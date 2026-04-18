@@ -1,0 +1,193 @@
+id,nuance,sentence,cstl,json,cstl_verdict,json_verdict,justification
+T01,temporal_past,Marie hesitated about the marriage when her mother fell ill.,"[STATE] Marie | = | hesitation | 0.85 | shallow
+[STATE] hesitation | ATT | marriage | 0.9 | shallow
+marriage | » | Marie | 0.7 | surface
+[STATE] mother | = | illness | 0.95 | deep
+mother | SYN | Marie | 0.8 | deep
+illness | « | hesitation | 0.85 | shallow
+mother.illness | ⊖ | Marie.marriage_decision | 0.8 | shallow
+Marie | ψ~̃ | uncertainty | 0.75 | shallow
+[IF] mother.recovery | ⟶ | marriage.proceed | 0.6 | shallow
+illness | κ | hesitation | 0.7 | shallow","{""person"": ""Marie"", ""action"": ""hesitated"", ""topic"": ""marriage"", ""reason"": ""mother fell ill"", ""mother_condition"": ""ill"", ""emotional_state"": ""uncertain""}",lost,partial,"CSTL uses no temporal markers indicating past tense, while JSON preserves 'hesitated' and 'fell' as past-tense verbs that a downstream agent could recognize as indicating completed past events."
+T02,temporal_future_uncertain,"If the funding comes through, the project will launch next year.","[IF] funding ⊕ | ARR | project » launch | 0.85 | shallow
+funding | ATT | ⊕ κ | 0.7 | surface
+project launch | ATT | » next_year | 0.9 | shallow
+[IF] | INH | certainty | 0.6 | shallow
+funding ⟶ project | SYN | conditional_dependency | 0.85 | shallow","{""condition"": ""funding comes through"", ""consequence"": ""project will launch"", ""consequence_timeframe"": ""next year"", ""sentence_type"": ""conditional"", ""certainty"": ""uncertain"", ""dependency"": ""funding""}",preserved,preserved,"Both encodings capture the conditional/uncertain nature and future timeframe - CSTL through [IF] with INH|certainty and temporal marker », JSON through explicit 'certainty: uncertain' and 'consequence_timeframe: next year'."
+T03,temporal_entanglement,His past and his future both weigh on the decision he makes now.,"[STATE] = decision_making
+«past» | AMP | =decision | 0.9 | deep
+»future» | AMP | =decision | 0.9 | deep
+«past» | ⊕ | =decision | 0.85 | shallow
+»future» | ⊕ | =decision | 0.85 | shallow
+«past» | «=» | »future» | 0.8 | deep
+=decision | ψ⟶ | »outcome | 0.75 | shallow","{""subject"": ""he"", ""topic"": ""decision_making"", ""decision_timing"": ""present"", ""influencing_factor_1"": ""past"", ""influencing_factor_2"": ""future"", ""effect_on_decision"": ""weighing"", ""temporal_elements"": [""past"", ""present"", ""future""], ""emotional_tone"": ""contemplative"", ""implication"": ""significant_consequences""}",preserved,partial,"CSTL explicitly encodes the past-future equivalence relation («=») showing their entangled influence on the present decision, while JSON merely lists temporal elements without capturing their interconnected, simultaneous weighing relationship."
+T04,temporal_ongoing,The negotiation has been dragging on for three years already.,"[STATE] negotiation | = | active | 0.95 | surface
+« | AMP | negotiation | 0.9 | shallow
+[NET] duration | ARR | three_years | 1.0 | surface
+⊖ | AMP | negotiation | 0.85 | shallow
+ψ~̃- | ATT | speaker | 0.8 | shallow
+κ | INH | resolution | 0.75 | deep
+CYC | ATT | negotiation | 0.7 | shallow
+⊕ | ARR | fatigue | 0.8 | deep","{""event_type"": ""negotiation"", ""status"": ""ongoing"", ""duration_years"": 3, ""duration_description"": ""dragging on"", ""sentiment"": ""prolonged"", ""time_reference"": ""already""}",preserved,preserved,"Both encodings capture the ongoing temporal nature - CSTL through [STATE] active with CYC (cyclical/continuing) attachment, and JSON through explicit 'status: ongoing' with 'already' time reference indicating continuation to present."
+C01,graded_confidence,He is probably but not certainly the author of the anonymous letter.,"[STATE] | = | he | 1.0 | surface
+he | ATT | author | 0.7 | shallow
+author | SYN | anonymous_letter | 0.9 | shallow
+[IF] | + | he→author | 0.7 | deep
+[NOT] | - | certainty | 0.3 | shallow
+ψ⟶ | ATT | attribution_claim | 0.8 | shallow
+ℝ | ⊕ | probable | 0.7 | shallow
+ℝ | ⊖ | certain | 0.3 | shallow","{""subject"":""he"",""role"":""author"",""object"":""anonymous letter"",""certainty"":""probable"",""certainty_qualifier"":""not certain"",""statement_type"":""attribution""}",preserved,partial,"CSTL explicitly encodes graded confidence through numeric values (0.7 probable, 0.3 certainty negated) and dual polarity markers (⊕/⊖), while JSON only provides categorical labels 'probable' and 'not certain' without capturing the specific gradation or the tension between them."
+C02,low_confidence_assertion,"Some rumors suggest, though nothing is confirmed, that he resigned.","[STATE] = rumors | ATT | resignation | 0.3 | surface
+[TRUST][unspecified] | AMP | uncertainty ~̃ | 0.7 | shallow
+he | ARR « | resigned | 0.4 | shallow
+[IF] confirmation | INH | [NOT] present | 0.9 | surface
+suggestion ψ⟶ | ATT | resignation | 0.3 | shallow
+epistemic_status | ⊖ | certainty | 0.8 | deep","{""subject"": ""he"", ""action"": ""resigned"", ""certainty_level"": ""unconfirmed"", ""source_type"": ""rumors"", ""hedge_phrase"": ""nothing is confirmed"", ""statement_type"": ""speculation""}",preserved,preserved,"Both encodings capture low confidence through explicit uncertainty markers - CSTL uses 0.3-0.4 confidence values and epistemic negation, while JSON marks certainty_level as 'unconfirmed' and statement_type as 'speculation', either allowing recovery of the low-confidence nature."
+C03,certainty_stack,"We are virtually certain about A, less sure about B, and skeptical of C.","[STATE] | = | epistemic_assessment | 1.0 | surface
+A | ATT | certainty | 0.95 | deep
+A | ⊕ | belief | 0.95 | deep
+B | ATT | uncertainty | 0.65 | shallow
+B | ~̃ | doubt° | 0.65 | shallow
+C | ATT | skepticism | 0.25 | shallow
+C | ⊖ | belief | 0.25 | deep
+C | [NOT] | acceptance | 0.75 | shallow
+A » B » C | INH | confidence_gradient- | 0.9 | deep","{""statement_a_confidence_level"": ""virtually certain"", ""statement_b_confidence_level"": ""less sure"", ""statement_c_confidence_level"": ""skeptical"", ""confidence_ranking"": [""A"", ""B"", ""C""], ""highest_confidence_item"": ""A"", ""lowest_confidence_item"": ""C""}",preserved,preserved,"Both encodings capture the three-tier certainty hierarchy with A highest, B middle, C lowest - CSTL uses numeric confidence values (0.95, 0.65, 0.25) with explicit gradient relation, while JSON uses descriptive labels and explicit ranking array, both sufficient for downstream recovery of the certainty stack."
+M01,obligation_vs_permission,Doctors must disclose side effects; patients may decline treatment.,"[NET] medical_ethics
+[TRUST][physician] 0.9
+[TRUST][patient] 0.85
+[STATE] = clinical_encounter
+
+physician | [MUST] | disclose(side_effects) | 0.95 | deep
+disclose(side_effects) | ⟶ | patient_autonomy | 0.9 | deep
+disclose(side_effects) | ⊕ | informed_consent | 0.92 | bedrock
+physician | ARR | information | 0.88 | shallow
+information | ⟶ | patient | 0.9 | surface
+
+patient | [MAY] | decline(treatment) | 0.95 | deep
+decline(treatment) | ℙ | refusal | 0.9 | deep
+patient_autonomy | AMP | decline(treatment) | 0.85 | bedrock
+decline(treatment) | ⊖ | physician_recommendation | 0.7 | shallow
+decline(treatment) | κ | alternative_care_path | 0.75 | shallow
+
+[MUST] | ANT | [MAY] | 0.8 | deep
+physician_obligation | SYN | patient_right | 0.88 | bedrock
+informed_consent | ⊃ | clinical_encounter | 0.92 | deep","{""subject_1"": ""doctors"", ""obligation_1"": ""must disclose side effects"", ""subject_2"": ""patients"", ""permission"": ""may decline treatment"", ""domain"": ""medical"", ""relationship"": ""doctor-patient"", ""topic_1"": ""disclosure"", ""topic_2"": ""consent"", ""obligation_type"": ""mandatory"", ""permission_type"": ""optional""}",preserved,preserved,"Both encodings explicitly mark the obligation/permission distinction: CSTL uses [MUST] vs [MAY] modal operators with an ANT (antonym) relation between them, while JSON uses 'obligation_1' with 'obligation_type: mandatory' versus 'permission' with 'permission_type: optional'."
+M02,prohibition,Employees are not permitted to discuss ongoing investigations externally.,"[NET] organizational_policy
+[TRUST][authority] employer
+[STATE] = active
+
+employees | ATT | discuss | 0.95 | deep
+discuss | ATT | investigations | 0.95 | deep
+investigations | ATT | ongoing | 0.90 | shallow
+discuss | ATT | externally | 0.90 | shallow
+[NOT][MUST] | INH | discuss | 0.95 | deep
+employees | ARR | external_parties | 0.85 | shallow
+ψ⟶ | ATT | compliance | 0.90 | deep
+ψℙ | ATT | prohibition | 0.95 | deep
+⊖ | AMP | external_disclosure | 0.90 | deep
+κ | ATT | confidentiality | 0.85 | shallow","{""subject"": ""employees"", ""action"": ""not permitted"", ""activity"": ""discuss ongoing investigations"", ""restriction_scope"": ""externally"", ""rule_type"": ""prohibition"", ""topic"": ""confidentiality policy""}",preserved,preserved,"Both encodings explicitly mark prohibition - CSTL uses [NOT][MUST] with INH relation plus ψℙ|ATT|prohibition, while JSON directly labels rule_type as 'prohibition' and action as 'not permitted'."
+M03,conditional_obligation,"If the motion passes, the committee is required to act within 30 days.","[IF] motion » passes | ARR | committee [MUST] act | 0.95 | deep
+motion » passes | κ | committee action | 0.85 | shallow
+committee [MUST] act | ATT | «30 days» | 0.90 | surface
+[IF] motion » passes | ⊕ | committee ⟶ action | 0.80 | shallow
+motion = pending | «=» | committee action » | 0.75 | deep","{""condition"": ""motion passes"", ""consequence"": ""committee is required to act"", ""deadline"": ""30 days"", ""deadline_type"": ""within"", ""subject"": ""committee"", ""action_required"": true, ""trigger_event"": ""motion passing""}",preserved,preserved,"Both encodings clearly capture the conditional trigger (motion passes) linked to an obligation (committee must act), with CSTL using explicit [IF] and [MUST] operators and JSON using 'condition' paired with 'action_required: true'."
+F01,pressure_toward_rupture,Tensions between the two factions keep building toward a breaking point.,"[STATE] = tension_between_factions
+factions | ANT | factions | 0.9 | deep
+tension | AMP+ | tension | 0.85 | shallow
+tension | ⊕ | breaking_point | 0.8 | deep
+[STATE] | » | ℜ | 0.75 | deep
+building | ⟶ | breaking_point | 0.85 | shallow
+[STATE] | κ | rupture_potential | 0.7 | bedrock","{""subject"":""tensions"",""subject_description"":""between two factions"",""action"":""keep building"",""direction"":""toward a breaking point"",""situation_type"":""escalating conflict"",""intensity"":""increasing"",""outcome_implied"":""imminent confrontation""}",preserved,preserved,"Both encodings capture the escalating pressure toward rupture - CSTL through explicit tension amplification (AMP+), trajectory toward breaking_point (⟶), and rupture_potential marker (κ); JSON through 'keep building toward a breaking point' with 'escalating conflict' and 'imminent confrontation' outcome."
+F02,resistance,The old guard resists every reform proposal the new director puts forward.,"[NET]
+old_guard | ARR | resistance_stance | 0.95 | deep
+new_director | ARR | reform_proposals | 0.90 | shallow
+reform_proposals | » | implementation | 0.40 | surface
+old_guard | INH⊖ | reform_proposals | 0.95 | deep
+old_guard | ANT | new_director | 0.85 | shallow
+[STATE]
+resistance_stance | = | ℝ⊖κ | 0.90 | deep
+reform_proposals | =«=» | institutional_change | 0.70 | shallow
+old_guard | ATT | status_quo | 0.95 | bedrock
+new_director | ATT | transformation | 0.85 | deep
+[TRUST][old_guard]
+reform_proposals | [NOT] | ψ⟶+ | 0.90 | deep
+new_director | ATT | threat | 0.80 | shallow
+[TRUST][new_director]
+old_guard | ATT | obstacle⊖ | 0.85 | shallow
+reform_proposals | [MUST] | ψ⟶ | 0.90 | deep
+every | AMP | resistance_pattern | 0.95 | surface
+CYC | old_guard⊖ ↔ new_director⊕ | deadlock | 0.85 | deep","{""subject"":""the old guard"",""action"":""resists"",""object"":""every reform proposal"",""proposal_source"":""the new director"",""frequency"":""every"",""verb_tense"":""present"",""conflict_type"":""institutional resistance"",""parties_in_conflict"":[""old guard"",""new director""]}",preserved,preserved,"Both encodings capture resistance: CSTL explicitly models it through INH⊖ (inhibition) relations and resistance_stance state, while JSON directly labels the action as 'resists' and conflict_type as 'institutional resistance'."
+F03,catalysis,The scandal accelerated changes that were going to happen anyway.,"[STATE] scandal | AMP | changes | 0.85 | shallow
+« changes | ARR | » changes | 0.90 | deep
+[IF] ¬scandal | ARR | changes | 0.75 | deep
+scandal | κ | changes | 0.88 | shallow
+changes | ℝ | «=» inevitability | 0.80 | bedrock
+scandal | ⊕+ | changes.tempo | 0.92 | surface
+changes | ψ⟶ | » state | 0.85 | shallow","{""event_type"": ""scandal"", ""effect"": ""accelerated changes"", ""change_nature"": ""inevitable"", ""implication"": ""changes were already going to occur"", ""scandal_role"": ""catalyst"", ""temporal_relationship"": ""changes preceded scandal in planning""}",preserved,preserved,Both encodings capture catalysis: CSTL uses the explicit κ (catalyst) operator plus counterfactual showing changes would occur without scandal; JSON directly labels 'scandal_role: catalyst' and states changes were 'inevitable' and 'already going to occur.'
+P01,performative,I hereby resign from my position effective immediately.,"[NET] resignation_declaration
+[TRUST][speaker] 0.95
+[STATE] =employment → «=»employment_terminated
+
+speaker | ℙ | resignation | 1.0 | bedrock
+I | ARR | hereby | 0.9 | deep
+hereby | ψ⟶ | performative_force | 1.0 | bedrock
+resign | ℙΔ | position | 1.0 | deep
+resign | ⊖ | employment_bond | 0.95 | deep
+my_position | ATT | speaker | 0.9 | shallow
+effective | ARR | immediately | 1.0 | surface
+immediately | » | =now | 1.0 | deep
+resignation | κ | employment_state | 0.95 | bedrock
+[MUST] | ARR | termination | 1.0 | deep
+speaker | ψ⟶ | severance_intent | 0.95 | deep
+declaration | ℜ | employment_contract | 0.9 | deep
+position | INH | speaker | «=» | shallow
+hereby | ⊕ | legal_weight | 0.85 | deep","{""document_type"": ""resignation"", ""action"": ""resign"", ""position"": ""current role"", ""effective_date"": ""immediately"", ""tone"": ""formal"", ""intent"": ""employment_termination""}",preserved,partial,"CSTL explicitly marks 'hereby' with ψ⟶ performative_force at bedrock confidence, directly encoding the speech-act nature; JSON only captures 'formal' tone and 'action: resign' without distinguishing performative utterance from mere description of resigning."
+P02,intention,She intends to finish the paper before the conference deadline.,"[NET]
+[STATE] = ψ⟶
+she | ARR | paper_completion | 0.9 | shallow
+paper_completion | ATT » | conference_deadline | 0.85 | shallow
+she | AMP ψ⟶ | finish | 0.9 | shallow
+finish | SYN | paper | 0.95 | surface
+conference_deadline | ⊕ | paper_completion | 0.8 | shallow
+[IF] deadline « completion | ⊖ | goal_success | 0.7 | deep","{""subject"": ""she"", ""action"": ""intends to finish"", ""object"": ""the paper"", ""temporal_reference"": ""before the conference deadline"", ""intent"": ""completion"", ""event_type"": ""academic_task""}",preserved,preserved,"CSTL captures intention through the ψ⟶ (psi-arrow) operator indicating goal-directed state and AMP ψ⟶ amplifying intentional action toward 'finish', while JSON explicitly labels 'intends to finish' as the action and includes an 'intent: completion' field, both allowing downstream recovery of the intention nuance."
+P03,emotional_modulation,"He said yes, but with visible reluctance in his voice.","[STATE] = | | | 1.0 | surface
+he | ARR | yes | 0.9 | surface
+he | AMP | ψ⟶[yes] | 0.7 | shallow
+he | SYN | ⊖reluctance | 0.85 | shallow
+voice | ATT | ~̃⊖ | 0.8 | shallow
+ψ⟶[yes] | ANT | ~̃⊖ | 0.75 | deep
+[yes] | INH | ⊖ | 0.6 | deep
+surface_statement | ANT | internal_state | 0.8 | bedrock","{""speaker"":""he"",""statement"":""yes"",""response_type"":""affirmative"",""manner"":""reluctant"",""reluctance_indicator"":""visible"",""communication_channel"":""voice""}",preserved,partial,"CSTL captures the emotional modulation through explicit tension markers (AMP showing hedged commitment, SYN linking to negative reluctance, ANT showing conflict between surface statement and internal state), while JSON merely labels 'manner: reluctant' without encoding the dynamic tension between affirmation and emotional resistance."
+N01,asymmetric_trust,Alice trusts Bob completely but remains wary of Carol.,"[TRUST][Alice] | ARR | Bob | 1.0 | deep
+[TRUST][Alice] | INH | Carol | 0.7 | shallow
+ψ⟶[Alice→Bob] | AMP+ | ℝ | 0.95 | deep
+ψ⟶[Alice→Carol] | ATT | ⊖ | 0.75 | shallow
+=[Alice] | SYN | [Bob] | 0.9 | deep
+=[Alice] | ANT | [Carol] | 0.6 | shallow","{""subject_1"": ""Alice"", ""relationship_1_type"": ""trust"", ""relationship_1_target"": ""Bob"", ""relationship_1_degree"": ""complete"", ""subject_2"": ""Alice"", ""relationship_2_type"": ""wariness"", ""relationship_2_target"": ""Carol"", ""relationship_2_degree"": ""moderate""}",preserved,preserved,"Both encodings explicitly represent Alice's high trust toward Bob and lower trust/wariness toward Carol as distinct directional relationships, making the asymmetric trust pattern recoverable from either format alone."
+N02,trust_degradation,"The partnership started on solid trust, but recent events have eroded it.","[STATE] partnership | = | active | 0.9 | surface
+[TRUST][partners] | « | ⊕+ | 0.95 | deep
+[TRUST][partners] | «=» | solid_foundation | 0.9 | deep
+recent_events | » | [TRUST][partners] | 0.85 | shallow
+recent_events | INH | trust_foundation | 0.8 | deep
+[TRUST][partners] | = | ⊖ | 0.85 | shallow
+solid_trust | CYC | erosion | 0.8 | deep
+partnership | = | ℜ- | 0.7 | shallow
+ψ~̃ | = | concern | 0.75 | shallow
+[STATE] trajectory | » | uncertain | 0.7 | shallow","{""subject"": ""partnership"", ""initial_state"": ""solid trust"", ""initial_sentiment"": ""positive"", ""change_trigger"": ""recent events"", ""change_type"": ""erosion"", ""current_state"": ""diminished trust"", ""trajectory"": ""declining"", ""temporal_contrast"": ""past_vs_present""}",preserved,preserved,"Both encodings explicitly capture the degradation arc: CSTL shows trust moving from ⊕+ through erosion (CYC, INH operators) to ⊖ with declining trajectory; JSON directly labels 'erosion' as change_type with 'declining' trajectory and past_vs_present contrast."
+X01,modal+temporal+trust,"If the board agrees, Alice must report to Bob by Friday; she trusts him to keep it confidential.","[NET] board_decision
+[IF] board » agrees | ARR | alice [MUST] report | 0.95 | deep
+alice | ARR | bob | 0.90 | shallow
+report | « » | friday | 0.85 | surface
+[TRUST][alice] bob | + | 0.88 | deep
+bob | [MUST] | confidentiality | 0.80 | deep
+alice ψ⟶ | ARR | bob ψ~̃ | 0.75 | shallow
+confidentiality | ⊕ | trust_maintenance | 0.82 | bedrock
+[IF] [NOT] board » agrees | INH | alice [MUST] report | 0.95 | deep","{""condition"": ""board agrees"", ""required_action"": ""report"", ""actor"": ""Alice"", ""recipient"": ""Bob"", ""deadline"": ""Friday"", ""trust_relationship"": ""Alice trusts Bob"", ""trust_subject"": ""confidentiality""}",preserved,partial,"CSTL explicitly encodes the modal obligation ([MUST]), temporal constraint (friday with « » relation), and trust with polarity/depth ([TRUST][alice] bob | + | 0.88 | deep), while JSON captures all three elements but loses the modal force (no distinction between 'must' vs 'should'), flattens the conditional structure, and represents trust as a simple string without gradation or directionality."
+X02,force+confidence+modal,"The evidence strongly suggests fraud, though not conclusively, so the auditor may but is not required to investigate further.","[STATE] evidence | AMP | fraud | 0.78 | deep
+[STATE] fraud | ATT | ⊕conclusive | 0.35 | shallow
+[STATE] [NOT][MUST] | INH | conclusive_proof | 0.82 | deep
+[TRUST][auditor] | [MAY] | investigate_further | 0.85 | shallow
+[TRUST][auditor] | [NOT][MUST] | investigate_further | 0.90 | deep
+ψ⟶ | ARR | auditor_discretion | 0.88 | shallow
+evidence | ⊕ | fraud_hypothesis | 0.78 | deep
+conclusive_proof | ⊖ | certainty | 0.65 | shallow","{""topic"": ""audit_findings"", ""evidence_type"": ""fraud_indicators"", ""evidence_strength"": ""strong"", ""conclusion_certainty"": ""inconclusive"", ""recommended_action"": ""further_investigation"", ""action_requirement"": ""optional"", ""responsible_party"": ""auditor"", ""fraud_status"": ""suspected_not_confirmed""}",preserved,partial,"CSTL explicitly encodes the epistemic force (AMP 0.78), confidence levels, and modal operators ([MAY] vs [NOT][MUST]) as distinct structural elements, while JSON flattens these into ambiguous string values like 'strong' and 'optional' that conflate force with confidence and lose the precise modal distinction between permission and non-obligation."
