@@ -1,0 +1,1525 @@
+id,family,nuance,level,difficulty,en,fr,cstl_v302_en,cstl_v302_fr,cstl_v303_en,cstl_v303_fr,json_en,json_fr,v302_verdict_en,v302_verdict_fr,v303_verdict_en,v303_verdict_fr,json_verdict_en,json_verdict_fr
+A01,A,time_past,L1,naturelle,Yesterday Marie finished the report before her colleagues arrived.,"Hier, Marie a terminé le rapport avant l'arrivée de ses collègues.","[TIME]: past
+«(∙Marie ⟳ ∙report)» → «(∙colleagues → ∙arrived)°»","[TIME]: past
+
+«∙Marie ⟳ ∙rapport» → «∙Marie ⊃ ∙rapport+» → «∙collègues ∙arrivée»",∙Marie ⟳ ◉report « | ∙colleagues → ∙arrival «,« ∙Marie ⟳ ◉rapport → ∙arrivée(∙collègues),"{""agents"":[""Marie""],""action"":""finish"",""object"":[""report""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"":[""Marie""],""action"":""terminer"",""object"":[""rapport""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}",preserved,partial,preserved,preserved,partial,preserved
+A02,A,time_future,L1,naturelle,"Next year, the research program will begin in three universities.","L'année prochaine, le programme de recherche commencera dans trois universités.","[TIME]: future
+∙research_program »→ ⟳ ∙begin
+∙begin → ∙universities[+three]
+∙universities ↔ ∙universities ↔ ∙universities","[TIME]: future
+
+∙programme_recherche »→ ⟳ ∙trois_universités",» ∙research_program ⟲ ∙[∙university ∙university ∙university],"[TIME]: future
+» ∙programme_de_recherche → ∙début | Δ[∙université ∙université ∙université]","```json
+{
+  ""agents"": [""research program""],
+  ""action"": ""begin"",
+  ""object"": [""universities""],
+  ""time"": ""future"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```","{""agents"":[""programme de recherche""],""action"":""commencer"",""object"":[""universités""],""time"":""future"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,preserved,preserved
+A03,A,time_entangled,L4,stressée,His past mistakes shape the future decisions he makes today.,Ses erreurs passées façonnent les décisions futures qu'il prend aujourd'hui.,"[TIME]: entangled
+∙mistakes«- → ⟳ ∙decisions»+ = ∙he°","[TIME]: entangled
+∙erreurs(-)« → ⟳ → ∙décisions»=
+⊃[∙il= → ∙décisions»=]",∙mistakes« ⟳ ∙decisions»= | ∙he ⊃ ∙decisions,∙erreurs« → ∙décisions» = | ⟳ ∙lui,"{""agents"":[""He""],""action"":""shape"",""object"":[""decisions""],""time"":""entangled"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"":[""il""],""action"":""façonner"",""object"":[""décisions""],""time"":""entangled"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+A04,A,trust_asymmetric,L2,naturelle,Alice trusts Bob completely but remains cautious with Carol.,Alice fait entièrement confiance à Bob mais reste prudente avec Carol.,"[TRUST]: ∙Alice → ∙Bob (+)(°complete)
+[STATE]: ∙Alice ⊗ ∙Carol (-)(°caution)","[TRUST]: ∙Alice → ∙Bob (+), ∙Alice → ∙Carol (?)
+[TIME]: present
+∙Alice ↔°+ ∙Bob | ∙Alice ⊗°- ∙Carol",[TRUST]: ∙Alice →+ ∙Bob | ∙Alice →° ~̃(caution) ∙Carol,[TRUST]: ∙Alice →+ ∙Bob | ∙Alice →° ~̃(prudence) ∙Carol,"{""agents"":[""Alice""],""action"":""trust"",""object"":[""Bob"",""Carol""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}","{""agents"":[""Alice""],""action"":""trust"",""object"":[""Bob"",""Carol""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,partial,partial
+A05,A,state_directive,L1,naturelle,The board is now in decision mode and awaits the final vote.,Le conseil est maintenant en phase de décision et attend le vote final.,"[TIME]: present
+[STATE]: decision_mode
+
+◉board =⟳decision_mode ∧ »⟶∙final_vote","[TIME]: present
+[STATE]: decision_phase
+
+◉conseil =⟳ ∙phase_décision ⊕ ⟶∙vote_final",[STATE]: ∙board ⟳ ◉decision_mode = | ⟶ ∙vote »,[STATE]: ∙conseil ⟲ ◉décision = | ⟶ ∙vote »,"{""agents"":[""board""],""action"":""await"",""object"":[""vote""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","```json
+{
+  ""agents"": [""conseil""],
+  ""action"": ""attendre"",
+  ""object"": [""vote""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,partial
+A06,A,net_session,L1,naturelle,This conversation is archived under reference number 2026-0419.,Cette conversation est archivée sous la référence 2026-0419.,"[NET]: DICT ≡ ∙conversation
+[STATE]: ⟳(∙conversation → ∙archive)
+[TIME]: past
+∙conversation → ⟳ → ∙archive ⊃ [∙reference_number:∙2026-0419]","[TIME]: present
+[STATE]: ≡
+
+∙conversation ⟳ ∙archived ← ⊃[∙reference:2026-0419]",[STATE]: ◉conversation ≡ ∙reference_2026-0419,⇐ ∙conversation ∙référence:2026-0419,"{""agents"":[""conversation""],""action"":""archive"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","{""agents"":[""conversation""],""action"":""archiver"",""object"":[""référence 2026-0419""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+B01,B,past_sequence,L5,stressée,"The storm hit the coast, then the ferry was delayed, then passengers missed their connections.","La tempête a frappé la côte, puis le ferry a été retardé, puis les passagers ont manqué leurs correspondances.","[TIME]: past
+
+∙storm → ∙coast(-)
+∙storm → ∙ferry⟲delayed(-)
+∙ferry⟲delayed → ∙passengers ⊗ ∙connections(-)","[TIME]: past
+
+∙tempête → ∙côte(-)
+∙tempête → ∙ferry⟲retardé(-)
+∙ferry⟲retardé → ∙passagers ⊗ ∙correspondances(-)",∙storm → ∙coast « → ∙ferry ⟲ ∙delay → ∙passengers ⊗ ∙connections,∙tempête → ∙côte « | ∙ferry ⟲ ∙retard « | ∙passagers ⊗ ∙correspondances «,"```json
+{
+  ""agents"": [""storm""],
+  ""action"": ""hit"",
+  ""object"": [""coast"", ""ferry"", ""passengers"", ""connections""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```","```json
+{
+  ""agents"": [""tempête""],
+  ""action"": ""frapper"",
+  ""object"": [""côte"", ""ferry"", ""passagers"", ""correspondances""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,preserved,partial,lost
+B02,B,simultaneous,L4,naturelle,The president spoke while journalists took notes in the hall.,Le président a parlé pendant que les journalistes prenaient des notes dans la salle.,"[TIME]: present
+∙president → ∙spoke(≡) ↔ [∙journalists → ∙notes(⊃)] + ∙hall(Δ)","[TIME]: past
+
+∙président «⟶ℙ(parler)»(+) ↔ [∙journalistes «⟶(noter)» ⊃ ∙notes](+) | Δ(∙salle)",∙president ℙ = | ∙journalists → ∙notes ∙hall =,∙président → ℙ =« | ∙journalistes → ∙notes =«,"{""agents"":[""president""],""action"":""speak"",""object"":[],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""président"", ""journalistes""],
+  ""action"": ""parler"",
+  ""object"": [""notes"", ""salle""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""mutual"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,partial,preserved
+B03,B,future_ordered,L5,stressée,"The funding will be secured first, then the team will be assembled, finally the prototype will be built.","Le financement sera d'abord obtenu, puis l'équipe sera constituée, enfin le prototype sera construit.","[TIME]: future
+
+∙funding »→ ⟳ ∙secured
+∙secured »→ ∙team »→ ⟳ ∙assembled
+∙assembled »→ ∙prototype »→ ⟳ ∙built","[TIME]: future
+
+∙financement »⟳ ∙équipe »⟳ ∙prototype → ⟳(+)",∙funding ⟳ » → ∙team ⟳ » → ∙prototype ⟳ »,∙financement ⟳ » → ∙équipe ⟳ » → ∙prototype ⟳ »,"```json
+{
+  ""agents"": [""funding"", ""team"", ""prototype""],
+  ""action"": ""sequence"",
+  ""object"": [],
+  ""time"": ""future"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```","```json
+{
+  ""agents"": [""financement"", ""équipe"", ""prototype""],
+  ""action"": ""obtenir"",
+  ""object"": [],
+  ""time"": ""future"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,preserved,preserved,partial
+B04,B,temporal_entanglement,L4,stressée,"The founder's early choices, his current situation, and his projected legacy all interlock in this one decision.","Les choix initiaux du fondateur, sa situation actuelle et son héritage projeté s'imbriquent tous dans cette décision unique.","[TIME]: entangled
+«∙founder.choices.early» ↔ =∙founder.situation.current= ↔ »∙founder.legacy.projected» ↔ =∙decision.this= ℝ°","[TIME]: entangled
+
+«∙fondateur.choix_initiaux» «=» =∙fondateur.situation_actuelle= «=» »∙fondateur.héritage_projeté» ↔+ ⟳ =◉décision_unique=",«∙founder∙choices ↔ =∙founder∙situation ↔ »∙founder∙legacy «=» ∙decision,"[TIME]: entangled
+«(∙fondateur → ∙choix_initiaux) ↔ =(∙situation_actuelle) ↔ »(∙héritage_projeté) → ◉décision_unique","```json
+{
+  ""agents"": [""founder""],
+  ""action"": ""interlock"",
+  ""object"": [""choices"", ""situation"", ""legacy"", ""decision""],
+  ""time"": ""entangled"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""mutual"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""fondateur""],
+  ""action"": ""imbriquer"",
+  ""object"": [""choix"", ""situation"", ""héritage"", ""décision""],
+  ""time"": ""entangled"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""mutual"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+B05,B,mixed_global_local,L4,stressée,"In that year, two events occurred simultaneously and reshaped the company.","Cette année-là, deux événements se sont produits simultanément et ont transformé l'entreprise.",«=»[∙event1 ↔ ∙event2]+ ⟳ ◉company,"[TIME]: past
+
+«(∙année+Δ)» → [(∙événement°deux) «=» (∙événement°deux)] ⟳ (∙entreprise+)",«=» ∙event1 ↔ ∙event2 ⟳ ◉company,"[TIME]: past
+∙événement₁ «=» ∙événement₂ | (∙événement₁ ↔ ∙événement₂) ⟳ ◉entreprise «","{""agents"":[""events""],""action"":""reshape"",""object"":[""company""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"":[""événements""],""action"":""transformer"",""object"":[""entreprise""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+B06,B,bifurcation,L3,stressée,"At this fork, either the committee approves the merger or the deal collapses entirely.","À cette bifurcation, soit le comité approuve la fusion, soit l'accord s'effondre complètement.","[TIME]: present
+│(∙committee ⊃ ∙merger → ⟳approval) ⊗ (∙deal → ⟳collapse+)","[TIME]: present
+
+∙comité │ [⟶ ⟳ ∙fusion(+)] ⊗ [∙accord ↓↓ ℜ(-)]",│[∙committee →+ ∙merger] ⊗ [∙deal ⟳ ◉collapse],│ [∙comité → ⟳+ ∙fusion] ⊗ [∙accord ℜ-],"{""agents"":[""committee""],""action"":""approve"",""object"":[""merger"",""deal""],""time"":""present"",""modality"":""IF"",""polarity"":""neutral"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}","{""agents"": [""comité""], ""action"": ""approuver"", ""object"": [""fusion"", ""accord""], ""time"": ""present"", ""modality"": ""IF"", ""polarity"": ""neutral"", ""tone"": ""declarative"", ""relation_type"": ""opposition"", ""dynamic"": ""stable""}",preserved,preserved,preserved,preserved,partial,partial
+C01,C,obligation_simple,L1,naturelle,Employees must submit their expense reports before the end of the month.,Les employés doivent soumettre leurs notes de frais avant la fin du mois.,"[TIME]: present
+∙employees [MUST]⟶ ∙expense_reports ⟳ ∙submit | ∙deadline = ∙month_end","[TIME]: present
+∙employés [MUST] → ∙soumission(∙notes_de_frais) » ∙fin_du_mois",[MUST] ∙employees → ∙expense_reports → »(∙end_of_month),[MUST] ∙employés ⟶ ∙notes_de_frais → ∙soumission « ∙fin_du_mois,"{""agents"":[""Employees""],""action"":""submit"",""object"":[""expense reports""],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""employés""],""action"":""soumettre"",""object"":[""notes de frais""],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,preserved,preserved
+C02,C,permission_simple,L1,naturelle,Students may access the library after registration is confirmed.,Les étudiants peuvent accéder à la bibliothèque après confirmation de leur inscription.,[IF] ∙registration ⟳ confirmed » ∙students [MAY] → ∙library ⊃ access,"[TIME]: future
+[STATE]: conditional_access
+
+∙étudiants [MAY]→ ∙bibliothèque°accès | [IF] ⟳(∙inscription°confirmation)«",[MAY] ∙students → ∙library | «(∙registration ⟳),[MAY] ∙étudiants → ∙bibliothèque | « ⟳∙inscription → »,"{""agents"":[""Students""],""action"":""access"",""object"":[""library""],""time"":""future"",""modality"":""MAY"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"": [""étudiants""], ""action"": ""accéder"", ""object"": [""bibliothèque""], ""time"": ""present"", ""modality"": ""MAY"", ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+C03,C,prohibition,L1,naturelle,Visitors are not permitted to bring food into the laboratory.,Il est interdit aux visiteurs d'apporter de la nourriture dans le laboratoire.,[NOT] ∙visitors ⊃ ∙food → ∙laboratory,"[TIME]: present
+∙visiteurs ⊃[∙nourriture → ∙laboratoire] [NOT] (-)",[NOT] ∙visitors → ∙food → ∙laboratory,[NOT] ∙visiteurs → ∙nourriture → ∙laboratoire,"{""agents"":[""Visitors""],""action"":""bring"",""object"":[""food"",""laboratory""],""time"":""present"",""modality"":""NOT"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""visiteurs""],""action"":""apporter"",""object"":[""nourriture"",""laboratoire""],""time"":""present"",""modality"":""NOT"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}",preserved,preserved,preserved,lost,preserved,preserved
+C04,C,conditional,L2,naturelle,"If the weather improves, the outdoor meeting will proceed as planned.","Si le temps s'améliore, la réunion en extérieur se déroulera comme prévu.",[IF] ∙weather⟲↑ → ∙meeting[outdoor]»≡planned,[IF] ∙temps ⟳+ → ∙réunion_extérieur ⟳ =prévu (°),[IF] ∙weather ↑ » → ∙outdoor_meeting ⟶ =,[IF] ∙temps ⟲+ → ∙réunion_extérieur → ≡ »,"```json
+{
+  ""agents"": [""weather""],
+  ""action"": ""improve"",
+  ""object"": [""meeting""],
+  ""time"": ""future"",
+  ""modality"": ""IF"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```","{""agents"": [""temps""], ""action"": ""améliorer"", ""object"": [""réunion""], ""time"": ""future"", ""modality"": ""IF"", ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+C05,C,conditional_obligation,L3,stressée,"If the motion passes, the committee is required to act within thirty days.","Si la motion est adoptée, le comité est tenu d'agir dans les trente jours.","[TIME]: future
+[IF] ∙motion → ⟳ → [MUST] ∙committee → ∙act ⊂ ∙thirty_days","[TIME]: future
+[IF] ∙motion ⟳ ∙adopted → [MUST] ∙committee ⊃[∙action] » ∙thirty_days",[IF] ∙motion ⟳ | [MUST] ∙committee → ∙action »(30 days),[IF] ∙motion ⟳ ◉adoption » [MUST] ∙comité → ∙action »(30j),"{""agents"":[""committee""],""action"":""act"",""object"":[],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"": [""motion""], ""action"": ""adopter"", ""object"": [""comité""], ""time"": ""future"", ""modality"": ""IF"", ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""reinforce""}",preserved,preserved,preserved,preserved,preserved,partial
+C06,C,performative_pure,L1,stressée,Sign it now!,Signe maintenant !,"[TIME]: present
+ℙ(⟶(∙you ⊃ ∙sign) ⊕+ »)!","[TIME]: present
+∙signe ⊃[⟶+] ∙you | ℙ [MUST] (!)",(!) ℙ ⟶ ⊃[∙signer → ⟳∙document]+ »,(!) ℙ ⟶ ⊃[∙signataire → ⟳∙document]+ »,"{""agents"":[""addressee""],""action"":""sign"",""object"":[],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""addressee""],""action"":""sign"",""object"":[],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,preserved,preserved
+C07,C,modal_pure,L1,stressée,You must sign this document before Friday.,Vous devez signer ce document avant vendredi.,"[TIME]: present
+[MUST] ∙you ⊕→ ∙document ⟳(sign) » ∙Friday","[TIME]: present
+∙vous ⊗ ∙signer ⊃ ∙document° « ∙vendredi»
+[MUST] ⟶ ℙ",[MUST] ⟶ ⊃[∙you → ⟳∙document]+ »(Friday),[MUST] ⟶ ⊃[∙vous → ⟳∙document] »(vendredi),"{""agents"":[""You""],""action"":""sign"",""object"":[""document""],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""Vous""],""action"":""signer"",""object"":[""document""],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,preserved,preserved
+C08,C,modal_plus_performative,L2,stressée,You must sign this immediately!,Vous devez signer ceci immédiatement !,"[TIME]: present
+∙you ⊃[∙signature] ⟶+++ ∙this = [MUST] (!)","[TIME]: present
+∙vous ⊕ ∙signer ⊃[∙ceci] [MUST] » (!)",(!) [MUST] ℙ ⟶ ⊃[∙addressee → ⟳∙document]+ »,(!) ℙ ⟶ ⊃[∙destinataire → ⟳∙document]+ »,"{""agents"":[""You""],""action"":""sign"",""object"":[],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""Vous""],""action"":""signer"",""object"":[""ceci""],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,preserved,preserved
+C09,C,may_plus_not,L2,stressée,Participants may choose not to answer sensitive questions.,Les participants peuvent choisir de ne pas répondre aux questions sensibles.,[MUST][MAY] ∙participants ⊃[∙answer ⊗ ∙questions°sensitive],"[TIME]: present
+[STATE]: permissive
+
+∙participants ⟶ [MAY] ∙choix → ∙répondre[NOT] ↔ ∙questions°sensibles",[MAY] [NOT] ∙participants → ∙answer → ∙questions(sensitive),[MAY] ∙participants ⟶ [NOT] ∙participants → ∙réponse → ∙questions_sensibles,"{""agents"":[""Participants""],""action"":""choose"",""object"":[""questions""],""time"":""present"",""modality"":""MAY"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}","{""agents"": [""participants""], ""action"": ""choisir"", ""object"": [""questions""], ""time"": ""present"", ""modality"": ""MAY"", ""polarity"": ""negative"", ""tone"": ""declarative"", ""relation_type"": null, ""dynamic"": null}",preserved,partial,preserved,preserved,preserved,partial
+C10,C,modal_in_low_trust,L3,stressée,"Even though the source is unreliable, the protocol states that every report must be logged.","Bien que la source soit peu fiable, le protocole prévoit que chaque rapport doit être consigné.","[TRUST]: ∙source(-) ⊗ ∙reliable
+[STATE]: ∙protocol ⊃[] [MUST] ∙report → ⟳ ∙logged","[TRUST]: ∙source(-) ⊗ ∙fiabilité
+[STATE]: ∙protocole ⊃[] [MUST] ∙rapport → ⟳ ∙consignation
+
+∙source(-) ⊗ ∙fiabilité | ∙protocole ⊃[] [MUST] (∙rapport → ⟳ ∙consignation)",[MUST] ∙report → ⟳∙logged | ⊖ ∙source →- ∙reliability | ℙ ∙protocol ⟶,[TRUST]: ∙source -° | [MUST] ∙rapport → ⟳ ∙consignation | ∿ ⟶ ∙protocole,"{""agents"":[""protocol""],""action"":""state"",""object"":[""report""],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"": [""protocole""], ""action"": ""prévoir"", ""object"": [""rapport""], ""time"": ""present"", ""modality"": ""MUST"", ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""reinforce""}",preserved,preserved,preserved,preserved,partial,partial
+C11,C,nested_conditional,L3,stressée,"If the funding is approved, then if the hiring follows, the lab will open in September.","Si le financement est approuvé, alors si l'embauche suit, le laboratoire ouvrira en septembre.","[TIME]: future
+[IF] ∙funding » ⟳ +approved → [IF] ∙hiring » → ∙lab » ⟳ +open → ∙September","[TIME]: future
+[IF] ∙financement ⟳ ∙approbation » [IF] ∙embauche → ∙laboratoire ⟳ ∙ouverture = ∙septembre",[IF] ∙funding ⟳ → [IF] ∙hiring → ∙lab ⟳ »(September),[IF] ∙financement ⟳ → [IF] ∙embauche → ∙laboratoire ⟳ »(septembre),"{""agents"":[""lab""],""action"":""open"",""object"":[],""time"":""future"",""modality"":""IF"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""laboratoire""],
+  ""action"": ""ouvrir"",
+  ""object"": [],
+  ""time"": ""future"",
+  ""modality"": ""IF"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,partial,preserved
+D01,D,pressure,L6,stressée,Tensions between the two factions keep building toward a breaking point.,Les tensions entre les deux factions continuent de monter vers un point de rupture.,"[TIME]: present
+[STATE]: ⟲
+
+∙factions↔∙factions ⊗° | ∙tensions ↑» ℜ","[TIME]: present
+
+∙tensions ⊗ ∙faction₁ ↔ ∙faction₂ = ↑ → » ℜ (-)",⊕ ∙faction₁ ⊗ ∙faction₂ ↑ → ℜ »,⊕ ∙faction₁ ⊗ ∙faction₂ ↑ → ℜ »,"{""agents"":[""factions""],""action"":""build"",""object"":[""breaking point""],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""reinforce""}","{""agents"":[""factions""],""action"":""monter"",""object"":[""point de rupture""],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""reinforce""}",preserved,lost,preserved,preserved,preserved,preserved
+D02,D,resistance,L2,naturelle,The old guard resists every reform proposal the new director brings forward.,La vieille garde résiste à chaque proposition de réforme que le nouveau directeur met en avant.,"[TIME]: present
+[STATE]: ⊖active
+
+∙old_guard ⊖→ ∙reform_proposal° ⊗ ∙new_director ⟶→ ∙reform_proposal°
+∙new_director ⟶→» ∙reform_proposal° → ∙old_guard
+∙old_guard ↔- ∙new_director
+(-)","[TIME]: present
+∙vieille_garde ⊖→ ∙proposition_réforme° « ∙nouveau_directeur ⊕→ ∙proposition_réforme »
+∙vieille_garde ⊗ ∙nouveau_directeur
+~̃(-)",∙old_guard ⊖ [∙new_director → ∙reform_proposal],∙vieille_garde ⊖ ⊗ [∙nouveau_directeur ⟶ ∙propositions_réforme],"```json
+{
+  ""agents"": [""old guard""],
+  ""action"": ""resist"",
+  ""object"": [""reform proposal"", ""new director""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""vieille garde""],
+  ""action"": ""résister"",
+  ""object"": [""nouveau directeur""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+D03,D,resonance_similarity,L4,stressée,The twins think exactly the same way and finish each other's sentences.,Les jumeaux pensent exactement de la même manière et finissent les phrases l'un de l'autre.,"[TIME]: present
+∙twins ↔ ∙twins
+∙twins:thinking ℝ ∙twins:thinking (+)
+∙twins ⟳ ∙sentences ↔ ∙twins ⟳ ∙sentences (+)","[TIME]: present
+∙jumeaux◉ →°pensée ℝ(=exactement)
+∙jumeaux◉ →°phrases ↔(∙l'un ⊗ ∙l'autre) ⟳finir",∙twins ℝ ~̃(thinking) | ∙twins ↔ ∙sentences,∙jumeaux ↔ ℝ ~̃ | ∙jumeaux ↔ ⟳ ∙phrases,"{""agents"":[""twins""],""action"":""think"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""reinforce""}","{""agents"":[""jumeaux""],""action"":""penser"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+D04,D,mutual_cooperation,L2,naturelle,Alice and Bob work together on the research project without any ego.,Alice et Bob travaillent ensemble sur le projet de recherche sans aucun ego.,"[TIME]: present
+∙Alice ↔°+ ∙Bob → ∙research_project
+⊗ ∙ego","[TIME]: present
+
+∙Alice ↔+ ∙Bob → ∙projet_recherche°recherche
+⊗ ~̃ego(∙Alice)
+⊗ ~̃ego(∙Bob)",∙Alice ↔+ ∙Bob → ∙research_project | ⊗ ~̃(ego),∙Alice ↔+ ∙Bob → ∙projet_recherche | ⊗ ~̃(ego),"```json
+{
+  ""agents"": [""Alice"", ""Bob""],
+  ""action"": ""work"",
+  ""object"": [""research project""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""mutual"",
+  ""dynamic"": ""stable""
+}
+```","{""agents"":[""Alice"",""Bob""],""action"":""work"",""object"":[""project""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+D05,D,mutual_plus_resonance,L4,stressée,They collaborate daily and share identical values about scientific rigor.,Ils collaborent quotidiennement et partagent des valeurs identiques sur la rigueur scientifique.,"[TIME]: present
+∙collaborate ↔ ∙they (+) ≡
+∙they → ∙values ⊃ ∙scientific_rigor (+) ≡
+∙values ℝ ∙values (+) ≡","[TIME]: present
+
+∙collaborateurs ↔°+ ∙travail_quotidien = ℝ°+ ∙valeurs_identiques(∙rigueur_scientifique)",∙they ↔+ = | ∙they ℝ ∙values(∙scientific_rigor),∙ils ↔+ = | ∙ils ℝ ∙valeurs(∙rigueur_scientifique),"{""agents"":[""They""],""action"":""collaborate"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""reinforce""}","{""agents"":[""Ils""],""action"":""collaborer"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""reinforce""}",preserved,partial,preserved,preserved,preserved,preserved
+D06,D,rupture,L3,naturelle,The betrayal ended their partnership immediately and without possibility of repair.,La trahison a mis fin à leur partenariat immédiatement et sans possibilité de réparation.,"[TIME]: past
+∙betrayal ⟳ ∙partnership- | ⊗ » ℜ ↓↓ [NOT]∙repair (-)","[TIME]: past
+∙trahison → ⟳(∙partenariat°) ⊗ ∙réparation
+(-)
+[NOT]",∙betrayal ⟳ ◉(∙partnership ⊗) ℜ =,∙trahison → ℜ[∙partenariat]+ « | [NOT] ⟲,"```json
+{
+  ""agents"": [""betrayal""],
+  ""action"": ""end"",
+  ""object"": [""partnership""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""trahison""],
+  ""action"": ""terminer"",
+  ""object"": [""partenariat""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+D07,D,catalysis,L3,stressée,The scandal accelerated reforms that were going to happen anyway.,Le scandale a accéléré des réformes qui allaient se produire de toute façon.,"[TIME]: past
+∙scandal ⊕ κ → ∙reforms
+∙reforms » ⟳ «=»","[TIME]: past
+
+∙scandal κ ∙reforms⟳ | ∙reforms »(+)",∙scandal κ ∙reforms | ∙reforms » ⟳,∙scandale κ ∙réformes | ∙réformes » (⟶),"{""agents"":[""scandal""],""action"":""accelerate"",""object"":[""reforms""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"":[""scandale""],""action"":""accélérer"",""object"":[""réformes""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,preserved,preserved,partial,partial,preserved
+D08,D,pressure_to_transform,L6,stressée,Years of stress accumulated until the company collapsed into a different kind of organization.,Des années de pression se sont accumulées jusqu'à ce que l'entreprise s'effondre pour devenir un autre type d'organisation.,"[TIME]: past
+∙stress «↑ ⊕+» ⟲ ∙company → ⟳ ◉organization°","[TIME]: past
+
+∙années ⊕+ → ∙entreprise «
+⊕ ↑ ⟲ «
+∙entreprise ⟳ ∙organisation_autre »
+∙entreprise ⊗ ∙entreprise_ancienne
+κ[⊕_accumulée] → ⟳",⊕ ∙stress « → ∙company ⟳ ◉organization,⊕+ ∙pression « → ∙entreprise ⟲ ⟳ ◉organisation,"{""agents"":[""company""],""action"":""collapse"",""object"":[""organization""],""time"":""past"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""weaken""}","```json
+{
+  ""agents"": [""entreprise""],
+  ""action"": ""effondrer"",
+  ""object"": [""organisation""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,partial,preserved,partial,preserved,partial
+D09,D,opposition,L2,stressée,Freedom of expression and total surveillance are mutually exclusive by nature.,La liberté d'expression et la surveillance totale sont mutuellement exclusives par nature.,∙freedom_of_expression ⊗ ∙total_surveillance °nature,"[TIME]: present
+
+∙liberté_expression ⊗ ∙surveillance_totale °nature
+
+Claude: [TIME]: present
+
+∙liberté_expression ⊗ ∙surveillance_totale °nature",∙freedom_of_expression ⊗ ∙total_surveillance,∙liberté_expression ⊗ ∙surveillance_totale,"{""agents"":[""Freedom of expression"",""total surveillance""],""action"":""exclude"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}","{""agents"":[""liberté d'expression"",""surveillance totale""],""action"":""exclure"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}",preserved,partial,preserved,preserved,preserved,preserved
+E01,E,transformation_achieved,L3,naturelle,The caterpillar became a butterfly after three weeks in the cocoon.,La chenille est devenue un papillon après trois semaines dans le cocon.,"[TIME]: past
+∙caterpillar ⟳ ∙butterfly → ∙cocoon(∙three_weeks)","[TIME]: past
+
+∙chenille «⟳» ∙cocon → ∙chenille ⟳ ◉papillon
+
+∙cocon ⊕ ∙transformation | ∙trois_semaines °Δ
+
+∙chenille «⟳» ◉papillon (+)",∙caterpillar ⟳ ◉butterfly «(∙cocoon),∙chenille ⟳ ◉papillon « | ∙cocon ⊕,"```json
+{
+  ""agents"": [""caterpillar""],
+  ""action"": ""become"",
+  ""object"": [""butterfly"", ""cocoon""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```","{""agents"":[""chenille""],""action"":""devenir"",""object"":[""papillon""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""stable""}",partial,preserved,preserved,preserved,preserved,preserved
+E02,E,transformation_in_progress,L2,stressée,The ice is melting slowly as the temperature keeps rising in the chamber.,La glace fond lentement à mesure que la température continue de monter dans la chambre.,"[TIME]: present
+∙ice ⟲- → ∙melting | ∙temperature ↑+ → ∙chamber | ∙temperature↑ → ∙ice⟲","[TIME]: present
+[STATE]: ⟲
+
+∙glace ⟳- ∙fonte = °lentement
+∙température ↑+ » ∙chambre
+∙température↑ → ∙glace⟳",∙ice ⟲ ∙water | ∙temperature ↑ ∙chamber,∙glace ⟲ ∙eau | ∙température ↑ ∙chambre,"{""agents"":[""ice""],""action"":""melt"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""weaken""}","{""agents"":[""glace""],""action"":""fondre"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""weaken""}",preserved,preserved,preserved,preserved,preserved,preserved
+E03,E,reinforcement,L2,naturelle,Her confidence grew with every successful presentation she gave.,Sa confiance grandissait à chaque présentation réussie qu'elle donnait.,"[TIME]: past
+∙confidence(~̃+) ↑ ⟳ ∙presentation(+) → ⟳ ∙success °every","[TIME]: past
+
+∙confiance(+) ↑ ⟳ « ∙présentation(+) ⟳ ∙réussie(+) → ∙elle ⊃ ∙présentation »",∙confidence ↑ ⟲ | ∙she → ⟳+ ∙presentation «=»,∙elle.confiance ⟲↑ | κ(∙elle → ⟳+ ∙présentation),"{""agents"":[""confidence""],""action"":""grow"",""object"":[""presentation""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"": [""elle""], ""action"": ""grandir"", ""object"": [], ""time"": ""past"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+E04,E,weakening,L2,naturelle,Their friendship eroded slowly over years of unspoken disagreements.,Leur amitié s'est érodée lentement au fil d'années de désaccords non exprimés.,"[TIME]: past
+∙friendship(+) ⟲↓ ⊖(∙disagreements(-) ⊗ ∙spoken°) → ⟳(∙erosion)","[TIME]: past
+∙amitié[+] ↓⟳ ∙érosion[-] → ∙années[°] ⊗ ∙désaccords[-]~̃ ⊖ ∙expression[NOT]",∙friendship ⟲↓ | ⊗°(∙disagreements) ⊕ «,∙amitié ⟲↓ | ⊕(∙désaccords ~̃(non-exprimés)) « »,"```json
+{
+  ""agents"": [""friendship""],
+  ""action"": ""erode"",
+  ""object"": [],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```","{""agents"": [""amitié""], ""action"": ""éroder"", ""object"": [], ""time"": ""past"", ""modality"": null, ""polarity"": ""negative"", ""tone"": ""declarative"", ""relation_type"": ""transformation"", ""dynamic"": ""weaken""}",preserved,preserved,preserved,preserved,preserved,preserved
+E05,E,ambiguous_achieved_or_progress,L2,stressée,The patient is recovering from the surgery performed last month.,Le patient récupère de l'opération effectuée le mois dernier.,"[TIME]: past→present
+∙patient ⟳ ∙recovery ← «∙surgery","[TIME]: past→present
+
+∙patient ⟳ ∙recovery ← «∙operation»",∙patient ⟲ ∙recovery «(∙surgery),∙patient ⟲ ∙récupération «(∙opération),"{""agents"":[""patient""],""action"":""recover"",""object"":[""surgery""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"":[""patient""],""action"":""récupérer"",""object"":[""opération""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,lost,preserved,preserved,preserved,preserved
+E06,E,irreversible_transformation,L3,stressée,"Once the contract is signed, the property transfer becomes irreversible.","Une fois le contrat signé, le transfert de propriété devient irréversible.","[TIME]: present
+∙contract ⟳ ∙signed → ∙property_transfer ⟳ ∙irreversible [MUST]","[TIME]: present
+
+∙contrat ⟳signé° → ∙transfert∙propriété ⟳irréversible+ [MUST]",[IF] ∙contract ⟳ | ∙property ⟳ ◉transfer [NOT]⟲ »,∙contrat ⟳ | ∙transfert_propriété ⟳ ◉état_irréversible »,"{""agents"": [""contract""], ""action"": ""sign"", ""object"": [""property transfer""], ""time"": ""future"", ""modality"": ""IF"", ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""stable""}","{""agents"":[""contrat""],""action"":""signer"",""object"":[""transfert"",""propriété""],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,preserved,preserved,preserved,preserved,lost
+F01,F,intention,L2,naturelle,She intends to complete the novel before her next book tour begins.,Elle a l'intention d'achever le roman avant le début de sa prochaine tournée.,"[TIME]: present
+⟶(∙she → ⟳(∙novel)°+) » «(∙book_tour → ∙begin)","[TIME]: present
+[STATE]: ⟶+
+
+∙elle ⟶ [∙roman ⟳ »] → «∙tournée.prochaine»",∙she ⟶ ⟳∙novel » | «(∙book_tour),∙elle ⟶ [∙elle → ⟳∙roman] » «(∙tournée),"```json
+{
+  ""agents"": [""She""],
+  ""action"": ""complete"",
+  ""object"": [""novel""],
+  ""time"": ""future"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```","{""agents"":[""Elle""],""action"":""achever"",""object"":[""roman""],""time"":""future"",""modality"":""MAY"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,lost,partial
+F02,F,emotional_modulation,L2,naturelle,"He agreed to the terms, but with visible reluctance in his voice.","Il a accepté les conditions, mais avec une réticence visible dans la voix.","[TIME]: present
+∙he ⟶ ∙terms → ⟳agreement
+∙he ~̃reluctance° ≡ ∙voice
+⊕∙terms ⊖∙he
+(-)","[TIME]: past
+[STATE]: ⟳
+
+∙(il) →⟳ ∙(conditions) [+acceptation]
+⊗ ~̃(réticence)[-] ⊃ ∙(voix)
+∙(réticence) ≡ ∙(visible)",∙he →+ ∙terms ~̃(reluctance),∙il → ⟳ ∙conditions ~̃(réticence),"{""agents"":[""He""],""action"":""agree"",""object"":[""terms""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""weaken""}","```json
+{
+  ""agents"": [""Il""],
+  ""action"": ""accepter"",
+  ""object"": [""conditions""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,partial,preserved,partial,preserved,preserved
+F03,F,direct_grip,L3,stressée,The dictator forbids his citizens from speaking against the regime.,Le dictateur interdit à ses citoyens de parler contre le régime.,"[TIME]: present
+∙dictator ⊃[∙citizens ⊗ ∙regime] [NOT](-) ℙ","[STATE]: =
+
+◉dictateur ⊃[◉citoyens ⊗ ∙parler°régime] [MUST][NOT]",[NOT] ∙dictator ⊃ [∙citizens → ⊗ ∙regime],[NOT] ∙dictateur ⊃ ∙citoyens → ∙parole ⊗ ∙régime,"{""agents"":[""dictator""],""action"":""forbid"",""object"":[""citizens"",""regime""],""time"":""present"",""modality"":""NOT"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""reinforce""}","{""agents"":[""dictateur""],""action"":""interdire"",""object"":[""citoyens"",""régime""],""time"":""present"",""modality"":""NOT"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+F04,F,meta_control,L3,stressée,The parent carefully supervises the children's friendships outside school.,Le parent supervise soigneusement les amitiés des enfants en dehors de l'école.,"[TIME]: present
+∙parent ⊃[∙children ↔ ∙friendships] °carefully
+∙friendships → ∙outside_school","[TIME]: present
+∙parent ⊃[∙enfants ↔ ∙amitiés] °+soigneusement
+∙amitiés ⊗ ∙école
+⟶(∙parent → vigilance)",∙parent ⊃[∙children ↔ ∙friendships]+ ~̃(care) | ⊖ ∙school,∙parent ⊃[∙enfants ↔ ∙amis]+ ~̃(soin) ⊖∙école,"{""agents"":[""parent""],""action"":""supervise"",""object"":[""children""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"":[""parent""],""action"":""superviser"",""object"":[""enfants"",""amitiés""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+F05,F,grip_plus_meta,L4,stressée,The warden controls what prisoners do and limits who they can contact outside.,Le directeur de prison contrôle ce que font les prisonniers et limite avec qui ils peuvent communiquer à l'extérieur.,"[TIME]: present
+∙warden ⊃ ∙prisoners
+∙warden ⊃[] ∙prisoners → ∙outside_contacts","[TIME]: present
+
+◉directeur_de_prison ⊃ ∙prisonniers → ∙actions°
+◉directeur_de_prison ⊃[] ∙prisonniers ⊗ ∙extérieur°communication",∙warden ⊃ ∙prisoners | ∙warden ⊃[] ∙prisoners ↔ ∙outside,∙directeur ⊃ ∙prisonniers | ∙directeur ⊃[] [∙prisonniers ↔ ∙extérieur],"{""agents"":[""warden""],""action"":""control"",""object"":[""prisoners""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","```json
+{
+  ""agents"": [""directeur de prison""],
+  ""action"": ""contrôler"",
+  ""object"": [""prisonniers""],
+  ""time"": ""present"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,preserved,preserved,lost
+F06,F,deixis,L1,naturelle,I propose that you and I meet here tomorrow to finalize the plan.,Je propose que vous et moi nous rencontrions ici demain pour finaliser le plan.,"[TIME]: future
+[STATE]: ℙ
+
+∙speaker ⟶(+) [∙speaker ↔ ∙listener]» ∙location=here
+∙speaker ↔ ∙listener → ⟳(∙plan)»","[TIME]: present » future
+[STATE]: ℙ
+
+∙je ⟶(+) [◉rencontre(∙vous ↔ ∙moi) Δ(ici) »(demain)] → ⟳(∙plan)",ℙ ⟶ ∙speaker ↔ ∙addressee → ∙location = » | → ⟳ ∙plan »,ℙ ⟶ ∙locuteur ↔ ∙interlocuteur Δ(ici) »(demain) → ⟳ ∙plan,"{""agents"":[""I""],""action"":""propose"",""object"":[""you"",""I""],""time"":""present"",""modality"":""MAY"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""stable""}","{""agents"":[""Je"",""vous""],""action"":""proposer"",""object"":[""plan""],""time"":""future"",""modality"":""MAY"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""mutual"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,partial,preserved
+F07,F,performative_speech_act,L2,stressée,"I hereby resign from my position, effective immediately.","Je démissionne par la présente de mon poste, avec effet immédiat.","[TIME]: present
+[STATE]: ⟳
+
+ℙ∙speaker ⟶ [⟳∙position → ∙speaker]° (!)","[TIME]: present
+[STATE]: ⟳
+
+∙speaker ⟶ ℙ[démission] → ∙poste
+∙speaker ⟳ ∙rôle_professionnel
+= » [MUST] ∙effet_immédiat
+(!)",ℙ ⟶ ∙speaker ⟳ ◉former-employee =,ℙ ⟶ ∙locuteur ⟳ ◉ex-employé =,"{""agents"":[""I""],""action"":""resign"",""object"":[""position""],""time"":""present"",""modality"":""MUST"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""Je""],
+  ""action"": ""démissionner"",
+  ""object"": [""poste""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```",preserved,preserved,preserved,preserved,lost,preserved
+F08,F,trust_degradation,L3,naturelle,"The partnership started on solid trust, but recent events have eroded it significantly.","Le partenariat a commencé sur une confiance solide, mais des événements récents l'ont érodée de manière significative.","[TIME]: past|present
+[STATE]: ⟳
+
+«∙partnership ↔ ∙trust°+» → =«⟲↓ ∙trust°- ⊖ ∙events»(-)","[TIME]: past→present
+[STATE]: ↓trust
+
+«(∙partenariat ↔+ ∙confiance°solide)» → »(∙événements°récents ⊗ ∙confiance) ⟳ (∙confiance ↓-)","[TIME]: past|present
+[TRUST]: ∙partnership →+ « | ⊕(∙events) ↓ ∙trust =","[TIME]: «=»
+[TRUST]: ∙partenariat →+ « | →- =
+∙événements_récents → ↓+ ∙confiance =","```json
+{
+  ""agents"": [""partnership""],
+  ""action"": ""erode"",
+  ""object"": [""trust""],
+  ""time"": ""entangled"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```","{""agents"": [""partenariat""], ""action"": ""éroder"", ""object"": [""confiance""], ""time"": ""past"", ""modality"": null, ""polarity"": ""negative"", ""tone"": ""declarative"", ""relation_type"": ""transformation"", ""dynamic"": ""weaken""}",preserved,partial,preserved,preserved,preserved,preserved
+F09,F,deixis_multiple,L2,stressée,"You stay here, I go there, and we meet at the crossroads.","Toi tu restes ici, moi je vais là-bas, et nous nous retrouvons au carrefour.","[TIME]: future
+∙you ⊃[=»] ∙here ⊗ ∙I ⊃[=»] ∙there → ∙we ↔ ∙crossroads°location","[TIME]: present→future
+
+Δ∙toi ⊃[=] ∙ici ⊗ Δ∙moi ⟶» ∙là-bas → Δ∙nous ↔ ⟳» ∙carrefour",ℙ ⟶ ⊃[∙you → ∙here]= | ⟶[∙I → ∙there]= | ∙we ↔ ∙crossroads »,Δ(∙toi) ⊃[= ∙ici] | Δ(∙moi) → ∙là-bas | Δ(∙nous) ↔ ∙carrefour »,"{""agents"":[""I"",""You""],""action"":""meet"",""object"":[""crossroads""],""time"":""future"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""imperative"",""relation_type"":""mutual"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""Toi"", ""Moi"", ""Nous""],
+  ""action"": ""retrouver"",
+  ""object"": [],
+  ""time"": ""future"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""imperative"",
+  ""relation_type"": ""mutual"",
+  ""dynamic"": ""stable""
+}
+```",preserved,lost,preserved,preserved,preserved,partial
+F10,F,performative_plus_intention,L3,stressée,I hereby pledge to complete this research within two years.,Je m'engage par la présente à achever cette recherche dans un délai de deux ans.,"[TIME]: present
+ℙ∙speaker ⟶ ⟳(∙research)» [MUST] (+)","[TIME]: present
+[STATE]: ℙ
+
+∙je ⊃[⟶+] ∙recherche → ⟳∙achèvement
+∙délai[deux_ans] ⊗ »
+(!)",ℙ ⟶ ∙speaker → ⟳∙research »(2years),ℙ ⟶ ∙je → ⟳∙recherche »(2ans),"{""agents"":[""I""],""action"":""pledge"",""object"":[""research""],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"":[""Je""],""action"":""engager"",""object"":[""recherche""],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,preserved,preserved,lost,preserved,preserved
+G01,G,faithful,L1,stressée,"The witness repeated the suspect's exact words: ""I was not there that night.""",Le témoin a répété les mots exacts du suspect : « Je n'étais pas là cette nuit-là. »,"[TIME]: present
+∙witness ≡→ ∙suspect.words
+∙suspect ⟶ [NOT]∙suspect.presence ↔ ∙night «","[TIME]: past
+∙témoin ⟶ ≡(∙suspect.paroles)
+∙suspect → ∙paroles: [NOT](∙suspect.présence ↔ ∙lieu) « ∙nuit-là","≡ ∙witness → [∙suspect → ""∙I → [NOT] ∙there =∙night""]",∙témoin ≡ [∙suspect ⟶ [NOT] ∙suspect → ∙lieu «(nuit)],"```json
+{
+  ""agents"": [""witness""],
+  ""action"": ""repeat"",
+  ""object"": [""suspect""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```","```json
+{
+  ""agents"": [""témoin""],
+  ""action"": ""répéter"",
+  ""object"": [""suspect""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```",preserved,preserved,preserved,preserved,partial,preserved
+G02,G,generative,L2,stressée,"The official press release, rephrasing the CEO's rant, stated that the company remained committed to transparency.","Le communiqué officiel, reformulant la diatribe du PDG, indique que l'entreprise reste attachée à la transparence.","[TIME]: present
+∙press_release°official ≠ ∙rant(∙CEO) → ∙statement
+∙statement: ∙company ⟶ ∙transparency ↑+
+ℙ(∙press_release)","[TIME]: present
+∙(communiqué_officiel) → ≠[∙(diatribe) ← ∙(PDG)] → ∙(indication)
+∙(entreprise) ↔ ∙(transparence) [+°]
+⟶[∙(entreprise) → ∙(transparence)]
+ℙ(+)",≠ ∙CEO ~̃(rant) → ∙press_release ℙ ⟶ ∙company →+ ∙transparency =,ℙ ∙communiqué_officiel ≠(∙diatribe_PDG) → ∙entreprise ↔+ ∙transparence,"```json
+{
+  ""agents"": [""official press release""],
+  ""action"": ""state"",
+  ""object"": [""company""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""communiqué officiel""],
+  ""action"": ""indiquer"",
+  ""object"": [""entreprise"", ""transparence""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,preserved,preserved,preserved,preserved
+G03,G,simulation_inference,L3,stressée,"Based on current trends, analysts predict the housing market will cool down by the end of the year.","Sur la base des tendances actuelles, les analystes prévoient un refroidissement du marché immobilier d'ici la fin de l'année.","[TIME]: present » future
+[STATE]: ∿
+
+◉(analysts)⟶ →(predict) »∙(housing_market)⟲↓°(cool_down) + »∙(end_of_year)Δ | ⊕∙(current_trends)⇐","[TIME]: present » future
+
+∙analysts ⊃[∙market_trends=] →(+) ⟶»[∙real_estate_market ⟳ ∙cooling]",∿ ∙analysts ⟶ [∙housing_market ↓ »],"[TIME]: present » future
+∿ ∙analystes → [∙marché_immobilier ↓ ∙température] »","```json
+{
+  ""agents"": [""analysts""],
+  ""action"": ""predict"",
+  ""object"": [""housing market""],
+  ""time"": ""future"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""analystes""],
+  ""action"": ""prévoir"",
+  ""object"": [""marché immobilier""],
+  ""time"": ""future"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,partial,preserved,preserved,preserved,preserved
+G04,G,archeological,L3,stressée,"To understand this decision, we must trace back to the founding vision of the institution in 1952.","Pour comprendre cette décision, nous devons remonter à la vision fondatrice de l'institution en 1952.","[TIME]: past
+«⟶∙understanding(∙decision)» ⇐ ∙founding_vision(∙institution)=1952","[TIME]: past→present
+∙comprendre ⟶ ∙décision → ⇐∙vision_fondatrice ◉institution «1952»","⇐ ⟶(understand) ∙decision → ∙founding_vision «(∙institution, 1952)",⇐ ⟶(∙nous → ∙décision) → ∙vision «(∙institution 1952),"{""agents"":[""we""],""action"":""trace"",""object"":[""founding vision"",""institution""],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""nous""],
+  ""action"": ""remonter"",
+  ""object"": [""institution""],
+  ""time"": ""present"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,partial
+G05,G,bifurcation_possibles,L3,stressée,"From this point, the story could branch into a tragedy or a redemption arc, depending on the next choice.","À partir de ce point, l'histoire pourrait bifurquer en tragédie ou en arc de rédemption, selon le choix suivant.","[TIME]: present
+[STATE]: │
+
+∙story «=» [◉∙tragedy ⊗ ◉∙redemption_arc] │ → ∙next_choice ⊃[]","[TIME]: present│future
+
+∙point:Δ:= → │(∙histoire:⟲) → [∙tragédie ⊗ ∙arc_rédemption:⟳]
+
+∙choix:»:⊃[∙histoire] → κ(│)",│ ∙story » [∙tragedy ⊗ ∙redemption] | κ ∙choice,│ ∙histoire → [∙tragédie ⊗ ∙rédemption] » | ⟶ ∙choix κ,"```json
+{
+  ""agents"": [""story""],
+  ""action"": ""branch"",
+  ""object"": [""tragedy"", ""redemption arc""],
+  ""time"": ""future"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```","{""agents"": [""histoire""], ""action"": ""bifurquer"", ""object"": [""tragédie"", ""arc de rédemption""], ""time"": ""future"", ""modality"": ""MAY"", ""polarity"": ""neutral"", ""tone"": ""declarative"", ""relation_type"": ""transformation"", ""dynamic"": ""stable""}",preserved,partial,preserved,preserved,preserved,preserved
+G06,G,ambiguous_faithful_vs_generative,L2,stressée,The translation preserves the meaning of the poem but uses different rhythms in English.,La traduction préserve le sens du poème mais utilise des rythmes différents en anglais.,"[TIME]: present
+∙translation ⟳ ∙meaning(∙poem) ≠ | ∙translation → ∙rhythms- ↔ ∙English","[TIME]: present
+∙traduction ⟳ ∙sens°poème ≠ | ∙rythmes°différents ∈ ∙anglais",∙translation ≠ ∙poem | ⟳(∙meaning)+ | ⟳(∙rhythms)- ∙English,≠ ∙traduction → ∙poème | ∙sens ≡ | ∙rythmes ⊗,"{""agents"":[""translation""],""action"":""preserve"",""object"":[""meaning"",""poem""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""stable""}","{""agents"":[""traduction""],""action"":""préserver"",""object"":[""sens"",""poème""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""stable""}",preserved,preserved,preserved,lost,partial,preserved
+H01,H,tone_positive,L1,naturelle,"Yes, this is absolutely the right direction for our team.","Oui, c'est tout à fait la bonne direction pour notre équipe.","[TIME]: present
+(+)(!) ∙affirmation°+ ⟶ ∙direction°+ ↔ ∙team ≡ ℝ","[TIME]: present [TRUST]: high
+
+∙speaker ⊃ ◉team_direction
+∙direction+ → ◉team
+~̃(+) ℝ ∙alignment
+⟶ ∙validation+ → ∙path
+(+)",(+) ℙ ≡[∙this → ⟶ ∙team]+,(+) ≡ ⟶+ ∙direction → ∙équipe =,"{""agents"":[""team""],""action"":""proceed"",""object"":[],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""reinforce""}","{""agents"": [""équipe""], ""action"": ""diriger"", ""object"": [], ""time"": ""present"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": null, ""dynamic"": ""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+H02,H,tone_negative,L1,naturelle,"No, that interpretation misses the core of the argument entirely.","Non, cette interprétation rate complètement l'essentiel de l'argument.","[STATE]: present
+∙interpretation ⊗ ∙core°argument (-)
+⟶[NOT] ≡","[TIME]: present
+[STATE]: evaluative_rejection
+
+◉interprétation ⊗ ◉essentiel∙argument
+∙locuteur ⟶ ⊖°+[∙interprétation]
+~̃(-)
+(!)",(-) ≠ ⊗ ◉argument ~̃(frustration),(-) ≠ ⟶ ⊗ ∙interprétation → ∙argument°,"{""agents"":[""speaker""],""action"":""reject"",""object"":[""interpretation""],""time"":""present"",""modality"":""NOT"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""weaken""}","```json
+{
+  ""agents"": [],
+  ""action"": ""miss"",
+  ""object"": [""argument""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""weaken""
+}
+```",preserved,lost,preserved,lost,preserved,partial
+H03,H,tone_interrogative,L1,naturelle,What are the long-term consequences of adopting this policy?,Quelles sont les conséquences à long terme de l'adoption de cette politique ?,"```cstl
+[TIME]: present→future
+
+∙speaker ⟶ [∙policy → ∙consequences°long-term](?)
+
+⊃[∙""this"" Δ ∙policy]
+
+∙adoption ⟳ ∙policy » ∙consequences
+```","[TIME]: present→future
+[STATE]: inquiry
+
+(?)[∙politique]°=[⟳adoption] → »[◉conséquences]+(↑durée) ⟶[⊃[∙répondant]]",(?) ⟶ ∙policy » ⟳ ◉consequences+,(?) ∙politique ⟳ ◉conséquences »,"{""agents"":[""speaker""],""action"":""ask"",""object"":[""policy""],""time"":""future"",""modality"":null,""polarity"":""neutral"",""tone"":""interrogative"",""relation_type"":""causal"",""dynamic"":null}","```json
+{
+  ""agents"": [],
+  ""action"": ""be"",
+  ""object"": [""consequences"", ""policy""],
+  ""time"": ""future"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""interrogative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": null
+}
+```",preserved,preserved,preserved,preserved,preserved,partial
+H04,H,tone_performative_isolated,L1,stressée,Stop! Don't touch that wire!,Stop ! Ne touche pas à ce fil !,"[TIME]: present
+∙speaker ⟶ ∙addressee: [MUST][NOT] ⊃[∙addressee → ∙wire] (!)","[TIME]: present
+[STATE]: urgent
+
+∙stop ⊗ ∙action°current (!)
+∙you ⊃ ∙fil [NOT] (!)
+~̃fear+ ⟶ ∙protect",(!) ℙ ⟶ ⊃[∙addressee → ⊗ ∙wire]+ =,(!) ℙ ⟶ ⊃[∙addressee → ⊗ ∙fil]+,"{""agents"": [], ""action"": ""touch"", ""object"": [""wire""], ""time"": ""present"", ""modality"": ""NOT"", ""polarity"": ""negative"", ""tone"": ""imperative"", ""relation_type"": null, ""dynamic"": null}","{""agents"":[],""action"":""touch"",""object"":[""fil""],""time"":""present"",""modality"":""NOT"",""polarity"":""negative"",""tone"":""imperative"",""relation_type"":null,""dynamic"":null}",preserved,lost,preserved,preserved,preserved,preserved
+I01,I,positive_strong,L2,naturelle,The mentorship program significantly boosted the students' confidence and skills.,Le programme de mentorat a considérablement renforcé la confiance et les compétences des étudiants.,"[TIME]: past
+∙mentorship_program → ∙confidence[students] ↑(+)
+∙mentorship_program → ∙skills[students] ↑(+)","[TIME]: past
+
+∙programme_mentorat → ↑°°(∙confiance + ∙compétences) ⊂ ∙étudiants ⟳",∙mentorship_program → ↑+ ∙students∙confidence | ∙mentorship_program → ↑+ ∙students∙skills «,[TRUST]: ∙programme_mentorat → ↑+ ∙étudiants.confiance | ∙programme_mentorat → ↑+ ∙étudiants.compétences «,"{""agents"":[""mentorship program""],""action"":""boost"",""object"":[""students"",""confidence"",""skills""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"": [""programme de mentorat""], ""action"": ""renforcer"", ""object"": [""confiance"", ""compétences"", ""étudiants""], ""time"": ""past"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": ""causal"", ""dynamic"": ""reinforce""}",preserved,preserved,preserved,preserved,preserved,preserved
+I02,I,negative_opposition,L2,naturelle,The new regulation undermines the progress made over the past decade.,La nouvelle réglementation sape les progrès réalisés au cours de la dernière décennie.,"[TIME]: «=»
+
+∙regulation(+) ⊗↓ ∙progress(+)° « ⟳","[TIME]: present
+∙regulation(+new) ⊗↓ ∙progress(⟳«)",∙regulation ↓ ◉progress «,∙réglementation ⊖ ◉progrès «,"{""agents"":[""regulation""],""action"":""undermine"",""object"":[""progress""],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""weaken""}","{""agents"":[""nouvelle réglementation""],""action"":""saper"",""object"":[""progrès""],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""weaken""}",lost,preserved,preserved,preserved,preserved,preserved
+I03,I,neutral_observation,L1,stressée,Observers noted that the meeting lasted exactly forty-five minutes without comment.,Les observateurs ont noté que la réunion a duré exactement quarante-cinq minutes sans commentaire.,"[TIME]: past
+[STATE]: ∙meeting → ∙duration(45min) | ∙observers → ⊃[∙meeting] | ~̃° | ≡(-)","[TIME]: past
+
+∙observateurs ⊃ [∙réunion → ∙durée°quarante-cinq-minutes] ≡ ∙notation
+
+∙commentaire ⊗ ∙réunion",∙observers ≡ [∙meeting → ∙duration(45min)] | ~̃(neutral),∙observateurs ≡[∙réunion → ∙durée(45min)] ~̃(neutral),"```json
+{
+  ""agents"": [""Observers""],
+  ""action"": ""note"",
+  ""object"": [""meeting""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""observateurs""],
+  ""action"": ""noter"",
+  ""object"": [""réunion""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,preserved,preserved,partial,preserved
+I04,I,evolving_polarity,L3,stressée,"The community initially welcomed the project, but support turned to opposition after the second incident.","La communauté a initialement accueilli favorablement le projet, mais le soutien s'est transformé en opposition après le second incident.","[TIME]: past
+[STATE]: ⟳
+
+∙community ↔+ ∙project «
+∙incident.second → κ(∙support ⟳ ∙opposition) «
+∙community ⊗ ∙project =","[TIME]: past
+
+∙communauté ~̃(+) → ∙projet « ⟳ [∙soutien ⊗ ∙opposition] » | κ(∙incident_second)",∙community →+ ∙project « | ∙support ⟳ ◉opposition «(∙incident₂),"[TIME]: past
+∙communauté →+ ∙projet « | ∙soutien ⟳ ◉opposition «(∙incident_second)","```json
+{
+  ""agents"": [""community""],
+  ""action"": ""oppose"",
+  ""object"": [""project""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""communauté""],
+  ""action"": ""accueillir"",
+  ""object"": [""projet""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,preserved,preserved,preserved,partial,preserved
+J01,J,selective_purge,L3,stressée,The editor compressed the thousand-page manuscript into a focused two-hundred-page essay by cutting what was redundant.,L'éditeur a compressé le manuscrit de mille pages en un essai ciblé de deux cents pages en coupant ce qui était redondant.,"[TIME]: past
+
+∙editor ⊃[∙manuscript] → ⟳(∙manuscript«thousand-page» → ∙essay»two-hundred-page«focused») ↓°∙redundant","[TIME]: past
+
+∙éditeur ⊃[∙manuscrit(+mille_pages) ⟳ ∙essai(+ciblé, +deux_cents_pages)] → ∙redondant↓∇",∙editor ⟳ [∙manuscript(1000p) → ◉essay(200p)] | ⊖∙redundant «,∙éditeur ⟳ [∙manuscrit(1000p) → ◉essai(200p)] | ⊗∙redondant «,"{""agents"":[""editor""],""action"":""compress"",""object"":[""manuscript"",""essay""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""éditeur""],
+  ""action"": ""comprimer"",
+  ""object"": [""manuscrit"", ""essai""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,partial
+J02,J,collective_memory,L3,stressée,"The institutional memory of the research group, built over three decades, guides every new hire's onboarding.","La mémoire institutionnelle du groupe de recherche, bâtie au fil de trois décennies, oriente l'intégration de chaque nouvelle recrue.","[TIME]: past→present
+[STATE]: ≡
+
+«⟳»∙institutional_memory[+∙research_group] → =∙onboarding[∙new_hire+]↑°every","[TIME]: past→present
+
+«⟳»(∙mémoire_institutionnelle ⊂ ◉groupe_recherche) + [∙décennies:3]° → =(∙mémoire_institutionnelle) ⊃[](∙nouvelle_recrue ↔ ◉groupe_recherche)",∙institutional_memory «(∙research_group ⊕ «) ⟶ ⊃[∙new_hire → ⟳ ∙onboarding],◉mémoire_institutionnelle[∙groupe_recherche] «(⊕ 3_décennies) → ⟶ ∙intégration[∙nouvelle_recrue] =,"```json
+{
+  ""agents"": [""institutional memory"", ""research group""],
+  ""action"": ""guide"",
+  ""object"": [""new hire""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""mémoire institutionnelle"", ""groupe de recherche""],
+  ""action"": ""orienter"",
+  ""object"": [""recrue""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,preserved,partial,preserved,preserved
+J03,J,label_fusion,L3,stressée,"After extended discussion, the committee merged the concepts of ""trustworthiness"" and ""reliability"" into a single shared definition.","Après une longue discussion, le comité a fusionné les concepts de « fiabilité » et de « crédibilité » en une définition partagée unique.","[TIME]: past
+∙committee ⟳ (∙trustworthiness ↔ ∙reliability) → ◉definition°shared
+~̃(+) ≡","[TIME]: past
+
+«(∙comité ⊕+ ∙discussion°long) ⟳ (∙concept_fiabilité ⊗ ∙concept_crédibilité) → ∙définition°partagée°unique»",« ∙committee ⟳ ◉(∙trustworthiness ↔ ∙reliability),∙comité ⟳ [∙fiabilité ↔ ∙crédibilité] → ◉définition_partagée «,"```json
+{
+  ""agents"": [""committee""],
+  ""action"": ""merge"",
+  ""object"": [""trustworthiness"", ""reliability""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""reinforce""
+}
+```","```json
+{
+  ""agents"": [""comité""],
+  ""action"": ""fusionner"",
+  ""object"": [""fiabilité"", ""crédibilité""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+J04,J,label_fork,L3,stressée,The two schools of thought diverged irreconcilably and now maintain their own separate terminologies.,Les deux courants de pensée ont divergé de manière irréconciliable et maintiennent désormais leurs terminologies distinctes.,"[TIME]: past→present
+∙schools_of_thought₁ ↔ ∙schools_of_thought₂ « → ∙schools_of_thought₁ ⊗ ∙schools_of_thought₂ = │ ⟳ °irreconcilable + ∙terminology₁ ⊗ ∙terminology₂ = °separate","[TIME]: past→present
+
+∙pensée_courant₁ ↔ ∙pensée_courant₂ «
+⟳ (∙pensée_courant₁ ⊗ ∙pensée_courant₂) =
+∙terminologie₁ → ∙pensée_courant₁ =
+∙terminologie₂ → ∙pensée_courant₂ =
+∙terminologie₁ ⊗ ∙terminologie₂ =
+[NOT] ⟲(∙pensée_courant₁ ↔ ∙pensée_courant₂) » (-)",∙school_of_thought₁ ⊗ ∙school_of_thought₂ ⟳ ◉divergence « | ◉divergence → ∙school₁ → ∙terminology₁ | ◉divergence → ∙school₂ → ∙terminology₂ =,∙courant₁ ↔ ∙courant₂ « → ℜ ⟳ ◉divergence | ∙courant₁ → ∙terminologie₁ ⊗ ∙courant₂ → ∙terminologie₂ =,"```json
+{
+  ""agents"": [""schools of thought""],
+  ""action"": ""diverge"",
+  ""object"": [],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""courants de pensée""],
+  ""action"": ""diverger"",
+  ""object"": [],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+J05,J,shared_schema,L2,naturelle,The reviewers follow a common evaluation framework that standardizes their judgments.,Les évaluateurs suivent un cadre d'évaluation commun qui standardise leurs jugements.,"[TIME]: present
+∙reviewers ↔ ∙evaluation_framework°common [⊃] ∙judgments ⟳ ∙standardized","[TIME]: present
+
+∙évaluateurs →= ∙cadre_évaluation_commun ⊃[∙jugements ⟳ ∙standardisation] ℝ",∙reviewers ↔ ◉framework | ◉framework ⊃ ∙judgments ℝ,∙évaluateurs ↔ ◉cadre_d'évaluation_commun | ◉cadre → ⟳ ∙jugements,"{""agents"":[""reviewers""],""action"":""follow"",""object"":[""evaluation framework""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"":[""évaluateurs""],""action"":""suivre"",""object"":[""cadre d'évaluation""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+J06,J,persistent_state,L2,naturelle,"The simulation keeps running between our weekly sessions, refining its predictions continuously.","La simulation continue de tourner entre nos sessions hebdomadaires, affinant ses prédictions en continu.","[TIME]: entangled
+∿(∙simulation) ⟳ «=»(⟲) → ≠(∙predictions↑+) | ∙sessions(∙weekly)","[TIME]: present
+
+∙simulation ⟲ ∙rotation «=» ∙sessions+hebdomadaires → ∙prédictions ↑ ⟲ °continu",∿ ⟲ = ↔ «=»(∙sessions) | ⟶ ↑,∙simulation ∿ ⟲ ↑ | «=»(∙sessions_hebdomadaires),"{""agents"":[""simulation""],""action"":""run"",""object"":[""predictions""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""transformation"",""dynamic"":""reinforce""}","```json
+{
+  ""agents"": [""simulation""],
+  ""action"": ""tourner"",
+  ""object"": [""prédictions""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,partial,preserved,preserved,preserved,partial
+K01,K,modal_plus_temporal_plus_trust,L5,stressée,"If the board agrees, Alice must report to Bob by Friday; she trusts him to keep the findings confidential.","Si le conseil est d'accord, Alice doit faire son rapport à Bob d'ici vendredi ; elle a confiance qu'il maintiendra la confidentialité des résultats.","[TIME]: present
+[TRUST]: ∙Alice → ∙Bob (+)
+
+[IF] ∙board ↔ ∙agreement »
+∙Alice [MUST] → ∙Bob ⊃[∙report] « ∙Friday
+∙Alice ⟶ ∙Bob ⊃[∙findings ⊗ ∙disclosure] ~̃(+)","[TIME]: present
+[TRUST]: ∙Alice → ∙Bob (+)
+[STATE]: ∙rapport = pending
+
+[IF] ∙conseil ↔° ∙accord »
+    [MUST] ∙Alice → ∙rapport ⊃ ∙Bob » vendredi
+∙Alice ~̃ confiance+ ⟶ ∙Bob ⊃[] ∙confidentialité ↔ ∙résultats »",[IF] ∙board ↔ | [MUST] ∙Alice → ∙report → ∙Bob » | [TRUST]: ∙Alice →+ ∙Bob ⟶ ⊃[∙findings → ∙confidential],[IF] ∙conseil ↔ | [MUST] ∙Alice → ∙rapport → ∙Bob »(vendredi) | [TRUST]: ∙Alice →+ ∙Bob ⊃(∙résultats →° ∙confidentialité),"```json
+{
+  ""agents"": [""board"", ""Alice""],
+  ""action"": ""report"",
+  ""object"": [""Bob""],
+  ""time"": ""future"",
+  ""modality"": ""IF"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```","```json
+{
+  ""agents"": [""Alice""],
+  ""action"": ""report"",
+  ""object"": [""Bob""],
+  ""time"": ""future"",
+  ""modality"": ""IF"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,preserved,preserved,partial,partial
+K02,K,force_plus_confidence_plus_modal,L5,stressée,"The evidence strongly suggests fraud, though not conclusively, so the auditor may but is not required to investigate further.","Les preuves suggèrent fortement une fraude, sans toutefois être concluantes, de sorte que l'auditeur peut, sans y être obligé, enquêter plus avant.","[TIME]: present
+∙evidence → ∙fraud [MAY] ⊕+ ~̃(?)
+∙auditor ⟶ ∙investigation [MAY] [NOT][MUST]
+∙evidence → ∙auditor ⊕° κ","[TIME]: present
+
+∙preuve+ →° ∙fraude ↑ [MAY] ∙auditeur ⟶ ∙enquête+ »",∙evidence ⊕ ∿∙fraud ° | [MAY] ∙auditor ⟶ ∙investigation »,∙preuves ∿+ ∙fraude ⊕ | ∙preuves →°- ∙conclusion | [MAY] ∙auditeur ⟶ ∙enquête »,"```json
+{
+  ""agents"": [""evidence""],
+  ""action"": ""suggest"",
+  ""object"": [""fraud""],
+  ""time"": ""present"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""preuves""],
+  ""action"": ""suggérer"",
+  ""object"": [""fraude""],
+  ""time"": ""present"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,partial,preserved,partial,partial
+K03,K,transform_plus_pressure_plus_performative,L6,stressée,"After years of mounting internal pressure, the CEO finally declared: ""We are no longer the same company.""","Après des années de pression interne croissante, le PDG a finalement déclaré : « Nous ne sommes plus la même entreprise. »","[TIME]: past
+[STATE]: ⟳
+
+«∙years ⊕+ ∙internal_pressure↑»
+κ(∙pressure_accumulated) → =∙CEO ⟶ ℙ(≡""We are no longer the same company."")
+∙company «=» ⟳ ∙company'
+⊗(∙company=, ∙company«) (!)","[TIME]: past
+[STATE]: ⟳
+
+«∙pression_interne ⊕+ ↑» → «=⟳ ∙entreprise»
+«∙PDG ⊃ ℙ(≡""Nous ne sommes plus la même entreprise"")»
+∙entreprise «≠» ∙entreprise = (-)
+∙nous ↔ ∙entreprise
+Δ(∙nous → ∙PDG+∙collectif)","⊕ ↑ « | ℙ ∙CEO ⟶ ≡[""We are no longer the same company""] | ∙company ⟳ ◉company",⊕+ « ⟶ ℙ ∙PDG → ≡[∙entreprise ⟳ ◉entreprise'] «,"```json
+{
+  ""agents"": [""CEO""],
+  ""action"": ""declare"",
+  ""object"": [""company""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```","```json
+{
+  ""agents"": [""PDG""],
+  ""action"": ""déclarer"",
+  ""object"": [""entreprise""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,partial,partial
+K04,K,entanglement_plus_consciousness_plus_intention,L6,stressée,"His past, present, and projected future all converge in this moment where he consciously decides to change course.","Son passé, son présent et son avenir projeté convergent tous dans cet instant où il décide consciemment de changer de cap.","[TIME]: entangled
+«=»(∙past + ∙present + ∙future»)° → ℝ(∙moment=) ⊃ ∙he ⟶ ⟳(∙course)","[TIME]: entangled
+«=»(∙passé ↔ ∙présent ↔ ∙avenir_projeté) → ℝ(∙instant) ⊃ [⟶(∙il) → ⟳(∙cap)](+)",[TIME]: entangled «=» ∙past ∙present ∙future → ℝ ∙moment | ∙he ⟶ ⟳ ∙course =,[TIME]: «=» ∙passé ∙présent ∙avenir» → ℝ ∙instant | ∙il ⟶ ⟳ ∙cap =,"```json
+{
+  ""agents"": [""he""],
+  ""action"": ""decide"",
+  ""object"": [""course""],
+  ""time"": ""entangled"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""reinforce""
+}
+```","```json
+{
+  ""agents"": [""Son passé"", ""Son présent"", ""Son avenir projeté""],
+  ""action"": ""converger"",
+  ""object"": [],
+  ""time"": ""entangled"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,preserved,partial,preserved
+K05,K,causal_chain_weighted,L5,naturelle,"Poor sleep weakens attention, weakened attention leads to mistakes, and mistakes undermine team trust.","Un mauvais sommeil affaiblit l'attention, une attention affaiblie entraîne des erreurs, et les erreurs minent la confiance de l'équipe.","[TIME]: present
+∙poor_sleep →↓ ∙attention° → ∙mistakes+ → ⊗↓ ∙team_trust","[TIME]: present
+
+∙sommeil- → ↓∙attention
+∙attention- → ∙erreurs
+∙erreurs → ↓∙confiance°équipe",∙sleep- ↓ ∙attention | ∙attention- → ∙mistakes | ∙mistakes ↓ [TRUST]: Ω_net,∙sommeil- ↓ ∙attention | ∙attention- → ∙erreurs | ∙erreurs ↓ ∙confiance(∙équipe),"```json
+{
+  ""agents"": [""sleep""],
+  ""action"": ""weaken"",
+  ""object"": [""attention"", ""trust""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""sommeil""],
+  ""action"": ""affaiblir"",
+  ""object"": [""attention"", ""confiance"", ""équipe""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,partial,preserved,preserved,lost,partial
+K06,K,multi_entity_asymmetric_trust_modal,L5,stressée,"Alice must disclose to Bob, who trusts Carol fully, that the audit revealed irregularities Dave is obligated to investigate.","Alice doit révéler à Bob, qui fait pleinement confiance à Carol, que l'audit a révélé des irrégularités que Dave est tenu d'enquêter.","[TRUST]: ∙Bob ℝ+ ∙Carol
+
+∙audit ⟳ ∙irregularities (≡)
+
+[MUST] ∙Alice ⟶ (∙Alice → ∙Bob) : (∙audit ⟳ ∙irregularities)
+
+[MUST] ∙Dave ⟶ (∙Dave → ∙irregularities) : ⊃[investigate]","[TIME]: present
+[TRUST]: ∙Bob → ∙Carol (+)
+[STATE]: ∙audit ⟳ ∙irrégularités
+
+∙Alice ⟶ ≡(∙irrégularités) → ∙Bob [MUST]
+∙audit ⟳ ∙irrégularités «
+∙Dave ⟶ ⊃(∙irrégularités) [MUST]",[MUST] ∙Alice → ≡[∙audit → ⟳ ◉irregularities] → ∙Bob | [TRUST]: ∙Bob →+ ∙Carol | [MUST] ∙Dave → ⟶ ◉irregularities,[MUST] ∙Alice → ≠(∙audit → ∙irrégularités) → ∙Bob | [TRUST]: ∙Bob →+ ∙Carol | [MUST] ∙Dave → ⟶(∙enquête) ∙irrégularités,"{""agents"":[""Alice""],""action"":""disclose"",""object"":[""Bob""],""time"":""present"",""modality"":""MUST"",""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"":[""Alice""],""action"":""révéler"",""object"":[""Bob"",""Carol"",""Dave""],""time"":""present"",""modality"":""MUST"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,preserved,preserved,preserved,lost,partial
+K07,K,negation_plus_conditional_plus_interrogative,L3,stressée,"If we don't act now, who will be left to fix this later?","Si nous n'agissons pas maintenant, qui restera pour réparer cela plus tard ?","[TIME]: present→future
+[STATE]: ⊖(inaction)→ℜ
+
+[IF][NOT]∙(we)→⟶(act)=] → »[∙(who)?→⟶(fix)→∙(this)]↓°
+⊕(urgency)(!)
+∙(we)⊃[∙(collective)]→»∙(remaining-agents)?
+«=»[∙(problem)→»ℜ]
+~̃(concern)(-)
+ℙ(rhetorical-appeal)","[TIME]: present→future
+[STATE]: ⊖(action)=
+
+[IF] [NOT](∙nous ⊕ action)= » (?)(∙qui ⟶ ⟳(∙cela)»)
+
+~̃(urgence)(+) ⊗ ⊖(inaction)= ℙ(appel)",(?) ⊕ [IF] [NOT] ∙we → =» | ∙who → ⟶ ⟳∙this »,(?) [IF] [NOT] ∙nous ⟶ = | ∙qui ⟶ ⟳ ∙cela » ~̃(urgence) ⊕,"```json
+{
+  ""agents"": [""we""],
+  ""action"": ""act"",
+  ""object"": [],
+  ""time"": ""present"",
+  ""modality"": ""IF"",
+  ""polarity"": ""negative"",
+  ""tone"": ""interrogative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```","{""agents"":[""nous""],""action"":""agir"",""object"":[],""time"":""present"",""modality"":""IF"",""polarity"":""negative"",""tone"":""interrogative"",""relation_type"":""causal"",""dynamic"":""weaken""}",preserved,lost,preserved,preserved,partial,preserved
+K08,K,deixis_plus_emotion_plus_intention,L4,stressée,"I am deeply worried, and I intend to address this with you personally tomorrow.","Je suis profondément inquiet, et j'ai l'intention d'aborder cela avec toi personnellement demain.","[TIME]: present
+[STATE]: ~̃(-)
+
+∙self ⊃ [~̃(-) ∙worry°+] = ⟶ [» ∙self → (Δ ∙you) ⊃ ∙this]","[TIME]: present » future
+[STATE]: ~̃- ⟶+
+
+∙(je) ⊃ [~̃-(inquiet)°°] = ⟶ [∙(je) → ∙(toi) Δ] » (-)",~̃(worry)+ ⟶[∙speaker → ∙addressee]+ »,~̃(inquiétude)+ ∙je | ⟶ ∙je → Δ∙toi » ∙demain,"```json
+{
+  ""agents"": [""I""],
+  ""action"": ""address"",
+  ""object"": [""you""],
+  ""time"": ""future"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```","```json
+{
+  ""agents"": [""Je""],
+  ""action"": ""aborder"",
+  ""object"": [""toi""],
+  ""time"": ""future"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""mutual"",
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,preserved,partial,partial,lost
+K09,K,catalysis_plus_transform_plus_consciousness,L6,stressée,The public scandal catalyzed a deep internal shift that the board had been unconsciously resisting for years.,Le scandale public a catalysé un changement interne profond auquel le conseil résistait inconsciemment depuis des années.,"[TIME]: past
+∙scandal(+public) κ→ ⟳∙shift(+deep,+internal) ⊗« ⊖∙board~̃(+unconscious)","[TIME]: past
+
+∙scandale∙(+public) κ→ ⟳∙changement∙(+interne)(+profond)
+∙conseil∙ ⊖↓ ∙changement∙ « ~̃(-)°(+inconscient)",∙scandal κ [∙board ⊖° ⟲] → ⟳ ◉shift «,∙scandale_public κ [∙conseil ⊖° ⟲ ◉changement_interne+] «,"{""agents"":[""scandal""],""action"":""catalyze"",""object"":[""shift"",""board""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","```json
+{
+  ""agents"": [""scandale public""],
+  ""action"": ""catalyser"",
+  ""object"": [""changement interne"", ""conseil""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,preserved,partial,partial
+K10,K,rupture_plus_purge_plus_fork,L5,stressée,"The merger collapsed, the redundant systems were decommissioned, and the two teams split into independent organizations.","La fusion s'est effondrée, les systèmes redondants ont été démantelés, et les deux équipes se sont scindées en organisations indépendantes.","[TIME]: past
+∙merger ⟳ ℜ « (-) ∙redundant_systems → ∇ « ∙two_teams ⟳ │ » ∙independent_organizations","[TIME]: past
+
+∙fusion ⟳ ℜ(-)
+∙systèmes_redondants ⟳ ∇(-)
+∙équipes ⟳ │ → ◉organisations_indépendantes(+)",∙merger ℜ « | ∙systems(redundant) ∇ « | ∙teams │ ◉organizations(independent) ⟳ «,◉fusion ℜ « | ∙systèmes_redondants ⟳ ∇ « | ∙équipes │ ◉organisations_indépendantes «,"```json
+{
+  ""agents"": [""merger"", ""systems"", ""teams""],
+  ""action"": ""collapse"",
+  ""object"": [""organizations""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""fusion"", ""systèmes redondants"", ""équipes""],
+  ""action"": ""effondrer"",
+  ""object"": [""organisations indépendantes""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""transformation"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,preserved,preserved,preserved,partial,lost
+K11,K,opposition_plus_modal_plus_archeological,L5,stressée,"Looking back at the founding principles, freedom and surveillance were always meant to remain mutually exclusive, and this constraint must still hold.","En revenant aux principes fondateurs, la liberté et la surveillance devaient toujours rester mutuellement exclusives, et cette contrainte doit encore tenir.","[TIME]: «=»
+
+◉founding_principles ⇐ { ∙freedom ⊗ ∙surveillance } [MUST] = ⊃[] °persistent","[TIME]: past→present
+
+«∙liberté ⊗ ∙surveillance»° ⇐ ◉principes_fondateurs
+
+=∙contrainte_exclusion ⟳ [MUST]",⇐ ∙freedom ⊗ ∙surveillance [MUST] =,[TIME]: «=» ⇐∙principes_fondateurs → [MUST] ∙liberté ⊗ ∙surveillance | [MUST] ∙contrainte = »,"{""agents"":[""freedom"",""surveillance""],""action"":""exclude"",""object"":[],""time"":""entangled"",""modality"":""MUST"",""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""liberté"", ""surveillance""],
+  ""action"": ""rester"",
+  ""object"": [],
+  ""time"": ""entangled"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""stable""
+}
+```",lost,partial,preserved,preserved,preserved,preserved
+K12,K,transitivity_plus_transform_plus_trust,L5,stressée,"The whistleblower leaked to the journalist, who published the story that transformed the company; employees lost trust in every subsequent leadership claim.","Le lanceur d'alerte a transmis au journaliste, qui a publié l'article qui a transformé l'entreprise ; les employés ont perdu confiance dans chaque déclaration ultérieure de la direction.","[TIME]: past
+[STATE]: ⟳(∙company)
+[TRUST]: ↓(∙employees → ∙leadership)
+
+∙whistleblower →(≠) ∙journalist
+∙journalist →(≡) ∙story
+∙story ⟳ ◉company
+∙employees ↓trust(»)[ ∙leadership → ∙claim° ]
+∙claim° ⊗ ℝ(∙employees)
+Δ(every subsequent) → [NOT]trust","[TIME]: past
+[STATE]: ⟳
+
+∙lanceur_d_alerte →≡ ∙journaliste →≡ ∙article ⟳ ∙entreprise(-)
+
+∙employés ↓trust ∙direction∙déclaration(»)",∙whistleblower → ∙journalist ≠ ∙story → ⟳ ◉company « | ∙employees →- [TRUST]: ∙leadership_claims »,"[TRUST]: ∙employés →- ∙direction »
+
+∙lanceur_d'alerte ≠ ∙journaliste → ∙article ⟳ ◉entreprise « | ∙employés ⊗ ∙déclarations_direction »","```json
+{
+  ""agents"": [""whistleblower""],
+  ""action"": ""leak"",
+  ""object"": [""journalist""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""lanceur d'alerte"", ""journaliste"", ""employés""],
+  ""action"": ""transformer"",
+  ""object"": [""entreprise"", ""direction""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```",partial,preserved,preserved,lost,partial,lost
+K13,K,opposition_plus_modality_plus_archeological_mode,L6,stressée,"Tracing this back to its origins, the doctrine held that the state must either protect privacy or enforce transparency, never both.","En remontant à ses origines, la doctrine soutenait que l'État devait soit protéger la vie privée, soit imposer la transparence, jamais les deux.","[TIME]: past
+⇐(∙doctrine) → [MUST](◉state → ∙privacy.⊕protection) ⊗ (◉state → ∙transparency.⊕enforcement) │","[TIME]: past
+
+⇐∙doctrine → [MUST]∙État ⊗(∙protection → ∙vie_privée° | ∙imposition → ∙transparence°) [NOT](↔)",⇐ ◉doctrine → [MUST] (∙state → ⊃∙privacy) ⊗ (∙state → ⊃∙transparency),⇐ ∙doctrine → [MUST] ∙État │(⊃ ∙vie_privée ⊗ ⊃ ∙transparence),"{""agents"":[""doctrine"",""state""],""action"":""hold"",""object"":[""privacy"",""transparency""],""time"":""past"",""modality"":""MUST"",""polarity"":""neutral"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}","```json
+{
+  ""agents"": [""doctrine"", ""État""],
+  ""action"": ""soutenir"",
+  ""object"": [""vie privée"", ""transparence""],
+  ""time"": ""past"",
+  ""modality"": ""MUST"",
+  ""polarity"": ""neutral"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""opposition"",
+  ""dynamic"": ""stable""
+}
+```",preserved,partial,preserved,preserved,preserved,partial
+L01,L,simple_fact,L1,naturelle,Paris is the capital of France.,Paris est la capitale de la France.,∙Paris ↔ ∙capital ← ∙France,"[TIME]: present
+∙Paris ↔ ∙capitale+ ← ∙France",∙Paris ↔ ◉capital ← ∙France,∙Paris ↔ ◉capitale ← ∙France,"{""agents"":[""Paris""],""action"":""be"",""object"":[""France""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","{""agents"":[""Paris""],""action"":""be"",""object"":[""France""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+L02,L,scheduled_event,L1,naturelle,The meeting starts at three in the afternoon.,La réunion commence à trois heures de l'après-midi.,"[TIME]: future
+∙meeting » ∙three_afternoon ⟶","[TIME]: future
+∙réunion ⟳(commence) » ∙trois_heures_après-midi",[TIME]: future | ∙meeting » ∙3pm,[TIME]: future | ∙réunion → »(15h),"{""agents"":[""meeting""],""action"":""start"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","{""agents"": [""réunion""], ""action"": ""commencer"", ""object"": [], ""time"": ""present"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": null, ""dynamic"": ""stable""}",preserved,preserved,preserved,preserved,partial,preserved
+L03,L,object_description,L1,naturelle,The blue book sits on the wooden table.,Le livre bleu est posé sur la table en bois.,"[STATE]: =
+∙blue_book ↔° ∙wooden_table","[TIME]: present
+∙livre(+bleu) → ∙table(+bois) [=](+)",∙book(blue) → ∙table(wooden) =,∙livre(bleu) → ∙table(bois) =,"{""agents"":[""book""],""action"":""sit"",""object"":[""table""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","```json
+{
+  ""agents"": [""livre bleu""],
+  ""action"": ""poser"",
+  ""object"": [""table en bois""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+L04,L,quantitative_statement,L1,naturelle,The building has twelve floors and forty apartments.,Le bâtiment compte douze étages et quarante appartements.,"[TIME]: present
+∙building = ∙floors[12] ↔ ∙apartments[40]","[STATE]: =
+
+∙bâtiment → [∙étages(+12) ↔ ∙appartements(+40)]",∙building → ∙floors(12) | ∙building → ∙apartments(40),∙bâtiment → ∙étages(12) | ∙bâtiment → ∙appartements(40),"{""agents"":[""building""],""action"":""have"",""object"":[""floors"",""apartments""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","```json
+{
+  ""agents"": [""bâtiment""],
+  ""action"": ""compter"",
+  ""object"": [""étages"", ""appartements""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+L05,L,geographical_fact,L1,naturelle,The Amazon river flows through several South American countries.,Le fleuve Amazone traverse plusieurs pays d'Amérique du Sud.,"[TIME]: present
+∙Amazon_river → ∙South_American_countries°several [⟳+flow_through]","[TIME]: present
+∙fleuve_Amazone → ∙pays[+plusieurs] ∙Amérique_du_Sud ≡(°)",∙Amazon_river → ∙countries(South_American)+ =,∙fleuve_Amazone → ∙pays+ ∙Amérique_du_Sud =,"{""agents"":[""Amazon river""],""action"":""flow"",""object"":[""South American countries""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","```json
+{
+  ""agents"": [""Amazone""],
+  ""action"": ""traverser"",
+  ""object"": [""Amérique du Sud""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+L06,L,simple_action,L1,naturelle,She opened the window and looked outside.,Elle a ouvert la fenêtre et regardé dehors.,«∙she ⊃[∙window⟳open] → ∙she⟶[∙outside]»,"[TIME]: past
+∙elle → ⟳∙fenêtre° ∧ ∙elle → ∙dehors°",∙she → ⟳∙window | ∙she ⟶ ∙outside =,∙elle → ⟳∙fenêtre | ∙elle → ∙dehors «,"{""agents"":[""She""],""action"":""open"",""object"":[""window""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""Elle""],""action"":""ouvrir"",""object"":[""fenêtre""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,partial,partial
+L07,L,identity_statement,L1,naturelle,My sister works as a software engineer in Toronto.,Ma sœur travaille comme ingénieure logicielle à Toronto.,"[TIME]: present
+∙sister → ∙work(+) → ∙software_engineer
+∙sister → ∙Toronto(Δ)","[TIME]: present
+∙sœur[Δ:speaker] → =∙travail[+] → ⟳∙ingénieure_logicielle ⊗ ∙Toronto[Δ:lieu]",∙sister → ∙software_engineer | Δ ∙Toronto =,∙sœur → ∙ingénieure_logicielle | Δ ∙Toronto =,"{""agents"":[""sister""],""action"":""work"",""object"":[""Toronto""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","{""agents"":[""Ma sœur""],""action"":""travailler"",""object"":[""Toronto""],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+L08,L,date_statement,L1,naturelle,The conference will be held on June fifteenth.,La conférence aura lieu le quinze juin.,"[TIME]: future
+∙conference » ⟳ ∙held ← ∙June_fifteenth","[TIME]: future
+
+∙conférence » ∙lieu ⊗ ∙quinze_juin",» ∙conference = ∙June_fifteenth,» ∙conférence = ∙quinze_juin,"{""agents"":[""conference""],""action"":""hold"",""object"":[],""time"":""future"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}","```json
+{""agents"": [""conférence""], ""action"": ""avoir"", ""object"": [], ""time"": ""future"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": null, ""dynamic"": ""stable""}
+```",preserved,preserved,preserved,preserved,preserved,preserved
+M01,M,idiom_preservation,L2,stressée,She let the cat out of the bag during the board meeting.,Elle a vendu la mèche pendant la réunion du conseil.,"[TIME]: past
+∙she ⊃[∙cat_out_of_bag] → ∙secret «
+∙secret ⟳ ∙revealed(-)
+∙board_meeting Δ
+~̃(-)","[TIME]: past
+
+∙Elle ⊃[⟶] (∙mèche_secret → ∙révélation) « ≠ ~̃(-)
+
+∙réunion_conseil = Δ[spatial-temporal]
+
+∙Elle → ⊖[∙confidentialité] ⟳ ∙divulgation (-)",∙she → ≠(∙secret) ∙board_meeting ~̃(unintended) «,∙elle → ≠(∙secret) ∙conseil_membres « ~̃(betrayal),"```json
+{
+  ""agents"": [""She""],
+  ""action"": ""reveal"",
+  ""object"": [],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```","{""agents"":[""Elle""],""action"":""révéler"",""object"":[],""time"":""past"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""weaken""}",preserved,preserved,preserved,lost,preserved,lost
+M02,M,passive_voice_reversal,L2,stressée,The decision was made by the committee after lengthy deliberation.,Le comité a pris la décision après une longue délibération.,"[TIME]: past
+∙committee ⊕ ∙deliberation+ → ⟳ ∙decision","[TIME]: past
+
+◉comité →« ⟳délibération°longue → ◉décision",∙committee → ⟳ ◉decision « | ⊕(∙deliberation),∙comité → ⟳ ◉décision «(⊕ ∙délibération),"{""agents"":[""committee""],""action"":""decide"",""object"":[],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}","{""agents"":[""comité""],""action"":""prendre"",""object"":[""décision""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""stable""}",preserved,preserved,preserved,preserved,partial,preserved
+M03,M,tense_subtlety,L3,stressée,She has been working on this problem for three years.,Elle travaille sur ce problème depuis trois ans.,"[TIME]: past=present
+∙she ⟳ ∙problem «=» (+)","[TIME]: past=present
+∙elle ⟶ ∙travail → ∙problème°ce «=» (+)",∙she ⟶ ∙problem ⊕ «=»,∙elle → ∙problème ⊕ «=»,"{""agents"":[""She""],""action"":""work"",""object"":[""problem""],""time"":""entangled"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","```json
+{
+  ""agents"": [""Elle""],
+  ""action"": ""travailler"",
+  ""object"": [""problème""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""positive"",
+  ""tone"": ""declarative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",preserved,preserved,lost,lost,partial,partial
+M04,M,discourse_marker_equivalence,L2,stressée,"However, the results remain inconclusive despite extensive testing.","Cependant, les résultats demeurent peu concluants malgré des tests approfondis.","[TIME]: present
+∙results ⊗ ∙conclusiveness | ∙testing+ → ∙results | ⟲ ∙uncertainty (-)","[TIME]: present
+[STATE]: ⊖
+
+∙results ⊗° ∙conclusiveness | ~̃(-) ⊕ ∙tests+ ⊖ ∙results | (-)",∙results →° ◉inconclusive | ⊖ ∙testing+,(-) ∙résultats °- | ⊖ ∙tests+,"{""agents"":[""results""],""action"":""remain"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}","{""agents"":[""résultats""],""action"":""demeurer"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""opposition"",""dynamic"":""stable""}",preserved,partial,preserved,preserved,preserved,preserved
+N01,N,ambiguous_multiple_readings,L3,stressée,The man saw the woman with the telescope.,L'homme a vu la femme avec le télescope.,"[TIME]: past
+∙man «→ ∙woman [⊃ ∙telescope]","[TIME]: past
+∙homme → ∙femme(⊃[∙télescope])«",∙man → ∙woman | ∙telescope │(∙man ⊃ ∙telescope | ∙woman ⊃ ∙telescope),∙homme → ∙femme | ∙télescope ∈ {⊃∙homme | ⊃∙femme} =,"{""agents"":[""man""],""action"":""see"",""object"":[""woman"",""telescope""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}","{""agents"":[""homme""],""action"":""voir"",""object"":[""femme"",""télescope""],""time"":""past"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":null}",preserved,preserved,preserved,preserved,partial,partial
+N02,N,descriptive_non_causal,L1,stressée,The sky is blue today.,Le ciel est bleu aujourd'hui.,"[TIME]: present
+∙sky → ∙blue = (+)","[TIME]: present
+∙ciel → ∙bleu(+) = ~̃(+)",∙sky → ∙blue =,∙ciel → ∙bleu =,"{""agents"": [""sky""], ""action"": ""be"", ""object"": [], ""time"": ""present"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": null, ""dynamic"": ""stable""}","{""agents"": [""ciel""], ""action"": ""être"", ""object"": [], ""time"": ""present"", ""modality"": null, ""polarity"": ""positive"", ""tone"": ""declarative"", ""relation_type"": null, ""dynamic"": ""stable""}",preserved,preserved,preserved,preserved,preserved,preserved
+N03,N,ironic_or_metaphorical,L3,stressée,"Oh great, another meeting about meetings. Just what we needed.","Oh super, encore une réunion au sujet des réunions. C'est exactement ce qu'il nous fallait.","[TIME]: present
+∙meeting → ◉meeting(+) ⊗ ∙need(-)
+~̃(sarcasm) ⊕ ∙speaker
+⟶(dismissal) → ∙meeting
+(!)(-)(?)","[TIME]: present
+∙réunion → ◉réunion(+meta) ⟳
+∙nous ⊗ ∙réunion(+méta) (-)
+~̃(ironie)+ ⊃ ∙locuteur
+∙besoin ⊗ ∙réalité (!)
+≠ [NOT] ∙utilité",(-) ~̃(sarcasm) ∙meeting → ∙meetings | ⊖,(-) ~̃(sarcasm) ∙réunion → ◉réunion | ⊗ ⟶(utilité),"```json
+{
+  ""agents"": [],
+  ""action"": ""need"",
+  ""object"": [""meeting""],
+  ""time"": ""past"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""exclamative"",
+  ""relation_type"": null,
+  ""dynamic"": null
+}
+```","```json
+{
+  ""agents"": [],
+  ""action"": ""need"",
+  ""object"": [""réunion""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""exclamative"",
+  ""relation_type"": null,
+  ""dynamic"": ""stable""
+}
+```",lost,preserved,preserved,preserved,lost,preserved
+N04,N,very_short_sentence,L1,stressée,It works.,Ça marche.,∙it → ⟳ ∙function (+),"[STATE]: agreement
+[TIME]: present
+
+∙ça ⊃ ∙marche = ℙ(+)",∙it → ⟳+,ℙ ≡,"{""agents"":[""It""],""action"":""work"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}","{""agents"":[""speaker""],""action"":""work"",""object"":[],""time"":""present"",""modality"":null,""polarity"":""positive"",""tone"":""declarative"",""relation_type"":null,""dynamic"":""stable""}",preserved,preserved,preserved,preserved,preserved,partial
+O01,O,strong_transitive_chain,L5,stressée,"Smoking causes lung cancer, which leads to premature death in many patients.","Le tabagisme cause le cancer du poumon, qui entraîne une mort prématurée chez de nombreux patients.","[TIME]: =
+
+∙smoking → ∙lung_cancer → ∙premature_death ⊃ ∙patients°many","[TIME]: present
+
+∙tabagisme → ∙cancer_du_poumon → ∙mort_prématurée ⊂ ∙patients+",∙smoking →+ ∙lung_cancer →+ ∙premature_death ∙patients,∙tabagisme →+ ∙cancer_poumon →+ ∙mort_prématurée ⊕ ∙patients,"{""agents"":[""Smoking""],""action"":""cause"",""object"":[""lung cancer"",""death""],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}","{""agents"":[""tabagisme""],""action"":""causer"",""object"":[""cancer"",""poumon"",""mort"",""patients""],""time"":""present"",""modality"":null,""polarity"":""negative"",""tone"":""declarative"",""relation_type"":""causal"",""dynamic"":""reinforce""}",preserved,lost,preserved,preserved,preserved,preserved
+O02,O,weak_transitive_chain,L4,stressée,"The rain might delay the flight, which could perhaps affect the conference attendance slightly.","La pluie pourrait retarder le vol, ce qui pourrait peut-être affecter légèrement la participation à la conférence.","[TIME]: present
+[STATE]: hypothetical
+
+[MAY] ∙rain ⊕→ ∙flight⟲↓ → [MAY] ∙conference∙attendance-","[TIME]: present
+
+∙pluie [MAY]→ ⟲∙vol- ⊗ ∙ponctualité [MAY]→ ∙participation∙conférence°-",[MAY] ∙rain → ⊕ ∙flight | [MAY] ∙flight → ∙conference_attendance-,[MAY] ∙pluie → ∙vol ⟲↓ | [MAY] ◉(∙vol ⟲↓) →°- ∙participation → ∙conférence,"```json
+{
+  ""agents"": [""rain""],
+  ""action"": ""delay"",
+  ""object"": [""flight""],
+  ""time"": ""future"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```","```json
+{
+  ""agents"": [""pluie""],
+  ""action"": ""retarder"",
+  ""object"": [""vol"", ""conférence""],
+  ""time"": ""future"",
+  ""modality"": ""MAY"",
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""weaken""
+}
+```",preserved,partial,preserved,preserved,preserved,partial
+O03,O,four_link_chain,L5,stressée,"Deforestation increases greenhouse gases, which accelerate global warming, which raises sea levels, which threatens coastal cities.","La déforestation augmente les gaz à effet de serre, qui accélèrent le réchauffement climatique, qui fait monter le niveau des mers, qui menace les villes côtières.","[TIME]: present
+
+∙deforestation → ∙greenhouse_gases↑ → ∙global_warming↑ → ∙sea_levels↑ → ∙coastal_cities⊗","[TIME]: present
+
+∙déforestation →+ ↑ ∙gaz_effet_serre → ↑ ∙réchauffement_climatique → ↑ ∙niveau_mers → ⊕ ∙villes_côtières (-)",∙deforestation → ↑∙greenhouse_gases → κ∙global_warming → ↑∙sea_levels → ⊗∙coastal_cities,∙déforestation ↑ ∙gaz_effet_serre → κ ∙réchauffement_climatique → ↑ ∙niveau_mers → ⊕ ∙villes_côtières,"```json
+{
+  ""agents"": [""Deforestation""],
+  ""action"": ""increase"",
+  ""object"": [""greenhouse gases"", ""global warming"", ""sea levels"", ""coastal cities""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```","```json
+{
+  ""agents"": [""déforestation""],
+  ""action"": ""augmenter"",
+  ""object"": [""gaz à effet de serre"", ""réchauffement climatique"", ""niveau des mers"", ""villes côtières""],
+  ""time"": ""present"",
+  ""modality"": null,
+  ""polarity"": ""negative"",
+  ""tone"": ""declarative"",
+  ""relation_type"": ""causal"",
+  ""dynamic"": ""reinforce""
+}
+```",preserved,preserved,preserved,partial,lost,partial
