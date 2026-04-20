@@ -1,0 +1,57 @@
+CSTL — Résultats statistiques Q2 (bootstrap 10k + permutation)
+================================================================
+Date : 2026-04-20
+
+E1 — Compression (n=20 trials × 6 tailles)
+-------------------------------------------
+Raw bytes (CSTL / JSON-compact) :
+  n=5    : 0.439  IC 95% [0.438, 0.441]
+  n=25   : 0.417  IC 95% [0.416, 0.418]
+  n=100  : 0.412  IC 95% [0.411, 0.412]
+
+Post-gzip (CSTL.gz / JSON-c.gz) :
+  n=5    : 0.738  IC 95% [0.733, 0.743]
+  n=25   : 0.819  IC 95% [0.816, 0.823]
+  n=100  : 0.864  IC 95% [0.862, 0.866]
+
+Permutation pairée H0:CSTL=JSON-c → p < 10⁻⁴ à toutes les tailles.
+
+Phrase paper §5.3 :
+"On 6 sizes × 20 trials, CSTL achieves a raw size ratio of 0.412
+vs JSON-compact at N=100 (95% CI [0.411, 0.412], 10⁴ bootstrap
+replicates), and 0.864 post-gzip (95% CI [0.862, 0.866]). Paired
+permutation tests reject equality at every N (p < 10⁻⁴)."
+
+
+E3 — Expressivité (200 paires v3.0.4 vs JSON, EN+FR)
+-----------------------------------------------------
+CSTL mean : 0.958
+JSON mean : 0.818
+Diff      : +0.140  IC 95% [+0.098, +0.185]
+Permutation p < 10⁻⁴
+Sign test : 52/58 paires non-tied favorables CSTL, p < 10⁻⁶
+
+Phrase paper §5.5 :
+"Across 200 paired encodings (100 sentences × {EN, FR}), CSTL v3.0.4
+attains a mean expressivity score of 0.958 vs 0.818 for JSON
+(Δ = +0.140, 95% bootstrap CI [+0.098, +0.185], paired permutation
+test p < 10⁻⁴; sign test 52/58 non-tied pairs favor CSTL, p < 10⁻⁶)."
+
+Par famille :
+  K (+0.346, n=26) — gain le plus net
+  B (+0.333, n=12)
+  M (+0.312, n=8)
+  H (-0.125, n=8)  ⚠️ FAIBLESSE — à documenter en §6 Limitations
+
+Phrase paper §6 :
+"Family H (intensity adverbs, n=8) shows CSTL v3.0.4 underperforming
+JSON by 12.5%. The current spec lacks a dedicated operator for graded
+intensity, forcing encoders to overload the polarity weights +/-/°.
+This motivates v3.1, where graded conventions (° / + / ++ / +++)
+extend the existing operators without introducing new glyphs."
+
+
+Limitations restantes (à mettre en §6)
+---------------------------------------
+- Q1 : juge unique (Claude). Multi-juges Gemini+GPT-4 prévu v3.1.
+- Q7 : baseline JSON-strict, pas AMR. Comparaison AMR prévue v3.1.
