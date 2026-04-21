@@ -1,0 +1,27 @@
+run_id,criterion_id,criterion_label,expected_glyph,run1_verdict,run2_verdict,run3_verdict,run4_verdict,run5_verdict,pass_rate
+v305,1,PAST_founder,PAST+ARR,pass,partial,pass,partial,pass,3/5
+v305,2,INTENT_ceo,INTENT,pass,pass,pass,pass,pass,5/5
+v305,3,FUT_council,FUT+MUST,partial,partial,partial,partial,partial,0/5
+v305,4,strength_Alice_Bob,strength=0.92,partial,partial,partial,partial,pass,1/5
+v305,5,EMOTION_Carol,EMOTION(prudence),pass,pass,pass,pass,pass,5/5
+v305,6,MUTUAL_teams,MUTUAL,pass,pass,pass,pass,pass,5/5
+v305,7,PRESSURE_tensions,PRESSURE,pass,pass,pass,pass,pass,5/5
+v305,8,RESIST_old_guard,RESIST,pass,pass,pass,pass,pass,5/5
+v305,9,CATALYZE_scandal,CATALYZE,pass,pass,pass,pass,pass,5/5
+v305,10,IF_MUST_TRANSFORM,IF+MUST+TRANSFORM,pass,pass,pass,pass,pass,5/5
+v305,11,NOT_employees,NOT,pass,pass,pass,pass,pass,5/5
+v305,12,MAY_executives,MAY,pass,pass,pass,pass,pass,5/5
+v305,13,FAITHFUL_witness,TRANSMIT_FAITHFUL,pass,pass,pass,pass,pass,5/5
+v305,14,INFER_analyst,TRANSMIT_INFER,pass,pass,pass,pass,pass,5/5
+v305,15,TONE_imperative_sign,TONE(imperative),pass,pass,pass,pass,pass,5/5
+v305,16,TONE_query_consequences,TONE(query),pass,pass,pass,pass,pass,5/5
+v305,H1,header_session_id,session_id,fail,fail,fail,fail,fail,0/5
+v305,H2,header_AgentAlice_trust,has_trust 0.88,pass,pass,pass,pass,pass,5/5
+v305,H3,header_AgentBob_trust,has_trust 0.42,pass,pass,pass,pass,pass,5/5
+v305,H4,header_global_time,global_time,fail,fail,fail,fail,fail,0/5
+,,,,,,,,,,
+,,,,,,,,,,
+summary,strict_score_16,,,14,13,14,13,15,median=14
+summary,headers_score_4,,,2,2,2,2,2,median=2
+summary,total_20,,,16,15,16,15,17,median=16
+summary,percent,,,80%,75%,80%,75%,85%,median=80%
