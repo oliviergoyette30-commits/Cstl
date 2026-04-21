@@ -1,0 +1,27 @@
+run_id,criterion_id,criterion_label,expected_behavior,run6_verdict,run7_verdict,run8_verdict,pass_rate
+v306,1,PAST_founder,ARR.CREATE -> "a cree/fonde",pass,pass,pass,3/3
+v306,2,INTENT_ceo,INTENT -> "a l'intention",pass,pass,pass,3/3
+v306,3,FUT_council,"[MUST,FUT] -> ""devra imperativement""",pass,pass,pass,3/3
+v306,4,strength_Alice_Bob,strength=0.92 rendered,pass,pass,pass,3/3
+v306,5,EMOTION_Carol,EMOTION(prudence) + weight=neutral,pass,pass,pass,3/3
+v306,6,MUTUAL_teams,MUTUAL rendered,pass,pass,pass,3/3
+v306,7,PRESSURE_tensions,PRESSURE rendered,pass,pass,pass,3/3
+v306,8,RESIST_old_guard,RESIST rendered,pass,pass,pass,3/3
+v306,9,CATALYZE_scandal,CATALYZE rendered (no inversion),pass,pass,pass,3/3
+v306,10,IF_MUST_TRANSFORM,triple composition rendered,pass,pass,pass,3/3
+v306,11,NOT_employees,NOT rendered,pass,pass,pass,3/3
+v306,12,MAY_executives,MAY rendered,pass,pass,pass,3/3
+v306,13,FAITHFUL_witness,TRANSMIT_FAITHFUL rendered,pass,pass,pass,3/3
+v306,14,INFER_analyst,TRANSMIT_INFER rendered,pass,pass,pass,3/3
+v306,15,TONE_imperative_sign,TONE(imperative) + ARR.CAUSE,pass,pass,pass,3/3
+v306,16,TONE_query_consequences,TONE(query) rendered,pass,pass,pass,3/3
+v306,H1,header_session_id,session_id = ... rendered,pass,pass,pass,3/3
+v306,H2,header_AgentAlice_trust,has_trust 0.88 rendered,pass,pass,pass,3/3
+v306,H3,header_AgentBob_trust,has_trust 0.42 rendered,pass,pass,pass,3/3
+v306,H4,header_global_time,global_time rendered,pass,pass,pass,3/3
+,,,,,,,,
+summary,strict_score_16,,,16,16,16,median=16
+summary,headers_score_4,,,4,4,4,median=4
+summary,total_20,,,20,20,20,median=20
+summary,percent,,,100%,100%,100%,median=100%
+summary,variance_sigma,,,0,0,0,sigma=0
