@@ -96,6 +96,8 @@ RELATIONS:
 
 A juriste, an LLM, or a parser can read this directly. No infrastructure required.
 
+The full payload is available as [`payload_novatech.cstl`](./payload_novatech.cstl) in this repository.
+
 ---
 
 ## Why CSTL?
@@ -138,7 +140,7 @@ CSTL v4.0 has been empirically validated on **9 distinct test protocols**:
 | JSON Schema baseline comparison | 5/5 dimensions |
 | **Total** | **212/214 = 99.1%** |
 
-See `experiments/` for reproducibility scripts and `analysis/` for comparative studies.
+Statistical validation (bootstrap CI 95%, permutation tests, sign tests) is documented in [`experiments/`](./experiments/) with random seed 42 for reproducibility.
 
 ---
 
@@ -158,48 +160,59 @@ CSTL is positioned within a broader landscape of LLM communication protocols:
 
 CSTL occupies a specific niche: **textual, self-sufficient, AI Act-compliant, zero-infrastructure** semantic protocol for LLM-to-LLM communication.
 
+Detailed comparative analyses available in this repository:
+- [`CSTL_vs_JSON.md`](./CSTL_vs_JSON.md) — rigorous 5-dimension comparison
+- [`CSTL_vs_G2CP.md`](./CSTL_vs_G2CP.md) — deep analysis of direct competitor
+- [`CSTL_literature_review_S1.md`](./CSTL_literature_review_S1.md) — review of 20 related works
+
 ---
 
-## Repository structure
+## Repository contents
 
-```
-cstl/
-├── README.md                  # This file
-├── LICENSE                    # MIT License
-├── CHANGELOG.md               # Version history
-├── CITATION.cff               # Academic citation metadata
-├── requirements.txt           # Python dependencies
-│
-├── SPEC_v4.md                 # Formal specification v4.0
-├── CSTL_arXiv_draft_v2.md     # Paper draft (in preparation)
-│
-├── cstl_parser.py             # Reference parser (Python)
-├── cstl_domains.py            # 18 domain ontologies
-├── cstl_codec.py              # Codec utilities
-├── cstl_colab.py              # Colab notebook helpers
-│
-├── examples/
-│   ├── payload_novatech.cstl  # Canonical example (financial)
-│   ├── payload_novatech.json  # JSON Schema equivalent (for comparison)
-│   └── payload_novatech.fc.json  # Function Calling equivalent
-│
-├── experiments/
-│   ├── e1_compression.csv      # Compression measurements
-│   ├── e1_compression.py
-│   ├── e3_expressivity.csv     # Expressivity measurements
-│   ├── e3_expressivity.py
-│   ├── e4_k9_uniqueness.py     # k=9 attribute uniqueness
-│   ├── run_experiments.py      # Reproducibility entry point
-│   └── cross_model_replication.md
-│
-├── analysis/
-│   ├── CSTL_vs_JSON.md         # Rigorous JSON comparison
-│   ├── CSTL_vs_G2CP.md         # G²CP analysis
-│   └── literature_review.md    # Related work synthesis
-│
-└── tests/
-    └── test_5aspects.py        # 5-dimension benchmark framework
-```
+### Core specification and code
+- [`README.md`](./README.md) — This file
+- [`SPEC_v4.md`](./SPEC_v4.md) — Formal specification v4.0
+- [`CHANGELOG.md`](./CHANGELOG.md) — Version history
+- [`CITATION.cff`](./CITATION.cff) — Academic citation metadata
+- [`LICENSE`](./LICENSE) — MIT License
+- [`requirements.txt`](./requirements.txt) — Python dependencies
+
+### Reference implementation
+- [`cstl_parser.py`](./cstl_parser.py) — Reference parser v4.0
+- [`cstl_domains.py`](./cstl_domains.py) — 18 domain ontologies
+- [`cstl_codec.py`](./cstl_codec.py) — Codec utilities
+- [`cstl_colab.py`](./cstl_colab.py) — Colab notebook helpers
+- [`cstl_stsb_test.py`](./cstl_stsb_test.py) — STSB benchmark utilities
+
+### Canonical examples
+- [`payload_novatech.cstl`](./payload_novatech.cstl) — CSTL example (financial AI Act scenario)
+- [`payload_novatech.json`](./payload_novatech.json) — JSON Schema equivalent
+- [`payload_novatech.fc.json`](./payload_novatech.fc.json) — Function Calling equivalent
+
+### Comparative analyses
+- [`CSTL_vs_JSON.md`](./CSTL_vs_JSON.md) — 5-dimension rigorous comparison
+- [`CSTL_vs_G2CP.md`](./CSTL_vs_G2CP.md) — Analysis of direct competitor (AAMAS 2026)
+- [`CSTL_literature_review_S1.md`](./CSTL_literature_review_S1.md) — Literature review (20 protocols)
+
+### Benchmarks and tests
+- [`test_5aspects.py`](./test_5aspects.py) — 5-dimension benchmark framework
+- [`run_experiments.py`](./run_experiments.py) — Reproducibility entry point
+- [`e1_compression.py`](./e1_compression.py) + [`e1_compression.csv`](./e1_compression.csv) — Compression measurements
+- [`e3_expressivity.py`](./e3_expressivity.py) + [`e3_expressivity.csv`](./e3_expressivity.csv) — Expressivity measurements
+- [`e4_k9_uniqueness.py`](./e4_k9_uniqueness.py) — k=9 attribute uniqueness study
+
+### Empirical experiments
+- [`experiments/`](./experiments/) — Full empirical trajectory v3.0.2 → v3.0.4 with statistical validation (bootstrap CI, permutation tests, sign tests)
+
+### Version history
+- [`v3.0.1_patch_notes.md`](./v3.0.1_patch_notes.md)
+- [`v3.0.2_patch_notes.md`](./v3.0.2_patch_notes.md)
+- [`v3.0.4_prompt_system.md`](./v3.0.4_prompt_system.md)
+- [`COMMIT_GUIDE_v304.md`](./COMMIT_GUIDE_v304.md)
+- [`EXPERIMENTAL_SETUP.md`](./EXPERIMENTAL_SETUP.md)
+
+### Paper draft
+- [`CSTL_arXiv_draft_v2.md`](./CSTL_arXiv_draft_v2.md) — Preprint in preparation
 
 ---
 
@@ -222,7 +235,7 @@ PyPI release planned: `pip install cstl` (Q2 2026).
 from cstl_parser import parse, encode, validate
 
 # Parse a CSTL payload
-with open('examples/payload_novatech.cstl') as f:
+with open('payload_novatech.cstl') as f:
     doc = parse(f.read())
 
 print(f"Domain: {doc.domain}")
@@ -260,7 +273,7 @@ A formal arXiv preprint is in preparation.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](./LICENSE) for details.
 
 ---
 
