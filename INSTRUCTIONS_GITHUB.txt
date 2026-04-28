@@ -1,0 +1,103 @@
+==========================================
+TAGLINE GITHUB (description du repo)
+==========================================
+
+Copier-coller cette description dans le champ "Description" du repo GitHub :
+
+>>> CSTL — Compressed Semantic Transfer Language. A self-sufficient semantic protocol for lossless LLM-to-LLM communication, with native deontic modalities ([MUST]/[NOT]/[IF]), uncertainty markers, and AI Act compliance. Sister mode CASTLE (networked) planned for future work.
+
+==========================================
+TOPICS GITHUB (tags du repo)
+==========================================
+
+Tags suggérés (existants à conserver + nouveaux) :
+
+- nlp
+- compression
+- llm
+- ai-communication
+- semantic-protocol
+- ai-act
+- multi-agent
+- deontic-logic
+- llm-to-llm
+- python
+
+==========================================
+PARAMÈTRES À CHANGER DANS GITHUB
+==========================================
+
+1. Settings → General → Visibility
+   → Change to "Public" quand prêt
+
+2. Settings → General → Description
+   → Coller le tagline ci-dessus
+
+3. Settings → General → Topics
+   → Ajouter les tags suggérés
+
+4. About (sidebar du repo, icône engrenage)
+   → Description : (le tagline)
+   → Website : (vide pour l'instant ou ton portfolio)
+   → Topics : (les tags)
+   → ✓ Use your GitHub Pages website (si tu en fais une plus tard)
+
+==========================================
+README.md À PLACER DANS LE REPO
+==========================================
+
+Le fichier README.md complet est dans /github_repo/README.md
+Il remplace celui actuel du repo.
+
+==========================================
+ORDRE DE COMMIT RECOMMANDÉ
+==========================================
+
+Pour limiter le risque de casser le repo, voici l'ordre :
+
+Commit 1 : "Add v4.0 specification and reference parser"
+  - SPEC_v4.md (NOUVEAU)
+  - cstl_parser.py (REMPLACE le précédent ou commit nouveau si différent)
+  - cstl_domains.py (NOUVEAU)
+
+Commit 2 : "Add canonical examples"
+  - examples/payload_novatech.cstl (NOUVEAU dossier examples/)
+  - examples/payload_novatech.json
+  - examples/payload_novatech.fc.json
+
+Commit 3 : "Add comparative analyses"
+  - analysis/CSTL_vs_JSON.md (NOUVEAU dossier analysis/)
+  - analysis/CSTL_vs_G2CP.md
+  - analysis/literature_review.md
+
+Commit 4 : "Add 5-aspect benchmark framework"
+  - tests/test_5aspects.py (NOUVEAU dossier tests/)
+
+Commit 5 : "Update README for v4.0 with CSTL/CASTLE dual-mode architecture"
+  - README.md (REMPLACE)
+  - CHANGELOG.md (REMPLACE ou MET À JOUR)
+  - CITATION.cff (NOUVEAU)
+
+Commit 6 (optionnel) : "Update repository tagline and topics"
+  - Pas de fichier modifié, juste les paramètres GitHub
+
+==========================================
+QUAND PASSER PUBLIC
+==========================================
+
+Recommandation : APRÈS les 5 commits ci-dessus.
+
+Vérifications avant de cliquer sur "Make public" :
+- [ ] README.md à jour pour v4.0
+- [ ] LICENSE présent (MIT)
+- [ ] CITATION.cff présent
+- [ ] Tagline mis à jour
+- [ ] cstl_parser.py exécutable sans erreur
+- [ ] requirements.txt à jour
+- [ ] Aucune information sensible (clés API, données privées)
+- [ ] Tous les commits avec messages clairs
+
+Une fois public :
+- Tweet/post LinkedIn d'annonce avec lien vers le repo
+- Mention de la métrique 212/214 sur 9 protocoles
+- Position : "préprint arXiv en préparation"

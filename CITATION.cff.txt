@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use CSTL in academic research or commercial deployment, please cite this work."
+title: "CSTL: A Compressed Semantic Transfer Language for Lossless LLM-to-LLM Communication"
+authors:
+  - family-names: "Goyette"
+    given-names: "Olivier"
+    affiliation: "Independent Researcher"
+type: software
+license: MIT
+version: "4.0"
+date-released: "2026-04-27"
+url: "https://github.com/oliviergoyette/cstl"
+keywords:
+  - "natural language processing"
+  - "large language models"
+  - "semantic protocol"
+  - "AI-to-AI communication"
+  - "AI Act compliance"
+  - "deontic logic"
+  - "multi-agent systems"
+  - "compression"
+abstract: >
+  CSTL (Compressed Semantic Transfer Language) is a textual semantic
+  protocol designed for lossless LLM-to-LLM communication. It preserves
+  propositional content, deontic modalities ([MUST], [NOT], [IF]),
+  numerical force, temporality, uncertainty markers, and multi-agent
+  trust state across agent hops. CSTL is self-sufficient (no shared
+  infrastructure required), zero-shot intelligible by frontier LLMs
+  (Claude, Gemini, ChatGPT), and aligned with EU AI Act articles
+  12, 13, and 14 for record-keeping, transparency, and human oversight.
+  Empirical validation across 9 distinct test protocols achieves
+  212/214 = 99.1% factual fidelity preservation.
+preferred-citation:
+  type: misc
+  authors:
+    - family-names: "Goyette"
+      given-names: "Olivier"
+  title: "CSTL: A Compressed Semantic Transfer Language for Lossless LLM-to-LLM Communication"
+  year: 2026
+  url: "https://github.com/oliviergoyette/cstl"
+  notes: "Preprint in preparation for arXiv submission"
