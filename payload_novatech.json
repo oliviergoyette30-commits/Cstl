@@ -1,0 +1,188 @@
+{
+  "context": {
+    "domain": "credit_scoring_finance",
+    "jurisdiction": "EU_AI_Act",
+    "snapshot_date": "2026-04-27"
+  },
+  "entities": [
+    {
+      "id": "NovaTech",
+      "name": "NovaTech SA",
+      "role": "editor",
+      "country": "FR"
+    },
+    {
+      "id": "FidBank",
+      "name": "FidBank",
+      "role": "deployer",
+      "country": "FR"
+    },
+    {
+      "id": "CreditEval",
+      "name": "CreditEval-1.7",
+      "role": "ai_system",
+      "ai_act_risk_class": "high"
+    },
+    {
+      "id": "Borrower",
+      "name": "Emprunteur",
+      "role": "end_user"
+    },
+    {
+      "id": "ACPR",
+      "name": "Autorite de Controle Prudentiel et de Resolution",
+      "role": "regulator",
+      "country": "FR"
+    }
+  ],
+  "system": {
+    "id": "CreditEval",
+    "version": "1.7",
+    "editor_id": "NovaTech",
+    "deployer_id": "FidBank",
+    "deployment_date": "2026-03-14",
+    "ai_act_risk_class": "high",
+    "training_dataset_size": 480000
+  },
+  "obligations": [
+    {
+      "id": "OB-001",
+      "modality": "MUST",
+      "subject_id": "NovaTech",
+      "object_id": "FidBank",
+      "action": "deliver_complete_technical_documentation",
+      "deadline": "2026-07-15",
+      "force": 0.92
+    },
+    {
+      "id": "OB-002",
+      "modality": "MUST",
+      "subject_id": "FidBank",
+      "action": "maintain_audit_trail",
+      "legal_basis": "AI_Act_Article_12",
+      "force": 0.95
+    },
+    {
+      "id": "OB-003",
+      "modality": "MUST",
+      "subject_id": "CreditEval",
+      "action": "enable_human_review_of_credit_refusals",
+      "force": 1.0
+    },
+    {
+      "id": "OB-004",
+      "modality": "NOT",
+      "subject_id": "CreditEval",
+      "action": "make_autonomous_decisions_above_threshold",
+      "monetary_threshold_eur": 50000,
+      "force": 1.0
+    },
+    {
+      "id": "OB-005",
+      "modality": "IF_THEN",
+      "subject_id": "FidBank",
+      "object_id": "Borrower",
+      "action": "provide_detailed_AI_reasoning_explanation",
+      "condition": "borrower_contests_decision",
+      "response_window_days": 7,
+      "force": 0.93
+    },
+    {
+      "id": "OB-006",
+      "modality": "MUST",
+      "subject_id": "FidBank",
+      "object_id": "ACPR",
+      "action": "submit_annual_audit_report",
+      "deadline": "2026-12-31",
+      "force": 0.93
+    }
+  ],
+  "metrics": [
+    {
+      "id": "MET-001",
+      "name": "false_positive_rate",
+      "value": 0.062,
+      "unit": "ratio",
+      "uncertainty": {
+        "status": "ESTIMATED",
+        "confidence": 0.75
+      }
+    },
+    {
+      "id": "MET-002",
+      "name": "sociodemographic_bias",
+      "value": null,
+      "unit": "ratio",
+      "uncertainty": {
+        "status": "UNKNOWN",
+        "confidence": 0.0
+      }
+    },
+    {
+      "id": "MET-003",
+      "name": "rgpd_full_compliance",
+      "value": 0.70,
+      "unit": "ratio",
+      "uncertainty": {
+        "status": "INFERRED",
+        "confidence": 0.70
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "REL-001",
+      "predicate": "developed",
+      "subject_id": "NovaTech",
+      "object_id": "CreditEval",
+      "tense": "past",
+      "force": 1.0,
+      "uncertainty": {
+        "status": "CERTAIN",
+        "confidence": 1.0
+      }
+    },
+    {
+      "id": "REL-002",
+      "predicate": "deployed",
+      "subject_id": "FidBank",
+      "object_id": "CreditEval",
+      "tense": "past",
+      "force": 0.98,
+      "uncertainty": {
+        "status": "CERTAIN",
+        "confidence": 0.98
+      },
+      "occurred_on": "2026-03-14"
+    },
+    {
+      "id": "REL-003",
+      "predicate": "transmits_documentation_to",
+      "subject_id": "NovaTech",
+      "object_id": "FidBank",
+      "tense": "present",
+      "force": 0.85,
+      "uncertainty": {
+        "status": "CERTAIN",
+        "confidence": 0.85
+      }
+    },
+    {
+      "id": "REL-004",
+      "predicate": "monitors",
+      "subject_id": "ACPR",
+      "object_id": "FidBank",
+      "tense": "present",
+      "force": 0.93,
+      "uncertainty": {
+        "status": "CERTAIN",
+        "confidence": 0.93
+      }
+    }
+  ],
+  "key_dates": {
+    "deployment": "2026-03-14",
+    "technical_documentation_due": "2026-07-15",
+    "annual_audit_report_due": "2026-12-31"
+  }
+}

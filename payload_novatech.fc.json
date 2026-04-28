@@ -1,0 +1,92 @@
+{
+  "name": "register_ai_system_compliance",
+  "description": "Register a high-risk AI system compliance context per EU AI Act",
+  "parameters": {
+    "type": "object",
+    "required": ["system", "obligations", "metrics", "relations"],
+    "properties": {
+      "system": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "version": {"type": "string"},
+          "deployment_date": {"type": "string", "format": "date"},
+          "editor": {"type": "string"},
+          "deployer": {"type": "string"},
+          "regulator": {"type": "string"},
+          "risk_class": {"type": "string", "enum": ["minimal", "limited", "high", "unacceptable"]},
+          "training_dataset_size": {"type": "integer"}
+        }
+      },
+      "obligations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "subject": {"type": "string"},
+            "action": {"type": "string"},
+            "deadline": {"type": "string"},
+            "force": {"type": "number"},
+            "modality": {"type": "string"}
+          }
+        }
+      },
+      "metrics": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "value": {"type": ["number", "null"]},
+            "status": {"type": "string"},
+            "confidence": {"type": "number"}
+          }
+        }
+      },
+      "relations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "predicate": {"type": "string"},
+            "subject": {"type": "string"},
+            "object": {"type": "string"},
+            "tense": {"type": "string"},
+            "force": {"type": "number"}
+          }
+        }
+      }
+    }
+  },
+  "arguments": {
+    "system": {
+      "name": "CreditEval-1.7",
+      "version": "1.7",
+      "deployment_date": "2026-03-14",
+      "editor": "NovaTech SA",
+      "deployer": "FidBank",
+      "regulator": "ACPR",
+      "risk_class": "high",
+      "training_dataset_size": 480000
+    },
+    "obligations": [
+      {"subject": "NovaTech", "action": "deliver_technical_documentation", "deadline": "2026-07-15", "force": 0.92, "modality": "MUST"},
+      {"subject": "FidBank", "action": "maintain_audit_trail_article_12", "force": 0.95, "modality": "MUST"},
+      {"subject": "CreditEval-1.7", "action": "enable_human_review", "force": 1.0, "modality": "MUST"},
+      {"subject": "CreditEval-1.7", "action": "no_auto_decision_above_50000_EUR", "force": 1.0, "modality": "NOT"},
+      {"subject": "FidBank", "action": "provide_explanation_within_7_days_if_contested", "force": 0.93, "modality": "IF"},
+      {"subject": "FidBank", "action": "submit_annual_report_to_ACPR", "deadline": "2026-12-31", "force": 0.93, "modality": "MUST"}
+    ],
+    "metrics": [
+      {"name": "false_positive_rate", "value": 0.062, "status": "ESTIMATED", "confidence": 0.75},
+      {"name": "sociodemographic_bias", "value": null, "status": "UNKNOWN", "confidence": 0.0},
+      {"name": "rgpd_compliance", "value": 0.70, "status": "INFERRED", "confidence": 0.70}
+    ],
+    "relations": [
+      {"predicate": "developed", "subject": "NovaTech", "object": "CreditEval-1.7", "tense": "past", "force": 1.0},
+      {"predicate": "deployed", "subject": "FidBank", "object": "CreditEval-1.7", "tense": "past", "force": 0.98},
+      {"predicate": "transmits_documentation", "subject": "NovaTech", "object": "FidBank", "tense": "present", "force": 0.85},
+      {"predicate": "monitors", "subject": "ACPR", "object": "FidBank", "tense": "present", "force": 0.93}
+    ]
+  }
+}

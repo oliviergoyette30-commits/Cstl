@@ -1,0 +1,45 @@
+#!CSTL v4.0
+LANG:fr
+DOMAIN:financier_credit_scoring
+SESSION:audit_credit_eval_novatech_2026
+
+INTENT_PAYLOAD: contexte_reglementaire_AI_Act [
+  priority=high,
+  sender=Olivier,
+  receiver=Claude,
+  purpose=encodage_systeme_IA_credit_scoring
+]
+
+META:
+  PAYLOAD_CONFIDENCE: 0.92
+  ENCODED_BY: gemini
+  ENCODING_TIMESTAMP: 2026-04-27T18:00:00
+
+CONSTRAINTS:
+  [MUST] NovaTech DELIVER documentation_technique [sigma=0.92, delta=b, deadline=2026-07-15, id=c1]
+  [MUST] FidBank MAINTAIN audit_trail [sigma=0.95, delta=b, ref=Article_12, id=c2]
+  [MUST] CreditEval-1.7 ENABLE revision_humaine [sigma=1.0, delta=b, id=c3]
+  [NOT] CreditEval-1.7 PERFORM decision_automatique_au_dessus_50000_EUR [sigma=1.0, delta=b, threshold=50000_EUR, id=c4]
+  [IF] emprunteur_conteste [MUST] FidBank PROVIDE explication_IA [sigma=0.93, delta=b, response_window=P7D, id=c5]
+  [MUST] FidBank SUBMIT rapport_annuel [sigma=0.93, delta=b, deadline=2026-12-31, target=ACPR, id=c6]
+
+UNCERTAINTY:
+  taux_faux_positifs ESTIMATED [sigma=0.75, value=0.062]
+  biais_sociodemographique UNKNOWN [source=donnees_entrainement_partielles]
+  conformite_RGPD_complete INFERRED [sigma=0.70]
+
+DEFINE NovaTech AS agent [id=e1, delta=b, role=editeur, pays=FR]
+DEFINE FidBank AS agent [id=e2, delta=b, role=deployeur, pays=FR]
+DEFINE CreditEval-1.7 AS system [id=s1, delta=b, version=1.7, classification=haut_risque]
+DEFINE Emprunteur AS human [id=e3, delta=d, role=utilisateur_final]
+DEFINE ACPR AS agent [id=e4, delta=b, role=regulateur, pays=FR]
+DEFINE patient_dataset AS document [id=d1, delta=d, taille=480000_dossiers]
+DEFINE rapport_audit AS document [id=d2, delta=d, deadline=2026-12-31]
+
+RELATIONS:
+  NovaTech ARR.CREATE CreditEval-1.7 [sigma=1.0, delta=b, tau=p, omega=+, id=r1]
+  FidBank DEPLOY CreditEval-1.7 [sigma=0.98, delta=b, tau=p, omega=+, occurred_on=2026-03-14, id=r2]
+  NovaTech TRANSMIT_FAITHFUL documentation [sigma=0.85, delta=b, tau=n, omega=+, id=r3]
+  ACPR MONITOR FidBank [sigma=0.93, delta=b, tau=n, omega=°, id=r4]
+
+---END---
