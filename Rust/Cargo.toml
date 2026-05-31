@@ -7,11 +7,11 @@ authors = ["Olivier Goyette"]
 
 [[bin]]
 name = "cstl_validate"
-path = "src/main.rs"
+path = "Src/main.rs"
 
 [lib]
 name = "cstl_parser"
-path = "src/lib.rs"
+path = "Src/lib.rs"
 
 [dependencies]
 # Zero external deps — pure Rust lexer + parser
