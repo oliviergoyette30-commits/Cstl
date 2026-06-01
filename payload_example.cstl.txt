@@ -1,0 +1,25 @@
+#!CSTL v4.9.3 MODE=A
+META [
+encoder=Agent_CLAUDE,
+produced_by=anthropic/claude-sonnet,
+sigma=0.88,
+PARENT_HASH=root
+]
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+CONSTRAINTS [
+[MUST] sender DELIVER audit_trail,
+[NOT] system PERFORM auto_decision,
+[IF] borrower_contests [MUST] sender REVIEW within_30_days
+]
+UNCERTAINTY [
+compliance INFERRED [sigma=0.70],
+false_positive_rate ESTIMATED [sigma=0.65]
+]
+DEFINE sender AS agent [id=e1, role=vendor]
+DEFINE system AS system [id=s1, role=scoring_model]
+RELATIONS [
+sender DEPLOY system [sigma=0.95, tau=past]
+]
+DECISION: example_decision [sigma=0.88]
+---END---
