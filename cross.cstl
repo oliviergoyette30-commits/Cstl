@@ -1,0 +1,11 @@
+#!CSTL_v4.9.2_MODE=A
+META [
+encoder=Agent_TEST,
+sigma:float=0.9,
+RESPONSE_FORMAT:enum=CSTL,
+NO_PROSE:bool=true,
+PARENT_HASH=root
+]
+(IF) sigma_low MUST flag_uncertainty
+(MUST_NOT) flag_uncertainty
+---END---
