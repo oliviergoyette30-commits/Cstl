@@ -87,8 +87,8 @@ fn sort_meta_fields(text: &str) -> String {
 
     // Sort lexicographically by field name (before : or =)
     fields.sort_by(|a, b| {
-        let key_a = a.split(|c| c == ':' || c == '=').next().unwrap_or("").to_lowercase();
-        let key_b = b.split(|c| c == ':' || c == '=').next().unwrap_or("").to_lowercase();
+        let key_a = a.split([':', '=']).next().unwrap_or("").to_lowercase();
+        let key_b = b.split([':', '=']).next().unwrap_or("").to_lowercase();
         key_a.cmp(&key_b)
     });
 

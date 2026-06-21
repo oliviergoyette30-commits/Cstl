@@ -50,7 +50,7 @@ pub fn is_keyword(word: &str) -> bool {
         "IF" | "IFF" | "MAY" | "MUST" | "MUST_NOT" | "SHOULD" | "UNLESS" |
         "REQUIRE" | "EXPECT" |
         // META keys (Session #2 ratified, Session #4 produced_by)
-        "ACTION" | "CONTINUATION_MODE" | "CONVERSATION_ID" |
+        "ACTION" | "CONTINUATION_MODE" | "CONVERSATION_ID" | "DOMAIN" |
         "encoder" | "NO_PROSE" | "PARENT_HASH" | "produced_by" |
         "payload_length_bytes" | "payload_length_tokens" |
         "RESPONSE_FORMAT" | "sigma" | "TIMESTAMP" | "TURN" | "VERIFIED_BY" |
@@ -175,7 +175,7 @@ impl Lexer {
                 }
 
                 // Number or negative
-                Some(ch) if ch.is_ascii_digit() || (ch == '-' && self.peek(1).map_or(false, |c| c.is_ascii_digit())) => {
+                Some(ch) if ch.is_ascii_digit() || (ch == '-' && self.peek(1).is_some_and(|c| c.is_ascii_digit())) => {
                     let word = self.read_while(|c| c.is_alphanumeric() || "._-".contains(c));
                     tokens.push(Token::new(TokenKind::Ident, word, line, col));
                 }

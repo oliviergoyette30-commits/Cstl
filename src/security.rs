@@ -70,7 +70,7 @@ fn check_nested_meta(text: &str) -> Vec<String> {
     for (i, line) in text.lines().enumerate() {
         let trimmed = line.trim_start();
         // Nested META = line that starts with whitespace + META (indented)
-        if line.starts_with(|c: char| c == ' ' || c == '\t')
+        if line.starts_with([' ', '\t'])
             && trimmed.starts_with("META")
             && (trimmed.len() == 4 || !trimmed.chars().nth(4).unwrap_or(' ').is_alphanumeric())
         {

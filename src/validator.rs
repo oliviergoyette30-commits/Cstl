@@ -36,7 +36,7 @@ const VALID_ACTION: &[&str] = &[
 
 fn validate_float(val: &str) -> bool {
     // Accepte "0", "1", "0.5", "1.0" etc.
-    val.parse::<f64>().map_or(false, |f| f >= 0.0 && f <= 1.0)
+    val.parse::<f64>().is_ok_and(|f| (0.0..=1.0).contains(&f))
 }
 
 fn validate_bool(val: &str) -> bool {
