@@ -48,10 +48,9 @@ pub fn parse(input: &str) -> CstlDocument {
                 ver
             ));
         }
-        // hashbang_version validated
     }
 
-        // Session #2 + #4: Validate META
+    // Session #2 + #4: Validate META
     if !doc.meta_fields.is_empty() {
         let val = validate_meta(&doc.meta_fields, text);
         doc.errors.extend(val.errors);

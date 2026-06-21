@@ -1,4 +1,4 @@
-//! CSTL v4.9.2 — Rust parser tests
+//! CSTL v4.9.3 — Rust parser tests
 
 #[cfg(test)]
 mod tests {
