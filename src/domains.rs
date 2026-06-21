@@ -83,8 +83,11 @@ pub fn domain_operators(domain: &str) -> HashSet<&'static str> {
 pub fn is_known_domain(domain: &str) -> bool {
     matches!(domain.to_lowercase().as_str(),
         "diplomatique" | "juridique" | "medical" | "médical" |
-        "cyber_securite" | "cyber" | "finance" | "rh" |
-        "supply_chain" | "education" | "journalisme" | "energie" |
-        "recherche" | "gouvernance" | "compliance" | "general"
+        "cyber_securite" | "cyber" | "finance" | "financier" |
+        "rh" | "supply_chain" | "education" | "journalisme" |
+        "energie" | "recherche" | "gouvernance" | "compliance" |
+        "corporate" | "astronomique" | "archeologique" | "archéologique" |
+        "reglementaire" | "marketing" | "immobilier" | "assurance" |
+        "general"
     )
 }
