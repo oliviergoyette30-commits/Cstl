@@ -102,6 +102,7 @@ impl Parser {
             return None;
         }
 
+        let saved_pos = self.pos; // save for clean backtrack
         let line = self.cur().line;
         let name = self.advance().value.clone();
         let mut type_hint = None;
@@ -116,9 +117,8 @@ impl Parser {
 
         // Must have =
         if !self.at(&TokenKind::Equals) {
-            // Not a field — backtrack
-            self.pos -= 1;
-            if type_hint.is_some() { self.pos -= 2; } // backtrack past :type too
+            // Not a field — restore to before name (handles bare ident, :type, and colon-only edge cases)
+            self.pos = saved_pos;
             return None;
         }
         self.advance(); // =
@@ -189,16 +189,16 @@ impl Parser {
                 }
 
                 // Pattern 2: KEYWORD label [...] — e.g. GAP missing [sigma=0.85]
-                if matches!(sub_kind.kind, TokenKind::Ident | TokenKind::Keyword) {
-                    if self.peek(2).kind == TokenKind::LBracket {
-                        let block_type = self.advance().value.clone();
-                        let label      = self.advance().value.clone();
-                        let sub_name   = format!("{}:{}", block_type, label);
-                        let sub = self.parse_block(sub_name, cur_line);
-                        subblocks.push(sub);
-                        self.skip_newlines();
-                        continue;
-                    }
+                if matches!(sub_kind.kind, TokenKind::Ident | TokenKind::Keyword)
+                    && self.peek(2).kind == TokenKind::LBracket
+                {
+                    let block_type = self.advance().value.clone();
+                    let label      = self.advance().value.clone();
+                    let sub_name   = format!("{}:{}", block_type, label);
+                    let sub = self.parse_block(sub_name, cur_line);
+                    subblocks.push(sub);
+                    self.skip_newlines();
+                    continue;
                 }
 
                 // Pattern 3: KEYWORD label — no brackets (inline statement)
@@ -214,8 +214,7 @@ impl Parser {
             }
 
             // Nothing matched — skip token
-            if !self.at(&TokenKind::Newline) { self.advance(); }
-            else { self.advance(); }
+            self.advance();
         }
 
         self.skip_newlines();
