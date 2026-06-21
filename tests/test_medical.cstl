@@ -1,0 +1,18 @@
+#!CSTL v4.9.3 MODE=A
+META [
+encoder=Agent_CLAUDE,
+produced_by=anthropic/claude-sonnet,
+sigma:float=0.95,
+RESPONSE_FORMAT:enum=CSTL,
+NO_PROSE:bool=true,
+PARENT_HASH=root
+]
+CONSTRAINTS [
+(MUST) medecin PRESCRIRE repos [sigma=0.95]
+(MUST_NOT) patient CONSOMMER alcool [sigma=1.0]
+]
+RELATIONS [
+(patient_X) STATE fievre_aigue [sigma=0.88]
+(medecin_Y) PRESCRIBE amoxicilline [sigma=0.95]
+]
+---END---

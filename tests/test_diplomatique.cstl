@@ -1,0 +1,19 @@
+#!CSTL v4.9.3 MODE=A
+META [
+encoder=Agent_GEMINI,
+produced_by=google/gemini-2-5-pro,
+sigma:float=0.89,
+RESPONSE_FORMAT:enum=CSTL,
+NO_PROSE:bool=true,
+PARENT_HASH=root
+]
+CONSTRAINTS [
+(MUST) delegations ADOPT resolution_finale [sigma=0.85]
+(MUST_NOT) veto BLOCK accord [sigma=1.0]
+]
+RELATIONS [
+(sommet_G7) PRODUCE accord_climatique [sigma=0.82]
+(pays_A) AGREE reduction_30pct [sigma=0.78]
+(pays_B) AGREE reduction_25pct [sigma=0.71]
+]
+---END---

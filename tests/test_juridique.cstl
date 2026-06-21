@@ -1,0 +1,18 @@
+#!CSTL v4.9.3 MODE=A
+META [
+encoder=Agent_GPT,
+produced_by=openai/gpt-4o-2026,
+sigma:float=0.92,
+RESPONSE_FORMAT:enum=CSTL,
+NO_PROSE:bool=true,
+PARENT_HASH=root
+]
+CONSTRAINTS [
+(MUST) partie_A RESPECTER clause_3 [sigma=0.99]
+(MUST_NOT) partie_B DIVULGUER données_confidentielles [sigma=1.0]
+]
+RELATIONS [
+(contrat_2026) BIND partie_A partie_B [sigma=0.99]
+(pénalité) APPLIES_IF délai_dépassé [sigma=0.90]
+]
+---END---
