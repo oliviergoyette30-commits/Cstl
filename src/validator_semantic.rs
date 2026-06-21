@@ -132,11 +132,11 @@ fn modal_polarity(token: &str) -> Option<bool> {
 }
 
 /// Extrait (obligation?, proposition normalisée, ligne) d'un bloc déontique.
-/// - (MUST)/(MUST_NOT)/(REQUIRE)/(FORBID)/(NOT) : modalité = nom du bloc,
-///   proposition = énoncé _stmt entier.
-/// - (RULE) : modalité = 1er token de _stmt (ex. "MUST x"), proposition = reste.
-/// Renvoie None pour les blocs non déontiques et pour (IF) (conditionnels,
-/// non couverts en v1).
+///
+/// - `(MUST)`/`(MUST_NOT)`/`(REQUIRE)`/`(FORBID)`/`(NOT)` : modalité = nom du bloc;
+///   proposition = énoncé `_stmt` entier.
+/// - `(RULE)` : modalité = 1er token de `_stmt` (ex. `"MUST x"`), proposition = reste.
+/// - `(IF)` et blocs non déontiques : renvoie `None` (conditionnels non couverts en v1).
 fn deontic_claim(block: &Block) -> Option<(bool, String, usize)> {
     if !(block.name.starts_with('(') && block.name.ends_with(')')) { return None; }
     let inner = &block.name[1..block.name.len() - 1];
@@ -360,16 +360,21 @@ fn check_cross_references(blocks: &[Block], r: &mut SemReport) {
 
 pub fn validate_semantics(blocks: &[Block], domain: Option<&str>) -> SemReport {
     let mut r = SemReport::default();
-    let op_set: HashSet<&str> = OFFICIAL_OPERATORS.iter().copied().collect();
-    let domain_ops: std::collections::HashSet<&str> = domain
-        .map(|d| crate::domains::domain_operators(d))
+    // Merge domain-specific operators into the official operator set so
+    // validate_block only needs one set (fixes domain_ops previously unused).
+    let domain_ops = domain
+        .map(crate::domains::domain_operators)
         .unwrap_or_default();
+    let op_set: HashSet<&str> = OFFICIAL_OPERATORS.iter()
+        .copied()
+        .chain(domain_ops)
+        .collect();
     let type_set: HashSet<&str> = OFFICIAL_ENTITY_TYPES.iter().copied().collect();
 
     let mut seen_ids: HashSet<String> = HashSet::new();
 
     for block in blocks {
-        validate_block(block, &op_set, &domain_ops, &type_set, &mut seen_ids, &mut r);
+        validate_block(block, &op_set, &type_set, &mut seen_ids, &mut r);
         check_attribute_ontology(block, &mut r);
     }
 
@@ -423,35 +428,33 @@ pub fn validate_semantics(blocks: &[Block], domain: Option<&str>) -> SemReport {
     r
 }
 
-/// R9 — Ontologie des valeurs canoniques pour 8 attributs sémantiques.
-/// Une clé présente ici dont la valeur n'est pas dans l'ensemble canonique
-/// déclenche un warning (encodage non déterministe, à corriger).
-fn attribute_ontology() -> std::collections::HashMap<&'static str, &'static [&'static str]> {
-    use std::collections::HashMap;
-    let mut m: HashMap<&'static str, &'static [&'static str]> = HashMap::new();
-    m.insert("polarity", &["positive", "negative", "neutral"]);
-    m.insert("quantifier", &["universal", "existential", "negative", "partial",
-                              "plural", "singular", "definite", "indefinite"]);
-    m.insert("frequency", &["always", "often", "sometimes", "rarely", "never",
-                             "occasional", "habitual", "exclusive"]);
-    m.insert("scope", &["universal", "partial", "wide", "narrow",
-                         "distributive", "collective", "reflexive", "external"]);
-    m.insert("mood", &["indicative", "imperative", "interrogative", "subjunctive",
-                        "conditional", "optative"]);
-    m.insert("aspect", &["perfective", "imperfective", "progressive", "habitual",
-                          "iterative", "perfect"]);
-    m.insert("epistemic", &["known", "unknown", "estimated", "inferred",
-                             "believed", "doubted", "certain"]);
-    m.insert("evidential", &["visual", "hearsay", "inference", "direct", "report"]);
-    m
+/// R9 — Returns the canonical value set for a known semantic attribute, or None.
+/// Zero-alloc: uses a match instead of a per-call HashMap.
+fn canonical_values_for(key: &str) -> Option<&'static [&'static str]> {
+    match key {
+        "polarity"   => Some(&["positive", "negative", "neutral"]),
+        "quantifier" => Some(&["universal", "existential", "negative", "partial",
+                                "plural", "singular", "definite", "indefinite"]),
+        "frequency"  => Some(&["always", "often", "sometimes", "rarely", "never",
+                                "occasional", "habitual", "exclusive"]),
+        "scope"      => Some(&["universal", "partial", "wide", "narrow",
+                                "distributive", "collective", "reflexive", "external"]),
+        "mood"       => Some(&["indicative", "imperative", "interrogative", "subjunctive",
+                                "conditional", "optative"]),
+        "aspect"     => Some(&["perfective", "imperfective", "progressive", "habitual",
+                                "iterative", "perfect"]),
+        "epistemic"  => Some(&["known", "unknown", "estimated", "inferred",
+                                "believed", "doubted", "certain"]),
+        "evidential" => Some(&["visual", "hearsay", "inference", "direct", "report"]),
+        _            => None,
+    }
 }
 
 /// R9 — Vérifie que les attributs sémantiques connus utilisent des valeurs
 /// canoniques. Récursif sur les sous-blocs. WARNING si hors ontologie.
 fn check_attribute_ontology(block: &Block, r: &mut SemReport) {
-    let ontology = attribute_ontology();
     for f in &block.fields {
-        if let Some(canonical_values) = ontology.get(f.name.as_str()) {
+        if let Some(canonical_values) = canonical_values_for(&f.name) {
             if !canonical_values.contains(&f.value.as_str()) {
                 r.warn("R9_NON_CANONICAL_VALUE", f.line, &format!(
                     "attribut '{}={}' hors ontologie. Valeurs canoniques: {:?}",
@@ -468,7 +471,6 @@ fn check_attribute_ontology(block: &Block, r: &mut SemReport) {
 fn validate_block(
     block: &Block,
     op_set: &HashSet<&str>,
-    domain_ops: &HashSet<&str>,
     type_set: &HashSet<&str>,
     seen_ids: &mut HashSet<String>,
     r: &mut SemReport,
@@ -488,10 +490,8 @@ fn validate_block(
 
     // ── R1 : IDs uniques (id=eXXX) ──
     for f in &block.fields {
-        if f.name == "id" {
-            if !seen_ids.insert(f.value.clone()) {
-                r.err("R1_DUPLICATE_ID", f.line, &format!("ID dupliqué: {}", f.value));
-            }
+        if f.name == "id" && !seen_ids.insert(f.value.clone()) {
+            r.err("R1_DUPLICATE_ID", f.line, &format!("ID dupliqué: {}", f.value));
         }
     }
 
@@ -501,7 +501,7 @@ fn validate_block(
             || f.type_hint.as_deref() == Some("float") && f.name.contains("sigma");
         if is_sigma {
             if let Some(s) = parse_sigma(&f.value) {
-                if s < 0.0 || s > 1.0 {
+                if !(0.0..=1.0).contains(&s) {
                     r.warn("R12_SIGMA_OUT_OF_RANGE", f.line,
                         &format!("sigma {} hors [0,1] — clampé à {}", s, s.clamp(0.0, 1.0)));
                 }
@@ -563,7 +563,7 @@ fn validate_block(
 
     // Récursion sur les sous-blocs
     for sub in &block.subblocks {
-        validate_block(sub, op_set, domain_ops, type_set, seen_ids, r);
+        validate_block(sub, op_set, type_set, seen_ids, r);
     }
 }
 
