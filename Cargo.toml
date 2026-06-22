@@ -1,6 +1,6 @@
 [package]
 name = "cstl_parser"
-version = "4.9.3"
+version = "5.0.0"
 edition = "2021"
 description = "CSTL v4.9.2 — Rust parser (lexer + recursive descent)"
 authors = ["Olivier Goyette"]

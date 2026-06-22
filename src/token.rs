@@ -1,9 +1,9 @@
-//! CSTL v4.9.3 — Token types and Lexer
+//! CSTL v5.0.0 — Token types and Lexer
 //! Zero external dependencies. Character-by-character, no regex.
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    Hashbang,    // #!CSTL v4.9.3 MODE=A
+    Hashbang,    // #!CSTL v5.0.0 MODE=A
     Keyword,     // META, DISAGREEMENT_BLOCK, GAP ...
     Ident,       // bare word / value token
     LBracket,    // [
@@ -32,7 +32,7 @@ impl Token {
     }
 }
 
-/// All ratified CSTL v4.9.3 keywords (Sessions #1-#4)
+/// All ratified CSTL v5.0.0 keywords (Sessions #1-#4)
 pub fn is_keyword(word: &str) -> bool {
     matches!(word,
         // Header
@@ -60,7 +60,17 @@ pub fn is_keyword(word: &str) -> bool {
         // Relation ops (Session #3 0x60-0x66)
         "ARR" | "EXPRESS" | "MAINTAIN" | "TRANSFORM" | "INTENT" |
         // Other
-        "AS" | "@SYNC"
+        "AS" | "@SYNC" |
+        // v5.0 Logical
+        "ENTAILS" | "CONTRADICTS" |
+        // v5.0 Epistemic
+        "BELIEVES" | "KNOWS" | "ASSUMES" | "DOUBTS" |
+        // v5.0 Temporal
+        "BEFORE" | "AFTER" | "DURING" |
+        // v5.0 Relational
+        "EQUALS" | "POSSESSES" | "RESEMBLES" | "CO_LOCATES" | "OPPOSES" | "COMPARES" |
+        // v5.0 DEPRECATED
+        "MUTUAL"
     )
 }
 

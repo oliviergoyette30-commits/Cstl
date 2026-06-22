@@ -512,4 +512,199 @@ mod tests {
                 "clé hors ontologie (custom) ne devrait pas warner R9: {:?}", r.warnings);
     }
 
+
+    // ═══════════════════════════════ v5.0 TESTS ═══════════════════════════════
+
+    #[test]
+    fn test_entails_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) ENTAILS B [sigma=0.90]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_contradicts_symmetry_warning() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) CONTRADICTS B [sigma=0.9]\n(B) CONTRADICTS A [sigma=0.9]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.warnings.iter().any(|w| w.contains("W602")), "{:?}", doc.warnings);
+    }
+
+    #[test]
+    fn test_contradicts_one_direction_no_warn() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) CONTRADICTS B [sigma=0.92]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.warnings.iter().filter(|w| w.contains("W602")).count() == 0);
+    }
+
+    #[test]
+    fn test_believes_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(agent) BELIEVES hypothesis [sigma=0.75]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_knows_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(agent) KNOWS fact [sigma=0.97]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_assumes_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(model) ASSUMES prior [sigma=0.60]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_doubts_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(reviewer) DOUBTS claim [sigma=0.30]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_knows_low_sigma_warns_w604() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(agent) KNOWS uncertain [sigma=0.5]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.warnings.iter().any(|w| w.contains("W604")), "{:?}", doc.warnings);
+    }
+
+    #[test]
+    fn test_doubts_high_sigma_warns_w605() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(agent) DOUBTS claim [sigma=0.8]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.warnings.iter().any(|w| w.contains("W605")), "{:?}", doc.warnings);
+    }
+
+    #[test]
+    fn test_before_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(step_1) BEFORE step_2 [sigma=1.0]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_after_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(step_3) AFTER step_2 [sigma=0.95]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_during_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(monitoring) DURING trial [sigma=0.90]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_temporal_contradiction_e701() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) BEFORE B [sigma=0.9]\n(A) AFTER B [sigma=0.9]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.errors.iter().any(|e| e.contains("E701")), "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_temporal_valid_workflow() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(ingestion) BEFORE processing [sigma=1.0]\n(monitoring) DURING processing [sigma=0.90]\n(validation) AFTER processing [sigma=0.95]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.errors.iter().filter(|e| e.contains("E701")).count() == 0);
+    }
+
+    #[test]
+    fn test_equals_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) EQUALS B [sigma=0.95]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_possesses_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(patient) POSSESSES record [sigma=0.99]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_resembles_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) RESEMBLES B [sigma=0.72]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_co_locates_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) CO_LOCATES B [sigma=0.85]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_opposes_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) OPPOSES B [sigma=0.70]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_compares_operator_recognized() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(CSTL) COMPARES JSON_LD [sigma=0.88]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "{:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_mutual_deprecated_emits_w601() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) MUTUAL B [sigma=0.80]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.warnings.iter().any(|w| w.contains("W601")), "{:?}", doc.warnings);
+    }
+
+    #[test]
+    fn test_mutual_deprecated_no_hard_error() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) MUTUAL B [sigma=0.80]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.errors.is_empty(), "MUTUAL must not be hard error: {:?}", doc.errors);
+    }
+
+    #[test]
+    fn test_entails_transitive_complete_no_w603() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(A) ENTAILS B [sigma=0.9]\n(B) ENTAILS C [sigma=0.9]\n(A) ENTAILS C [sigma=0.9]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.warnings.iter().filter(|w| w.contains("W603")).count() == 0);
+    }
+
+    #[test]
+    fn test_v5_full_mixed_payload() {
+        let payload = BASE.replace("---END---",
+            "RELATIONS [\n(hypothesis) ENTAILS finding [sigma=0.85]\n(finding) CONTRADICTS null_h [sigma=0.90]\n(agent) KNOWS measured [sigma=0.97]\n(agent) BELIEVES derived [sigma=0.72]\n(step_1) BEFORE step_2 [sigma=1.0]\n(monitor) DURING step_2 [sigma=0.90]\n(CSTL) COMPARES JSON_LD [sigma=0.88]\n]\n---END---");
+        let doc = parse(&payload);
+        assert!(doc.is_valid, "Full v5 payload should be valid: {:?}", doc.errors);
+    }
+
 }
