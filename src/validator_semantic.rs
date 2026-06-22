@@ -1,8 +1,8 @@
-//! CSTL v4.9.3 — Semantic Validator
+//! CSTL v5.0.0 — Semantic Validator
 //!
 //! S'exécute APRÈS le parser structurel (parser.rs). Le parser garantit que le
 //! document est bien formé (structure, sécurité, hash). Ce module valide la
-//! SÉMANTIQUE de la spec : les 21 opérateurs officiels, les 10 types d'entités
+//! SÉMANTIQUE de la spec : les 36 opérateurs officiels, les 10 types d'entités
 //! DEFINE, les règles R1–R7, et les opérateurs des blocs modaux déontiques.
 //!
 //! Il ne modifie pas le parser : il prend des blocs déjà parsés et retourne
@@ -17,7 +17,7 @@ use std::collections::HashSet;
 
 // ── Constantes de la spec ───────────────────────────────────────────────────
 
-/// Les 21 opérateurs FIXED officiels (spec section 8).
+/// Les 36 opérateurs FIXED officiels (spec section 8).
 pub const OFFICIAL_OPERATORS: &[&str] = &[
     // Causalité
     "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
@@ -27,6 +27,8 @@ pub const OFFICIAL_OPERATORS: &[&str] = &[
     "AMP", "INH", "PRESSURE", "CATALYZE",
     // Relationnel
     "MUTUAL", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    // v5.0 opérateurs
+    "ENTAILS", "CONTRADICTS", "BELIEVES", "KNOWS", "ASSUMES", "DOUBTS", "BEFORE", "AFTER", "DURING", "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES", "COMPARES",
     // Actes de langage
     "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
 ];

@@ -1,4 +1,4 @@
-// CSTL v4.9.3 — Ontologie des domaines
+// CSTL v5.0.0 — Ontologie des domaines
 // Porte l'essentiel de cstl_domains.py (18 domaines) vers Rust.
 // Utilisé par R5 pour accepter les opérateurs hors-21-officiels
 // quand un DOMAIN est déclaré dans META.
