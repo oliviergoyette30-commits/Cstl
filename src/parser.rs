@@ -1,23 +1,55 @@
-//! CSTL v4.9.3 — Recursive Descent Parser
-//! Sessions #1-#7 decisions encoded in validation rules.
+//! CSTL v5.0.0 — Recursive Descent Parser
+//! v5.0 fixes:
+//!   [FIX-1] parse_relation(): (subject) OPERATOR object [attrs] → Relation AST node
+//!   [FIX-2] parse_modal(): handles (subject) OPERATOR pattern, not just (MODALITY)
+//!   [FIX-3] parse_block(): Pattern for (subject) lines inside RELATIONS block
+//!   [FIX-4] parse_field() backtrack: saved pos instead of manual arithmetic
 
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-use crate::ast::{Block, CstlDocument, Field};
-// security handled in lib.rs
+use crate::ast::{Block, CstlDocument, Field, Relation};
 use crate::token::{Token, TokenKind};
 
+/// All v5.0 relation operators (logical, epistemic, temporal, relational, core)
+const RELATION_OPERATORS: &[&str] = &[
+    // v5.0 new
+    "ENTAILS", "CONTRADICTS",
+    "BELIEVES", "KNOWS", "ASSUMES", "DOUBTS",
+    "BEFORE", "AFTER", "DURING",
+    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES", "COMPARES",
+    // v5.0 deprecated (still valid)
+    "MUTUAL",
+    // core v4
+    "ARR", "EXPRESS", "MAINTAIN", "TRANSFORM", "INTENT",
+    "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    "AMP", "INH", "PRESSURE", "CATALYZE",
+    "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
+    "RESIST", "CAUSE",
+];
+
+fn is_relation_operator(word: &str) -> bool {
+    RELATION_OPERATORS.contains(&word)
+}
+
+/// Deontic modalities valid before a relation
+const MODALITIES: &[&str] = &["MUST", "MUST_NOT", "MAY", "SHOULD", "IF", "IFF", "UNLESS"];
+
+fn is_modality(word: &str) -> bool {
+    MODALITIES.contains(&word)
+}
+
 pub struct Parser {
-    tokens:   Vec<Token>,
-    pos:      usize,
-    errors:   Vec<String>,
-    warnings: Vec<String>,
+    tokens:    Vec<Token>,
+    pos:       usize,
+    errors:    Vec<String>,
+    warnings:  Vec<String>,
+    relations: Vec<Relation>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, pos: 0, errors: vec![], warnings: vec![] }
+        Parser { tokens, pos: 0, errors: vec![], warnings: vec![], relations: vec![] }
     }
 
     // ── Token navigation ──────────────────────────────────────────────────────
@@ -49,24 +81,13 @@ impl Parser {
         matches!(self.cur().kind, TokenKind::Eof | TokenKind::EndMarker)
     }
 
-    #[allow(dead_code)]
-    fn expect(&mut self, kind: TokenKind, ctx: &str) -> Option<String> {
-        if self.cur().kind == kind {
-            Some(self.advance().value.clone())
-        } else {
-            self.errors.push(format!(
-                "Expected {:?} got {:?} ({:?}) at {}:{} [{}]",
-                kind, self.cur().kind, self.cur().value,
-                self.cur().line, self.cur().col, ctx
-            ));
-            None
-        }
-    }
+    fn save_pos(&self) -> usize { self.pos }
+
+    fn restore_pos(&mut self, saved: usize) { self.pos = saved; }
 
     // ── Value parsing ─────────────────────────────────────────────────────────
 
     fn parse_value(&mut self) -> String {
-        // Collect tokens until structural delimiter
         let mut parts = Vec::new();
         let mut depth = 0i32;
 
@@ -84,9 +105,7 @@ impl Parser {
                 }
                 TokenKind::RBracket | TokenKind::Comma |
                 TokenKind::Newline | TokenKind::Eof | TokenKind::EndMarker => break,
-                _ => {
-                    parts.push(self.advance().value.clone());
-                }
+                _ => { parts.push(self.advance().value.clone()); }
             }
         }
         parts.join(" ").trim().to_string()
@@ -94,17 +113,17 @@ impl Parser {
 
     // ── Field parsing ─────────────────────────────────────────────────────────
 
+    /// [FIX-4] Backtrack uses saved pos, not manual arithmetic
     fn parse_field(&mut self) -> Option<Field> {
         self.skip_newlines();
 
-        // Must start with ident or keyword
         if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
             return None;
         }
 
-        let saved_pos = self.pos; // save for clean backtrack
-        let line = self.cur().line;
-        let name = self.advance().value.clone();
+        let saved = self.save_pos(); // [FIX-4]
+        let line  = self.cur().line;
+        let name  = self.advance().value.clone();
         let mut type_hint = None;
 
         // Optional :type
@@ -117,8 +136,7 @@ impl Parser {
 
         // Must have =
         if !self.at(&TokenKind::Equals) {
-            // Not a field — restore to before name (handles bare ident, :type, and colon-only edge cases)
-            self.pos = saved_pos;
+            self.restore_pos(saved); // [FIX-4] clean backtrack
             return None;
         }
         self.advance(); // =
@@ -143,7 +161,6 @@ impl Parser {
             } else if self.at(&TokenKind::RBracket) || self.at_eof_or_end() {
                 break;
             } else if !self.at(&TokenKind::Newline) {
-                // Unknown token — skip with warning
                 let (tk, tv, tl, tc) = {
                     let t = self.advance();
                     (t.kind.clone(), t.value.clone(), t.line, t.col)
@@ -159,99 +176,142 @@ impl Parser {
         fields
     }
 
-    // ── Block parsing ─────────────────────────────────────────────────────────
+    // ── [FIX-1] Relation parsing ──────────────────────────────────────────────
+    //
+    // Parses: [(MODALITY)] (subject) OPERATOR object [attrs]
+    //
+    // Examples:
+    //   (hypothesis) ENTAILS finding [sigma=0.85, tau=future]
+    //   (MUST) agent KNOWS fact [sigma=0.97]
+    //   (step_1) BEFORE step_2 [sigma=1.0]
+    //
+    // Called when cur() == LParen
 
-    fn parse_block(&mut self, name: String, line: usize) -> Block {
-        let mut fields    = Vec::new();
-        let mut subblocks = Vec::new();
+    fn try_parse_relation(&mut self) -> Option<Relation> {
+        let saved = self.save_pos();
+        let line  = self.cur().line;
 
-        // Consume [
-        if self.at(&TokenKind::LBracket) { self.advance(); }
-        self.skip_newlines();
+        // Must start with (
+        if !self.at(&TokenKind::LParen) {
+            return None;
+        }
+        self.advance(); // consume (
 
-        loop {
-            self.skip_newlines();
-            if self.at(&TokenKind::RBracket) || self.at_eof_or_end() { break; }
+        // Read identifier inside parens
+        if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+            self.restore_pos(saved);
+            return None;
+        }
+        let inner = self.advance().value.clone();
 
-            let cur_line = self.cur().line;
+        if !self.at(&TokenKind::RParen) {
+            self.restore_pos(saved);
+            return None;
+        }
+        self.advance(); // consume )
 
-            // Check for subblock patterns
-            if matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
-                let sub_kind = self.peek(1);
-
-                // Pattern 1: KEYWORD [ — direct subblock
-                if sub_kind.kind == TokenKind::LBracket {
-                    let sub_name = self.advance().value.clone();
-                    let sub = self.parse_block(sub_name, cur_line);
-                    subblocks.push(sub);
-                    self.skip_newlines();
-                    continue;
-                }
-
-                // Pattern 2: KEYWORD label [...] — e.g. GAP missing [sigma=0.85]
-                if matches!(sub_kind.kind, TokenKind::Ident | TokenKind::Keyword)
-                    && self.peek(2).kind == TokenKind::LBracket
-                {
-                    let block_type = self.advance().value.clone();
-                    let label      = self.advance().value.clone();
-                    let sub_name   = format!("{}:{}", block_type, label);
-                    let sub = self.parse_block(sub_name, cur_line);
-                    subblocks.push(sub);
-                    self.skip_newlines();
-                    continue;
-                }
-
-                // Pattern 3: KEYWORD label — no brackets (inline statement)
-                // Just try parsing as field
+        // Case A: (MODALITY) subject OPERATOR object [attrs]
+        // e.g. (MUST) agent KNOWS fact [sigma=0.97]
+        if is_modality(&inner) {
+            let modality = inner.clone();
+            // subject
+            if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+                self.restore_pos(saved);
+                return None;
             }
+            let subject = self.advance().value.clone();
 
-            // Try field
-            if let Some(f) = self.parse_field() {
-                fields.push(f);
-                self.skip_newlines();
-                if self.at(&TokenKind::Comma) { self.advance(); }
-                continue;
+            // operator
+            if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+                self.restore_pos(saved);
+                return None;
             }
-
-            // Nothing matched — skip token
+            let op_candidate = self.cur().value.clone();
+            if !is_relation_operator(&op_candidate) {
+                self.restore_pos(saved);
+                return None;
+            }
             self.advance();
-        }
 
-        self.skip_newlines();
-        if self.at(&TokenKind::RBracket) { self.advance(); }
-
-        Block { name, fields, subblocks, line }
-    }
-
-
-    // ── CONSTRAINTS block: CONSTRAINTS [ (MUST) ... (MUST_NOT) ... ] ─────────
-    fn parse_constraints_block(&mut self, line: usize) -> Block {
-        let mut modal_blocks: Vec<Block> = Vec::new();
-        loop {
-            self.skip_newlines();
-            if self.at(&TokenKind::RBracket) || self.at_eof_or_end() { break; }
-            if self.at(&TokenKind::LParen) {
-                self.advance();
-                if let Some(mb) = self.parse_modal() {
-                    modal_blocks.push(mb);
-                }
-                continue;
+            // object
+            if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+                self.restore_pos(saved);
+                return None;
             }
-            self.advance(); // ligne non reconnue : skip
+            let object = self.advance().value.clone();
+
+            // optional [attrs]
+            let attrs = self.parse_optional_attrs();
+
+            return Some(Relation {
+                subject,
+                operator: op_candidate,
+                object,
+                attrs,
+                modality: Some(modality),
+                line,
+            });
         }
-        if self.at(&TokenKind::RBracket) { self.advance(); }
-        Block {
-            name: "CONSTRAINTS".to_string(),
-            fields: vec![],
-            subblocks: modal_blocks,
+
+        // Case B: (subject) OPERATOR object [attrs]
+        // e.g. (hypothesis) ENTAILS finding [sigma=0.85]
+        let subject = inner;
+
+        if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+            self.restore_pos(saved);
+            return None;
+        }
+        let op_candidate = self.cur().value.clone();
+        if !is_relation_operator(&op_candidate) {
+            // Not a relation — restore and let parse_modal handle it
+            self.restore_pos(saved);
+            return None;
+        }
+        self.advance(); // consume operator
+
+        // object
+        if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+            self.restore_pos(saved);
+            return None;
+        }
+        let object = self.advance().value.clone();
+
+        // optional [attrs]
+        let attrs = self.parse_optional_attrs();
+
+        Some(Relation {
+            subject,
+            operator: op_candidate,
+            object,
+            attrs,
+            modality: None,
             line,
+        })
+    }
+
+    fn parse_optional_attrs(&mut self) -> Vec<Field> {
+        if self.at(&TokenKind::LBracket) {
+            self.advance();
+            let fields = self.parse_field_list();
+            if self.at(&TokenKind::RBracket) { self.advance(); }
+            fields
+        } else {
+            vec![]
         }
     }
 
-    // ── Modal statement: (MUST) ... ───────────────────────────────────────────
+    // ── [FIX-2] Modal statement ───────────────────────────────────────────────
+    //
+    // parse_modal is called after ( is consumed at top-level.
+    // It now correctly distinguishes:
+    //   (MODALITY) subject verb ...   → modal statement (non-relation)
+    //   (subject) OPERATOR ...        → handled by try_parse_relation before reaching here
+    //
+    // This function only handles true modal statements like:
+    //   (RULE) MUST respond_in_cstl_only
+    //   (MUST) team ADMINISTER aspirin
 
     fn parse_modal(&mut self) -> Option<Block> {
-        // ( already consumed by caller
         if !matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
             return None;
         }
@@ -261,7 +321,7 @@ impl Parser {
         if !self.at(&TokenKind::RParen) { return None; }
         self.advance(); // )
 
-        // Rest of statement until [ or newline
+        // Collect rest of statement until [ or newline
         let mut parts = Vec::new();
         while !matches!(self.cur().kind,
             TokenKind::Newline | TokenKind::Eof | TokenKind::EndMarker |
@@ -269,7 +329,7 @@ impl Parser {
             parts.push(self.advance().value.clone());
         }
 
-        let mut inline_fields = Vec::new();
+        let mut inline_fields = vec![];
         if self.at(&TokenKind::LBracket) {
             self.advance();
             inline_fields = self.parse_field_list();
@@ -277,8 +337,7 @@ impl Parser {
         }
 
         let stmt_value = parts.join(" ").trim().to_string();
-        let f = Field { name: "_stmt".to_string(), type_hint: None,
-                        value: stmt_value, line };
+        let f = Field { name: "_stmt".to_string(), type_hint: None, value: stmt_value, line };
         let mut all_fields = vec![f];
         all_fields.extend(inline_fields);
 
@@ -290,15 +349,126 @@ impl Parser {
         })
     }
 
+    // ── Block parsing ─────────────────────────────────────────────────────────
+
+    /// [FIX-3] parse_block now handles (subject) OPERATOR lines inside blocks
+    /// e.g. inside RELATIONS [ ... ] or CONSTRAINTS [ ... ]
+    fn parse_block(&mut self, name: String, line: usize) -> Block {
+        let mut fields    = Vec::new();
+        let mut subblocks = Vec::new();
+
+        if self.at(&TokenKind::LBracket) { self.advance(); }
+        self.skip_newlines();
+
+        loop {
+            self.skip_newlines();
+            if self.at(&TokenKind::RBracket) || self.at_eof_or_end() { break; }
+
+            let cur_line = self.cur().line;
+
+            // [FIX-3] (subject) OPERATOR object [attrs] inside a block
+            if self.at(&TokenKind::LParen) {
+                if let Some(rel) = self.try_parse_relation() {
+                    // Store as a subblock for backward compat + add to doc.relations
+                    // The subblock name encodes the relation for querying
+                    let rel_name = format!("REL:{}:{}:{}", rel.subject, rel.operator, rel.object);
+                    let mut rel_fields = rel.attrs.clone();
+                    rel_fields.push(Field {
+                        name: "_subject".to_string(), type_hint: None,
+                        value: rel.subject.clone(), line: rel.line,
+                    });
+                    rel_fields.push(Field {
+                        name: "_operator".to_string(), type_hint: None,
+                        value: rel.operator.clone(), line: rel.line,
+                    });
+                    rel_fields.push(Field {
+                        name: "_object".to_string(), type_hint: None,
+                        value: rel.object.clone(), line: rel.line,
+                    });
+                    if let Some(ref m) = rel.modality {
+                        rel_fields.push(Field {
+                            name: "_modality".to_string(), type_hint: None,
+                            value: m.clone(), line: rel.line,
+                        });
+                    }
+                    subblocks.push(Block {
+                        name: rel_name, fields: rel_fields, subblocks: vec![], line: rel.line
+                    });
+                    self.relations.push(rel);
+                    self.skip_newlines();
+                    continue;
+                }
+                // Not a relation — fall through to parse_modal style
+                self.advance(); // consume (
+                if let Some(modal_blk) = self.parse_modal() {
+                    subblocks.push(modal_blk);
+                }
+                self.skip_newlines();
+                continue;
+            }
+
+            // Keyword [ — direct subblock
+            if matches!(self.cur().kind, TokenKind::Ident | TokenKind::Keyword) {
+                let sub_kind = self.peek(1);
+
+                if sub_kind.kind == TokenKind::LBracket {
+                    let sub_name = self.advance().value.clone();
+                    let sub = self.parse_block(sub_name, cur_line);
+                    subblocks.push(sub);
+                    self.skip_newlines();
+                    continue;
+                }
+
+                // KEYWORD label [...] — e.g. GAP missing [sigma=0.85]
+                if matches!(sub_kind.kind, TokenKind::Ident | TokenKind::Keyword) {
+                    if self.peek(2).kind == TokenKind::LBracket {
+                        let block_type = self.advance().value.clone();
+                        let label      = self.advance().value.clone();
+                        let sub_name   = format!("{}:{}", block_type, label);
+                        let sub = self.parse_block(sub_name, cur_line);
+                        subblocks.push(sub);
+                        self.skip_newlines();
+                        continue;
+                    }
+                }
+            }
+
+            // Try field (key=value)
+            if let Some(f) = self.parse_field() {
+                fields.push(f);
+                self.skip_newlines();
+                if self.at(&TokenKind::Comma) { self.advance(); }
+                continue;
+            }
+
+            // Nothing matched — skip token with warning if not newline
+            let (tk, tv, tl) = {
+                let t = self.advance();
+                (t.kind.clone(), t.value.clone(), t.line)
+            };
+            if tk != TokenKind::Newline && tk != TokenKind::RBracket {
+                self.warnings.push(format!(
+                    "PARSER: skipped unrecognized token {:?} {:?} at line {}",
+                    tk, tv, tl
+                ));
+            }
+        }
+
+        self.skip_newlines();
+        if self.at(&TokenKind::RBracket) { self.advance(); }
+
+        Block { name, fields, subblocks, line }
+    }
+
     // ── Top-level parse ───────────────────────────────────────────────────────
 
     pub fn parse(mut self, token_count: usize) -> CstlDocument {
         let t0 = Instant::now();
 
-        let mut hashbang     = None;
-        let mut meta_fields  = HashMap::new();
-        let mut blocks       = Vec::new();
-        let mut meta_found   = false;
+        let mut hashbang    = None;
+        let mut meta_fields = HashMap::new();
+        let mut blocks      = Vec::new();
+        let mut meta_found  = false;
 
         self.skip_newlines();
 
@@ -315,7 +485,6 @@ impl Parser {
             self.skip_newlines();
             let meta_block = self.parse_block("META".to_string(), line);
 
-            // Extract meta fields — enforce C3 duplicate key detection
             let mut seen: HashSet<String> = HashSet::new();
             let mut c3_violation = false;
             for f in &meta_block.fields {
@@ -339,7 +508,7 @@ impl Parser {
             self.errors.push("Missing META block".to_string());
         }
 
-        // Body: blocks + modal statements
+        // Body
         self.skip_newlines();
         while !self.at_eof_or_end() {
             self.skip_newlines();
@@ -347,11 +516,24 @@ impl Parser {
 
             let line = self.cur().line;
 
-            // Modal: (RULE) (MUST) etc.
+            // [FIX-2] Top-level (subject) OPERATOR ... or (MODAL) ...
             if self.at(&TokenKind::LParen) {
-                self.advance();
-                if let Some(modal_block) = self.parse_modal() {
-                    blocks.push(modal_block);
+                // Try relation first
+                if let Some(rel) = self.try_parse_relation() {
+                    // Top-level relation — encode as block + store in relations
+                    let rel_name = format!("REL:{}:{}:{}", rel.subject, rel.operator, rel.object);
+                    let mut rel_fields = rel.attrs.clone();
+                    rel_fields.push(Field { name: "_subject".to_string(), type_hint: None, value: rel.subject.clone(), line: rel.line });
+                    rel_fields.push(Field { name: "_operator".to_string(), type_hint: None, value: rel.operator.clone(), line: rel.line });
+                    rel_fields.push(Field { name: "_object".to_string(), type_hint: None, value: rel.object.clone(), line: rel.line });
+                    blocks.push(Block { name: rel_name, fields: rel_fields, subblocks: vec![], line: rel.line });
+                    self.relations.push(rel);
+                } else {
+                    // Modal statement
+                    self.advance(); // consume (
+                    if let Some(modal_block) = self.parse_modal() {
+                        blocks.push(modal_block);
+                    }
                 }
                 self.skip_newlines();
                 continue;
@@ -363,22 +545,11 @@ impl Parser {
                 self.skip_newlines();
 
                 if self.at(&TokenKind::LBracket) {
-                    if name == "CONSTRAINTS" {
-                        self.advance(); // consume [
-                        let blk = self.parse_constraints_block(line);
-                        for mb in blk.subblocks {
-                            blocks.push(mb);
-                        }
-                    } else {
-                        // Standard block: KEYWORD [...]
-                        let blk = self.parse_block(name, line);
-                        blocks.push(blk);
-                    }
+                    let blk = self.parse_block(name, line);
+                    blocks.push(blk);
                 } else if self.at(&TokenKind::Colon) {
-                    // DECISION: value form
                     self.advance();
                     let value = self.parse_value();
-                    // Optional [...] after DECISION
                     let mut inline = vec![];
                     if self.at(&TokenKind::LBracket) {
                         self.advance();
@@ -400,16 +571,13 @@ impl Parser {
                 continue;
             }
 
-            // Skip unknown
             self.advance();
         }
 
-        // END marker validation
+        // END marker
         if self.at(&TokenKind::EndMarker) {
             self.advance();
             self.skip_newlines();
-
-            // T3 violation: content after ---END---
             let mut post_end = Vec::new();
             while !self.at(&TokenKind::Eof) {
                 let t = self.advance();
@@ -426,12 +594,13 @@ impl Parser {
         }
 
         let parse_time_us = t0.elapsed().as_micros() as u64;
-        let is_valid = self.errors.is_empty();
+        let is_valid      = self.errors.is_empty();
 
         CstlDocument {
             hashbang,
             meta_fields,
             blocks,
+            relations: self.relations,
             is_valid,
             errors:    self.errors,
             warnings:  self.warnings,
