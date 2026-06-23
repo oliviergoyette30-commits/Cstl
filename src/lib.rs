@@ -41,12 +41,12 @@ pub fn parse(input: &str) -> CstlDocument {
     // #4b: Validate hashbang version
     if let Some(ref hb) = doc.hashbang {
         let hb_norm = hb.replace('_', " ");
-        if !hb_norm.contains("v4.9.3") {
+        if !hb_norm.contains("v4.9") || hb_norm.contains("v5.0") {
             let ver = hb_norm.split_whitespace()
                 .find(|t| t.starts_with('v'))
                 .unwrap_or("unknown");
             doc.warnings.push(format!(
-                "HASHBANG_VERSION: expected v4.9.3 got '{}' — update payload to #!CSTL v5.0.0 MODE=A",
+                "HASHBANG_VERSION: expected v4.9.x or v5.0.x got '{}' — update payload to #!CSTL v5.0.0 MODE=A",
                 ver
             ));
         }
