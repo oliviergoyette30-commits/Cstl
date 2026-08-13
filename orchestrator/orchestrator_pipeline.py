@@ -33,7 +33,7 @@ import sys
 
 PENDING = "ORCHESTRATOR_PENDING"
 
-VERIFY_KB_PATH = "/data/data/com.termux/files/home/cstl_verify_public_kb.py"
+VERIFY_KB_PATH = "/data/data/com.termux/files/home/cstl/orchestrator/cstl_verify_public_kb.py"
 HASH_ENTANGLEMENT_PATH = "/data/data/com.termux/files/home/cstl_hash_entanglement.py"
 ADN_DB_PATH = "/data/data/com.termux/files/home/cstl_adn.db"
 
