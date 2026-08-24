@@ -8,7 +8,7 @@ pub mod parser;
 pub mod security;
 pub mod validator;
 pub mod canonical;
-pub mod relation_validator;
+pub mod semantic;
 pub mod validator_semantic;
 pub mod domains;
 pub use ast::CstlDocument;
@@ -16,7 +16,6 @@ use token::Lexer;
 use parser::Parser;
 use security::security_scan;
 use validator::validate_meta;
-use relation_validator::validate_relations;
 
 /// Parse a CSTL payload string into a CstlDocument.
 /// Full pipeline: security → lex → parse → validate.
@@ -41,7 +40,7 @@ pub fn parse(input: &str) -> CstlDocument {
     // #4b: Validate hashbang version
     if let Some(ref hb) = doc.hashbang {
         let hb_norm = hb.replace('_', " ");
-        if !hb_norm.contains("v4.9") || hb_norm.contains("v5.0") {
+        if !(hb_norm.contains("v4.9") || hb_norm.contains("v5.0")) {
             let ver = hb_norm.split_whitespace()
                 .find(|t| t.starts_with('v'))
                 .unwrap_or("unknown");
@@ -57,9 +56,7 @@ pub fn parse(input: &str) -> CstlDocument {
         let val = validate_meta(&doc.meta_fields, text);
         doc.errors.extend(val.errors);
         doc.warnings.extend(val.warnings);
-    }
-
-    // Validation sémantique (opérateurs, types DEFINE, blocs modaux déontiques)
+    }    // Validation sémantique (opérateurs, types DEFINE, blocs modaux déontiques)
     let sem = validator_semantic::validate_semantics(&doc.blocks, doc.meta_fields.get("DOMAIN").map(|s| s.as_str()));
     doc.warnings.extend(sem.warnings);
     doc.errors.extend(sem.errors);
@@ -67,10 +64,20 @@ pub fn parse(input: &str) -> CstlDocument {
 
 
     // v5.0: relation-level validation
-    let rel_val = validate_relations(text);
-    doc.errors.extend(rel_val.errors);
-    doc.warnings.extend(rel_val.warnings);
-    doc.is_valid = doc.errors.is_empty();
+use semantic::SemanticValidator;let domain = doc.meta_fields.get("DOMAIN").map(|s| s.as_str());
+let sem = match domain {
+    Some(d) => SemanticValidator::with_domain(&doc.relations, d, &doc.blocks),
+    None => SemanticValidator::new(&doc.relations, &doc.blocks),
+};
+let sem_errors = sem.validate();
+for e in &sem_errors {
+    if e.code.starts_with('E') {
+        doc.errors.push(format!("{}: {}", e.code, e.message));
+    } else {
+        doc.warnings.push(format!("{}: {}", e.code, e.message));
+    }
+
+}    doc.is_valid = doc.errors.is_empty();
 
     doc
 }
@@ -87,3 +94,4 @@ pub fn equivalent(a: &str, b: &str) -> bool {
 }
 
 mod tests;
+

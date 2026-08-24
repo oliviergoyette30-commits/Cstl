@@ -1,0 +1,14 @@
+#!CSTL v5.0.0 MODE=A
+META [encoder=test, produced_by=manual, sigma=1.0]
+
+DEFINE [
+id=e001
+name=alice
+type=human
+]
+
+RELATIONS [
+(alice) STATE calm [σ=0.8, id=r001, polarity=positive]
+(alice) STATE upset [σ=0.7, id=r002, polarity=maybe]
+]
+---END---

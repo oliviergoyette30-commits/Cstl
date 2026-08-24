@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod tests {
     use crate::parse;
-    use crate::canonical::{canonical_form, canonical_hash};
+    use crate::canonical::canonical_hash;
 
     const BASE: &str = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_TEST,
 produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
@@ -263,7 +263,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     #[test]
     fn test_entails_operator_recognized() {
         let payload = BASE.replace("---END---",
-            "RELATIONS [\n(fix_p3) ENTAILS propagation_logique_native [sigma=0.90, tau=future, id=r007]\n]\n---END---");
+            "RELATIONS [\n(fix_p3) ENTAILS propagation_logique_native [sigma=0.90, tau=f_future, id=r007]\n]\n---END---");
         let doc = parse(&payload);
         assert!(doc.is_valid, "{:?}", doc.errors);
     }
@@ -305,7 +305,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     #[test]
     fn test_contradicts_operator_recognized() {
         let payload = BASE.replace("---END---",
-            "RELATIONS [\n(hypothesis_A) CONTRADICTS hypothesis_B [sigma=0.88, tau=present]\n]\n---END---");
+            "RELATIONS [\n(hypothesis_A) CONTRADICTS hypothesis_B [sigma=0.88, tau=n_present]\n]\n---END---");
         let doc = parse(&payload);
         assert!(doc.is_valid, "{:?}", doc.errors);
     }
@@ -334,7 +334,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     #[test]
     fn test_believes_operator_recognized() {
         let payload = BASE.replace("---END---",
-            "RELATIONS [\n(agent_A) BELIEVES hypothesis_valid [sigma=0.75, tau=present]\n]\n---END---");
+            "RELATIONS [\n(agent_A) BELIEVES hypothesis_valid [sigma=0.75, tau=n_present]\n]\n---END---");
         let doc = parse(&payload);
         assert!(doc.is_valid, "{:?}", doc.errors);
     }
@@ -342,7 +342,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     #[test]
     fn test_knows_operator_recognized() {
         let payload = BASE.replace("---END---",
-            "RELATIONS [\n(agent_A) KNOWS patient_weight_82kg [sigma=0.98, tau=present]\n]\n---END---");
+            "RELATIONS [\n(agent_A) KNOWS patient_weight_82kg [sigma=0.98, tau=n_present]\n]\n---END---");
         let doc = parse(&payload);
         assert!(doc.is_valid, "{:?}", doc.errors);
     }
@@ -545,7 +545,7 @@ DEFINE finding_A AS concept [id=f001, content=fidelity_100pct_measured]
 DEFINE finding_B AS concept [id=f002, content=n_too_small_for_confirmation]
 
 RELATIONS [
-(hypothesis) ENTAILS finding_A [sigma=0.80, tau=future, id=r001]
+(hypothesis) ENTAILS finding_A [sigma=0.80, tau=f_future, id=r001]
 (finding_A) CONTRADICTS naive_null_hypothesis [sigma=0.90, id=r002]
 (finding_B) OPPOSES publication_claim [sigma=0.85, id=r003]
 (agent_reviewer) KNOWS finding_A [sigma=0.97, id=r004]
@@ -614,7 +614,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     #[test]
     fn test_relation_extracted_into_ast() {
         let payload = BASE.replace("---END---",
-            "RELATIONS [\n(hypothesis) ENTAILS finding [sigma=0.85, tau=future]\n]\n---END---");
+            "RELATIONS [\n(hypothesis) ENTAILS finding [sigma=0.85, tau=f_future]\n]\n---END---");
         let doc = parse(&payload);
         assert!(doc.is_valid, "{:?}", doc.errors);
         assert_eq!(doc.relations.len(), 1, "Should have 1 relation in AST");
@@ -628,7 +628,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     #[test]
     fn test_relation_attrs_extracted() {
         let payload = BASE.replace("---END---",
-            "RELATIONS [\n(A) KNOWS B [sigma=0.97, tau=present, id=r001]\n]\n---END---");
+            "RELATIONS [\n(A) KNOWS B [sigma=0.97, tau=n_present, id=r001]\n]\n---END---");
         let doc = parse(&payload);
         assert_eq!(doc.relations.len(), 1);
         let rel = &doc.relations[0];
@@ -744,7 +744,7 @@ produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enu
     fn test_full_v5_payload_ast_complete() {
         let payload = BASE.replace("---END---", r#"
 RELATIONS [
-(hypothesis) ENTAILS finding [sigma=0.85, tau=future, id=r001]
+(hypothesis) ENTAILS finding [sigma=0.85, tau=f_future, id=r001]
 (finding) CONTRADICTS null_hypothesis [sigma=0.90, id=r002]
 (agent) KNOWS measured_value [sigma=0.97, id=r003]
 (agent) BELIEVES derived_claim [sigma=0.72, id=r004]

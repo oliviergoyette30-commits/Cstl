@@ -1,0 +1,23 @@
+#!CSTL v5.0.0 MODE=A
+META [encoder=test, produced_by=manual, sigma=1.0]
+
+DEFINE [
+id=e001
+name=alice
+type=human
+]
+
+DEFINE [
+id=e002
+name=she
+type=human
+coref_with=e001
+]
+
+DEFINE [
+id=e003
+name=he
+type=human
+coref_with=e999
+]
+---END---

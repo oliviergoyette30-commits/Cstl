@@ -1,0 +1,661 @@
+//! CSTL v5.0.0 — Validateur sémantique — VERSION FINALE
+//!
+//! Confirmée contre le code source réel lu sur Termux (ast.rs, parser.rs) :
+//! - Relation { subject, operator, object, attrs: Vec<Field>, modality: Option<String>, line }
+//! - Field { name, type_hint, value, line }
+//! - CstlDocument.relations: Vec<Relation> contient À LA FOIS les lignes de
+//!   RELATIONS et de CONSTRAINTS (parser.rs ligne 355 : même chemin de code,
+//!   is_modality() détermine juste si `modality` est rempli ou non).
+//! - AUCUN besoin d'extracteur de triplets : self.relations.push(rel) existe
+//!   déjà (parser.rs lignes 397 et 530), correctement décomposé.
+//! - LE VRAI TROU : aucun contrôle n'existe qui compare `operator` contre
+//!   la liste des 36 opérateurs officiels, ni qui vérifie l'axiome D de SDL.
+//!   C'est uniquement ce que ce module ajoute.
+//!
+//! Session du 9 juillet 2026 : ajout du support domaine (with_domain), qui
+//! délègue à crate::domains::is_domain_operator pour accepter les verbes
+//! d'un domaine (ex. PRESCRIRE en médical) en plus des 36 opérateurs du noyau.
+
+use crate::ast::Relation;
+use crate::ast::Block;
+use crate::validator_semantic::extract_entity_type;
+
+const OFFICIAL_OPERATORS: &[&str] = &[
+    "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
+    "INTENT", "MAINTAIN", "TRANSFORM", "RESIST", "AMP", "INH",
+    "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
+    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES",
+    "COMPARES", "ENTAILS", "CONTRADICTS",
+    "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS",
+    "BEFORE", "AFTER", "DURING",
+];
+
+const DEPRECATED_OPERATORS: &[&str] = &["MUTUAL"];
+const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
+const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
+const PERFORMED_OPERATORS:  &[&str] = &["PERFORM", "ARR", "ARR.CREATE", "ARR.PRODUCE"];
+const VALID_TAU: &[&str] = &["p", "n", "f", "p_past", "n_present", "f_future"];
+
+/// R9 (port depuis parser.py ATTRIBUTE_ONTOLOGY) — valeurs canoniques pour
+/// les 8 clés d'attributs sémantiques. Hors ontologie = warning, pas erreur.
+const ATTRIBUTE_ONTOLOGY: &[(&str, &[&str])] = &[
+    ("polarity", &["positive", "negative", "neutral"]),
+    ("quantifier", &["universal", "existential", "negative", "partial", "plural", "singular", "definite", "indefinite"]),
+    ("frequency", &["always", "often", "sometimes", "rarely", "never", "occasional", "habitual", "exclusive"]),
+    ("scope", &["universal", "partial", "wide", "narrow", "distributive", "collective", "reflexive", "external"]),
+    ("mood", &["indicative", "imperative", "interrogative", "subjunctive", "conditional", "optative"]),
+    ("aspect", &["perfective", "imperfective", "progressive", "habitual", "iterative", "perfect"]),
+    ("epistemic", &["known", "unknown", "estimated", "inferred", "believed", "doubted", "certain"]),
+    ("evidential", &["visual", "hearsay", "inference", "direct", "report"]),
+];
+
+fn ontology_values(key: &str) -> Option<&'static [&'static str]> {
+    ATTRIBUTE_ONTOLOGY.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+}
+
+/// R10 (port depuis parser.py, logique réelle à deux paliers) :
+/// - 10 à 12 attributs : warning (k=9 dépassé, ignoré mais pas fatal)
+/// - 13+ attributs : erreur (anti-bombing, attaque probable)
+const ATTR_WARN_THRESHOLD: usize = 9;
+const ATTR_ERROR_THRESHOLD: usize = 12;
+
+#[derive(Debug, Clone)]
+pub struct SemanticError {
+    pub code:    String,
+    pub message: String,
+    pub line:    usize,
+}
+
+fn attr_sigma(rel: &Relation) -> Option<f64> {
+    rel.attrs.iter()
+        .find(|f| f.name == "sigma" || f.name == "σ")
+        .and_then(|f| f.value.parse::<f64>().ok())
+}
+
+fn attr_tau(rel: &Relation) -> Option<String> {
+    rel.attrs.iter()
+        .find(|f| f.name == "tau" || f.name == "τ")
+        .map(|f| f.value.clone())
+}
+
+/// Prend UN SEUL slice de Relation — celles avec modality=Some(..) sont
+/// traitées comme contraintes, celles avec modality=None comme relations
+/// causales normales. Reflète exactement comment parser.rs les stocke déjà.
+///
+/// `domain` est optionnel : None = noyau seulement (comportement historique,
+/// utilisé par tous les tests existants via new()). Some(d) = noyau + verbes
+/// du domaine d, utilisé par with_domain() pour les payloads sectoriels.
+pub struct SemanticValidator<'a> {
+    all: &'a [Relation],
+    domain: Option<&'a str>,
+    blocks: &'a [Block],
+}
+
+impl<'a> SemanticValidator<'a> {
+    pub fn new(all: &'a [Relation], blocks: &'a [Block]) -> Self {
+        SemanticValidator { all, domain: None, blocks }
+    }
+
+    pub fn with_domain(all: &'a [Relation], domain: &'a str, blocks: &'a [Block]) -> Self {
+        SemanticValidator { all, domain: Some(domain), blocks }
+    }
+
+    fn constraints(&self) -> impl Iterator<Item = &Relation> {
+        self.all.iter().filter(|r| r.modality.is_some())
+    }
+
+    fn relations(&self) -> impl Iterator<Item = &Relation> {
+        self.all.iter().filter(|r| r.modality.is_none())
+    }
+
+    pub fn validate(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        errors.extend(self.check_operator_whitelist());
+        errors.extend(self.check_axiom_d());
+        errors.extend(self.check_temporal_contradiction());
+        errors.extend(self.check_maintain_tau());
+        errors.extend(self.check_amp_inh_conflict());
+        errors.extend(self.check_tau_values());
+        errors.extend(self.check_attribute_ontology());
+        errors.extend(self.check_attribute_bombing());
+        errors.extend(self.check_contradicts_symmetry());
+        errors.extend(self.check_entails_transitivity());
+        errors.extend(self.check_knows_calibration());
+        errors.extend(self.check_doubts_calibration());
+        errors.extend(self.check_temporal_pair_consistency());
+        errors.extend(self.check_undefined_entity_reference());
+        errors
+    }
+
+    /// E101 — LE FIX CENTRAL. N'existe nulle part ailleurs dans le code.
+    fn check_operator_whitelist(&self) -> Vec<SemanticError> {
+        let mut errors: Vec<SemanticError> = self.all.iter()
+            .filter(|r| !r.operator.is_empty())
+            .filter(|r| !OFFICIAL_OPERATORS.contains(&r.operator.as_str()))
+            .filter(|r| !DEPRECATED_OPERATORS.contains(&r.operator.as_str()))
+            .filter(|r| !self.domain
+                .map(|d| crate::domains::is_domain_operator(&r.operator, d))
+                .unwrap_or(false))
+            .map(|r| SemanticError {
+                code: "E101".to_string(),
+                message: format!(
+                    "Opérateur invalide '{}' — absent des 36 opérateurs officiels (ligne {})",
+                    r.operator, r.line
+                ),
+                line: r.line,
+            })
+            .collect();
+
+        errors.extend(
+            self.all.iter()
+                .filter(|r| DEPRECATED_OPERATORS.contains(&r.operator.as_str()))
+                .map(|r| SemanticError {
+                    code: "W601".to_string(),
+                    message: format!(
+                        "Opérateur '{}' déprécié depuis v5.0 — migrer vers EQUALS/POSSESSES/RESEMBLES/CO_LOCATES/OPPOSES/COMPARES (ligne {})",
+                        r.operator, r.line
+                    ),
+                    line: r.line,
+                })
+        );
+
+        errors
+    }
+
+    /// E107 — Axiome D de SDL : ¬(MUST p ∧ MUST_NOT p)
+    fn check_axiom_d(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let constraints: Vec<&Relation> = self.constraints().collect();
+        for c1 in &constraints {
+            let Some(ref m1) = c1.modality else { continue };
+            if !REQUIRED_MODALITIES.contains(&m1.as_str()) { continue }
+            for c2 in &constraints {
+                let Some(ref m2) = c2.modality else { continue };
+                if FORBIDDEN_MODALITIES.contains(&m2.as_str())
+                    && c1.subject == c2.subject
+                    && c1.object == c2.object
+                {
+                    errors.push(SemanticError {
+                        code: "E107".to_string(),
+                        message: format!(
+                            "SDL Axiome D violé : ({}) {} {} et ({}) {} {} coexistent (lignes {}, {})",
+                            m1, c1.subject, c1.object, m2, c2.subject, c2.object, c1.line, c2.line
+                        ),
+                        line: c2.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// E108 — MUST_NOT(S,O,τ) + PERFORM(S,O,τ) au même instant
+    fn check_temporal_contradiction(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for c in self.constraints() {
+            let Some(ref m) = c.modality else { continue };
+            if !FORBIDDEN_MODALITIES.contains(&m.as_str()) { continue }
+            let c_tau = attr_tau(c);
+            for r in self.relations() {
+                if PERFORMED_OPERATORS.contains(&r.operator.as_str())
+                    && r.subject == c.subject
+                    && r.object == c.object
+                    && attr_tau(r) == c_tau
+                {
+                    errors.push(SemanticError {
+                        code: "E108".to_string(),
+                        message: format!(
+                            "Contradiction τ-locale : ({}) {} {} mais {} {} {} au même instant",
+                            m, c.subject, c.object, r.operator, r.subject, r.object
+                        ),
+                        line: r.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+
+    fn check_contradicts_symmetry(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let mut pairs: Vec<(String, String)> = Vec::new();
+        for r in self.relations() {
+            if r.operator != "CONTRADICTS" {
+                continue;
+            }
+            let src = r.subject.clone();
+            let tgt = r.object.clone();
+            if pairs.iter().any(|(a, b)| a == &tgt && b == &src) {
+                errors.push(SemanticError {
+                    code: "W602".to_string(),
+                    message: format!(
+                        "({}) CONTRADICTS ({}) — reverse already declared; CONTRADICTS is anti-symmetric, one direction sufficient",
+                        src, tgt
+                    ),
+                    line: r.line,
+                });
+            }
+            pairs.push((src, tgt));
+        }
+        errors
+    }
+
+    fn check_entails_transitivity(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let mut entails: Vec<(String, String, usize)> = Vec::new();
+        for r in self.relations() {
+            if r.operator == "ENTAILS" {
+                entails.push((r.subject.clone(), r.object.clone(), r.line));
+            }
+        }
+        for (a, b, line_ab) in &entails {
+            for (b2, c, _) in &entails {
+                if b == b2 && a != c {
+                    let declared = entails.iter().any(|(x, y, _)| x == a && y == c);
+                    if !declared {
+                        errors.push(SemanticError {
+                            code: "W603".to_string(),
+                            message: format!(
+                                "ENTAILS closure: ({})->({})->({}) but ({})->({}) not declared (recommended)",
+                                a, b, c, a, c
+                            ),
+                            line: *line_ab,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    fn check_knows_calibration(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.relations() {
+            if r.operator == "KNOWS" {
+                if let Some(s) = attr_sigma(r) {
+                    if s < 0.8 {
+                        errors.push(SemanticError {
+                            code: "W604".to_string(),
+                            message: format!(
+                                "KNOWS with sigma={:.2} — KNOWS implies factual certainty; expected sigma >= 0.8",
+                                s
+                            ),
+                            line: r.line,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    fn check_doubts_calibration(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.relations() {
+            if r.operator == "DOUBTS" {
+                if let Some(s) = attr_sigma(r) {
+                    if s > 0.5 {
+                        errors.push(SemanticError {
+                            code: "W605".to_string(),
+                            message: format!(
+                                "DOUBTS with sigma={:.2} — DOUBTS implies low confidence; expected sigma <= 0.5",
+                                s
+                            ),
+                            line: r.line,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    fn check_temporal_pair_consistency(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let mut before_pairs: Vec<(String, String, usize)> = Vec::new();
+        let mut after_pairs: Vec<(String, String)> = Vec::new();
+        for r in self.relations() {
+            if r.operator == "BEFORE" {
+                before_pairs.push((r.subject.clone(), r.object.clone(), r.line));
+            } else if r.operator == "AFTER" {
+                after_pairs.push((r.subject.clone(), r.object.clone()));
+            }
+        }
+        for (a, b, line) in &before_pairs {
+            if after_pairs.iter().any(|(x, y)| x == a && y == b) {
+                errors.push(SemanticError {
+                    code: "E701".to_string(),
+                    message: format!(
+                        "({}) declared both BEFORE and AFTER ({}) — temporal contradiction",
+                        a, b
+                    ),
+                    line: *line,
+                });
+            }
+        }
+        errors
+    }
+
+    fn defined_entities(&self) -> std::collections::HashMap<String, String> {
+        let mut store = std::collections::HashMap::new();
+        for block in self.blocks {
+            if block.name == "DEFINE" || block.name.starts_with("DEFINE_") || block.name.starts_with("DEFINE:") {
+                let mut name: Option<String> = None;
+                let mut entity_type: Option<String> = None;
+                for f in &block.fields {
+                    if f.name == "name" {
+                        name = Some(f.value.clone());
+                    }
+                    if f.name == "type" {
+                        entity_type = Some(f.value.clone());
+                    }
+                }
+                if entity_type.is_none() {
+                    entity_type = extract_entity_type(block);
+                }
+                if let (Some(n), Some(t)) = (name, entity_type) {
+                    store.insert(n, t);
+                }
+            }
+        }
+        store
+    }
+
+    fn check_undefined_entity_reference(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let store = self.defined_entities();
+        if store.is_empty() {
+            return errors;
+        }
+        for r in self.relations() {
+            for entity in [&r.subject, &r.object] {
+                if !store.contains_key(entity) {
+                    errors.push(SemanticError {
+                        code: "W606".to_string(),
+                        message: format!(
+                            "Entity '{}' referenced in relation but not declared via DEFINE",
+                            entity
+                        ),
+                        line: r.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+
+
+
+
+
+    /// W502 — MAINTAIN avec τ=p
+    fn check_maintain_tau(&self) -> Vec<SemanticError> {
+        self.relations()
+            .filter(|r| r.operator == "MAINTAIN")
+            .filter_map(|r| {
+                let tau = attr_tau(r)?;
+                (tau == "p" || tau == "p_past").then(|| SemanticError {
+                    code: "W502".to_string(),
+                    message: format!("MAINTAIN avec τ=p sémantiquement invalide (ligne {})", r.line),
+                    line: r.line,
+                })
+            })
+            .collect()
+    }
+
+    /// E109 — AMP + INH sur même paire sujet/objet
+    fn check_amp_inh_conflict(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let amps: Vec<&Relation> = self.relations().filter(|r| r.operator == "AMP").collect();
+        let inhs: Vec<&Relation> = self.relations().filter(|r| r.operator == "INH").collect();
+        for a in &amps {
+            for i in &inhs {
+                if a.subject == i.subject && a.object == i.object {
+                    errors.push(SemanticError {
+                        code: "E109".to_string(),
+                        message: format!(
+                            "Contradiction AMP/INH sur paire ({}, {}) — lignes {} et {}",
+                            a.subject, a.object, a.line, i.line
+                        ),
+                        line: i.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// W503 — tau hors {p, n, f}
+    fn check_tau_values(&self) -> Vec<SemanticError> {
+        self.all.iter()
+            .filter_map(|r| {
+                let tau = attr_tau(r)?;
+                (!VALID_TAU.contains(&tau.as_str())).then(|| SemanticError {
+                    code: "W503".to_string(),
+                    message: format!("Valeur τ invalide '{}' (ligne {})", tau, r.line),
+                    line: r.line,
+                })
+            })
+            .collect()
+    }
+
+    /// R9 — valeurs d'attributs hors ontologie sémantique (warning).
+    fn check_attribute_ontology(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.all.iter() {
+            for f in r.attrs.iter() {
+                if let Some(canonical) = ontology_values(&f.name) {
+                    if !canonical.contains(&f.value.as_str()) {
+                        errors.push(SemanticError {
+                            code: "R9".to_string(),
+                            message: format!(
+                                "Attribut '{}={}' hors ontologie (ligne {}). Valeurs canoniques: {:?}",
+                                f.name, f.value, f.line, canonical
+                            ),
+                            line: f.line,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    /// R10 — anti-bombing à deux paliers : warning si 10-12 attributs,
+    /// erreur fatale si 13 ou plus (comportement réel de parser.py).
+    fn check_attribute_bombing(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.all.iter() {
+            let n = r.attrs.len();
+            if n > ATTR_ERROR_THRESHOLD {
+                errors.push(SemanticError {
+                    code: "R10".to_string(),
+                    message: format!(
+                        "Anti-bombing : {} attributs détectés sur '{} {} {}' (ligne {}) — possible attaque, limite {}",
+                        n, r.subject, r.operator, r.object, r.line, ATTR_ERROR_THRESHOLD
+                    ),
+                    line: r.line,
+                });
+            } else if n > ATTR_WARN_THRESHOLD {
+                errors.push(SemanticError {
+                    code: "W504".to_string(),
+                    message: format!(
+                        "k=9 dépassé : {} attributs sur '{} {} {}' (ligne {}) — au-delà du seuil recommandé",
+                        n, r.subject, r.operator, r.object, r.line
+                    ),
+                    line: r.line,
+                });
+            }
+        }
+        errors
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::Field;
+
+    fn rel(subject: &str, op: &str, object: &str, sigma: f64, tau: &str, modality: Option<&str>) -> Relation {
+        Relation {
+            subject: subject.into(),
+            operator: op.into(),
+            object: object.into(),
+            attrs: vec![
+                Field { name: "sigma".into(), type_hint: None, value: sigma.to_string(), line: 1 },
+                Field { name: "tau".into(), type_hint: None, value: tau.into(), line: 1 },
+            ],
+            modality: modality.map(String::from),
+            line: 1,
+        }
+    }
+
+    #[test]
+    fn test_invalid_operator_in_relation() {
+        let data = vec![rel("patient", "TRANSMIT_FAUSH", "risk", 0.85, "n", None)];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_valid_operator_passes() {
+        let data = vec![rel("patient", "POSSESSES", "risk", 0.85, "n", None)];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(!v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_invalid_operator_in_constraint() {
+        // Une contrainte utilise aussi `operator` pour le verbe : ex PRESCRIBE
+        let data = vec![rel("physician", "PRESCRIBEZ", "drug_A", 0.92, "n", Some("MUST"))];
+        let v = SemanticValidator::new(&data, &[]);
+        // PRESCRIBEZ n'est même pas dans la liste officielle des 36 —
+        // ceci teste que la whitelist s'applique aussi aux CONSTRAINTS
+        assert!(v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_axiom_d_violation_detected() {
+        let data = vec![
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("physician", "PRESCRIBE", "drug_A", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(v.validate().iter().any(|e| e.code == "E107"),
+                "Axiome D doit être détecté quand MUST et MUST_NOT partagent sujet+objet");
+    }
+
+    #[test]
+    fn test_axiom_d_different_subjects_no_violation() {
+        let data = vec![
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("patient", "TAKE", "drug_A", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(!v.validate().iter().any(|e| e.code == "E107"));
+    }
+
+    #[test]
+    fn test_amp_inh_conflict() {
+        let data = vec![
+            rel("drug_A", "AMP", "treatment_response", 0.88, "n", None),
+            rel("drug_A", "INH", "treatment_response", 0.75, "n", None),
+        ];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(v.validate().iter().any(|e| e.code == "E109"));
+    }
+
+    #[test]
+    fn test_maintain_past_invalid() {
+        let data = vec![rel("physician", "MAINTAIN", "audit_trace", 0.90, "p", None)];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(v.validate().iter().any(|e| e.code == "W502"));
+    }
+
+    #[test]
+    fn test_clean_medical_payload_no_errors() {
+        // Corrigé le 9 juillet 2026 : PRESCRIBE/TAKE n'existaient dans aucune
+        // liste (ni noyau, ni domaine médical qui utilise le français).
+        // PRESCRIRE et ADMINISTRER sont les vrais opérateurs du domaine médical
+        // (voir cstl_domains.py / domains.rs). Le domaine doit être précisé
+        // via with_domain() pour que ces verbes soient acceptés.
+        let data = vec![
+            rel("physician", "PRESCRIRE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("patient", "ADMINISTRER", "drug_A", 1.0, "n", Some("MUST_NOT")),
+            rel("patient", "POSSESSES", "risk", 0.85, "n", None),
+            rel("physician", "KNOWS", "diagnosis", 0.97, "n", None),
+        ];
+        let v = SemanticValidator::with_domain(&data, "médical", &[]);
+        let hard: Vec<_> = v.validate().iter().filter(|e| e.code.starts_with('E')).cloned().collect();
+        assert!(hard.is_empty(), "Payload propre : {:?}", hard);
+    }
+
+    fn rel_with_attrs(subject: &str, op: &str, object: &str, extra_attrs: Vec<(&str, &str)>) -> Relation {
+        let mut attrs = vec![
+            Field { name: "sigma".into(), type_hint: None, value: "0.8".into(), line: 1 },
+        ];
+        for (k, v) in extra_attrs {
+            attrs.push(Field { name: k.into(), type_hint: None, value: v.into(), line: 1 });
+        }
+        Relation {
+            subject: subject.into(),
+            operator: op.into(),
+            object: object.into(),
+            attrs,
+            modality: None,
+            line: 1,
+        }
+    }
+
+    #[test]
+    fn test_r9_canonical_value_passes() {
+        let data = vec![rel_with_attrs("x", "STATE", "y", vec![("polarity", "positive")])];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(!v.validate().iter().any(|e| e.code == "R9"));
+    }
+
+    #[test]
+    fn test_r9_non_canonical_value_warns() {
+        let data = vec![rel_with_attrs("x", "STATE", "y", vec![("polarity", "maybe")])];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(v.validate().iter().any(|e| e.code == "R9"));
+    }
+
+    #[test]
+    fn test_r9_unknown_key_ignored() {
+        // Clé custom hors ontologie sémantique : permissif, pas de warning R9.
+        let data = vec![rel_with_attrs("x", "STATE", "y", vec![("custom_key", "anything")])];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(!v.validate().iter().any(|e| e.code == "R9"));
+    }
+
+    #[test]
+    fn test_r10_under_warn_threshold_clean() {
+        let extra: Vec<(&str, &str)> = (0..5).map(|_| ("modifier", "x")).collect();
+        let data = vec![rel_with_attrs("x", "STATE", "y", extra)];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(!v.validate().iter().any(|e| e.code == "R10" || e.code == "W504"));
+    }
+
+    #[test]
+    fn test_r10_between_9_and_12_warns_not_errors() {
+        // 11 attrs custom + 1 sigma = 12 total : au-dessus de 9, au plus 12 → warning
+        let extra: Vec<(&str, &str)> = (0..11).map(|_| ("modifier", "x")).collect();
+        let data = vec![rel_with_attrs("x", "STATE", "y", extra)];
+        let v = SemanticValidator::new(&data, &[]);
+        let errs = v.validate();
+        assert!(errs.iter().any(|e| e.code == "W504"), "devrait avertir (W504)");
+        assert!(!errs.iter().any(|e| e.code == "R10"), "ne devrait PAS être une erreur fatale à ce niveau");
+    }
+
+    #[test]
+    fn test_r10_over_12_errors() {
+        let extra: Vec<(&str, &str)> = (0..15).map(|_| ("modifier", "x")).collect();
+        let data = vec![rel_with_attrs("x", "STATE", "y", extra)];
+        let v = SemanticValidator::new(&data, &[]);
+        assert!(v.validate().iter().any(|e| e.code == "R10"));
+    }
+}

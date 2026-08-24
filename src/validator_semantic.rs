@@ -455,6 +455,12 @@ fn canonical_values_for(key: &str) -> Option<&'static [&'static str]> {
 /// R9 — Vérifie que les attributs sémantiques connus utilisent des valeurs
 /// canoniques. Récursif sur les sous-blocs. WARNING si hors ontologie.
 fn check_attribute_ontology(block: &Block, r: &mut SemReport) {
+    // Fix 12 juil 2026 : sous-bloc REL:* = copie backward-compat d'une Relation
+    // deja validee via doc.relations par semantic.rs::check_attribute_ontology.
+    // Sans ce filtre, meme violation polarity=maybe rapportee deux fois (R9 + R9_NON_CANONICAL_VALUE).
+    if block.name.starts_with("REL:") {
+        return;
+    }
     for f in &block.fields {
         if let Some(canonical_values) = canonical_values_for(&f.name) {
             if !canonical_values.contains(&f.value.as_str()) {
@@ -571,7 +577,13 @@ fn validate_block(
 
 /// Extrait le type d'entité d'un bloc DEFINE.
 /// Cherche un champ dont la valeur suit "AS", ou un champ "AS", ou un _stmt.
-fn extract_entity_type(block: &Block) -> Option<String> {
+pub fn extract_entity_type(block: &Block) -> Option<String> {
+    // Cas 0 (fix 12 juil 2026) : champ direct "type=..." — format reel du parser v5.0.0
+    for f in &block.fields {
+        if f.name == "type" {
+            return Some(f.value.clone());
+        }
+    }
     // Cas 1 : un champ _stmt contenant "alice AS human [..]"
     for f in &block.fields {
         if f.name == "_stmt" || f.name == "_value" {
