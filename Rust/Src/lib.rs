@@ -51,4 +51,5 @@ pub fn is_valid(input: &str) -> bool {
     parse(input).is_valid
 }
 
+#[path = "../Tests/tests.rs"]
 mod tests;
