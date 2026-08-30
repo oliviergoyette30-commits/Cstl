@@ -1,32 +1,39 @@
-use std::io::Read;
-use cstl_parser::parse;
+/// CSTL-Native Server
+/// Main entry point - starts TCP listener on port 5000
 
-fn main() {
-    // Lit le payload : 1er argument = chemin de fichier, sinon stdin.
-    let input = match std::env::args().nth(1) {
-        Some(path) => std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| { eprintln!("Lecture {path} impossible: {e}"); std::process::exit(1); }),
-        None => {
-            let mut s = String::new();
-            std::io::stdin().read_to_string(&mut s).expect("lecture stdin");
-            s
-        }
-    };
+use cstl_parser::server::CstlNativeServer;
+use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
 
-    let doc = parse(&input);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    eprintln!("🚀 CSTL-Native Server v1.0");
+    eprintln!("===========================");
 
-    println!("=== CSTL parse ===");
-    println!("valide        : {}", doc.is_valid);
-    println!("hashbang      : {:?}", doc.hashbang);
-    println!("encoder       : {:?}", doc.encoder());
-    println!("produced_by   : {:?}", doc.produced_by());
-    println!("blocs         : {}", doc.blocks.len());
-    for b in &doc.blocks {
-        println!("  - {} ({} champs)", b.name, b.fields.len());
-    }
-    println!("erreurs ({})  : {:?}", doc.errors.len(), doc.errors);
-    println!("warnings ({}) : {:?}", doc.warnings.len(), doc.warnings);
-    println!("parse_time_us : {}", doc.parse_time_us);
+    // Create server
+    let server = CstlNativeServer::new(5000);
 
-    std::process::exit(if doc.is_valid { 0 } else { 1 });
+    // Register some test agents
+    let mut registry = AgentRegistry::new();
+    registry.register(AgentCard {
+        name: "alice".to_string(),
+        version: "5.0.0".to_string(),
+        capabilities: vec!["communication".to_string(), "arbitration".to_string()],
+        trust_score: 0.95,
+    });
+
+    registry.register(AgentCard {
+        name: "bob".to_string(),
+        version: "5.0.0".to_string(),
+        capabilities: vec!["communication".to_string(), "fact_checking".to_string()],
+        trust_score: 0.85,
+    });
+
+    eprintln!("✅ Registered agents: alice, bob");
+    eprintln!("📡 Starting server on port 5000...");
+    eprintln!("💬 Ready to receive CSTL payloads\n");
+
+    // Start server
+    server.start().await?;
+
+    Ok(())
 }
