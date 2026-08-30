@@ -20,7 +20,7 @@ pub struct AuditEntry {
 }
 
 pub struct HashChain {
-    entries: Vec<AuditEntry>,
+    pub entries: Vec<AuditEntry>,
 }
 
 /// Hash canonique deterministe: champs tries, aucune dependance a l'ordre d'arrivee.

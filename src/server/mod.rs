@@ -14,6 +14,7 @@ pub mod router;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
 use crate::agent_discovery::AgentRegistry;
 
 pub struct CstlNativeServer {
@@ -61,3 +62,5 @@ pub mod parser;
 pub mod validator;
 
 pub mod audit;
+
+pub mod audit_store;
