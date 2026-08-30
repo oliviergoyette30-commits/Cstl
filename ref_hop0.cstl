@@ -1,0 +1,177 @@
+#!CSTL v5.0.0 MODE=A
+Mets ta réponse CSTL dans un bloc de code cstl. Tu peux ajouter du texte après le bloc fermant.
+META [
+ACTION=audit,
+CONVERSATION_ID=full_spec_coverage_v5_rev5,
+DOMAIN=medical,
+PARENT_HASH=root,
+TIMESTAMP=2026-06-23T06:00:00Z,
+TURN=1,
+encoder=Agent_CLAUDE,
+produced_by=anthropic/claude-sonnet,
+sigma=0.93
+]
+
+(RULE) assistant MUST copy_second_line_of_payload_verbatim_after_hashbang
+(RULE) assistant MUST wrap_its_entire_cstl_response_in_a_triple_backtick_code_block_tagged_cstl
+(RULE) assistant MUST start_the_code_block_with_the_hashbang_line_and_end_it_with_---END---
+(RULE) assistant MUST respond_exclusively_in_cstl_inside_the_code_block
+(RULE) assistant MUST preserve_all_existing_entities_constraints_and_relations_verbatim
+(RULE) assistant MUST emit_new_META_block_with_its_own_encoder_name_and_incremented_TURN
+(RULE) assistant MUST add_at_least_3_new_relations_inside_relations_block
+(RULE) assistant MUST copy_these_RULE_lines_into_its_response
+(RULE) assistant MUST_NOT translate_or_summarize_payload
+(RULE) assistant MUST_NOT delete_existing_entities
+(RULE) assistant MAY write_prose_only_after_the_code_block
+
+GRAMMAR_PRIMER [
+hashbang=#!CSTL v5.0.0 MODE=A,
+line2=Mets ta réponse CSTL dans un bloc de code cstl. Tu peux ajouter du texte après le bloc fermant.,
+meta=META [encoder=Agent_YOU, produced_by=your_model, sigma=0.9, PARENT_HASH=sha256:prev_or_root, TURN=2],
+rule=(RULE) assistant MUST respond_exclusively_in_cstl_inside_the_code_block,
+define=DEFINE entity AS type [id=eXXX, attr=val],
+constraint=(MUST) subject OPERATOR object [sigma=0.9, id=cXXX],
+relation=(subject) OPERATOR object [sigma=0.9, τ=present, id=rXXX],
+uncertainty=field ESTIMATED [sigma=0.72],
+decision=DECISION: value [sigma=0.9],
+trailer=---END---
+]
+
+INTENT_PAYLOAD [
+reason=full_spec_coverage_multihop_audit,
+sender=Agent_CLAUDE,
+receiver=Agent_next,
+purpose=preserve_and_extend_semantic_graph,
+priority=critical,
+context=multi_hop_degradation_experiment_hop0
+]
+
+DEFINE patient AS human [id=e001, age=67, σ=0.99, δ=bedrock]
+DEFINE physician AS agent [id=e002, role=cardiologist, δ=bedrock]
+DEFINE drug_A AS concept [id=e003, name=metformin, dose=500mg, δ=bedrock]
+DEFINE drug_B AS concept [id=e004, name=amlodipine, dose=5mg, δ=deep]
+DEFINE protocol AS document [id=e005, type=WHO_2026, version=3.1]
+DEFINE monitor AS system [id=e006, type=EHR, vendor=epic]
+DEFINE risk AS threat [id=e007, type=renal_failure, severity=high, δ=bedrock]
+DEFINE outcome AS deliverable [id=e008, type=audit_report, format=pdf]
+DEFINE trial AS event [id=e009, type=clinical_phase2, duration=12months]
+DEFINE site AS place [id=e010, name=hospital_A, city=montreal]
+DEFINE network AS infrastructure [id=e011, type=hospital_lan, tier=internal]
+
+CONSTRAINTS [
+(MUST) physician PRESCRIBE drug_A [sigma=0.92, id=c001]
+(MUST) physician PRESCRIBE drug_B [sigma=0.88, id=c002]
+(MUST_NOT) patient TAKE drug_A [sigma=1.0, condition=renal_failure, id=c003]
+(MAY) physician ADJUST dose [sigma=0.75, id=c004]
+(SHOULD) physician MONITOR renal_function [sigma=0.90, id=c005]
+(IF) risk ENTAILS contraindication_active [sigma=0.95, id=c006]
+(IFF) dual_therapy EQUALS standard_protocol [sigma=0.88, id=c007]
+(UNLESS) patient POSSESSES renal_failure [sigma=0.99, id=c008]
+(REQUIRE) physician DOCUMENT decision [sigma=0.85, id=c009]
+(FORBID) system OVERRIDE physician_decision [sigma=1.0, id=c010]
+]
+
+UNCERTAINTY [
+treatment_response ESTIMATED [sigma=0.72]
+drug_interaction UNKNOWN
+long_term_outcome INFERRED [sigma=0.60]
+biomarker_level MEASURED [sigma=0.95]
+]
+
+RELATIONS [
+(patient) POSSESSES risk [sigma=0.85, τ=present, δ=bedrock, ω=negative, id=r001]
+(drug_A) BEFORE drug_B [sigma=0.90, τ=future, id=r002]
+(monitor) DURING trial [sigma=0.95, τ=present, id=r003]
+(outcome) AFTER trial [sigma=0.88, τ=future, id=r004]
+(physician) KNOWS diagnosis [sigma=0.97, τ=present, δ=bedrock, ω=positive, id=r005]
+(physician) BELIEVES therapy_effective [sigma=0.78, τ=present, δ=shallow, id=r006]
+(physician) ASSUMES renal_stable [sigma=0.60, τ=past, δ=deep, id=r007]
+(physician) DOUBTS adverse_event [sigma=0.25, τ=future, δ=surface, id=r008]
+(therapy) ENTAILS monitoring_required [sigma=0.92, δ=deep, id=r009]
+(drug_A) ENTAILS renal_monitoring [sigma=0.88, δ=bedrock, id=r010]
+(monitoring_required) ENTAILS outcome_documented [sigma=0.95, id=r011]
+(risk) CONTRADICTS therapy_safe [sigma=0.90, ω=negative, id=r012]
+(therapy) RESEMBLES protocol [sigma=0.85, δ=shallow, id=r013]
+(physician) CO_LOCATES monitor [sigma=0.99, τ=present, id=r014]
+(drug_A) OPPOSES renal_failure [sigma=0.70, ω=positive, id=r015]
+(therapy) COMPARES standard_protocol [sigma=0.88, axis=efficacy, id=r016]
+(protocol) TRANSMIT_FAITHFUL physician [sigma=0.95, δ=bedrock, id=r017]
+(protocol) TRANSMIT_INFER physician [sigma=0.80, δ=deep, id=r018]
+(physician) INTENT treatment_success [sigma=0.92, τ=present, id=r019]
+(patient) ARR therapy [sigma=0.88, τ=future, ω=positive, id=r020]
+(patient) ARR.CREATE trial_record [sigma=0.85, τ=past, id=r021]
+(physician) ARR.JOIN clinical_team [sigma=0.90, τ=present, id=r022]
+(protocol) ARR.PRODUCE outcome [sigma=0.88, τ=future, id=r023]
+(monitor) ARR.ACCESS patient_record [sigma=0.99, τ=present, id=r024]
+(monitor) MAINTAIN patient_record [sigma=0.99, τ=present, δ=bedrock, id=r025]
+(risk) AMP contraindication_active [sigma=0.85, τ=present, id=r026]
+(risk) INH therapy_approval [sigma=0.75, τ=present, ω=negative, id=r027]
+(physician) TRANSFORM diagnosis [sigma=0.80, τ=past, id=r028]
+(protocol) RESIST deviation [sigma=0.88, δ=bedrock, id=r029]
+(physician) COMMAND monitor [sigma=0.90, τ=present, id=r030]
+(physician) ASK patient [sigma=0.85, τ=past, id=r031]
+(physician) STATE diagnosis [sigma=0.95, τ=present, id=r032]
+(physician) PERFORM examination [sigma=0.90, τ=past, id=r033]
+(physician) RECOMMEND drug_A [sigma=0.88, τ=present, id=r034]
+(site) CO_LOCATES trial [sigma=0.95, τ=present, id=r035]
+(outcome) EQUALS audit_standard [sigma=0.80, δ=bedrock, id=r036]
+(risk) PRESSURE physician [sigma=0.70, τ=present, ω=negative, id=r037]
+(evidence) CATALYZE decision [sigma=0.82, τ=present, id=r038]
+(network) MAINTAIN monitor [σ=0.95, τ=present, δ=bedrock, ω=positive, ι=r039, coref_with=e011]
+]
+
+AGREEMENT_BLOCK [
+STRENGTH renal_monitoring_protocol [sigma=0.92, detail=evidence_based]
+AGREEMENT dual_therapy_indicated [sigma=0.88]
+]
+
+DISAGREEMENT_BLOCK [
+GAP multi_hop_curve [sigma=0.93, detail=not_yet_measured_beyond_2_hops]
+CONCERN single_auditor [sigma=0.87, detail=author_judged_all_results]
+CAUTION small_n [sigma=0.80, detail=N_10_exploratory_only]
+DISPUTE drug_B_dosage [sigma=0.65, detail=alternative_5mg_vs_10mg]
+SELF_CRITIQUE renal_assumption [sigma=0.60, detail=assumes_stable_baseline]
+]
+
+DEADLOCK_DECLARE [
+round=0,
+agent=Agent_CLAUDE,
+reason=no_deadlock_at_hop0
+]
+
+ARBITRATION_REQUEST [
+agent=Agent_CLAUDE,
+sigma=0.85,
+reason=request_validation_from_downstream_agents
+]
+
+ARBITRATION_RULING [
+ruling=proceed_with_dual_therapy_pending_renal_check,
+sigma=0.90,
+final=false
+]
+
+ARBITRATION_APPEAL [
+appeal_basis=renal_risk_may_contraindicate,
+sigma=0.72
+]
+
+ARBITRATION_FINALIZE [
+ruling=monitor_renal_function_before_drug_A,
+final=true,
+sigma=0.92
+]
+
+DEADLOCK_TRIGGER [
+trigger=sigma_below_threshold,
+round=0
+]
+
+ARBITRATION_TELEMETRY [
+metric=consensus_rounds,
+round=0,
+sigma=0.93
+]
+
+DECISION: proceed_to_multihop_experiment [sigma=0.92, rationale=spec_coverage_complete]
+---END---
