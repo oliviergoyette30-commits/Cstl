@@ -3,17 +3,16 @@
 
 use cstl_parser::server::CstlNativeServer;
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("🚀 CSTL-Native Server v1.0");
     eprintln!("===========================");
 
-    // Create server
-    let server = CstlNativeServer::new(5000);
-
-    // Register some test agents
+    // Create registry and register agents
     let mut registry = AgentRegistry::new();
+    
     registry.register(AgentCard {
         name: "alice".to_string(),
         version: "5.0.0".to_string(),
@@ -29,6 +28,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     eprintln!("✅ Registered agents: alice, bob");
+
+    // Create server with registry
+    let mut server = CstlNativeServer::new(5000);
+    server.agent_registry = Arc::new(registry);
+
     eprintln!("📡 Starting server on port 5000...");
     eprintln!("💬 Ready to receive CSTL payloads\n");
 
