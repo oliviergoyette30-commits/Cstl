@@ -1,0 +1,41 @@
+#!CSTL v5.0.0 MODE=A
+META encoder=Agent_CLAUDE produced_by=claude-4-haiku sigma=0.99 RESPONSE_FORMAT=CSTL NO_PROSE=true PARENT_HASH=root TIMESTAMP=2026-08-30T13:08:00Z
+
+(RULE) kappa_result DETERMINES arxiv_gate
+(RULE) no_prose_decision_tree_only
+
+INTENT_PAYLOAD [
+  purpose: arxiv_gate_decision_tree
+  input: kappa_point_estimate_and_confidence_interval
+  output: semantic_claim_scope_final_determination
+]
+
+DECISION: [
+
+  scenario_if_kappa_gte_0_70: [
+    interpretation: april_was_artifact_june_was_valid
+    semantic_claim: maintain_unchanged
+    paper_title: unchanged_keep_semantic_fidelity
+    arxiv_scope: semantic_fidelity_substantial_agreement
+    risk_level: low
+  ]
+
+  scenario_if_kappa_0_40_to_0_70: [
+    interpretation: moderate_agreement_conditional_use
+    semantic_claim: scope_reduced_format_preservation_focus
+    paper_title: revised_remove_semantic_add_format
+    arxiv_scope: "CSTL Format Preservation Through LLM Chains"
+    risk_level: medium_revised_scope_credible
+  ]
+
+  scenario_if_kappa_below_0_40: [
+    interpretation: both_april_june_were_artifacts_methodology_was_weak
+    semantic_claim: rejected_jettisoned_entirely
+    paper_title: pivoted_complete_rewrite_transport_only
+    arxiv_scope: "CSTL Transport Layer Fidelity 99.3% Across 12+ Hops"
+    risk_level: high_but_transport_defensible
+  ]
+
+]
+
+---END---

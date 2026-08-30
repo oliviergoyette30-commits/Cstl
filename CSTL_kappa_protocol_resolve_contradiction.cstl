@@ -1,0 +1,53 @@
+#!CSTL v5.0.0 MODE=A
+META encoder=Agent_CLAUDE produced_by=claude-4-haiku sigma=0.98 RESPONSE_FORMAT=CSTL NO_PROSE=true PARENT_HASH=root TIMESTAMP=2026-08-30T13:08:00Z
+
+(RULE) triple_blind MUST be_enforced
+(RULE) masking MUST remove_all_context
+(RULE) juges MUST_NOT see_encoder_identity
+
+INTENT_PAYLOAD [
+  purpose: resolve_kappa_contradiction_april_june_definitively
+  methodology: triple_blind_rct
+  n_texts: twenty_diverse_easy_medium_complex_edge
+  n_judges: three_independent_gpt4_gemini_mistral
+  metric: fleiss_kappa_plus_wilson_interval_95_percent
+  timeline: 36_hours_total_execution
+]
+
+CONSTRAINTS [
+  (NOT) change_metric_after_data_collection
+  (NOT) exclude_judges_post_hoc
+  (NOT) modify_seuil_0.70_after_results
+  (MUST) publish_raw_judgment_matrix_3x20_public
+]
+
+DEFINE protocol_corpus AS frozen [
+  texts_total: twenty
+  easy_category: five_simple_qa_no_ambiguity
+  medium_category: five_narrative_implicit_relations
+  complex_category: five_legal_medical_technical
+  edge_category: five_negation_scope_presupposition_coordination
+]
+
+DEFINE judges AS independent [
+  judge_1: gpt_4_turbo temperature_0_3
+  judge_2: gemini_2_pro temperature_0_2
+  judge_3: mistral_large_2 temperature_0_25
+  masking: opaque_ids removed_context removed_timestamp removed_encoder
+]
+
+DEFINE metric_fleiss_kappa AS frozen [
+  formula: kappa_fleiss_not_cohen
+  reason: three_plus_judges_not_two
+  confidence_interval: wilson_95_percent
+  seuil_publication: 0.70
+]
+
+DECISION: [
+  if_kappa_gte_0.70: semantic_fidelity_claim_maintained
+  if_kappa_0.40_to_0.70: scope_reduced_format_preservation_focus
+  if_kappa_below_0.40: semantic_fidelity_rejected_transport_layer_only_99_3
+  publication_requirement: raw_judgment_matrix_3x20_visible_for_audit
+]
+
+---END---
