@@ -584,21 +584,6 @@ pub fn extract_entity_type(block: &Block) -> Option<String> {
             return Some(f.value.clone());
         }
     }
-    // Cas 1 : un champ _stmt contenant "alice AS human [..]"
-    for f in &block.fields {
-        if f.name == "_stmt" || f.name == "_value" {
-            let parts: Vec<&str> = f.value.split_whitespace().collect();
-            if let Some(pos) = parts.iter().position(|&p| p == "AS") {
-                if pos + 1 < parts.len() {
-                    return Some(parts[pos + 1].trim_matches(|c| c == '[' || c == ']').to_string());
-                }
-            }
-        }
-        // Cas 2 : champ nommé "AS"
-        if f.name == "AS" {
-            return Some(f.value.clone());
-        }
-    }
     None
 }
 
@@ -664,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_unknown_entity_type_warns() {
-        let b = block("DEFINE", vec![field("_stmt", "alice AS wizard")]);
+        let b = block("DEFINE", vec![field("type", "wizard")]);
         let r = validate_semantics(&[b], None);
         assert!(r.warnings.iter().any(|w| w.contains("wizard") && w.contains("R7_INVALID_ENTITY_TYPE")),
                 "type 'wizard' devrait warner R5");
