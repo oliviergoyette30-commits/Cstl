@@ -5,3 +5,4 @@ pub mod security;
 pub mod token;
 pub mod arbitration_wire;
 pub mod agent_discovery;
+pub mod server;
