@@ -13,11 +13,13 @@ pub mod handler;
 pub mod router;
 
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use crate::agent_discovery::AgentRegistry;
 
 pub struct CstlNativeServer {
     pub port: u16,
     pub agent_registry: Arc<AgentRegistry>,
+    pub chain: Arc<Mutex<audit::HashChain>>,
 }
 
 impl CstlNativeServer {
@@ -25,6 +27,7 @@ impl CstlNativeServer {
         CstlNativeServer {
             port,
             agent_registry: Arc::new(AgentRegistry::new()),
+            chain: Arc::new(Mutex::new(audit::HashChain::new())),
         }
     }
 
@@ -36,7 +39,7 @@ impl CstlNativeServer {
         
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
         
-        listener::accept_connections(listener, self.agent_registry.clone()).await?;
+        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone()).await?;
         
         Ok(())
     }
@@ -56,3 +59,5 @@ mod tests {
 pub mod parser;
 
 pub mod validator;
+
+pub mod audit;

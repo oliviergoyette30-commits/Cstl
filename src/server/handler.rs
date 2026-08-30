@@ -11,13 +11,16 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use crate::agent_discovery::AgentRegistry;
+use super::audit::HashChain;
 use super::parser;
 use super::validator;
 
 pub async fn handle_connection(
     mut socket: TcpStream,
     registry: Arc<AgentRegistry>,
+    chain: Arc<Mutex<HashChain>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; 8192];
     
@@ -44,6 +47,10 @@ pub async fn handle_connection(
                 
                 if validation.valid {
                     eprintln!("[Handler] ✅ Validation passed");
+
+                    // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
+                    // L'agent envoie PARENT_HASH=root; on le remplace ici.
+                    let entry = { chain.lock().await.append(&payload) };
                     
                     // STEP 3: Extract routing info
                     let receiver = payload.intent.get("receiver").cloned().unwrap_or_else(|| "unknown".to_string());
@@ -61,9 +68,13 @@ pub async fn handle_connection(
                             META [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
                             INTENT_PAYLOAD [purpose=acknowledgement, sender=server, receiver={}]\n\
                             RELATION [type=received, subject={}, status=valid]\n\
+                            AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
-                            purpose
+                            purpose,
+                            entry.hash,
+                            entry.parent_hash,
+                            entry.seq
                         );
                         
                         socket.write_all(response.as_bytes()).await?;

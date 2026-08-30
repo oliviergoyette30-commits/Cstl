@@ -29,3 +29,6 @@ tokio = { version = "1", features = ["full"] }
 [dependencies.tokio]
 version = "1.40"
 features = ["full"]
+
+[dependencies.sha2]
+version = "0.10"
