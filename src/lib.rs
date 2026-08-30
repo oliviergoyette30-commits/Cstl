@@ -95,3 +95,4 @@ pub fn equivalent(a: &str, b: &str) -> bool {
 
 mod tests;
 
+mod arbitration_wire;
