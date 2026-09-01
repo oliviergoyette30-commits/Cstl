@@ -1,6 +1,8 @@
 # CSTL v5.0.0 — Compressed Semantic Transfer Language
 
 > The first wire format designed natively for LLM-to-LLM communication.
+>
+> **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
 
 [
 
