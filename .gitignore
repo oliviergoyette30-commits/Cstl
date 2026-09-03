@@ -3,3 +3,8 @@
 Cargo.lock
 __pycache__/
 *.db
+
+# Python venvs (graphify)
+.graphify-venv/
+.venv-graphify/
+.venv/
