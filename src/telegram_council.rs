@@ -66,11 +66,11 @@ impl TelegramNotifier {
     pub async fn send_decision_request(&self, full_hash: &str, sigma: f64, consistent: bool, details: &str) -> Result<(), reqwest::Error> {
         let id = short_id(full_hash);
         let text = format!(
-            "🔔 Décision requise\nhash: {}\ncohérence: {} (sigma={})\n\n{}",
+            "🔔 Décision requise\nhash: {}\ncohérence: {} (sigma={})\n\nVérification (copiable):\n```\n{}\n```",
             full_hash,
             if consistent { "OK" } else { "⚠️ CONTRADICTION/CYCLE" },
             sigma,
-            details
+            details.trim()
         );
         let reply_markup = json!({
             "inline_keyboard": [[
@@ -84,6 +84,7 @@ impl TelegramNotifier {
             .form(&[
                 ("chat_id", self.chat_id.as_str()),
                 ("text", text.as_str()),
+                ("parse_mode", "Markdown"),
                 ("reply_markup", reply_markup.to_string().as_str()),
             ])
             .timeout(Duration::from_secs(10))
