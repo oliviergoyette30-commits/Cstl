@@ -141,6 +141,31 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     Ok(payload)
 }
 
+/// Coupe `content` sur les virgules de premier niveau seulement -- une virgule
+/// a l'interieur d'une paire de guillemets ne separe pas deux champs. Corrige
+/// une trouvaille critique de l'audit multi-angle (2026-09-03): l'ancien
+/// `content.split(',')` coupait aveuglement sur TOUTE virgule, y compris dans
+/// une valeur citee comme `produced_by="Report, final version"` -- le fragment
+/// resultant sans '=' etait alors ignore silencieusement (pas d'erreur), et la
+/// valeur d'origine finissait tronquee avec un guillemet ouvrant orphelin.
+fn split_top_level_commas(content: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut in_quotes = false;
+    for (i, ch) in content.char_indices() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ',' if !in_quotes => {
+                parts.push(&content[start..i]);
+                start = i + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    parts.push(&content[start..]);
+    parts
+}
+
 fn parse_block(block: &str) -> Result<HashMap<String, String>, ParseError> {
     let mut map = HashMap::new();
 
@@ -149,10 +174,25 @@ fn parse_block(block: &str) -> Result<HashMap<String, String>, ParseError> {
 
     let content = &block[start + 1..end];
 
-    for pair in content.split(',') {
+    for pair in split_top_level_commas(content) {
         let pair = pair.trim();
-        if let Some((key, value)) = pair.split_once('=') {
-            map.insert(key.trim().to_string(), value.trim().trim_matches('"').to_string());
+        if pair.is_empty() {
+            continue;
+        }
+        match pair.split_once('=') {
+            Some((key, value)) => {
+                map.insert(key.trim().to_string(), value.trim().trim_matches('"').to_string());
+            }
+            None => {
+                // Avant: ignore silencieusement un fragment sans '=' -- une
+                // valeur mal formee (guillemet non ferme, typo) perdait des
+                // donnees sans que personne ne le sache. Desormais: erreur
+                // explicite plutot que perte silencieuse.
+                return Err(ParseError::MalformedBlock(format!(
+                    "champ sans '=': {:?}",
+                    pair
+                )));
+            }
         }
     }
 
@@ -180,6 +220,44 @@ RELATION [type=equals, subject=x, object=y]
         assert_eq!(payload.meta.get("encoder"), Some(&"Agent_CLAUDE".to_string()));
         assert_eq!(payload.intent.get("purpose"), Some(&"test".to_string()));
         assert_eq!(payload.relations.len(), 1);
+    }
+
+    #[test]
+    fn test_quoted_value_with_internal_comma_is_preserved() {
+        // Cas exact de l'audit multi-angle (2026-09-03): une virgule DANS une
+        // valeur citee ne doit plus couper le champ en deux.
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by="Report, final version"]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert_eq!(payload.meta.get("produced_by"), Some(&"Report, final version".to_string()));
+    }
+
+    #[test]
+    fn test_field_without_equals_is_now_an_explicit_parse_error() {
+        // Avant: un fragment sans '=' (issu d'un guillemet non ferme, etc.)
+        // etait ignore silencieusement -- perte de donnees sans erreur.
+        // Desormais: ParseError::MalformedBlock explicite.
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, ceci_na_pas_de_signe_egal]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+---END---"#;
+
+        let result = parse_payload(payload_str);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_trailing_comma_still_parses_fine() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude,]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert_eq!(payload.meta.get("produced_by"), Some(&"Claude".to_string()));
     }
 
     #[test]
