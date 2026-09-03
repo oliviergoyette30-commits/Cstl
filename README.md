@@ -52,7 +52,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
 | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live; not yet unified with the hash chain into one store |
 | 6 | **Human interface** — Graphify (589 nodes, 1142 edges), Obsidian vault | 🔶 Skeleton |
-| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request); `src/server/router.rs` is dead code (unused stub) sitting next to it, not yet cleaned up |
+| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request) |
 | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ Designed |
 | 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
 
@@ -241,7 +241,7 @@ cargo test
 - Open-weight LLMs (Llama, Mistral, Qwen): partially validated only.
 - Standard-mode compression advantage largely disappears after gzip.
 - CASTLE mode: architecture only, no implementation, no benchmark.
-- Layer 3b: `ExecutionLab` and `RestrictedCouncil` are both wired live, and a commit has actually happened end-to-end (via a Telegram button). But `RestrictedCouncil` is a single authorized member, not the 2/3 multi-person quorum this doc describes elsewhere — that quorum logic does not exist. Layer 6: designed or partial, not production-wired. Layer 7 (agent discovery/routing) is built and wired live; `src/server/router.rs` next to it is a dead, unused stub.
+- Layer 3b: `ExecutionLab` and `RestrictedCouncil` are both wired live, and a commit has actually happened end-to-end (via a Telegram button). But `RestrictedCouncil` is a single authorized member, not the 2/3 multi-person quorum this doc describes elsewhere — that quorum logic does not exist. Layer 6: designed or partial, not production-wired. Layer 7 (agent discovery/routing) is built and wired live.
 - Human council resolution rate: never measured under production conditions.
 - Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
 - `emergence_proofs` table: implemented (Rust), zero production data — nothing populates it yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.

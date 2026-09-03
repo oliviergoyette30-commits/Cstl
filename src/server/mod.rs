@@ -10,7 +10,6 @@
 
 pub mod listener;
 pub mod handler;
-pub mod router;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
