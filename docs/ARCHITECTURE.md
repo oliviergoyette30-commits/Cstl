@@ -40,9 +40,14 @@ serveur séparé ci-dessous serait une régression de cette réécriture.
 CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
 
 ### Couche 2: Gouvernance / Résilience
-**État:** ✅ TESTÉ - 4/4 modes
+**État:** 🔴 NON CONSTRUITE — audit multi-angle du 2026-09-03
 
-Circuit Breaker avec quorum 2/3, dynamic whitelist, 3 modes défaillance, operator drift prevention.
+Aucun circuit breaker, aucune logique de quorum, aucune détection de drift
+d'opérateur n'existe nulle part dans ce dépôt (vérifié par grep exhaustif).
+Le "✅ TESTÉ - 4/4 modes" affiché ici auparavant n'a jamais été vrai. Le
+primitif le plus proche réellement construit est `RestrictedCouncil`
+(Couche 3b ci-dessous) : quorum=1, pas 2/3, sans circuit breaker ni
+détection de drift.
 
 ### Couche 3a: Vérification Faits Publics
 **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
@@ -67,7 +72,7 @@ Laplace Smoothed Scoring per-agent, per-domain accuracy.
 ### Couche 6: Interface Humaine
 **État:** 🟡 PARTIEL
 
-Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: inactif — l'outil n'est pas installé sur la machine de dev (vérifié le 2026-09-03), les données de graphe existantes (2026-08-26) décrivent l'ancien codebase Python et ne peuvent pas être régénérées sans installer l'outil d'abord.
+Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel désormais — corrige une contradiction avec README.md détectée par l'audit multi-angle du 2026-09-03 (ce document disait encore "inactif, pas installé" alors que README.md documentait déjà l'installation et la régénération). L'outil (`graphifyy`, PyPI, venv local) a été installé et le graphe régénéré le 2026-09-03 : 967 nœuds, 1800 arêtes, 63 communautés étiquetées sémantiquement, construit depuis le commit `3326f917`. Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé.
 
 ### Couche 7: Agent Discovery & Routing (CSTL Natif)
 **État:** ✅ CONSTRUITE ET CÂBLÉE LIVE

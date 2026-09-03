@@ -5,7 +5,7 @@
 > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-86%20passing-brightgreen.svg)](src/tests.rs)
+![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen.svg)
 
 ---
 
@@ -46,7 +46,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 | # | Layer | Status |
 |---|---|---|
 | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
-| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | ✅ Tested (4/4 modes) |
+| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | 🔴 Not built — no circuit breaker, quorum, or drift-detection code exists anywhere in this repo (verified by exhaustive grep, 2026-09-03). This row's "✅ Tested (4/4 modes)" was never true. The closest built primitive is `RestrictedCouncil` (Layer 3b below): quorum=1, not 2/3, no circuit breaker or drift detection |
 | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
 | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — reduced scope: single authorized member (quorum=1), not the 2/3 multi-person quorum described below |
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
@@ -230,7 +230,7 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
 cargo test
 ```
 
-86 tests passing, 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
+132 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
 
 ---
 
