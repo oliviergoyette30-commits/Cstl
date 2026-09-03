@@ -75,6 +75,11 @@ fn now_unix() -> i64 {
 impl AdnStore {
     pub fn open(path: &str) -> Result<Self, rusqlite::Error> {
         let conn = Connection::open(path)?;
+        // Les FK ne sont PAS appliquees par defaut en SQLite, meme avec la
+        // syntaxe REFERENCES dans le CREATE TABLE -- il faut l'activer
+        // explicitement par connexion. Sans cette ligne, les contraintes
+        // ci-dessous sont silencieusement ignorees.
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS adn_store (
                 hash TEXT PRIMARY KEY,
@@ -92,7 +97,7 @@ impl AdnStore {
             );
             CREATE TABLE IF NOT EXISTS adn_council_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                hash TEXT NOT NULL,
+                hash TEXT NOT NULL REFERENCES adn_store(hash),
                 action TEXT NOT NULL,
                 by_whom TEXT NOT NULL,
                 note TEXT,
@@ -110,7 +115,7 @@ impl AdnStore {
             );
             CREATE TABLE IF NOT EXISTS adn_relations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                hash TEXT NOT NULL,
+                hash TEXT NOT NULL REFERENCES adn_store(hash),
                 subject TEXT NOT NULL,
                 predicate TEXT NOT NULL,
                 object TEXT NOT NULL
@@ -441,8 +446,22 @@ mod tests {
     }
 
     #[test]
+    fn test_put_relations_rejects_orphan_hash_via_foreign_key() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "A".to_string());
+        rel.insert("type".to_string(), "part_of".to_string());
+        rel.insert("object".to_string(), "B".to_string());
+        // "hash_never_stored" n'a jamais ete put() dans adn_store -- la FK
+        // doit refuser l'insertion plutot que la laisser passer en silence.
+        let result = store.put_relations("hash_never_stored", &[rel]);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_put_relations_and_all_relations_roundtrip() {
         let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_a", "payload", None, None, 0.3, None, None, None).unwrap();
         let mut rel = HashMap::new();
         rel.insert("subject".to_string(), "Marie Curie".to_string());
         rel.insert("type".to_string(), "born_in".to_string());
@@ -458,6 +477,8 @@ mod tests {
     #[test]
     fn test_all_relations_accumulates_across_multiple_put_relations_calls() {
         let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_1", "payload", None, None, 0.3, None, None, None).unwrap();
+        store.put("hash_2", "payload", None, None, 0.3, None, None, None).unwrap();
         let mut rel1 = HashMap::new();
         rel1.insert("subject".to_string(), "A".to_string());
         rel1.insert("type".to_string(), "part_of".to_string());
