@@ -18,6 +18,7 @@ use crate::adn_store::AdnStore;
 use crate::execution_lab;
 use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
+use crate::obsidian_escalation::ObsidianEscalation;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -30,6 +31,7 @@ pub async fn handle_connection(
     adn_store: Arc<Mutex<AdnStore>>,
     restricted_council: Arc<RestrictedCouncil>,
     telegram: Option<Arc<TelegramNotifier>>,
+    obsidian: Option<Arc<ObsidianEscalation>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; 8192];
     
@@ -176,6 +178,20 @@ pub async fn handle_connection(
                         telegram_details.push_str("\nCycles:\n");
                         for cy in &consistency.cycles {
                             telegram_details.push_str(&format!("- {}: {}\n", cy.predicate, cy.path.join(" -> ")));
+                        }
+                    }
+
+                    // STEP 3c-bis: Escalade Obsidian (Layer 6, portion reelle) — si
+                    // ExecutionLab a detecte une contradiction/cycle, on ecrit une
+                    // entree visible directement dans le vault Obsidian de
+                    // l'utilisateur, en plus de la notification Telegram.
+                    if !consistency.consistent {
+                        if let Some(obsidian) = &obsidian {
+                            if let Err(e) = obsidian.escalate(&entry.hash, sigma, &telegram_details) {
+                                eprintln!("[Obsidian] ⚠️  escalade echouee: {}", e);
+                            } else {
+                                eprintln!("[Obsidian] 📓 Escalade ecrite dans le vault (hash={})", entry.hash);
+                            }
                         }
                     }
 

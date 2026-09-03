@@ -19,6 +19,7 @@ use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
 use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
+use crate::obsidian_escalation::ObsidianEscalation;
 
 pub struct CstlNativeServer {
     pub port: u16,
@@ -28,6 +29,7 @@ pub struct CstlNativeServer {
     pub adn_store: Arc<Mutex<AdnStore>>,
     pub restricted_council: Arc<RestrictedCouncil>,
     pub telegram: Option<Arc<TelegramNotifier>>,
+    pub obsidian: Option<Arc<ObsidianEscalation>>,
 }
 
 impl CstlNativeServer {
@@ -45,6 +47,9 @@ impl CstlNativeServer {
             // None si TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents de l'environnement -
             // degradation propre, le serveur marche pareil sans notification.
             telegram: TelegramNotifier::from_env().map(Arc::new),
+            // None si OBSIDIAN_VAULT_PATH absent de l'environnement - degradation
+            // propre, le serveur marche pareil sans escalade Obsidian.
+            obsidian: ObsidianEscalation::from_env().map(Arc::new),
         }
     }
 
@@ -67,7 +72,7 @@ impl CstlNativeServer {
         
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
         
-        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone(), self.restricted_council.clone(), self.telegram.clone()).await?;
+        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone(), self.restricted_council.clone(), self.telegram.clone(), self.obsidian.clone()).await?;
         
         Ok(())
     }
