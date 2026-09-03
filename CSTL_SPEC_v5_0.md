@@ -531,7 +531,13 @@ canonical_hash(input_a) == canonical_hash(input_b)
   sha256:56e0ae1a0c4ebd6cae999b4d9af0ac517071b673615a3e6c059f0a61e5232bea
 ```
 
-Vecteurs #3 et #4 : voir `test_canonical_hash_roundtrip_*` dans `src/tests.rs`.
+Vecteurs #3 et #4 (equivalence NFC du hash canonique) : voir
+`test_nfc_composed_and_decomposed_produce_same_hash` et
+`test_nfc_normalization_applied_to_canonical_form` dans `src/canonical.rs`
+(corrige le 2026-09-03 -- cette section referencait auparavant
+`test_canonical_hash_roundtrip_*` dans `src/tests.rs`, un fichier jamais
+compile ni execute et qui ne contenait meme pas cette fonction; voir
+`src/ast.rs` pour le detail de la suppression).
 
 ---
 

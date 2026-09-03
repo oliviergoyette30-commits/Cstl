@@ -1,5 +1,22 @@
 //! CSTL v5.0.0 — AST node types
-use std::collections::HashMap;
+//!
+//! Field/Block/Relation sont reellement utilises par semantic.rs et
+//! validator_semantic.rs (branches sur le pipeline TCP reel depuis l'audit
+//! multi-angle du 2026-09-03, voir server/validator.rs::check_sdl_operator_whitelist).
+//!
+//! CstlDocument (le type produit par une fonction `crate::parse()` qui
+//! n'a jamais existe) a ete retire le meme jour: son seul et unique
+//! consommateur etait src/tests.rs, un fichier de 796 lignes de tests
+//! jamais declare comme module dans lib.rs (aucun `mod tests;`), donc
+//! jamais compile ni execute par `cargo test` -- decouvert en corrigeant
+//! le badge de tests du README (qui pointait dessus en affichant un
+//! chiffre errone). Plutot que d'ecrire de toutes pieces le parser +
+//! tokenizer complet que ces 796 lignes de tests supposaient (feature
+//! entiere jamais implementee, pas juste un bug a corriger -- risque
+//! eleve de dupliquer, avec un modele de donnees different, le travail
+//! que fait deja server/parser.rs), les deux fichiers ont ete supprimes
+//! pour que le depot ne pretende plus tester quelque chose qui n'existe
+//! pas.
 
 #[derive(Debug, Clone)]
 pub struct Field {
@@ -27,41 +44,3 @@ pub struct Relation {
     pub line:     usize,
 }
 
-#[derive(Debug)]
-pub struct CstlDocument {
-    pub hashbang:      Option<String>,
-    pub meta_fields:   HashMap<String, String>,
-    pub blocks:        Vec<Block>,
-    pub relations:     Vec<Relation>,
-    pub is_valid:      bool,
-    pub errors:        Vec<String>,
-    pub warnings:      Vec<String>,
-    pub parse_time_us: u64,
-    pub token_count:   usize,
-}
-
-impl CstlDocument {
-    pub fn meta(&self, key: &str) -> Option<&str> {
-        self.meta_fields.get(key).map(|s| s.as_str())
-    }
-    pub fn encoder(&self) -> Option<&str> { self.meta("encoder") }
-    pub fn produced_by(&self) -> Option<&str> { self.meta("produced_by") }
-    pub fn blocks_named(&self, prefix: &str) -> Vec<&Block> {
-        self.blocks.iter()
-            .filter(|b| b.name == prefix
-                || b.name.starts_with(&format!("{}_", prefix))
-                || b.name.starts_with(&format!("{}:", prefix)))
-            .collect()
-    }
-    pub fn relations_by_op(&self, op: &str) -> Vec<&Relation> {
-        self.relations.iter().filter(|r| r.operator == op).collect()
-    }
-    pub fn relations_by_subject(&self, subj: &str) -> Vec<&Relation> {
-        self.relations.iter().filter(|r| r.subject == subj).collect()
-    }
-    pub fn relation_sigma(rel: &Relation) -> Option<f64> {
-        rel.attrs.iter()
-            .find(|f| f.name == "sigma" || f.name == "σ")
-            .and_then(|f| f.value.parse().ok())
-    }
-}
