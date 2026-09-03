@@ -153,18 +153,36 @@ impl TelegramNotifier {
     }
 }
 
-fn apply_decision(store_lock: &AdnStore, hash: &str, action: &str, note: Option<&str>) -> Result<(), rusqlite::Error> {
+/// Applique une decision (commit/revoke) recue via Telegram. Le commit passe
+/// desormais par le meme quorum 2/3 (Couche 2, gouvernance) que
+/// `purpose=council_decision` recu par TCP -- pas de double-standard entre
+/// les deux entrees. Retourne un message pret a renvoyer au chat.
+fn apply_decision(store_lock: &AdnStore, hash: &str, action: &str, note: Option<&str>, quorum_size: usize) -> Result<String, rusqlite::Error> {
     match action {
-        "commit" | "c" => store_lock.commit(hash, "Olivier", note),
-        "revoke" | "r" => store_lock.revoke(hash, "Olivier", note),
-        _ => Ok(()),
+        "commit" | "c" => {
+            let outcome = store_lock.cast_commit_vote(hash, "Olivier", note, quorum_size)?;
+            Ok(if outcome.quorum_reached {
+                format!("✅ commit applique sur {} (quorum {}/{})", hash, outcome.distinct_voters, outcome.quorum_size)
+            } else {
+                format!("🗳️ vote enregistre sur {} (quorum {}/{}, pas encore atteint)", hash, outcome.distinct_voters, outcome.quorum_size)
+            })
+        }
+        "revoke" | "r" => {
+            store_lock.revoke(hash, "Olivier", note)?;
+            Ok(format!("✅ revoke applique sur {}", hash))
+        }
+        _ => Ok(format!("⚠️ action inconnue: {}", action)),
     }
 }
 
 /// Boucle de fond: poll Telegram, applique les décisions (boutons ou texte)
 /// directement sur l'ADN store. Un message/clic venant d'un chat_id autre que
 /// celui configuré est ignoré silencieusement (log seulement).
-pub async fn run_telegram_poller(notifier: Arc<TelegramNotifier>, adn_store: Arc<Mutex<AdnStore>>) {
+pub async fn run_telegram_poller(
+    notifier: Arc<TelegramNotifier>,
+    adn_store: Arc<Mutex<AdnStore>>,
+    restricted_council: Arc<crate::restricted_council::RestrictedCouncil>,
+) {
     eprintln!("[Telegram] Poller demarre (chat_id={})", notifier.chat_id);
     let mut offset = 0i64;
     loop {
@@ -194,12 +212,13 @@ pub async fn run_telegram_poller(notifier: Arc<TelegramNotifier>, adn_store: Arc
                     };
                     let reply = match resolved {
                         Ok(Some(entry)) => {
+                            let quorum_size = restricted_council.quorum_size();
                             let outcome = {
                                 let store = adn_store.lock().await;
-                                apply_decision(&store, &entry.hash, full_action, Some("via bouton Telegram"))
+                                apply_decision(&store, &entry.hash, full_action, Some("via bouton Telegram"), quorum_size)
                             };
                             match outcome {
-                                Ok(()) => format!("✅ {} applique sur {}", full_action, entry.hash),
+                                Ok(msg) => msg,
                                 Err(e) => format!("⚠️ Echec {} sur {}: {}", full_action, entry.hash, e),
                             }
                         }
@@ -226,12 +245,13 @@ pub async fn run_telegram_poller(notifier: Arc<TelegramNotifier>, adn_store: Arc
                         continue;
                     }
 
+                    let quorum_size = restricted_council.quorum_size();
                     let outcome = {
                         let store = adn_store.lock().await;
-                        apply_decision(&store, hash, &action, note)
+                        apply_decision(&store, hash, &action, note, quorum_size)
                     };
                     let reply = match outcome {
-                        Ok(()) => format!("✅ {} applique sur {}", action, hash),
+                        Ok(msg) => msg,
                         Err(e) => format!("⚠️ Echec {} sur {}: {}", action, hash, e),
                     };
                     eprintln!("[Telegram] {}", reply);

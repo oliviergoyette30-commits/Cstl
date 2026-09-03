@@ -8,6 +8,7 @@ use crate::adn_store::AdnStore;
 use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
 use crate::obsidian_escalation::ObsidianEscalation;
+use crate::governance::GovernanceTracker;
 use super::audit::HashChain;
 use super::handler;
 
@@ -25,11 +26,12 @@ pub async fn accept_connections(
     restricted_council: Arc<RestrictedCouncil>,
     telegram: Option<Arc<TelegramNotifier>>,
     obsidian: Option<Arc<ObsidianEscalation>>,
+    governance: Arc<Mutex<GovernanceTracker>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (socket, addr) = listener.accept().await?;
         eprintln!("[Server] New connection from {}", addr);
-        
+
         let registry = agent_registry.clone();
         let chain = chain.clone();
         let kb_verifier = kb_verifier.clone();
@@ -37,9 +39,10 @@ pub async fn accept_connections(
         let restricted_council = restricted_council.clone();
         let telegram = telegram.clone();
         let obsidian = obsidian.clone();
-        
+        let governance = governance.clone();
+
         tokio::spawn(async move {
-            if let Err(e) = handler::handle_connection(socket, registry, chain, kb_verifier, adn_store, restricted_council, telegram, obsidian).await {
+            if let Err(e) = handler::handle_connection(socket, registry, chain, kb_verifier, adn_store, restricted_council, telegram, obsidian, governance).await {
                 eprintln!("[Server] Error handling connection: {}", e);
             }
         });

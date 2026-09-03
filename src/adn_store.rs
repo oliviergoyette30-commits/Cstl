@@ -49,6 +49,16 @@ pub struct CouncilLogEntry {
     pub timestamp: i64,
 }
 
+/// Résultat d'un vote de commit à quorum (Couche 2, gouvernance,
+/// `cast_commit_vote`). `quorum_reached` reflète l'état APRES ce vote
+/// (voix distinctes deja comptees, y compris celle-ci).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoteOutcome {
+    pub distinct_voters: usize,
+    pub quorum_size: usize,
+    pub quorum_reached: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct EmergenceProof {
     pub id: i64,
@@ -221,6 +231,39 @@ impl AdnStore {
             params![hash, by_whom, note, now],
         )?;
         Ok(())
+    }
+
+    /// Résultat d'un vote de commit avec quorum (Couche 2, gouvernance).
+    pub fn cast_commit_vote(
+        &self,
+        hash: &str,
+        by_whom: &str,
+        note: Option<&str>,
+        quorum_size: usize,
+    ) -> Result<VoteOutcome, rusqlite::Error> {
+        let now = now_unix();
+        // On enregistre toujours le vote, quorum atteint ou non -- c'est ce
+        // journal (adn_council_log, colonnes by_whom/timestamp deja
+        // presentes) qui permet de recompter les votants distincts.
+        self.conn.execute(
+            "INSERT INTO adn_council_log (hash, action, by_whom, note, timestamp) VALUES (?1, 'commit', ?2, ?3, ?4)",
+            params![hash, by_whom, note, now],
+        )?;
+        let distinct_voters: i64 = self.conn.query_row(
+            "SELECT COUNT(DISTINCT by_whom) FROM adn_council_log WHERE hash = ?1 AND action = 'commit'",
+            params![hash],
+            |r| r.get(0),
+        )?;
+        let quorum_size = quorum_size.max(1);
+        let distinct_voters = distinct_voters as usize;
+        let quorum_reached = distinct_voters >= quorum_size;
+        if quorum_reached {
+            self.conn.execute(
+                "UPDATE adn_store SET committed = 1, committed_by = ?2, committed_at = ?3 WHERE hash = ?1",
+                params![hash, by_whom, now],
+            )?;
+        }
+        Ok(VoteOutcome { distinct_voters, quorum_size, quorum_reached })
     }
 
     pub fn revoke(&self, hash: &str, by_whom: &str, note: Option<&str>) -> Result<(), rusqlite::Error> {
@@ -423,6 +466,58 @@ mod tests {
         let entry = store.get("hash2").unwrap().unwrap();
         assert!(entry.committed);
         assert_eq!(entry.committed_by.as_deref(), Some("human_arbiter"));
+    }
+
+    #[test]
+    fn test_cast_commit_vote_quorum_one_matches_legacy_commit_flow() {
+        // quorum_size=1 (config a un seul membre, celle d'aujourd'hui):
+        // un seul vote doit committer immediatement, comme commit().
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q1", "payload", None, None, 0.75, None, None, None).unwrap();
+        let outcome = store.cast_commit_vote("hash_q1", "Olivier", None, 1).unwrap();
+        assert_eq!(outcome.distinct_voters, 1);
+        assert_eq!(outcome.quorum_size, 1);
+        assert!(outcome.quorum_reached);
+        let entry = store.get("hash_q1").unwrap().unwrap();
+        assert!(entry.committed);
+        assert_eq!(entry.committed_by.as_deref(), Some("Olivier"));
+    }
+
+    #[test]
+    fn test_cast_commit_vote_below_quorum_does_not_commit() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q2", "payload", None, None, 0.75, None, None, None).unwrap();
+        let outcome = store.cast_commit_vote("hash_q2", "alice", None, 2).unwrap();
+        assert_eq!(outcome.distinct_voters, 1);
+        assert_eq!(outcome.quorum_size, 2);
+        assert!(!outcome.quorum_reached);
+        let entry = store.get("hash_q2").unwrap().unwrap();
+        assert!(!entry.committed, "un seul votant sur quorum=2 ne doit pas committer");
+    }
+
+    #[test]
+    fn test_cast_commit_vote_second_distinct_voter_reaches_quorum() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q3", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.cast_commit_vote("hash_q3", "alice", None, 2).unwrap();
+        let outcome = store.cast_commit_vote("hash_q3", "bob", None, 2).unwrap();
+        assert_eq!(outcome.distinct_voters, 2);
+        assert!(outcome.quorum_reached);
+        let entry = store.get("hash_q3").unwrap().unwrap();
+        assert!(entry.committed);
+        assert_eq!(entry.committed_by.as_deref(), Some("bob"));
+    }
+
+    #[test]
+    fn test_cast_commit_vote_repeat_voter_does_not_fake_quorum() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q4", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.cast_commit_vote("hash_q4", "alice", None, 2).unwrap();
+        let outcome = store.cast_commit_vote("hash_q4", "alice", None, 2).unwrap();
+        assert_eq!(outcome.distinct_voters, 1, "COUNT DISTINCT: 2 votes du meme membre = 1 votant");
+        assert!(!outcome.quorum_reached);
+        let entry = store.get("hash_q4").unwrap().unwrap();
+        assert!(!entry.committed);
     }
 
     #[test]

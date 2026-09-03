@@ -27,6 +27,20 @@ impl RestrictedCouncil {
     pub fn is_authorized(&self, sender: &str) -> bool {
         self.authorized_members.iter().any(|m| m == sender)
     }
+
+    /// Nombre de membres autorisés.
+    pub fn member_count(&self) -> usize {
+        self.authorized_members.len()
+    }
+
+    /// Taille du quorum 2/3 (Couche 2, gouvernance) — ceil(2/3 * n).
+    /// n=1 (config actuelle, un seul membre "Olivier") -> quorum_size()=1,
+    /// identique au comportement d'avant cette fonction: aucune régression.
+    /// ceil(a/b) = (a+b-1)/b avec a=2n, b=3.
+    pub fn quorum_size(&self) -> usize {
+        let n = self.member_count().max(1);
+        (2 * n + 2) / 3
+    }
 }
 
 #[cfg(test)]
@@ -51,5 +65,35 @@ mod tests {
         assert!(council.is_authorized("a"));
         assert!(council.is_authorized("b"));
         assert!(!council.is_authorized("c"));
+    }
+
+    #[test]
+    fn test_quorum_size_single_member_is_one_no_regression() {
+        // n=1 -> quorum_size()=1: doit rester identique au comportement
+        // "un commit suffit" d'avant l'ajout du quorum multi-membres.
+        let council = RestrictedCouncil::single_member("Olivier");
+        assert_eq!(council.quorum_size(), 1);
+    }
+
+    #[test]
+    fn test_quorum_size_two_members_is_two() {
+        let council = RestrictedCouncil::new(vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(council.quorum_size(), 2);
+    }
+
+    #[test]
+    fn test_quorum_size_three_members_is_two() {
+        let council = RestrictedCouncil::new(
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        assert_eq!(council.quorum_size(), 2);
+    }
+
+    #[test]
+    fn test_quorum_size_four_members_is_three() {
+        let council = RestrictedCouncil::new(vec![
+            "a".to_string(), "b".to_string(), "c".to_string(), "d".to_string(),
+        ]);
+        assert_eq!(council.quorum_size(), 3);
     }
 }

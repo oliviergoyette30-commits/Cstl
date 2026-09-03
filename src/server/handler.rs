@@ -21,6 +21,7 @@ use crate::telegram_council::TelegramNotifier;
 use crate::obsidian_escalation::ObsidianEscalation;
 use crate::emergence;
 use crate::security;
+use crate::governance::GovernanceTracker;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -50,6 +51,7 @@ pub async fn handle_connection(
     restricted_council: Arc<RestrictedCouncil>,
     telegram: Option<Arc<TelegramNotifier>>,
     obsidian: Option<Arc<ObsidianEscalation>>,
+    governance: Arc<Mutex<GovernanceTracker>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0u8; 8192];
     // Trouvaille mineure de l'audit multi-angle (2026-09-03): le buffer de
@@ -174,29 +176,53 @@ pub async fn handle_connection(
                             )
                         } else {
                             match (target_hash, decision) {
-                                (Some(hash), Some(decision)) => {
+                                (Some(hash), Some(decision)) if decision == "commit" => {
+                                    // Couche 2 (gouvernance): commit passe desormais par le
+                                    // quorum 2/3 (restricted_council.quorum_size()) plutot
+                                    // que d'ancrer au premier vote. Avec la config actuelle
+                                    // (un seul membre), quorum_size()==1 -- comportement
+                                    // identique a avant ce changement, aucune regression.
+                                    let quorum_size = restricted_council.quorum_size();
                                     let outcome = {
                                         let store = adn_store.lock().await;
-                                        match decision.as_str() {
-                                            "commit" => store.commit(&hash, &sender, note.as_deref()),
-                                            "revoke" => store.revoke(&hash, &sender, note.as_deref()),
-                                            other => {
-                                                eprintln!("[Handler] ⚠️  decision inconnue: {}", other);
-                                                Ok(())
-                                            }
-                                        }
+                                        store.cast_commit_vote(&hash, &sender, note.as_deref(), quorum_size)
                                     };
                                     match outcome {
-                                        Ok(()) if decision == "commit" || decision == "revoke" => {
-                                            eprintln!("[Handler] ⚖️  RestrictedCouncil: {} sur {} par {}", decision, hash, sender);
+                                        Ok(vote) if vote.quorum_reached => {
+                                            eprintln!("[Handler] ⚖️  RestrictedCouncil: commit APPLIQUE sur {} par {} (quorum {}/{})", hash, sender, vote.distinct_voters, vote.quorum_size);
                                             format!(
-                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=council_decision_applied, decision={}, target_hash={}, by={}]\n---END---\n",
-                                                decision, hash, sender
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=council_decision_applied, decision=commit, target_hash={}, by={}, quorum={}/{}, committed=true]\n---END---\n",
+                                                hash, sender, vote.distinct_voters, vote.quorum_size
                                             )
                                         }
-                                        Ok(()) => format!(
-                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=unknown_decision]\n---END---\n"
-                                        ),
+                                        Ok(vote) => {
+                                            eprintln!("[Handler] ⚖️  RestrictedCouncil: vote enregistre sur {} par {} (quorum {}/{}, pas encore atteint)", hash, sender, vote.distinct_voters, vote.quorum_size);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=council_decision_recorded, decision=commit, target_hash={}, by={}, quorum={}/{}, committed=false]\n---END---\n",
+                                                hash, sender, vote.distinct_voters, vote.quorum_size
+                                            )
+                                        }
+                                        Err(e) => {
+                                            eprintln!("[Handler] ⚠️  council decision failed: {}", e);
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_failed, detail=internal_error]\n---END---\n".to_string()
+                                        }
+                                    }
+                                }
+                                (Some(hash), Some(decision)) if decision == "revoke" => {
+                                    // Revoke reste a acteur unique: la spec ne mentionne un
+                                    // quorum que pour la ratification/commit.
+                                    let outcome = {
+                                        let store = adn_store.lock().await;
+                                        store.revoke(&hash, &sender, note.as_deref())
+                                    };
+                                    match outcome {
+                                        Ok(()) => {
+                                            eprintln!("[Handler] ⚖️  RestrictedCouncil: revoke sur {} par {}", hash, sender);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=council_decision_applied, decision=revoke, target_hash={}, by={}]\n---END---\n",
+                                                hash, sender
+                                            )
+                                        }
                                         Err(e) => {
                                             // Trouvaille mineure de l'audit multi-angle (2026-09-03):
                                             // e.to_string() ici est un rusqlite::Error -- peut exposer
@@ -208,6 +234,10 @@ pub async fn handle_connection(
                                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_failed, detail=internal_error]\n---END---\n".to_string()
                                         }
                                     }
+                                }
+                                (Some(_), Some(other)) => {
+                                    eprintln!("[Handler] ⚠️  decision inconnue: {}", other);
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=unknown_decision]\n---END---\n".to_string()
                                 }
                                 _ => "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=missing_target_hash_or_decision]\n---END---\n".to_string(),
                             }
@@ -405,6 +435,60 @@ pub async fn handle_connection(
                         }
                     }
 
+                    // STEP 3c-governance: Couche 2 (gouvernance/resilience) — circuit
+                    // breaker + drift d'operateur, observation seule (src/governance.rs).
+                    // Avant cette etape, la Couche 2 etait completement vide (aucun
+                    // circuit breaker, aucune detection de drift n'existait nulle part
+                    // dans ce depot). Ce module calcule un etat par expediteur et
+                    // l'expose dans la reponse, escalade plus fort via Telegram si un
+                    // seuil est franchi, mais NE REJETTE JAMAIS le payload — coherent
+                    // avec le seul mecanisme de blocage reel du pipeline (securite/
+                    // parse/validation, STEP 0/1/2 ci-dessus): tout le reste
+                    // (verification KB, coherence, avertissements d'operateurs
+                    // semantiques) est deja purement consultatif.
+                    let governance_sender = payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string());
+                    let mut governance_reasons = Vec::new();
+                    if !consistency.consistent {
+                        governance_reasons.push(crate::governance::EventReason::Inconsistency);
+                    }
+                    if !semantic_warnings.is_empty() {
+                        governance_reasons.push(crate::governance::EventReason::SemanticWarning);
+                    }
+                    let gov_state = {
+                        governance.lock().await.record(&governance_sender, &governance_reasons)
+                    };
+                    eprintln!(
+                        "[Handler] 🏛️  Governance: sender={} circuit={} breaker_trips={} drift_ratio={:.2} drift_flagged={}",
+                        governance_sender,
+                        if gov_state.circuit_open { "open" } else { "closed" },
+                        gov_state.breaker_trips, gov_state.drift_ratio, gov_state.drift_flagged
+                    );
+                    let governance_line = format!(
+                        "GOVERNANCE [sender={}, circuit={}, breaker_trips={}, drift_ratio={:.2}, drift_flagged={}]\n",
+                        governance_sender,
+                        if gov_state.circuit_open { "open" } else { "closed" },
+                        gov_state.breaker_trips, gov_state.drift_ratio, gov_state.drift_flagged
+                    );
+                    if gov_state.should_alert {
+                        if let Some(telegram) = &telegram {
+                            let telegram = telegram.clone();
+                            let sender_for_alert = governance_sender.clone();
+                            let circuit_open = gov_state.circuit_open;
+                            let breaker_trips = gov_state.breaker_trips;
+                            let drift_flagged = gov_state.drift_flagged;
+                            let drift_ratio = gov_state.drift_ratio;
+                            tokio::spawn(async move {
+                                let message = format!(
+                                    "🚨 GOVERNANCE ALERT: sender={} circuit_open={} breaker_trips={} drift_flagged={} drift_ratio={:.2}",
+                                    sender_for_alert, circuit_open, breaker_trips, drift_flagged, drift_ratio
+                                );
+                                if let Err(e) = telegram.send_message(&message).await {
+                                    eprintln!("[Telegram] ⚠️  alerte gouvernance echouee: {}", e);
+                                }
+                            });
+                        }
+                    }
+
                     // STEP 3d: Memoire persistante (Couche 5, ADN store) — le payload est
                     // stocke (ASSUMES, non-commite) avec le sigma qu'ExecutionLab vient de
                     // calculer. Rien n'est ancre (committed) ici: aucun RestrictedCouncil
@@ -479,6 +563,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -486,6 +571,7 @@ pub async fn handle_connection(
                             verification_lines,
                             consistency_line,
                             semantic_warning_lines,
+                            governance_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq

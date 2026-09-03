@@ -40,14 +40,24 @@ serveur séparé ci-dessous serait une régression de cette réécriture.
 CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
 
 ### Couche 2: Gouvernance / Résilience
-**État:** 🔴 NON CONSTRUITE — audit multi-angle du 2026-09-03
+**État:** 🟡 PARTIEL, observation seule — câblée live le 2026-09-03 (`src/governance.rs`)
 
-Aucun circuit breaker, aucune logique de quorum, aucune détection de drift
-d'opérateur n'existe nulle part dans ce dépôt (vérifié par grep exhaustif).
-Le "✅ TESTÉ - 4/4 modes" affiché ici auparavant n'a jamais été vrai. Le
-primitif le plus proche réellement construit est `RestrictedCouncil`
-(Couche 3b ci-dessous) : quorum=1, pas 2/3, sans circuit breaker ni
-détection de drift.
+Un circuit breaker par expéditeur (fenêtre glissante sur les événements
+d'incohérence `ExecutionLab`) et un ratio de drift d'opérateur (fenêtre
+glissante sur les avertissements `SEMANTIC_WARNING`) sont désormais
+calculés pour chaque payload et exposés dans un nouveau bloc de réponse
+`GOVERNANCE [...]`, avec escalade Telegram renforcée quand un seuil est
+franchi — mais **aucun des deux ne rejette jamais un payload**, décision
+explicite cohérente avec le seul mécanisme de blocage réel du pipeline
+(sécurité/parse/validation). `RestrictedCouncil::quorum_size()` implémente
+maintenant l'arithmétique réelle du quorum 2/3 (ceil(2/3·n)) et
+`AdnStore::cast_commit_vote` compte les votants distincts par hash —
+vérifié en direct avec un council à 2 membres
+(`examples/governance_smoke_test.rs`). Limites assumées: la config de
+production (`main.rs`) n'enregistre encore qu'un seul membre ("Olivier"),
+donc quorum=1 en pratique aujourd'hui ; l'état du breaker/drift est en
+mémoire uniquement, perdu au redémarrage. Le "✅ TESTÉ - 4/4 modes" affiché
+ici avant le 2026-09-03 n'a jamais été vrai.
 
 ### Couche 3a: Vérification Faits Publics
 **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
@@ -57,7 +67,7 @@ Fact Verification avec Wikidata + SPARQL, entity resolution. Appelée pour chaqu
 ### Couche 3b: Lab Logiciel + Arbitration
 **État:** 🟡 PARTIEL, câblé live avec portée réduite
 
-`ExecutionLab` (`src/execution_lab.rs`): détection de contradictions et de cycles, câblée live. `RestrictedCouncil` (`src/restricted_council.rs`): câblée live, avec pont Telegram (boutons, réponse en direct) — mais portée réduite à un seul membre autorisé (quorum=1), pas le quorum 2/3 multi-personnes décrit plus bas. Coherence check désormais croisé avec l'historique complet de l'ADN store (`check_consistency_with_history`), pas seulement les relations d'un seul payload reçu.
+`ExecutionLab` (`src/execution_lab.rs`): détection de contradictions et de cycles, câblée live. `RestrictedCouncil` (`src/restricted_council.rs`): câblée live, avec pont Telegram (boutons, réponse en direct) — l'arithmétique du quorum 2/3 (`quorum_size()`) et le comptage des votants distincts (`AdnStore::cast_commit_vote`) sont maintenant implémentés et testés (voir Couche 2 ci-dessus), mais la config de production n'enregistre encore qu'un seul membre autorisé, donc quorum=1 en pratique aujourd'hui. Coherence check désormais croisé avec l'historique complet de l'ADN store (`check_consistency_with_history`), pas seulement les relations d'un seul payload reçu.
 
 ### Couche 4: Calibration / Fiabilité
 **État:** ✅ TESTÉ
@@ -115,7 +125,7 @@ vs MCP: agent-to-tool vs agent-to-agent sémantique natif
 
 1. Deontic modality première classe
 2. Semantic fidelity prouvée par tests
-3. Arbitration protocol structuré (portée réduite: quorum=1, pas 2/3 — voir Couche 3b)
+3. Arbitration protocol structuré (quorum 2/3 implémenté et testé — voir Couche 2/3b; production encore configurée à un seul membre, donc quorum=1 en pratique)
 4. Hash-chained immutable provenance
 5. Relations au centre
 6. Zero external dependencies (no MCP)
