@@ -4,7 +4,6 @@
 
 use rusqlite::{Connection, params};
 use super::audit::{HashChain, AuditEntry};
-use std::path::Path;
 
 pub struct AuditStore {
     conn: Connection,

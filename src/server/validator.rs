@@ -9,7 +9,6 @@
 /// - No circular dependencies
 
 use super::parser::CstlPayload;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ValidationError {
@@ -123,6 +122,7 @@ fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationRe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_valid_payload() {
