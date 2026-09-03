@@ -35,6 +35,20 @@ pub struct AdnStats {
     pub pending: u64,
 }
 
+/// Une ligne de `adn_council_log` — jusqu'ici la table etait ecriture seule
+/// (`commit`/`revoke` y inserent) sans aucun moyen de la relire. Correction
+/// honnete: le journal d'audit humain existait dans la DB mais nulle part
+/// dans le code Rust.
+#[derive(Debug, Clone)]
+pub struct CouncilLogEntry {
+    pub id: i64,
+    pub hash: String,
+    pub action: String,
+    pub by_whom: String,
+    pub note: Option<String>,
+    pub timestamp: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct EmergenceProof {
     pub id: i64,
@@ -215,6 +229,32 @@ impl AdnStore {
         Ok(())
     }
 
+    /// Journal d'audit complet pour un hash donne (commit/revoke, par qui, quand,
+    /// note eventuelle), du plus ancien au plus recent. Premiere methode de
+    /// lecture pour `adn_council_log` -- avant cette fonction, rien dans le
+    /// code Rust ne pouvait relire ce que `commit()`/`revoke()` y ecrivent.
+    pub fn council_log_for(&self, hash: &str) -> Result<Vec<CouncilLogEntry>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, hash, action, by_whom, note, timestamp
+             FROM adn_council_log WHERE hash = ?1 ORDER BY timestamp ASC",
+        )?;
+        let rows = stmt.query_map(params![hash], |row| {
+            Ok(CouncilLogEntry {
+                id: row.get(0)?,
+                hash: row.get(1)?,
+                action: row.get(2)?,
+                by_whom: row.get(3)?,
+                note: row.get(4)?,
+                timestamp: row.get(5)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
     pub fn stats(&self) -> Result<AdnStats, rusqlite::Error> {
         let total: u64 = self.conn.query_row("SELECT COUNT(*) FROM adn_store", [], |r| r.get(0))?;
         let committed: u64 =
@@ -362,6 +402,42 @@ mod tests {
         assert_eq!(stats.total, 2);
         assert_eq!(stats.committed, 1);
         assert_eq!(stats.pending, 1);
+    }
+
+    #[test]
+    fn test_council_log_for_empty_when_never_committed() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_x", "p", None, None, 0.3, None, None, None).unwrap();
+        assert!(store.council_log_for("hash_x").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_council_log_for_records_commit_then_revoke_in_order() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_y", "p", None, None, 0.3, None, None, None).unwrap();
+        store.commit("hash_y", "alice", Some("quorum ok")).unwrap();
+        store.revoke("hash_y", "bob", Some("erreur")).unwrap();
+
+        let log = store.council_log_for("hash_y").unwrap();
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].action, "commit");
+        assert_eq!(log[0].by_whom, "alice");
+        assert_eq!(log[0].note.as_deref(), Some("quorum ok"));
+        assert_eq!(log[1].action, "revoke");
+        assert_eq!(log[1].by_whom, "bob");
+    }
+
+    #[test]
+    fn test_council_log_for_is_scoped_to_its_hash() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_z1", "p", None, None, 0.3, None, None, None).unwrap();
+        store.put("hash_z2", "p", None, None, 0.3, None, None, None).unwrap();
+        store.commit("hash_z1", "alice", None).unwrap();
+        store.commit("hash_z2", "bob", None).unwrap();
+
+        let log = store.council_log_for("hash_z1").unwrap();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].by_whom, "alice");
     }
 
     #[test]
