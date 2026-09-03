@@ -4,10 +4,38 @@
 /// jamais par un LLM. Un LLM ne peut pas produire de SHA-256 reel.
 /// PARENT_HASH=root ou unverified_no_hash_tool_available cote agent,
 /// remplace ici par le vrai hash calcule.
+///
+/// Note honnete (audit multi-angle, 2026-09-03 -- decouverte en creusant
+/// le fix NFC de src/canonical.rs): CE canonical_hash() ci-dessous, et non
+/// canonical::canonical_hash(), est celui reellement utilise par le
+/// serveur TCP en production (via HashChain::append, appele depuis
+/// server/handler.rs pour chaque payload recu -- c'est la cle primaire de
+/// adn_store). src/canonical.rs implemente un algorithme DIFFERENT
+/// (canonicalisation de texte brut, documente comme normatif dans
+/// CSTL_SPEC_v5_0.md section 15) mais n'est appele NULLE PART dans ce
+/// depot -- corriger canonical.rs (fait plus tot dans cette session, ajout
+/// de la normalisation NFC) n'avait donc AUCUN effet sur le hash reel
+/// produit par le serveur qui tourne. Les deux fonctions partagent le nom
+/// canonical_hash et l'intention (determinisme, immutabilite) mais
+/// operent sur des donnees differentes (texte brut CSTL vs CstlPayload
+/// deja parse) et ne sont PAS interchangeables -- corriger celle-ci ne
+/// dispense pas de garder canonical.rs a jour si un jour un appelant
+/// reel apparait pour elle.
 
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use unicode_normalization::UnicodeNormalization;
 use super::parser::CstlPayload;
+
+/// Applique NFC avant de pousser une chaine dans le buffer canonique.
+/// Corrige la meme trouvaille NFC que src/canonical.rs (ratifiee
+/// tripartite depuis la Session #5, jamais appliquee ici): deux
+/// representations Unicode canoniquement equivalentes d'une valeur de
+/// champ (ex: "café" precompose vs decompose) produisaient auparavant
+/// deux hash d'audit differents pour un payload semantiquement identique.
+fn nfc(s: &str) -> String {
+    s.nfc().collect()
+}
 
 #[derive(Debug, Clone)]
 pub struct AuditEntry {
@@ -28,11 +56,15 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
     let mut canon = String::new();
 
     canon.push_str("VERSION|");
-    canon.push_str(&payload.version);
+    canon.push_str(&nfc(&payload.version));
     canon.push_str("\nMODE|");
-    canon.push_str(&payload.mode);
+    canon.push_str(&nfc(&payload.mode));
 
-    // BTreeMap => tri lexicographique garanti
+    // BTreeMap => tri lexicographique garanti. Trie sur les cles BRUTES
+    // (non normalisees) -- deux cles NFC-equivalentes mais bytes-differentes
+    // seraient de toute facon deux entrees HashMap distinctes en amont, la
+    // normalisation ici ne change donc pas l'ORDRE de tri, seulement les
+    // bytes hashes pour chaque valeur (et chaque cle, par coherence).
     let meta: BTreeMap<_, _> = payload.meta.iter().collect();
     canon.push_str("\nMETA");
     for (k, v) in meta {
@@ -41,18 +73,18 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
             continue;
         }
         canon.push('|');
-        canon.push_str(k);
+        canon.push_str(&nfc(k));
         canon.push('=');
-        canon.push_str(v);
+        canon.push_str(&nfc(v));
     }
 
     let intent: BTreeMap<_, _> = payload.intent.iter().collect();
     canon.push_str("\nINTENT");
     for (k, v) in intent {
         canon.push('|');
-        canon.push_str(k);
+        canon.push_str(&nfc(k));
         canon.push('=');
-        canon.push_str(v);
+        canon.push_str(&nfc(v));
     }
 
     // Relations: chaque bloc trie en interne, puis les blocs tries entre eux
@@ -63,7 +95,7 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
             let sorted: BTreeMap<_, _> = r.iter().collect();
             sorted
                 .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| format!("{}={}", nfc(k), nfc(v)))
                 .collect::<Vec<_>>()
                 .join(",")
         })
@@ -173,6 +205,22 @@ mod tests {
             relations: vec![],
             raw: String::new(),
         }
+    }
+
+    /// Corrige la meme trouvaille NFC que src/canonical.rs, mais cette fois
+    /// sur le HASH REELLEMENT UTILISE EN PRODUCTION (via HashChain::append,
+    /// la cle primaire de adn_store). Deux payloads dont un champ INTENT
+    /// contient la meme valeur visible mais dans deux representations
+    /// Unicode differentes (café precompose vs decompose) doivent produire
+    /// EXACTEMENT le meme hash d'audit.
+    #[test]
+    fn test_nfc_equivalent_field_values_produce_same_audit_hash() {
+        let mut a = mk("alice", "query");
+        let mut b = mk("alice", "query");
+        a.intent.insert("note".to_string(), "caf\u{00E9}".to_string());
+        b.intent.insert("note".to_string(), "cafe\u{0301}".to_string());
+        assert_ne!(a.intent.get("note"), b.intent.get("note"), "bytes bruts differents avant normalisation");
+        assert_eq!(canonical_hash(&a), canonical_hash(&b));
     }
 
     #[test]
