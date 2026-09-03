@@ -120,7 +120,8 @@ impl AdnStore {
                 predicate TEXT NOT NULL,
                 object TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);",
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);",
         )?;
         Ok(Self { conn })
     }
@@ -289,9 +290,52 @@ impl AdnStore {
     /// Toutes les relations jamais stockees, tous hashes confondus -- l'historique
     /// complet que la Couche 3b utilise pour detecter des contradictions/cycles
     /// qui s'etalent sur plusieurs requetes, pas seulement dans un seul payload.
+    /// Conservee telle quelle pour compatibilite (tests existants, usage generique
+    /// hors ExecutionLab si besoin un jour) -- voir `relations_for_predicates` pour
+    /// le chemin utilise reellement par le handler, qui ne charge que ce qui compte.
     pub fn all_relations(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
         let mut stmt = self.conn.prepare("SELECT subject, predicate, object FROM adn_relations")?;
         let rows = stmt.query_map([], |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            Ok(m)
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Comme `all_relations()`, mais filtre au niveau SQL sur une liste de
+    /// predicats (WHERE predicate IN (...)). Existe pour que
+    /// `ExecutionLab::check_consistency_with_history` (via le handler) ne
+    /// charge que les ~6 predicats dont il se sert reellement
+    /// (`execution_lab::relevant_predicates()`), pas tout ce qui a jamais ete
+    /// stocke dans `adn_relations` -- y compris, une fois le Layer 4
+    /// (hypothesis engine) actif, des relations `ASSUMES`/`DOUBTS` qui ne
+    /// concernent pas du tout la coherence de Couche 3b. Correction honnete:
+    /// ca reste O(relations pertinentes), pas O(1) -- un vrai lookup cible par
+    /// (subject, predicate) demanderait de casser la purete de execution_lab.rs
+    /// (voir le message de commit), pas fait ici volontairement.
+    pub fn relations_for_predicates(
+        &self,
+        predicates: &[&str],
+    ) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        if predicates.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = predicates.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            "SELECT subject, predicate, object FROM adn_relations WHERE predicate IN ({})",
+            placeholders
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            predicates.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
             let mut m = HashMap::new();
             m.insert("subject".to_string(), row.get::<_, String>(0)?);
             m.insert("type".to_string(), row.get::<_, String>(1)?);
@@ -457,6 +501,42 @@ mod tests {
         // doit refuser l'insertion plutot que la laisser passer en silence.
         let result = store.put_relations("hash_never_stored", &[rel]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_relations_for_predicates_filters_at_sql_level() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h1", "p", None, None, 0.3, None, None, None).unwrap();
+        let mut born = HashMap::new();
+        born.insert("subject".to_string(), "Marie Curie".to_string());
+        born.insert("type".to_string(), "born_in".to_string());
+        born.insert("object".to_string(), "Warsaw".to_string());
+        let mut assumes = HashMap::new();
+        assumes.insert("subject".to_string(), "X".to_string());
+        assumes.insert("type".to_string(), "ASSUMES".to_string());
+        assumes.insert("object".to_string(), "Y".to_string());
+        store.put_relations("h1", &[born, assumes]).unwrap();
+
+        // all_relations() voit tout, y compris ASSUMES.
+        assert_eq!(store.all_relations().unwrap().len(), 2);
+
+        // relations_for_predicates ne renvoie que ce qui est demande.
+        let filtered = store.relations_for_predicates(&["born_in", "died_in"]).unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].get("type").map(String::as_str), Some("born_in"));
+    }
+
+    #[test]
+    fn test_relations_for_predicates_empty_list_returns_nothing() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h1", "p", None, None, 0.3, None, None, None).unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "A".to_string());
+        rel.insert("type".to_string(), "born_in".to_string());
+        rel.insert("object".to_string(), "B".to_string());
+        store.put_relations("h1", &[rel]).unwrap();
+
+        assert!(store.relations_for_predicates(&[]).unwrap().is_empty());
     }
 
     #[test]

@@ -211,10 +211,14 @@ pub async fn handle_connection(
                     // de verite empirique (ca, c'est kb_verify) — c'est une verification
                     // de coherence computationnellement checkable, maintenant etendue
                     // au-dela d'un seul payload recu.
+                    // Charge seulement les predicats dont ExecutionLab se sert
+                    // (WHERE predicate IN (...) au niveau SQL), pas tout
+                    // adn_relations -- correction du scan complet a chaque
+                    // requete identifie precedemment.
                     let history_relations = {
                         let store = adn_store.lock().await;
-                        store.all_relations().unwrap_or_else(|e| {
-                            eprintln!("[Handler] ⚠️  adn_store.all_relations failed: {}", e);
+                        store.relations_for_predicates(&execution_lab::relevant_predicates()).unwrap_or_else(|e| {
+                            eprintln!("[Handler] ⚠️  adn_store.relations_for_predicates failed: {}", e);
                             Vec::new()
                         })
                     };

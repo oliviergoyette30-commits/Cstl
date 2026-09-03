@@ -17,11 +17,11 @@ use std::collections::{HashMap, HashSet};
 
 /// Prédicats à valeur unique par sujet: en voir deux avec des objets différents
 /// pour le même sujet, dans le même payload, est une contradiction directe.
-const FUNCTIONAL_PREDICATES: &[&str] = &["born_in", "died_in", "spouse", "capital_of"];
+pub const FUNCTIONAL_PREDICATES: &[&str] = &["born_in", "died_in", "spouse", "capital_of"];
 
 /// Prédicats transitifs pour lesquels un cycle est une incohérence structurelle
 /// (une hiérarchie d'imbrication ne peut pas revenir sur elle-même).
-const CHAINABLE_PREDICATES: &[&str] = &["part_of", "located_in"];
+pub const CHAINABLE_PREDICATES: &[&str] = &["part_of", "located_in"];
 
 #[derive(Debug, Clone)]
 pub struct Contradiction {
@@ -143,6 +143,19 @@ fn dfs_find_cycle<'a>(start: &'a str, adjacency: &HashMap<&'a str, Vec<&'a str>>
     }
 }
 
+/// Union de FUNCTIONAL_PREDICATES et CHAINABLE_PREDICATES — les seuls
+/// prédicats dont `check_consistency_with_history` se sert. Existe pour que
+/// l'appelant (le handler, via `AdnStore::relations_for_predicates`) puisse
+/// ne charger que ça depuis la DB, sans dupliquer la liste à la main et
+/// risquer qu'elle diverge des constantes ci-dessus si l'une des deux change.
+pub fn relevant_predicates() -> Vec<&'static str> {
+    FUNCTIONAL_PREDICATES
+        .iter()
+        .chain(CHAINABLE_PREDICATES.iter())
+        .copied()
+        .collect()
+}
+
 /// Point d'entrée principal — vérifie la cohérence interne de toutes les
 /// relations d'un même payload.
 pub fn check_consistency(relations: &[HashMap<String, String>]) -> ConsistencyReport {
@@ -260,6 +273,15 @@ mod tests {
         m.insert("type".to_string(), predicate.to_string());
         m.insert("object".to_string(), object.to_string());
         m
+    }
+
+    #[test]
+    fn test_relevant_predicates_contains_all_six_and_nothing_else() {
+        let preds = relevant_predicates();
+        assert_eq!(preds.len(), 6);
+        for p in ["born_in", "died_in", "spouse", "capital_of", "part_of", "located_in"] {
+            assert!(preds.contains(&p), "predicat manquant: {p}");
+        }
     }
 
     #[test]
