@@ -16,3 +16,4 @@ pub mod execution_lab;
 pub mod restricted_council;
 pub mod telegram_council;
 pub mod obsidian_escalation;
+pub mod emergence;

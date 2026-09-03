@@ -19,6 +19,7 @@ use crate::execution_lab;
 use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
 use crate::obsidian_escalation::ObsidianEscalation;
+use crate::emergence;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -110,6 +111,59 @@ pub async fn handle_connection(
                                     }
                                 }
                                 _ => "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=missing_target_hash_or_decision]\n---END---\n".to_string(),
+                            }
+                        };
+
+                        socket.write_all(response.as_bytes()).await?;
+                        continue;
+                    }
+
+                    // STEP 2c: Detection d'emergence (Couche 3b, port de
+                    // RevisionOrchestrator, src/emergence.rs) -- purpose=detect_emergence
+                    // compare la decision d'un run TRIPARTITE deja stocke (trio_hash) a
+                    // celles des runs SOLO de chaque agent (eux aussi deja stockes,
+                    // soumis normalement par chaque agent avant le tripartite). Aucun
+                    // appel API: les payloads compares sont deja dans l'adn_store.
+                    // Comme council_decision, court-circuite le reste du pipeline.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("detect_emergence") {
+                        let trio_hash = payload.intent.get("trio_hash").cloned().unwrap_or_default();
+                        let solo_hashes_field = payload.intent.get("solo_hashes").cloned().unwrap_or_default();
+                        let question = payload.intent.get("question").cloned().unwrap_or_default();
+                        let solo_hashes = emergence::parse_solo_hashes(&solo_hashes_field);
+
+                        let response = if trio_hash.is_empty() || solo_hashes.is_empty() {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_rejected, reason=missing_trio_hash_or_solo_hashes]\n---END---\n".to_string()
+                        } else {
+                            let detect_result = {
+                                let store = adn_store.lock().await;
+                                emergence::detect_revisions(&store, &trio_hash, &solo_hashes, &question)
+                            };
+                            match detect_result {
+                                Ok(reports) => {
+                                    let mut lines = String::new();
+                                    for r in &reports {
+                                        lines.push_str(&format!(
+                                            "EMERGENCE_REPORT [agent={}, revised={}, solo={}, trio={}, delta_sigma={}]\n",
+                                            r.agent, r.revised, r.solo_decision, r.trio_decision, r.delta_sigma
+                                        ));
+                                    }
+                                    let revised_count = reports.iter().filter(|r| r.revised).count();
+                                    eprintln!(
+                                        "[Handler] 🧬 detect_emergence: {} agents compares, {} revision(s) detectee(s)",
+                                        reports.len(), revised_count
+                                    );
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=detect_emergence_result, trio_hash={}, agents_compared={}, revisions_detected={}]\n{}---END---\n",
+                                        trio_hash, reports.len(), revised_count, lines
+                                    )
+                                }
+                                Err(e) => {
+                                    eprintln!("[Handler] ⚠️  detect_emergence failed: {}", e);
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_failed, detail={}]\n---END---\n",
+                                        e.to_string().replace("\"", "'")
+                                    )
+                                }
                             }
                         };
 

@@ -35,6 +35,18 @@ pub struct AdnStats {
     pub pending: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct EmergenceProof {
+    pub id: i64,
+    pub question: String,
+    pub solo_answers: String,
+    pub final_decision: String,
+    pub position_changed_by: Option<String>,
+    pub changed_to: Option<String>,
+    pub delta_sigma: Option<f64>,
+    pub timestamp: i64,
+}
+
 pub struct AdnStore {
     conn: Connection,
 }
@@ -246,6 +258,58 @@ impl AdnStore {
         }
         Ok(out)
     }
+
+    /// Enregistre un `emergence_proof` (Level 4): la reponse solo de chaque
+    /// modele face a une question, la decision collective finale, et si/comment
+    /// une position a change. Portee honnete: aucun code de ce repo ne genere
+    /// ces donnees automatiquement -- le debat multi-modele qui produit
+    /// `solo_answers` se fait aujourd'hui manuellement, hors de ce serveur.
+    /// Cette methode existe pour que la table serve reellement des qu'un vrai
+    /// flux (orchestrateur ou saisie manuelle) l'appelle, plutot que de rester
+    /// un schema sans aucun code Rust autour.
+    #[allow(clippy::too_many_arguments)]
+    pub fn put_emergence_proof(
+        &self,
+        question: &str,
+        solo_answers: &str,
+        final_decision: &str,
+        position_changed_by: Option<&str>,
+        changed_to: Option<&str>,
+        delta_sigma: Option<f64>,
+    ) -> Result<i64, rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO emergence_proofs
+                (question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, now_unix()],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Tous les emergence_proofs enregistres, du plus ancien au plus recent.
+    pub fn get_emergence_proofs(&self) -> Result<Vec<EmergenceProof>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, timestamp
+             FROM emergence_proofs ORDER BY timestamp ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(EmergenceProof {
+                id: row.get(0)?,
+                question: row.get(1)?,
+                solo_answers: row.get(2)?,
+                final_decision: row.get(3)?,
+                position_changed_by: row.get(4)?,
+                changed_to: row.get(5)?,
+                delta_sigma: row.get(6)?,
+                timestamp: row.get(7)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
@@ -332,5 +396,46 @@ mod tests {
 
         let all = store.all_relations().unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_put_and_get_emergence_proof_roundtrip() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let id = store
+            .put_emergence_proof(
+                "Is the sky blue?",
+                r#"{"claude":"yes","gpt":"yes","gemini":"mostly"}"#,
+                "yes",
+                Some("gemini"),
+                Some("yes"),
+                Some(0.12),
+            )
+            .unwrap();
+        assert!(id > 0);
+
+        let all = store.get_emergence_proofs().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].question, "Is the sky blue?");
+        assert_eq!(all[0].position_changed_by.as_deref(), Some("gemini"));
+        assert_eq!(all[0].delta_sigma, Some(0.12));
+    }
+
+    #[test]
+    fn test_emergence_proof_without_position_change() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store
+            .put_emergence_proof(
+                "2+2?",
+                r#"{"claude":"4","gpt":"4"}"#,
+                "4",
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let all = store.get_emergence_proofs().unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(all[0].position_changed_by.is_none());
+        assert!(all[0].delta_sigma.is_none());
     }
 }
