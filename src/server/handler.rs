@@ -20,6 +20,7 @@ use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
 use crate::obsidian_escalation::ObsidianEscalation;
 use crate::emergence;
+use crate::security;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -46,7 +47,32 @@ pub async fn handle_connection(
         
         let raw_payload = String::from_utf8_lossy(&buffer[..n]).to_string();
         eprintln!("[Handler] Received {} bytes", n);
-        
+
+        // STEP 0: Security scan (Sessions #6+#7) -- trouve dans un audit multi-angle
+        // (2026-09-03) que security::security_scan existait depuis sa creation sans
+        // etre appele nulle part sur le chemin reseau reel. Corrige ici: on nettoie
+        // les codepoints dangereux (zero-width/bidi/C1) AVANT le parsing, et on
+        // rejette purement et simplement tout payload avec une erreur de securite
+        // (META imbrique / injection, profondeur de crochets excessive) sans meme
+        // tenter de le parser.
+        let security_report = security::security_scan(&raw_payload);
+        if !security_report.warnings.is_empty() {
+            eprintln!("[Handler] 🛡️  Security warnings: {:?}", security_report.warnings);
+        }
+        if !security_report.errors.is_empty() {
+            eprintln!("[Handler] 🚫 Security scan rejected payload: {:?}", security_report.errors);
+            let rejection = format!(
+                "#!CSTL v5.0.0 MODE=A\n\
+                META [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                INTENT_PAYLOAD [purpose=security_rejected, details={}]\n\
+                ---END---\n",
+                security_report.errors.join("; ").replace("\"", "\\\"")
+            );
+            socket.write_all(rejection.as_bytes()).await?;
+            continue;
+        }
+        let raw_payload = security_report.cleaned;
+
         // STEP 1: Parse CSTL payload
         let parse_result = parser::parse_payload(&raw_payload);
         
