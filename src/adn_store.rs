@@ -10,6 +10,7 @@
 //! ADNDeltaDetector. Ces pièces restent à construire si on en a besoin plus tard.
 
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct AdnEntry {
@@ -80,6 +81,13 @@ impl AdnStore {
                 changed_to TEXT,
                 delta_sigma REAL,
                 timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS adn_relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hash TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                predicate TEXT NOT NULL,
+                object TEXT NOT NULL
             );",
         )?;
         Ok(Self { conn })
@@ -201,6 +209,43 @@ impl AdnStore {
             self.conn.query_row("SELECT COUNT(*) FROM adn_store WHERE committed = 1", [], |r| r.get(0))?;
         Ok(AdnStats { total, committed, pending: total - committed })
     }
+
+    /// Persiste les relations d'un payload deja stocke (via `put`), pour que
+    /// `ExecutionLab::check_consistency_with_history` puisse les retrouver lors
+    /// d'une requete future. Appelee separement de `put()`: un payload sans
+    /// relations (purpose=council_decision, etc.) n'a rien a inserer ici.
+    pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
+        for rel in relations {
+            if let (Some(subject), Some(predicate), Some(object)) =
+                (rel.get("subject"), rel.get("type"), rel.get("object"))
+            {
+                self.conn.execute(
+                    "INSERT INTO adn_relations (hash, subject, predicate, object) VALUES (?1, ?2, ?3, ?4)",
+                    params![hash, subject, predicate, object],
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Toutes les relations jamais stockees, tous hashes confondus -- l'historique
+    /// complet que la Couche 3b utilise pour detecter des contradictions/cycles
+    /// qui s'etalent sur plusieurs requetes, pas seulement dans un seul payload.
+    pub fn all_relations(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare("SELECT subject, predicate, object FROM adn_relations")?;
+        let rows = stmt.query_map([], |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            Ok(m)
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
@@ -253,5 +298,39 @@ mod tests {
         assert_eq!(stats.total, 2);
         assert_eq!(stats.committed, 1);
         assert_eq!(stats.pending, 1);
+    }
+
+    #[test]
+    fn test_put_relations_and_all_relations_roundtrip() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "Marie Curie".to_string());
+        rel.insert("type".to_string(), "born_in".to_string());
+        rel.insert("object".to_string(), "Warsaw".to_string());
+        store.put_relations("hash_a", &[rel]).unwrap();
+
+        let all = store.all_relations().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].get("subject").map(String::as_str), Some("Marie Curie"));
+        assert_eq!(all[0].get("object").map(String::as_str), Some("Warsaw"));
+    }
+
+    #[test]
+    fn test_all_relations_accumulates_across_multiple_put_relations_calls() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let mut rel1 = HashMap::new();
+        rel1.insert("subject".to_string(), "A".to_string());
+        rel1.insert("type".to_string(), "part_of".to_string());
+        rel1.insert("object".to_string(), "B".to_string());
+        store.put_relations("hash_1", &[rel1]).unwrap();
+
+        let mut rel2 = HashMap::new();
+        rel2.insert("subject".to_string(), "B".to_string());
+        rel2.insert("type".to_string(), "part_of".to_string());
+        rel2.insert("object".to_string(), "C".to_string());
+        store.put_relations("hash_2", &[rel2]).unwrap();
+
+        let all = store.all_relations().unwrap();
+        assert_eq!(all.len(), 2);
     }
 }

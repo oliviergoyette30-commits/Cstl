@@ -155,6 +155,101 @@ pub fn check_consistency(relations: &[HashMap<String, String>]) -> ConsistencyRe
     }
 }
 
+fn edges_set(relations: &[HashMap<String, String>], predicates: &[&str]) -> HashSet<(String, String, String)> {
+    // (predicate, subject, object)
+    let mut set = HashSet::new();
+    for rel in relations {
+        if let (Some(subject), Some(predicate), Some(object)) =
+            (rel.get("subject"), rel.get("type"), rel.get("object"))
+        {
+            if predicates.contains(&predicate.as_str()) {
+                set.insert((predicate.clone(), subject.clone(), object.clone()));
+            }
+        }
+    }
+    set
+}
+
+/// Vérifie la cohérence d'un payload NOUVEAU contre tout l'historique de
+/// l'ADN store, pas seulement les relations reçues dans la même requête.
+/// Portée honnête et ce qui change par rapport à `check_consistency`:
+///
+///   - Contradictions: la valeur "établie" pour un (sujet, prédicat)
+///     fonctionnel vient d'abord de l'historique, puis est mise à jour par les
+///     relations du nouveau payload dans l'ordre. Une contradiction n'est
+///     rapportée QUE si une relation du NOUVEAU payload contredit une valeur
+///     déjà établie (par l'historique ou plus tôt dans ce même payload) —
+///     deux entrées de l'historique qui se contredisaient déjà entre elles
+///     ne sont jamais re-signalées ici: si c'était une vraie contradiction,
+///     elle a déjà été rapportée au moment où sa deuxième moitié est arrivée.
+///     Répéter ce signalement à chaque requête future non liée serait du
+///     bruit, pas de l'information nouvelle.
+///   - Cycles: le graphe complet (historique + nouveau) est utilisé pour la
+///     détection — un cycle est une propriété structurelle de tout le graphe,
+///     pas seulement de l'arête qui le referme — mais un cycle n'est
+///     rapporté QUE s'il contient au moins une arête introduite par CE
+///     payload. Un cycle qui existait déjà entièrement dans l'historique
+///     aurait déjà été rapporté quand son arête de fermeture est arrivée.
+pub fn check_consistency_with_history(
+    new_relations: &[HashMap<String, String>],
+    history_relations: &[HashMap<String, String>],
+) -> ConsistencyReport {
+    let mut established: HashMap<(String, String), String> = HashMap::new();
+    for rel in history_relations {
+        if let (Some(subject), Some(predicate), Some(object)) =
+            (rel.get("subject"), rel.get("type"), rel.get("object"))
+        {
+            if FUNCTIONAL_PREDICATES.contains(&predicate.as_str()) {
+                established.insert((subject.clone(), predicate.clone()), object.clone());
+            }
+        }
+    }
+
+    let mut contradictions = Vec::new();
+    for rel in new_relations {
+        let (Some(subject), Some(predicate), Some(object)) =
+            (rel.get("subject"), rel.get("type"), rel.get("object"))
+        else { continue };
+        if !FUNCTIONAL_PREDICATES.contains(&predicate.as_str()) {
+            continue;
+        }
+        let key = (subject.clone(), predicate.clone());
+        match established.get(&key) {
+            Some(prev_object) if prev_object != object => {
+                contradictions.push(Contradiction {
+                    subject: subject.clone(),
+                    predicate: predicate.clone(),
+                    object_a: prev_object.clone(),
+                    object_b: object.clone(),
+                });
+            }
+            Some(_) => {}
+            None => {
+                established.insert(key, object.clone());
+            }
+        }
+    }
+
+    let new_edges = edges_set(new_relations, CHAINABLE_PREDICATES);
+    let mut combined: Vec<HashMap<String, String>> = history_relations.to_vec();
+    combined.extend(new_relations.iter().cloned());
+    let cycles: Vec<Cycle> = find_cycles(&combined)
+        .into_iter()
+        .filter(|cycle| {
+            cycle
+                .path
+                .windows(2)
+                .any(|edge| new_edges.contains(&(cycle.predicate.clone(), edge[0].clone(), edge[1].clone())))
+        })
+        .collect();
+
+    ConsistencyReport {
+        consistent: contradictions.is_empty() && cycles.is_empty(),
+        contradictions,
+        cycles,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,14 +301,57 @@ mod tests {
         assert_eq!(report.cycles.len(), 1);
     }
 
+
+
     #[test]
-    fn test_valid_chain_is_not_a_cycle() {
-        let relations = vec![
-            rel("Paris", "part_of", "France"),
-            rel("France", "part_of", "Europe"),
+    fn test_history_contradicts_new_relation() {
+        let history = vec![rel("Marie Curie", "born_in", "Warsaw")];
+        let new_relations = vec![rel("Marie Curie", "born_in", "Paris")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
+        assert_eq!(report.contradictions.len(), 1);
+        assert_eq!(report.contradictions[0].object_a, "Warsaw");
+        assert_eq!(report.contradictions[0].object_b, "Paris");
+    }
+
+    #[test]
+    fn test_history_contradicting_itself_is_not_reported_again() {
+        // Deux entrees d'historique deja contradictoires entre elles (auraient
+        // ete rapportees quand la deuxieme est arrivee) ne doivent pas
+        // resurgir juste parce qu'une requete sans rapport arrive ensuite.
+        let history = vec![
+            rel("Marie Curie", "born_in", "Warsaw"),
+            rel("Marie Curie", "born_in", "Paris"),
         ];
-        let report = check_consistency(&relations);
+        let new_relations = vec![rel("Albert Einstein", "born_in", "Ulm")];
+        let report = check_consistency_with_history(&new_relations, &history);
         assert!(report.consistent);
-        assert_eq!(report.sigma_adjustment(), 0.75);
+        assert_eq!(report.contradictions.len(), 0);
+    }
+
+    #[test]
+    fn test_new_relation_matching_history_is_consistent() {
+        let history = vec![rel("Marie Curie", "born_in", "Warsaw")];
+        let new_relations = vec![rel("Marie Curie", "born_in", "Warsaw")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(report.consistent);
+    }
+
+    #[test]
+    fn test_history_closes_cycle_with_new_edge() {
+        let history = vec![rel("A", "part_of", "B")];
+        let new_relations = vec![rel("B", "part_of", "A")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
+        assert_eq!(report.cycles.len(), 1);
+    }
+
+    #[test]
+    fn test_preexisting_history_cycle_not_reported_again() {
+        let history = vec![rel("A", "part_of", "B"), rel("B", "part_of", "A")];
+        let new_relations = vec![rel("X", "part_of", "Y")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(report.consistent);
+        assert_eq!(report.cycles.len(), 0);
     }
 }

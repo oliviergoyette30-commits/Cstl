@@ -52,7 +52,7 @@ Fact Verification avec Wikidata + SPARQL, entity resolution. Appelée pour chaqu
 ### Couche 3b: Lab Logiciel + Arbitration
 **État:** 🟡 PARTIEL, câblé live avec portée réduite
 
-`ExecutionLab` (`src/execution_lab.rs`): détection de contradictions et de cycles, câblée live. `RestrictedCouncil` (`src/restricted_council.rs`): câblée live, avec pont Telegram (boutons, réponse en direct) — mais portée réduite à un seul membre autorisé (quorum=1), pas le quorum 2/3 multi-personnes décrit plus bas. Coherence check limité aux relations d'un seul payload reçu, pas encore croisé avec l'historique complet de l'ADN store.
+`ExecutionLab` (`src/execution_lab.rs`): détection de contradictions et de cycles, câblée live. `RestrictedCouncil` (`src/restricted_council.rs`): câblée live, avec pont Telegram (boutons, réponse en direct) — mais portée réduite à un seul membre autorisé (quorum=1), pas le quorum 2/3 multi-personnes décrit plus bas. Coherence check désormais croisé avec l'historique complet de l'ADN store (`check_consistency_with_history`), pas seulement les relations d'un seul payload reçu.
 
 ### Couche 4: Calibration / Fiabilité
 **État:** ✅ TESTÉ

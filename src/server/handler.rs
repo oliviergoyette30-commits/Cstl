@@ -152,11 +152,19 @@ pub async fn handle_connection(
                     }
 
                     // STEP 3c: Coherence interne (ExecutionLab, couche 3b partielle) —
-                    // verifie les relations DE CE PAYLOAD entre elles (contradictions
-                    // sur un predicat fonctionnel, cycles sur une chaine transitive).
-                    // Ce n'est PAS un jugement de verite empirique (ca, c'est kb_verify) —
-                    // c'est une verification de coherence computationnellement checkable.
-                    let consistency = execution_lab::check_consistency(&payload.relations);
+                    // verifie les relations DE CE PAYLOAD contre TOUT l'historique de
+                    // l'adn_store, pas seulement entre elles. Ce n'est PAS un jugement
+                    // de verite empirique (ca, c'est kb_verify) — c'est une verification
+                    // de coherence computationnellement checkable, maintenant etendue
+                    // au-dela d'un seul payload recu.
+                    let history_relations = {
+                        let store = adn_store.lock().await;
+                        store.all_relations().unwrap_or_else(|e| {
+                            eprintln!("[Handler] ⚠️  adn_store.all_relations failed: {}", e);
+                            Vec::new()
+                        })
+                    };
+                    let consistency = execution_lab::check_consistency_with_history(&payload.relations, &history_relations);
                     let sigma = consistency.sigma_adjustment();
                     eprintln!(
                         "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} -> sigma={}",
@@ -199,7 +207,19 @@ pub async fn handle_connection(
                     // stocke (ASSUMES, non-commite) avec le sigma qu'ExecutionLab vient de
                     // calculer. Rien n'est ancre (committed) ici: aucun RestrictedCouncil
                     // (quorum humain 2/3) n'existe encore pour faire ce commit.
-                    if let Err(e) = adn_store.lock().await.put(
+                    // Le Result est capture dans une variable AVANT le if/else pour que
+                    // le MutexGuard temporaire de `.lock().await` soit relache a la fin de
+                    // cette instruction `let`, PAS a la fin de tout le if/else qui suit.
+                    // Bug reel trouve et corrige ici (2026-09-03): avec
+                    // `if let Err(e) = adn_store.lock().await.put(...) { } else { ...
+                    // adn_store.lock().await.put_relations(...) ... }`, les regles
+                    // d'extension de duree de vie des temporaires gardaient le guard du
+                    // premier `.lock()` vivant pendant TOUTE la branche else -- le second
+                    // `.lock()` sur le meme Mutex (non reentrant) attendait donc un verrou
+                    // que la meme tache detenait deja implicitement -> deadlock permanent,
+                    // confirme par un test live: la deuxieme requete d'un test en 2 payloads
+                    // separes ne progressait plus jamais au-dela de ce point.
+                    let put_result = adn_store.lock().await.put(
                         &entry.hash,
                         &raw_payload,
                         payload.meta.get("encoder").map(String::as_str),
@@ -208,10 +228,20 @@ pub async fn handle_connection(
                         Some(&entry.parent_hash),
                         None,
                         None,
-                    ) {
+                    );
+                    if let Err(e) = put_result {
                         eprintln!("[Handler] ⚠️  adn_store.put failed: {}", e);
                     } else {
                         eprintln!("[Handler] 💾 Stored in adn_store (hash={}, sigma={}, committed=false)", entry.hash, sigma);
+
+                        // Persiste aussi les relations de ce payload pour que les
+                        // requetes FUTURES puissent etre verifiees contre elles via
+                        // check_consistency_with_history — sans ca, l'historique
+                        // recupere plus haut resterait toujours vide.
+                        let put_relations_result = adn_store.lock().await.put_relations(&entry.hash, &payload.relations);
+                        if let Err(e) = put_relations_result {
+                            eprintln!("[Handler] ⚠️  adn_store.put_relations failed: {}", e);
+                        }
 
                         // STEP 3e: Notification RestrictedCouncil (portee reduite v1) —
                         // pousse un message Telegram plutot que d'attendre que le

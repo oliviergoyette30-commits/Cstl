@@ -116,7 +116,7 @@ Level 4 is defined as: *several LLMs coordinate a real task without semantic los
 | Component | Role | Status |
 |---|---|---|
 | **Hypothesis engine** | Entanglement detection over a bounded knowledge graph (Wikidata subgraph): find node pairs with high common-neighbour overlap and no direct edge, then propose a speculative CSTL relation at deliberately low σ (`ASSUMES` / `DOUBTS`, never `KNOWS`) | 🟡 SPARQL integration exists (`src/kb_verify.rs`); Graphify not installed, not part of this; generative step untested |
-| **Simulation / validation lab** | `ExecutionLab` for computationally checkable hypotheses (internal consistency, contradiction, temporal cycle detection). Empirical world-facts stay permanently low-σ until independently corroborated — by design, not as a gap | 🟡 Contradiction + 2-node cycle detection implemented and wired live (`src/execution_lab.rs`, tested); scoped to relations within a single received payload — not yet cross-referenced against ADN store history; longer cycles, temporal-cycle detection and domain simulators not built |
+| **Simulation / validation lab** | `ExecutionLab` for computationally checkable hypotheses (internal consistency, contradiction, temporal cycle detection). Empirical world-facts stay permanently low-σ until independently corroborated — by design, not as a gap | 🟡 Contradiction + 2-node cycle detection implemented and wired live (`src/execution_lab.rs`, tested); `check_consistency_with_history` cross-references each new payload against the full ADN store history (`adn_relations` table), not just relations within the same payload; only re-flags a contradiction/cycle when the NEW payload is what triggers it (pre-existing history-vs-history issues are not re-reported on every unrelated future request); longer cycles, temporal-cycle detection and domain simulators not built |
 | **Human council** | `RestrictedCouncil`, 2/3 quorum — plausibility and harm filter before storage, not a truth oracle | 🟡 Designed, matches published precedent (Wikidata Primary Sources Tool pattern) |
 
 **What CSTL contributes specifically.** Discovery is graph mathematics; validation is sandbox logic — both would work in any format. CSTL's contribution is the **auditable epistemic transport between them**:
@@ -245,7 +245,7 @@ cargo test
 - Human council resolution rate: never measured under production conditions.
 - Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
 - `emergence_proofs` table: implemented (Rust), zero production data — nothing populates it yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.
-- `ExecutionLab` consistency check is scoped to relations within a single received payload — not yet cross-referenced against the full ADN store history.
+- `ExecutionLab` consistency check now cross-references each new payload against the full ADN store history (`src/execution_lab.rs::check_consistency_with_history`, wired live in `handler.rs`), not just relations within the same payload. Still scoped to functional-predicate contradictions and 2-node cycles — no temporal-cycle detection, no cross-domain simulators.
 - Level 4 hypothesis engine: generative step (proposing novel relations) not yet demonstrated.
 - Simulation lab: consistency checking prototyped; domain-specific simulators not built.
 - Zero external adopters.
