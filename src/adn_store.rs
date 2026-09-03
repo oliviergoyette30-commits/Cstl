@@ -119,7 +119,8 @@ impl AdnStore {
                 subject TEXT NOT NULL,
                 predicate TEXT NOT NULL,
                 object TEXT NOT NULL
-            );",
+            );
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);",
         )?;
         Ok(Self { conn })
     }
