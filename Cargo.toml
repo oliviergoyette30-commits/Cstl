@@ -2,21 +2,25 @@
 name = "cstl_parser"
 version = "5.0.0"
 edition = "2021"
-description = "CSTL v4.9.2 — Rust parser (lexer + recursive descent)"
+description = "CSTL v5.0.0 — Rust TCP-native agentic server (parser, validator, audit chain, KB verification)"
 authors = ["Olivier Goyette"]
-
-
-# [[bin]]
-# name = "cstl_validate"
-# path = "src/main.rs"
 
 [lib]
 name = "cstl_parser"
 path = "src/lib.rs"
 
+# Pas de section [[bin]] explicite: Cargo detecte automatiquement src/main.rs
+# comme binaire par defaut (nomme d'apres le package, "cstl_parser") -- c'est
+# ce que `cargo run` lance depuis le debut de cette session. Un bloc [[bin]]
+# commente nommant "cstl_validate" trainait ici et ne correspondait a rien
+# de reel; retire le 2026-09-03 pour ne pas induire en erreur.
+
 [dependencies]
-# Zero external deps — pure Rust lexer + parser
-# nom would be option 1b — here we do hand-rolled for zero-dep portability
+# Session #5 (v4.9.3): "zero deps, hand-rolled lexer+parser" etait vrai a
+# l'epoque. Plus maintenant -- ce commentaire mentait depuis l'ajout de
+# tokio (couche TCP), sha2/rusqlite (audit + adn_store), reqwest (kb_verify
+# / Wikidata), serde (wire format des reponses) et unicode-normalization
+# (NFC). Corrige le 2026-09-03.
 
 [dev-dependencies]
 
@@ -24,7 +28,13 @@ path = "src/lib.rs"
 opt-level = 3
 lto = true
 codegen-units = 1
-tokio = { version = "1", features = ["full"] }
+# La ligne `tokio = { version = "1", features = ["full"] }` vivait ici par
+# erreur -- une section [profile.*] ne prend pas de dependances, donc cargo
+# l'ignorait silencieusement en emettant "unused manifest key:
+# profile.release.tokio" a CHAQUE build de cette session (visible dans
+# chaque cargo build/test depuis le debut). Retiree le 2026-09-03; le vrai
+# tokio est deja declare juste en dessous, avec la contrainte de version
+# reellement utilisee (1.40, pas 1).
 
 [dependencies.tokio]
 version = "1.40"
