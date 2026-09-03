@@ -34,8 +34,16 @@ pub struct RevisionReport {
 
 /// Extrait la "decision" d'un payload CSTL brut. Port fidele des deux styles
 /// que reconnaissait la version Python: "DECISION: <valeur>" jusqu'a la fin de
-/// ligne ou un `[`, ou un bloc "DECISION [ ... ]" (tronque a 80 caracteres,
-/// comme l'original).
+/// ligne ou un `[`, ou un bloc "DECISION [ ... ]".
+///
+/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03): la
+/// forme bloc tronquait auparavant a 80 caracteres AVANT la comparaison dans
+/// decisions_differ() -- deux decisions genuinement differentes partageant
+/// un prefixe de 80+ caracteres identiques etaient jugees IDENTIQUES,
+/// manquant silencieusement une vraie revision de position. La troncature
+/// n'a plus lieu d'etre: rien dans le format ne borne la longueur d'une
+/// decision, et decisions_differ() ne fait qu'une comparaison textuelle,
+/// pas d'affichage necessitant une limite.
 fn extract_decision(payload: &str) -> Option<String> {
     if let Some(idx) = payload.find("DECISION:") {
         let rest = &payload[idx + "DECISION:".len()..];
@@ -49,7 +57,7 @@ fn extract_decision(payload: &str) -> Option<String> {
         let rest = payload[idx + "DECISION".len()..].trim_start();
         if let Some(rest) = rest.strip_prefix('[') {
             if let Some(end) = rest.find(']') {
-                let value: String = rest[..end].trim().chars().take(80).collect();
+                let value = rest[..end].trim().to_string();
                 if !value.is_empty() {
                     return Some(value);
                 }
@@ -170,6 +178,33 @@ mod tests {
     #[test]
     fn test_extract_decision_absent() {
         assert_eq!(extract_decision("META [x=y]\n---END---"), None);
+    }
+
+    #[test]
+    fn test_extract_decision_block_style_not_truncated_past_80_chars() {
+        let long_value = format!("{}AAAA", "X".repeat(80));
+        let payload = format!("META [x=y]\nDECISION [{}]\n---END---", long_value);
+        assert_eq!(extract_decision(&payload).as_deref(), Some(long_value.as_str()));
+    }
+
+    #[test]
+    fn test_detect_revisions_catches_a_change_hidden_past_80_chars() {
+        // Avant ce fix: deux decisions partageant les 80 premiers caracteres
+        // mais differant apres (AAAA vs BBBB) etaient tronquees a 80 chars
+        // AVANT comparaison -> jugees identiques -> revision manquee.
+        let store = AdnStore::open(":memory:").unwrap();
+        let shared_prefix = "X".repeat(80);
+        let solo_decision = format!("DECISION [{}AAAA]", shared_prefix);
+        let trio_decision = format!("DECISION [{}BBBB]", shared_prefix);
+        store.put("solo_x", &solo_decision, None, None, 0.80, None, None, None).unwrap();
+        store.put("trio_x", &trio_decision, None, None, 0.90, None, None, None).unwrap();
+
+        let mut solo_hashes = HashMap::new();
+        solo_hashes.insert("Agent_X".to_string(), "solo_x".to_string());
+
+        let reports = detect_revisions(&store, "trio_x", &solo_hashes, "Q_long").unwrap();
+        assert_eq!(reports.len(), 1);
+        assert!(reports[0].revised, "la revision cachee apres 80 caracteres doit etre detectee");
     }
 
     #[test]
