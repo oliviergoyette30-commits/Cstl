@@ -18,6 +18,7 @@ use tokio::sync::Mutex;
 use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
+use crate::restricted_council::RestrictedCouncil;
 
 pub struct CstlNativeServer {
     pub port: u16,
@@ -25,6 +26,7 @@ pub struct CstlNativeServer {
     pub chain: Arc<Mutex<audit::HashChain>>,
     pub kb_verifier: Arc<KbVerifier>,
     pub adn_store: Arc<Mutex<AdnStore>>,
+    pub restricted_council: Arc<RestrictedCouncil>,
 }
 
 impl CstlNativeServer {
@@ -35,6 +37,10 @@ impl CstlNativeServer {
             chain: Arc::new(Mutex::new(audit::HashChain::new())),
             kb_verifier: Arc::new(KbVerifier::new()),
             adn_store: Arc::new(Mutex::new(AdnStore::open("cstl_adn.db").expect("failed to open cstl_adn.db"))),
+            // Portee reduite v1, decision explicite de l'utilisateur: un seul membre
+            // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
+            // decrit dans le README.
+            restricted_council: Arc::new(RestrictedCouncil::single_member("Olivier")),
         }
     }
 
@@ -46,7 +52,7 @@ impl CstlNativeServer {
         
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
         
-        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone()).await?;
+        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone(), self.restricted_council.clone()).await?;
         
         Ok(())
     }

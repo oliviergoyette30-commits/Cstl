@@ -13,3 +13,4 @@ pub mod domains;
 pub mod kb_verify;
 pub mod adn_store;
 pub mod execution_lab;
+pub mod restricted_council;

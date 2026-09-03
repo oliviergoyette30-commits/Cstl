@@ -16,6 +16,7 @@ use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
 use crate::execution_lab;
+use crate::restricted_council::RestrictedCouncil;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -26,6 +27,7 @@ pub async fn handle_connection(
     chain: Arc<Mutex<HashChain>>,
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,
+    restricted_council: Arc<RestrictedCouncil>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; 8192];
     
@@ -52,6 +54,64 @@ pub async fn handle_connection(
                 
                 if validation.valid {
                     eprintln!("[Handler] ✅ Validation passed");
+
+                    // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
+                    // — purpose=council_decision est traite a part: ce n'est pas un
+                    // nouveau fait a verifier/stocker, c'est une action sur une entree
+                    // DEJA dans l'adn_store. On court-circuite le reste du pipeline.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("council_decision") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let target_hash = payload.intent.get("target_hash").cloned();
+                        let decision = payload.intent.get("decision").cloned();
+                        let note = payload.intent.get("note").cloned();
+
+                        let response = if !restricted_council.is_authorized(&sender) {
+                            eprintln!("[Handler] ⛔ Council decision rejected: '{}' non autorise", sender);
+                            format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=not_authorized, sender={}]\n---END---\n",
+                                sender
+                            )
+                        } else {
+                            match (target_hash, decision) {
+                                (Some(hash), Some(decision)) => {
+                                    let outcome = {
+                                        let store = adn_store.lock().await;
+                                        match decision.as_str() {
+                                            "commit" => store.commit(&hash, &sender, note.as_deref()),
+                                            "revoke" => store.revoke(&hash, &sender, note.as_deref()),
+                                            other => {
+                                                eprintln!("[Handler] ⚠️  decision inconnue: {}", other);
+                                                Ok(())
+                                            }
+                                        }
+                                    };
+                                    match outcome {
+                                        Ok(()) if decision == "commit" || decision == "revoke" => {
+                                            eprintln!("[Handler] ⚖️  RestrictedCouncil: {} sur {} par {}", decision, hash, sender);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=council_decision_applied, decision={}, target_hash={}, by={}]\n---END---\n",
+                                                decision, hash, sender
+                                            )
+                                        }
+                                        Ok(()) => format!(
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=unknown_decision]\n---END---\n"
+                                        ),
+                                        Err(e) => {
+                                            eprintln!("[Handler] ⚠️  council decision failed: {}", e);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_failed, detail={}]\n---END---\n",
+                                                e.to_string().replace("\"", "'")
+                                            )
+                                        }
+                                    }
+                                }
+                                _ => "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=missing_target_hash_or_decision]\n---END---\n".to_string(),
+                            }
+                        };
+
+                        socket.write_all(response.as_bytes()).await?;
+                        continue;
+                    }
 
                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
