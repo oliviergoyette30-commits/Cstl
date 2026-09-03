@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = CstlNativeServer::new(5050);
     server.agent_registry = Arc::new(registry);
 
-    eprintln!("📡 Starting server on port 5000...");
+    eprintln!("📡 Starting server on port 5050...");
     eprintln!("💬 Ready to receive CSTL payloads\n");
 
     // Start server
