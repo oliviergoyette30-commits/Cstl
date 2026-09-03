@@ -48,11 +48,11 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
 | 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | ✅ Tested (4/4 modes) |
 | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
-| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` quorum still not built |
+| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — reduced scope: single authorized member (quorum=1), not the 2/3 multi-person quorum described below |
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
 | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live; not yet unified with the hash chain into one store |
 | 6 | **Human interface** — Graphify (589 nodes, 1142 edges), Obsidian vault | 🔶 Skeleton |
-| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ❌ To build |
+| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request); `src/server/router.rs` is dead code (unused stub) sitting next to it, not yet cleaned up |
 | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ Designed |
 | 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
 
@@ -190,7 +190,7 @@ BELIEVES x_influenced_y [σ=0.75 validated_by=executionlab_run_xyz
 
 Nothing becomes an anchored fact without a logged human commit. Rejection is equally traceable: a contradicted hypothesis drops to σ≈0.09 and stays queryable rather than being deleted.
 
-**Honest status.** Both systems are now Rust, tested, and wired into the live server — the ADN store previously described here as Python did not actually exist anywhere in this repository until this pass (verified by exhaustive search before writing `src/adn_store.rs`). They are not yet *unified* into one schema: the hash chain and the ADN store are two separate stores, linked only by the ADN store reusing the hash chain's `hash` as its key. The council-log and emergence-proofs tables exist but have zero production data — nothing has ever been committed, because `RestrictedCouncil` (the human 2/3 quorum) is not built.
+**Honest status.** Both systems are now Rust, tested, and wired into the live server — the ADN store previously described here as Python did not actually exist anywhere in this repository until this pass (verified by exhaustive search before writing `src/adn_store.rs`). They are not yet *unified* into one schema: the hash chain and the ADN store are two separate stores, linked only by the ADN store reusing the hash chain's `hash` as its key. `RestrictedCouncil` now exists and has actually committed an entry end-to-end, including via a Telegram button — but it is a single authorized member (quorum=1), not the 2/3 multi-person quorum this document describes. `emergence_proofs` still has zero production data.
 
 ---
 
@@ -241,10 +241,10 @@ cargo test
 - Open-weight LLMs (Llama, Mistral, Qwen): partially validated only.
 - Standard-mode compression advantage largely disappears after gzip.
 - CASTLE mode: architecture only, no implementation, no benchmark.
-- Layer 3b: only the `ExecutionLab` consistency check is wired live; `RestrictedCouncil` (human quorum) is not built, so nothing is ever committed. Layers 6, 7: designed or partial, not production-wired.
+- Layer 3b: `ExecutionLab` and `RestrictedCouncil` are both wired live, and a commit has actually happened end-to-end (via a Telegram button). But `RestrictedCouncil` is a single authorized member, not the 2/3 multi-person quorum this doc describes elsewhere — that quorum logic does not exist. Layer 6: designed or partial, not production-wired. Layer 7 (agent discovery/routing) is built and wired live; `src/server/router.rs` next to it is a dead, unused stub.
 - Human council resolution rate: never measured under production conditions.
 - Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
-- `adn_council_log` and `emergence_proofs` tables: implemented (Rust), zero production data — no commit has ever happened, `commit()`/`revoke()` are unreachable from any running code path.
+- `emergence_proofs` table: implemented (Rust), zero production data — nothing populates it yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.
 - `ExecutionLab` consistency check is scoped to relations within a single received payload — not yet cross-referenced against the full ADN store history.
 - Level 4 hypothesis engine: generative step (proposing novel relations) not yet demonstrated.
 - Simulation lab: consistency checking prototyped; domain-specific simulators not built.
