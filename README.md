@@ -5,7 +5,7 @@
 > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-130%20passing-brightgreen.svg)
 
 ---
 
@@ -230,7 +230,7 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
 cargo test
 ```
 
-132 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
+130 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
 
 ---
 

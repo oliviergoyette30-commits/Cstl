@@ -490,54 +490,61 @@ et les transmet au hop suivant — gouvernance auto-propagée.
 
 ## 15. Forme canonique et hachage
 
-### 15.1 Cinq règles canoniques
+### 15.1 Ou vit reellement cette section (corrige le 2026-09-03)
 
-1. Fins de ligne normalisées en LF
-2. Espaces multiples collapsés à un espace unique
-3. Champs META triés lexicographiquement
-4. Unicode normalisé en NFC
-5. Pas d'espaces finaux
+Cette section decrivait auparavant un algorithme (`src/canonical.rs`,
+canonicalisation de TEXTE BRUT en 5 regles, puis SHA-256) qui n'a jamais
+ete appele par le serveur en production -- decouvert le 2026-09-03 en
+verifiant l'effet reel d'un fix NFC applique a ce fichier. `src/canonical.rs`
+a ete supprime le meme jour: du code mort qui pretendait etre la
+reference alors qu'une implementation SEPAREE et DIFFERENTE faisait
+deja tout le travail reel.
+
+Le hash canonique reellement utilise en production -- cle primaire de
+`adn_store`, chainon de `HashChain` -- est `server/audit.rs::canonical_hash()`.
+Difference structurelle importante: il n'opere PAS sur le texte brut du
+payload, mais sur les champs DEJA PARSES (`CstlPayload`: version, mode,
+meta, intent, relations). Consequence: les regles de canonicalisation de
+texte brut (fins de ligne, espaces multiples, espaces finaux) n'ont pas
+de sens pour lui -- le parser (`server/parser.rs`) les a deja neutralisees
+en extrayant les champs. Les deux regles qui comptent reellement, et qui
+sont reellement appliquees:
+
+1. **Tri lexicographique des champs** -- via `BTreeMap`, sur META (moins
+   `PARENT_HASH`, exclu pour eviter une dependance circulaire du hash sur
+   lui-meme), INTENT, et chaque bloc RELATION.
+2. **Normalisation Unicode NFC** -- appliquee a chaque cle et valeur avant
+   hachage (corrige le 2026-09-03, meme trouvaille NFC que ci-dessus,
+   appliquee cette fois au code qui tourne reellement).
 
 ### 15.2 Hash canonique
 
-`canonical_hash()` calcule SHA-256 sur la forme canonique et produit un digest
-256-bit (64 caractères hex), préfixé `sha256:`.
+`server/audit.rs::canonical_hash()` calcule SHA-256 sur la concatenation
+triee et NFC-normalisee des champs et produit un digest 256-bit
+(64 caracteres hex), prefixe `sha256:`.
 
-La largeur 256-bit a été ratifiée en Session #7 : la borne anniversaire sur
-128 bits est insuffisante (2^64 opérations sous attaque délibérée).
+La largeur 256-bit a ete ratifiee en Session #7 : la borne anniversaire sur
+128 bits est insuffisante (2^64 operations sous attaque deliberee).
 
-### 15.3 Idempotence round-trip
+### 15.3 Verification executable
 
-`parse → encode → parse` produit un résultat byte-identique (P2 == P3).
+Les proprietes ci-dessus (determinisme, invariance d'ordre des champs
+META, equivalence NFC, exclusion de PARENT_HASH) sont verifiees par des
+tests reels, executes par `cargo test --lib server::audit`, pas par des
+exemples statiques dans ce document (les vecteurs #1/#2 precedemment
+listes ici citaient des hash calcules par l'algorithme supprime de
+`src/canonical.rs` -- ils ne correspondent a AUCUNE sortie du code
+reellement en production, et ont ete retires pour ne pas induire en
+erreur):
 
-**Vecteur #1 — hash déterministe :**
-```
-input (LF, NFC, META trié lexico):
-  "#!CSTL v5.0.0 MODE=A\nMETA [encoder=A, PARENT_HASH=root, sigma=0.9]\n---END---"
+- `test_hash_is_deterministic`
+- `test_hash_changes_with_content`
+- `test_parent_hash_excluded_from_hash`
+- `test_nfc_equivalent_field_values_produce_same_audit_hash`
+- `test_chain_links_correctly`
+- `test_integrity_detects_break`
 
-canonical_hash:
-  sha256:56e0ae1a0c4ebd6cae999b4d9af0ac517071b673615a3e6c059f0a61e5232bea
-```
-
-**Vecteur #2 — invariance ordre META :**
-```
-input_a: "META [encoder=A, PARENT_HASH=root, sigma=0.9]"   (ordre A)
-input_b: "META [PARENT_HASH=root, encoder=A, sigma=0.9]"   (ordre B)
-
-après canonicalisation (tri lexico):
-  les deux → "META [encoder=A, PARENT_HASH=root, sigma=0.9]"
-
-canonical_hash(input_a) == canonical_hash(input_b)
-  sha256:56e0ae1a0c4ebd6cae999b4d9af0ac517071b673615a3e6c059f0a61e5232bea
-```
-
-Vecteurs #3 et #4 (equivalence NFC du hash canonique) : voir
-`test_nfc_composed_and_decomposed_produce_same_hash` et
-`test_nfc_normalization_applied_to_canonical_form` dans `src/canonical.rs`
-(corrige le 2026-09-03 -- cette section referencait auparavant
-`test_canonical_hash_roundtrip_*` dans `src/tests.rs`, un fichier jamais
-compile ni execute et qui ne contenait meme pas cette fonction; voir
-`src/ast.rs` pour le detail de la suppression).
+toutes dans `src/server/audit.rs`.
 
 ---
 
