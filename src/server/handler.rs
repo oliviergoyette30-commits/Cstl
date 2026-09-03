@@ -13,6 +13,7 @@ use tokio::net::TcpStream;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::agent_discovery::AgentRegistry;
+use crate::kb_verify::KbVerifier;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -21,6 +22,7 @@ pub async fn handle_connection(
     mut socket: TcpStream,
     registry: Arc<AgentRegistry>,
     chain: Arc<Mutex<HashChain>>,
+    kb_verifier: Arc<KbVerifier>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; 8192];
     
@@ -57,6 +59,30 @@ pub async fn handle_connection(
                     let purpose = payload.intent.get("purpose").cloned().unwrap_or_else(|| "unknown".to_string());
                     
                     eprintln!("[Handler] 🔀 Routing to: {} (purpose: {})", receiver, purpose);
+
+                    // STEP 3b: Verification factuelle (Couche 3a) — pour chaque RELATION
+                    // du payload, on interroge Wikidata via kb_verify::KbVerifier.
+                    // Le module cesse ici d'etre un exemple isole et devient une
+                    // capacite reelle du serveur en cours d'execution.
+                    let mut verification_lines = String::new();
+                    for relation in &payload.relations {
+                        let subject = relation.get("subject").cloned();
+                        let object = relation.get("object").cloned();
+                        let predicate = relation.get("type").cloned();
+                        if let (Some(subject), Some(predicate), Some(object)) = (subject, predicate, object) {
+                            eprintln!("[Handler] 🔎 Verifying relation: {} {} {}", subject, predicate, object);
+                            let result = kb_verifier.verify_relation(&subject, &predicate, &object, "fr", 4, 40).await;
+                            eprintln!("[Handler]    -> {} ({})", result.verified, result.reason);
+                            verification_lines.push_str(&format!(
+                                "VERIFICATION [subject={}, predicate={}, object={}, verified={}, source={}]\n",
+                                subject,
+                                predicate,
+                                object,
+                                result.verified,
+                                result.source_url.unwrap_or_else(|| "none".to_string())
+                            ));
+                        }
+                    }
                     
                     // STEP 4: Try to route to agent
                     if let Some(agent) = registry.route("communication") {
@@ -68,10 +94,12 @@ pub async fn handle_connection(
                             META [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
                             INTENT_PAYLOAD [purpose=acknowledgement, sender=server, receiver={}]\n\
                             RELATION [type=received, subject={}, status=valid]\n\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
                             purpose,
+                            verification_lines,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq

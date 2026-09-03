@@ -36,3 +36,14 @@ version = "0.10"
 [dependencies.rusqlite]
 version = "0.31"
 features = ["bundled"]
+
+[dependencies.reqwest]
+version = "0.12"
+features = ["json"]
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.serde_json]
+version = "1"

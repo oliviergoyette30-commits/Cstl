@@ -10,3 +10,4 @@ pub mod ast;
 pub mod semantic;
 pub mod validator_semantic;
 pub mod domains;
+pub mod kb_verify;

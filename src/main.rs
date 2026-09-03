@@ -1,5 +1,5 @@
 /// CSTL-Native Server
-/// Main entry point - starts TCP listener on port 5000
+/// Main entry point - starts TCP listener on port 5050 (5000 est souvent pris par AirPlay Receiver sur macOS)
 
 use cstl_parser::server::CstlNativeServer;
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("✅ Registered agents: alice, bob");
 
     // Create server with registry
-    let mut server = CstlNativeServer::new(5000);
+    let mut server = CstlNativeServer::new(5050);
     server.agent_registry = Arc::new(registry);
 
     eprintln!("📡 Starting server on port 5000...");

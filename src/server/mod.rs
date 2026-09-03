@@ -16,11 +16,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::agent_discovery::AgentRegistry;
+use crate::kb_verify::KbVerifier;
 
 pub struct CstlNativeServer {
     pub port: u16,
     pub agent_registry: Arc<AgentRegistry>,
     pub chain: Arc<Mutex<audit::HashChain>>,
+    pub kb_verifier: Arc<KbVerifier>,
 }
 
 impl CstlNativeServer {
@@ -29,6 +31,7 @@ impl CstlNativeServer {
             port,
             agent_registry: Arc::new(AgentRegistry::new()),
             chain: Arc::new(Mutex::new(audit::HashChain::new())),
+            kb_verifier: Arc::new(KbVerifier::new()),
         }
     }
 
@@ -40,7 +43,7 @@ impl CstlNativeServer {
         
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
         
-        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone()).await?;
+        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone()).await?;
         
         Ok(())
     }
