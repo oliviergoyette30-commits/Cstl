@@ -17,6 +17,7 @@ use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
 use crate::execution_lab;
 use crate::restricted_council::RestrictedCouncil;
+use crate::telegram_council::TelegramNotifier;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -28,6 +29,7 @@ pub async fn handle_connection(
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,
     restricted_council: Arc<RestrictedCouncil>,
+    telegram: Option<Arc<TelegramNotifier>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; 8192];
     
@@ -176,6 +178,26 @@ pub async fn handle_connection(
                         eprintln!("[Handler] ⚠️  adn_store.put failed: {}", e);
                     } else {
                         eprintln!("[Handler] 💾 Stored in adn_store (hash={}, sigma={}, committed=false)", entry.hash, sigma);
+
+                        // STEP 3e: Notification RestrictedCouncil (portee reduite v1) —
+                        // pousse un message Telegram plutot que d'attendre que le
+                        // membre autorise pense a interroger l'ADN store lui-meme.
+                        if let Some(telegram) = &telegram {
+                            let notice = format!(
+                                "🔔 Nouvelle entree ADN store
+hash: {}
+coherence: {} (sigma={})
+Repondre: commit {} [note] ou revoke {} [note]",
+                                entry.hash, if consistency.consistent { "OK" } else { "CONTRADICTION/CYCLE" }, sigma,
+                                entry.hash, entry.hash
+                            );
+                            let telegram = telegram.clone();
+                            tokio::spawn(async move {
+                                if let Err(e) = telegram.send_message(&notice).await {
+                                    eprintln!("[Telegram] ⚠️  envoi echoue: {}", e);
+                                }
+                            });
+                        }
                     }
 
                     let consistency_line = format!(

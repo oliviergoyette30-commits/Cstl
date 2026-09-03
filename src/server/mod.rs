@@ -19,6 +19,7 @@ use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
 use crate::restricted_council::RestrictedCouncil;
+use crate::telegram_council::TelegramNotifier;
 
 pub struct CstlNativeServer {
     pub port: u16,
@@ -27,6 +28,7 @@ pub struct CstlNativeServer {
     pub kb_verifier: Arc<KbVerifier>,
     pub adn_store: Arc<Mutex<AdnStore>>,
     pub restricted_council: Arc<RestrictedCouncil>,
+    pub telegram: Option<Arc<TelegramNotifier>>,
 }
 
 impl CstlNativeServer {
@@ -41,18 +43,32 @@ impl CstlNativeServer {
             // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
             // decrit dans le README.
             restricted_council: Arc::new(RestrictedCouncil::single_member("Olivier")),
+            // None si TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents de l'environnement -
+            // degradation propre, le serveur marche pareil sans notification.
+            telegram: TelegramNotifier::from_env().map(Arc::new),
         }
     }
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[CSTL-Native Server] Starting on port {}", self.port);
+
+        if let Some(telegram) = &self.telegram {
+            eprintln!("[CSTL-Native Server] Telegram poller actif");
+            let telegram = telegram.clone();
+            let adn_store = self.adn_store.clone();
+            tokio::spawn(async move {
+                crate::telegram_council::run_telegram_poller(telegram, adn_store).await;
+            });
+        } else {
+            eprintln!("[CSTL-Native Server] Telegram desactive (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents)");
+        }
         
         let addr = format!("0.0.0.0:{}", self.port);
         let listener = listener::create_listener(&addr).await?;
         
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
         
-        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone(), self.restricted_council.clone()).await?;
+        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone(), self.restricted_council.clone(), self.telegram.clone()).await?;
         
         Ok(())
     }

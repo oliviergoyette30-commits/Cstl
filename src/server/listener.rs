@@ -6,6 +6,7 @@ use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
 use crate::restricted_council::RestrictedCouncil;
+use crate::telegram_council::TelegramNotifier;
 use super::audit::HashChain;
 use super::handler;
 
@@ -21,6 +22,7 @@ pub async fn accept_connections(
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,
     restricted_council: Arc<RestrictedCouncil>,
+    telegram: Option<Arc<TelegramNotifier>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (socket, addr) = listener.accept().await?;
@@ -31,9 +33,10 @@ pub async fn accept_connections(
         let kb_verifier = kb_verifier.clone();
         let adn_store = adn_store.clone();
         let restricted_council = restricted_council.clone();
+        let telegram = telegram.clone();
         
         tokio::spawn(async move {
-            if let Err(e) = handler::handle_connection(socket, registry, chain, kb_verifier, adn_store, restricted_council).await {
+            if let Err(e) = handler::handle_connection(socket, registry, chain, kb_verifier, adn_store, restricted_council, telegram).await {
                 eprintln!("[Server] Error handling connection: {}", e);
             }
         });
