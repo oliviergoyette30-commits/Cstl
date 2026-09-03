@@ -17,12 +17,14 @@ use tokio::sync::Mutex;
 
 use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
+use crate::adn_store::AdnStore;
 
 pub struct CstlNativeServer {
     pub port: u16,
     pub agent_registry: Arc<AgentRegistry>,
     pub chain: Arc<Mutex<audit::HashChain>>,
     pub kb_verifier: Arc<KbVerifier>,
+    pub adn_store: Arc<Mutex<AdnStore>>,
 }
 
 impl CstlNativeServer {
@@ -32,6 +34,7 @@ impl CstlNativeServer {
             agent_registry: Arc::new(AgentRegistry::new()),
             chain: Arc::new(Mutex::new(audit::HashChain::new())),
             kb_verifier: Arc::new(KbVerifier::new()),
+            adn_store: Arc::new(Mutex::new(AdnStore::open("cstl_adn.db").expect("failed to open cstl_adn.db"))),
         }
     }
 
@@ -43,7 +46,7 @@ impl CstlNativeServer {
         
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
         
-        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone()).await?;
+        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone()).await?;
         
         Ok(())
     }

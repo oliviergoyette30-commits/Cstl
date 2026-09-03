@@ -14,6 +14,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
+use crate::adn_store::AdnStore;
+use crate::execution_lab;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -23,6 +25,7 @@ pub async fn handle_connection(
     registry: Arc<AgentRegistry>,
     chain: Arc<Mutex<HashChain>>,
     kb_verifier: Arc<KbVerifier>,
+    adn_store: Arc<Mutex<AdnStore>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; 8192];
     
@@ -83,6 +86,42 @@ pub async fn handle_connection(
                             ));
                         }
                     }
+
+                    // STEP 3c: Coherence interne (ExecutionLab, couche 3b partielle) —
+                    // verifie les relations DE CE PAYLOAD entre elles (contradictions
+                    // sur un predicat fonctionnel, cycles sur une chaine transitive).
+                    // Ce n'est PAS un jugement de verite empirique (ca, c'est kb_verify) —
+                    // c'est une verification de coherence computationnellement checkable.
+                    let consistency = execution_lab::check_consistency(&payload.relations);
+                    let sigma = consistency.sigma_adjustment();
+                    eprintln!(
+                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} -> sigma={}",
+                        consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
+                    );
+
+                    // STEP 3d: Memoire persistante (Couche 5, ADN store) — le payload est
+                    // stocke (ASSUMES, non-commite) avec le sigma qu'ExecutionLab vient de
+                    // calculer. Rien n'est ancre (committed) ici: aucun RestrictedCouncil
+                    // (quorum humain 2/3) n'existe encore pour faire ce commit.
+                    if let Err(e) = adn_store.lock().await.put(
+                        &entry.hash,
+                        &raw_payload,
+                        payload.meta.get("encoder").map(String::as_str),
+                        payload.meta.get("produced_by").map(String::as_str),
+                        sigma,
+                        Some(&entry.parent_hash),
+                        None,
+                        None,
+                    ) {
+                        eprintln!("[Handler] ⚠️  adn_store.put failed: {}", e);
+                    } else {
+                        eprintln!("[Handler] 💾 Stored in adn_store (hash={}, sigma={}, committed=false)", entry.hash, sigma);
+                    }
+
+                    let consistency_line = format!(
+                        "CONSISTENCY [consistent={}, contradictions={}, cycles={}, sigma={}]\n",
+                        consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
+                    );
                     
                     // STEP 4: Try to route to agent
                     if let Some(agent) = registry.route("communication") {
@@ -95,11 +134,13 @@ pub async fn handle_connection(
                             INTENT_PAYLOAD [purpose=acknowledgement, sender=server, receiver={}]\n\
                             RELATION [type=received, subject={}, status=valid]\n\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
                             purpose,
                             verification_lines,
+                            consistency_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq
