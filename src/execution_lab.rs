@@ -123,24 +123,52 @@ fn find_cycles(relations: &[HashMap<String, String>]) -> Vec<Cycle> {
     cycles
 }
 
+/// Corrige un bug critique trouve par l'audit multi-angle (2026-09-03): l'ancienne
+/// version ne suivait que `adjacency[current].first()` -- des qu'un noeud a plus
+/// d'un successeur via un predicat chainable (legal, ce ne sont pas des
+/// FUNCTIONAL_PREDICATES), un vrai cycle passant par un AUTRE successeur que le
+/// premier devenait invisible, sans backtracking pour essayer les autres. Cas
+/// reproduit par l'audit: A->B, A->C, C->A (cycle A->C->A reel) rate completement
+/// car le chemin part toujours vers B en premier et n'a plus de successeur.
+///
+/// Nouvelle version: vraie recherche en profondeur avec backtracking explicite --
+/// on essaie CHAQUE successeur du noeud courant, pas seulement le premier, et on
+/// revient en arriere (path.pop()/on_path.remove()) si une branche n'aboutit pas.
 fn dfs_find_cycle<'a>(start: &'a str, adjacency: &HashMap<&'a str, Vec<&'a str>>) -> Option<Vec<&'a str>> {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let mut path: Vec<&str> = vec![start];
-    let mut current = start;
-
-    loop {
-        visited.insert(current);
-        let next = adjacency.get(current)?.first().copied()?;
-        if next == start {
+    fn dfs<'a>(
+        current: &'a str,
+        start: &'a str,
+        adjacency: &HashMap<&'a str, Vec<&'a str>>,
+        path: &mut Vec<&'a str>,
+        on_path: &mut HashSet<&'a str>,
+    ) -> Option<Vec<&'a str>> {
+        let neighbors = adjacency.get(current)?;
+        for &next in neighbors {
+            if next == start {
+                path.push(next);
+                return Some(path.clone());
+            }
+            if on_path.contains(next) {
+                // Deja sur CE chemin (pas `start`) -- cette branche ne peut pas
+                // fermer le cycle qu'on cherche depuis `start`. On essaie le
+                // successeur suivant plutot que d'abandonner toute la recherche.
+                continue;
+            }
             path.push(next);
-            return Some(path);
+            on_path.insert(next);
+            if let Some(found) = dfs(next, start, adjacency, path, on_path) {
+                return Some(found);
+            }
+            path.pop();
+            on_path.remove(next);
         }
-        if visited.contains(next) {
-            return None; // boucle qui ne revient pas sur `start` — pas le cycle qu'on cherche ici
-        }
-        path.push(next);
-        current = next;
+        None
     }
+
+    let mut path: Vec<&str> = vec![start];
+    let mut on_path: HashSet<&str> = HashSet::new();
+    on_path.insert(start);
+    dfs(start, start, adjacency, &mut path, &mut on_path)
 }
 
 /// Union de FUNCTIONAL_PREDICATES et CHAINABLE_PREDICATES — les seuls
@@ -324,6 +352,38 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn test_detects_cycle_missed_by_first_successor_only_traversal() {
+        // Cas exact trouve par l'audit multi-angle (2026-09-03): A a DEUX
+        // successeurs (B et C). L'ancienne version suivait toujours B en
+        // premier (ordre d'insertion), B n'a pas de successeur -> impasse ->
+        // le cycle reel A->C->A n'etait jamais essaye. Avec backtracking, la
+        // branche B echoue mais C est ensuite essaye et ferme le cycle.
+        let relations = vec![
+            rel("A", "part_of", "B"),
+            rel("A", "part_of", "C"),
+            rel("C", "part_of", "A"),
+        ];
+        let report = check_consistency(&relations);
+        assert!(!report.consistent, "le cycle A->C->A doit etre detecte malgre le successeur B qui n'aboutit pas");
+        assert_eq!(report.cycles.len(), 1);
+        assert_eq!(report.sigma_adjustment(), 0.09);
+    }
+
+    #[test]
+    fn test_no_false_positive_when_multiple_successors_and_no_real_cycle() {
+        // Meme forme (un noeud a deux successeurs) mais SANS cycle reel --
+        // verifie que le backtracking ne cree pas de faux positifs.
+        let relations = vec![
+            rel("A", "part_of", "B"),
+            rel("A", "part_of", "C"),
+            rel("C", "part_of", "D"),
+        ];
+        let report = check_consistency(&relations);
+        assert!(report.consistent);
+        assert!(report.cycles.is_empty());
+    }
 
     #[test]
     fn test_history_contradicts_new_relation() {
