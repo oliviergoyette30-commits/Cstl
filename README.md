@@ -224,13 +224,13 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
 
 ---
 
-## Rust Parser
+## Rust Server
 
 ```bash
-cargo test
+cargo test --lib
 ```
 
-130 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
+130 tests passing, 0 failures. Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
 
 ---
 
