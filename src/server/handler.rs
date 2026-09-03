@@ -161,6 +161,24 @@ pub async fn handle_connection(
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
                     );
 
+                    // Resume lisible du dilemme pour la notification Telegram — sans
+                    // ca, "committer" est un clic aveugle, pas une decision informee.
+                    let mut telegram_details = verification_lines.clone();
+                    if !consistency.contradictions.is_empty() {
+                        telegram_details.push_str("\nContradictions:\n");
+                        for ct in &consistency.contradictions {
+                            telegram_details.push_str(&format!(
+                                "- {} {}: {} vs {}\n", ct.subject, ct.predicate, ct.object_a, ct.object_b
+                            ));
+                        }
+                    }
+                    if !consistency.cycles.is_empty() {
+                        telegram_details.push_str("\nCycles:\n");
+                        for cy in &consistency.cycles {
+                            telegram_details.push_str(&format!("- {}: {}\n", cy.predicate, cy.path.join(" -> ")));
+                        }
+                    }
+
                     // STEP 3d: Memoire persistante (Couche 5, ADN store) — le payload est
                     // stocke (ASSUMES, non-commite) avec le sigma qu'ExecutionLab vient de
                     // calculer. Rien n'est ancre (committed) ici: aucun RestrictedCouncil
@@ -183,17 +201,12 @@ pub async fn handle_connection(
                         // pousse un message Telegram plutot que d'attendre que le
                         // membre autorise pense a interroger l'ADN store lui-meme.
                         if let Some(telegram) = &telegram {
-                            let notice = format!(
-                                "🔔 Nouvelle entree ADN store
-hash: {}
-coherence: {} (sigma={})
-Repondre: commit {} [note] ou revoke {} [note]",
-                                entry.hash, if consistency.consistent { "OK" } else { "CONTRADICTION/CYCLE" }, sigma,
-                                entry.hash, entry.hash
-                            );
                             let telegram = telegram.clone();
+                            let hash_for_telegram = entry.hash.clone();
+                            let consistent = consistency.consistent;
+                            let details_for_telegram = telegram_details.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = telegram.send_message(&notice).await {
+                                if let Err(e) = telegram.send_decision_request(&hash_for_telegram, sigma, consistent, &details_for_telegram).await {
                                     eprintln!("[Telegram] ⚠️  envoi echoue: {}", e);
                                 }
                             });

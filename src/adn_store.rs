@@ -135,6 +135,37 @@ impl AdnStore {
             .optional()
     }
 
+    /// Résout un hash court (les 16 premiers caractères hex après "sha256:") en
+    /// entrée complète — utile pour les callback_data Telegram, limités à 64
+    /// octets, bien trop court pour un sha256 complet ("sha256:" + 64 hex).
+    pub fn get_by_short_id(&self, short_id: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
+        let pattern = format!("sha256:{}%", short_id);
+        self.conn
+            .query_row(
+                "SELECT hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
+                        committed, committed_by, committed_at, created_at
+                 FROM adn_store WHERE hash LIKE ?1 LIMIT 1",
+                params![pattern],
+                |row| {
+                    Ok(AdnEntry {
+                        hash: row.get(0)?,
+                        payload: row.get(1)?,
+                        encoder: row.get(2)?,
+                        produced_by: row.get(3)?,
+                        sigma: row.get(4)?,
+                        parent_hash: row.get(5)?,
+                        conversation_id: row.get(6)?,
+                        turn: row.get(7)?,
+                        committed: row.get::<_, i64>(8)? != 0,
+                        committed_by: row.get(9)?,
+                        committed_at: row.get(10)?,
+                        created_at: row.get(11)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
     /// Ancrage humain (RestrictedCouncil). Rien n'est ancré sans ce commit explicite —
     /// aucune logique de quorum n'appelle encore cette fonction automatiquement:
     /// le quorum 2/3 humain (RestrictedCouncil) n'est pas construit dans cette passe.
@@ -202,6 +233,14 @@ mod tests {
         store.put("hash3", "v2_should_be_ignored", None, None, 0.9, None, None, None).unwrap();
         let entry = store.get("hash3").unwrap().unwrap();
         assert_eq!(entry.payload, "v1");
+    }
+
+    #[test]
+    fn test_get_by_short_id() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("sha256:abcdef0123456789fedcba", "payload", None, None, 0.5, None, None, None).unwrap();
+        let entry = store.get_by_short_id("abcdef0123456789").unwrap().unwrap();
+        assert_eq!(entry.hash, "sha256:abcdef0123456789fedcba");
     }
 
     #[test]
