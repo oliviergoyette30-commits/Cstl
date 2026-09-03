@@ -17,7 +17,18 @@ use std::collections::HashSet;
 
 // ── Constantes de la spec ───────────────────────────────────────────────────
 
-/// Les 36 opérateurs FIXED officiels (spec section 8).
+/// Les opérateurs FIXED officiels et actifs (spec section 8). N'inclut PAS
+/// MUTUAL, qui est déprécié depuis v5.0 -- voir DEPRECATED_OPERATORS ci-dessous.
+///
+/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03) : ce
+/// fichier listait encore MUTUAL comme opérateur officiel actif (35 autres +
+/// MUTUAL) alors que semantic.rs le traitait déjà comme déprécié (W601,
+/// migration recommandée vers EQUALS/POSSESSES/RESEMBLES/CO_LOCATES/OPPOSES/
+/// COMPARES). Deux sources de vérité divergentes pour la même notion, sans
+/// référence croisée -- MUTUAL passait la whitelist ici en silence, était
+/// rejeté-avec-avertissement là-bas. DEPRECATED_OPERATORS est désormais LA
+/// source unique (semantic.rs l'importe d'ici au lieu de sa propre copie),
+/// et ce fichier applique lui aussi la dépréciation (voir check_operators_in_value).
 pub const OFFICIAL_OPERATORS: &[&str] = &[
     // Causalité
     "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
@@ -26,12 +37,16 @@ pub const OFFICIAL_OPERATORS: &[&str] = &[
     // Dynamiques
     "AMP", "INH", "PRESSURE", "CATALYZE",
     // Relationnel
-    "MUTUAL", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
     // v5.0 opérateurs
     "ENTAILS", "CONTRADICTS", "BELIEVES", "KNOWS", "ASSUMES", "DOUBTS", "BEFORE", "AFTER", "DURING", "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES", "COMPARES",
     // Actes de langage
     "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
 ];
+
+/// Opérateurs dépréciés depuis v5.0 : encore reconnus (warning, pas erreur),
+/// migration recommandée. Source unique partagée avec semantic.rs.
+pub const DEPRECATED_OPERATORS: &[&str] = &["MUTUAL"];
 
 /// Les 10 types d'entités DEFINE officiels (spec section 6).
 pub const OFFICIAL_ENTITY_TYPES: &[&str] = &[
@@ -99,7 +114,7 @@ fn token_is_operator_candidate(tok: &str) -> bool {
 }
 
 /// Scanne une valeur (`sujet OP cible ...`) et signale tout token qui ressemble
-/// à un opérateur mais n'appartient pas aux 21 officiels (et n'est pas une
+/// à un opérateur mais n'appartient pas aux opérateurs officiels actifs (35, hors MUTUAL déprécié) (et n'est pas une
 /// modalité déontique). Mutualisé entre les blocs RELATIONS et les blocs modaux.
 fn check_operators_in_value(
     value: &str,
@@ -108,11 +123,16 @@ fn check_operators_in_value(
     r: &mut SemReport,
 ) {
     for tok in value.split_whitespace() {
-        if token_is_operator_candidate(tok)
-            && !MODALITIES.contains(&tok)
-            && !op_set.contains(tok)
-        {
-            r.warn("R5_UNKNOWN_OPERATOR", line, &format!("opérateur '{}' hors des 21 officiels", tok));
+        if !token_is_operator_candidate(tok) || MODALITIES.contains(&tok) {
+            continue;
+        }
+        if DEPRECATED_OPERATORS.contains(&tok) {
+            r.warn("W601_DEPRECATED_OPERATOR", line, &format!(
+                "opérateur '{}' déprécié depuis v5.0 — migrer vers EQUALS/POSSESSES/RESEMBLES/CO_LOCATES/OPPOSES/COMPARES",
+                tok
+            ));
+        } else if !op_set.contains(tok) {
+            r.warn("R5_UNKNOWN_OPERATOR", line, &format!("opérateur '{}' hors des {} officiels", tok, OFFICIAL_OPERATORS.len()));
         }
     }
 }
@@ -535,7 +555,7 @@ fn validate_block(
         }
     }
 
-    // ── Validation RELATIONS : opérateurs ∈ 21 officiels (R5) ──
+    // ── Validation RELATIONS : opérateurs ∈ officiels (35 actifs + MUTUAL déprécié) (R5) ──
     if name == "RELATIONS" || name.starts_with("RELATIONS") {
         for f in &block.fields {
             // les relations inline sont stockées dans des champs _stmt / _value
@@ -546,7 +566,7 @@ fn validate_block(
     // ── Validation des blocs modaux déontiques : (MUST) (MUST_NOT) (RULE) (IF) (MAY)… ──
     // Le parser nomme ces blocs "(XXX)" et range l'énoncé "sujet OP cible" dans _stmt.
     // C'est ici que se joue le cœur de CSTL : vérifier que l'opérateur déontique
-    // déclaré utilise bien un opérateur des 21 officiels, et non un verbe inventé.
+    // déclaré utilise bien un opérateur des opérateurs officiels actifs, et non un verbe inventé.
     if name.starts_with('(') && name.ends_with(')') {
         for f in &block.fields {
             if f.name == "_stmt" {
@@ -653,6 +673,25 @@ mod tests {
         let r = validate_semantics(&[b], None);
         assert!(r.warnings.iter().any(|w| w.contains("wizard") && w.contains("R7_INVALID_ENTITY_TYPE")),
                 "type 'wizard' devrait warner R5");
+    }
+
+    /// Corrige la desync MUTUAL de l'audit multi-angle (2026-09-03) : avant ce
+    /// fix, MUTUAL etait dans OFFICIAL_OPERATORS ici et passait la whitelist
+    /// SANS AUCUN avertissement, alors que semantic.rs le traitait deja comme
+    /// deprecie (W601). Desormais les deux modules partagent DEPRECATED_OPERATORS
+    /// et MUTUAL declenche un warning explicite ici aussi.
+    #[test]
+    fn test_mutual_now_warns_as_deprecated_instead_of_silently_passing() {
+        assert!(!OFFICIAL_OPERATORS.contains(&"MUTUAL"), "MUTUAL ne doit plus etre dans les operateurs actifs");
+        assert!(DEPRECATED_OPERATORS.contains(&"MUTUAL"));
+
+        let b = block("RELATIONS", vec![field("_stmt", "alice MUTUAL bob")]);
+        let r = validate_semantics(&[b], None);
+        assert!(
+            r.warnings.iter().any(|w| w.contains("MUTUAL") && w.contains("W601_DEPRECATED_OPERATOR")),
+            "MUTUAL devrait declencher W601_DEPRECATED_OPERATOR, warnings actuels: {:?}",
+            r.warnings
+        );
     }
 
     #[test]

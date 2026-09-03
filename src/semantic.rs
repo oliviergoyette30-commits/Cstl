@@ -19,6 +19,7 @@
 use crate::ast::Relation;
 use crate::ast::Block;
 use crate::validator_semantic::extract_entity_type;
+use crate::validator_semantic::DEPRECATED_OPERATORS;
 
 const OFFICIAL_OPERATORS: &[&str] = &[
     "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
@@ -31,7 +32,10 @@ const OFFICIAL_OPERATORS: &[&str] = &[
     "BEFORE", "AFTER", "DURING",
 ];
 
-const DEPRECATED_OPERATORS: &[&str] = &["MUTUAL"];
+// DEPRECATED_OPERATORS vit maintenant dans validator_semantic.rs -- source
+// unique partagee entre les deux modules, corrige la desync MUTUAL de
+// l'audit multi-angle (2026-09-03). Voir le commentaire au-dessus de
+// validator_semantic::OFFICIAL_OPERATORS pour le detail.
 const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
 const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
 const PERFORMED_OPERATORS:  &[&str] = &["PERFORM", "ARR", "ARR.CREATE", "ARR.PRODUCE"];
