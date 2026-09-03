@@ -47,3 +47,6 @@ features = ["derive"]
 
 [dependencies.serde_json]
 version = "1"
+
+[dependencies.unicode-normalization]
+version = "0.1"

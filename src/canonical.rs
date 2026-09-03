@@ -4,7 +4,17 @@
 
 
 /// Produce the normative canonical text form of a CSTL payload.
+///
+/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03):
+/// la regle NFC etait ratifiee tripartite (voir en-tete de ce fichier,
+/// ligne 2, depuis Session #5) mais jamais reellement codee -- deux
+/// representations Unicode canoniquement equivalentes du meme texte
+/// (ex: "é" precompose U+00E9 vs "e" + accent combinant U+0301) produisaient
+/// des hash SHA-256 differents pour un contenu semantiquement identique,
+/// cassant la garantie d'immutabilite/deduplication du hash canonique.
 pub fn canonical_form(text: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let text: String = text.nfc().collect();
     let mut lines: Vec<String> = text
         .replace("\r\n", "\n")
         .replace("\r", "\n")
@@ -185,4 +195,28 @@ fn sha256(data: &[u8]) -> [u8; 32] {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nfc_composed_and_decomposed_produce_same_hash() {
+        // "café" precompose (e-acute U+00E9) vs decompose (e U+0065 + accent
+        // combinant U+0301) -- meme texte visuellement et semantiquement,
+        // representations Unicode differentes. Avant ce fix: deux hash
+        // differents pour un contenu identique.
+        let composed = "META [name=caf\u{00E9}]";
+        let decomposed = "META [name=cafe\u{0301}]";
+        assert_ne!(composed, decomposed, "les deux representations doivent differer en bytes bruts");
+        assert_eq!(canonical_hash(composed), canonical_hash(decomposed));
+    }
+
+    #[test]
+    fn test_nfc_normalization_applied_to_canonical_form() {
+        let decomposed = "e\u{0301}";
+        let normalized = canonical_form(decomposed);
+        assert_eq!(normalized, "\u{00E9}");
+    }
 }
