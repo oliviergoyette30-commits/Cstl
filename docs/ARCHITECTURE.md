@@ -1,9 +1,16 @@
 # CSTL OS Kernel Architecture Complète
 
-**Date:** 29 Août 2026  
-**Version:** 5.0.0  
-**Auteur:** Olivier Goyette  
-**Concept fondateur:** Les relations sont plus importantes que l'information  
+**Date de dernière vérification:** 3 Septembre 2026
+**Version:** 5.0.0
+**Auteur:** Olivier Goyette
+**Concept fondateur:** Les relations sont plus importantes que l'information
+
+> Ce document décrit l'architecture conceptuelle. Pour le statut d'implémentation
+> détaillé et vérifié (quel fichier Rust fait quoi, ce qui est réellement câblé
+> vs designé, les limitations honnêtes), voir [`README.md`](../README.md#architecture--9-layers)
+> et sa section "Honest Limitations" — ce document-ci est resynchronisé avec ces
+> deux sources au moment de la date ci-dessus, mais README.md reste la source de
+> vérité en cas de divergence future.
 
 ## Philosophie fondamentale
 
@@ -11,7 +18,7 @@ CSTL OS Kernel n'est pas un système qui gère de l'information. C'est un systè
 
 Les relations entre:
 - Agents et agents
-- Agents et humains  
+- Agents et humains
 - Agents et règles
 - Données et contexte
 - Actions et intentions
@@ -21,126 +28,61 @@ Tout le reste découle de là.
 
 ## Architecture 9 Couches
 
-### Couche 1: Transport (FORME/TRANSPORT)
-**État:** ✅ PROUVÉ  
-**Fidelité:** 99.3% sur 12+ hops multimodel  
+Implémentation actuelle: Rust natif (`src/`), serveur TCP async (tokio). L'ancienne
+implémentation Python (parser, ADN store, serveur FastAPI) a été abandonnée au
+profit de ce portage Rust — toute mention de FastAPI, de fichiers `.py`, ou d'un
+serveur séparé ci-dessous serait une régression de cette réécriture.
 
-CSTL Wire Format avec hashbang #!CSTL v5.0.0 MODE=A, SHA-256 immutable, zéro hallucination prouvée.
+### Couche 1: Transport (FORME/TRANSPORT)
+**État:** ✅ PROUVÉ
+**Fidelité:** 99.3% sur 12+ hops multimodel
+
+CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
 
 ### Couche 2: Gouvernance / Résilience
-**État:** ✅ TESTÉ - 4/4 modes  
+**État:** ✅ TESTÉ - 4/4 modes
 
 Circuit Breaker avec quorum 2/3, dynamic whitelist, 3 modes défaillance, operator drift prevention.
 
 ### Couche 3a: Vérification Faits Publics
-**État:** ✅ IMPLÉMENTÉE  
+**État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
 
-Fact Verification avec Wikidata + SPARQL, entity resolution.
+Fact Verification avec Wikidata + SPARQL, entity resolution. Appelée pour chaque `RELATION` d'un payload reçu par le serveur en cours d'exécution.
 
 ### Couche 3b: Lab Logiciel + Arbitration
-**État:** 🟡 DESIGNÉ, PAS WIRED  
+**État:** 🟡 PARTIEL, câblé live avec portée réduite
 
-RestrictedCouncil Framework, ExecutionLab subprocess-isolated, human arbitration channel.
+`ExecutionLab` (`src/execution_lab.rs`): détection de contradictions et de cycles, câblée live. `RestrictedCouncil` (`src/restricted_council.rs`): câblée live, avec pont Telegram (boutons, réponse en direct) — mais portée réduite à un seul membre autorisé (quorum=1), pas le quorum 2/3 multi-personnes décrit plus bas. Coherence check limité aux relations d'un seul payload reçu, pas encore croisé avec l'historique complet de l'ADN store.
 
 ### Couche 4: Calibration / Fiabilité
-**État:** ✅ TESTÉ  
+**État:** ✅ TESTÉ
 
 Laplace Smoothed Scoring per-agent, per-domain accuracy.
 
 ### Couche 5: Mémoire Persistante / Provenance
-**État:** 🟡 FRAGMENTÉE  
+**État:** 🟡 Construite en Rust, câblée live
 
-SQLite store + hash entanglement + FastAPI server.
-
-### Couche 6: Interface Humaine
-**État:** 🔶 SQUELETTE  
-
-Graphify (589 nodes) + Obsidian vault.
-
-### Couche 7: Agent Discovery & Routing (CSTL Natif)
-**État:** ❌ À CONSTRUIRE  
-
-Zero external dependencies. Agent Registry, Agent Cards, Service Discovery - tout CSTL natif.
-
-### Couche 8: Provenance Audit / Cryptographic Guarantee
-**État:** ✅ DESIGNÉ  
-
-Hash-Chained Audit Trail, Deontic Modality
-
-cd ~/cstl && mkdir -p docs && cat > docs/ARCHITECTURE.md << 'EOF'
-# CSTL OS Kernel Architecture Complète
-
-**Date:** 29 Août 2026  
-**Version:** 5.0.0  
-**Auteur:** Olivier Goyette  
-**Concept fondateur:** Les relations sont plus importantes que l'information  
-
-## Philosophie fondamentale
-
-CSTL OS Kernel n'est pas un système qui gère de l'information. C'est un système qui gère des relations.
-
-Les relations entre:
-- Agents et agents
-- Agents et humains  
-- Agents et règles
-- Données et contexte
-- Actions et intentions
-- Promesses et réalité
-
-Tout le reste découle de là.
-
-## Architecture 9 Couches
-
-### Couche 1: Transport (FORME/TRANSPORT)
-**État:** ✅ PROUVÉ  
-**Fidelité:** 99.3% sur 12+ hops multimodel  
-
-CSTL Wire Format avec hashbang #!CSTL v5.0.0 MODE=A, SHA-256 immutable, zéro hallucination prouvée.
-
-### Couche 2: Gouvernance / Résilience
-**État:** ✅ TESTÉ - 4/4 modes  
-
-Circuit Breaker avec quorum 2/3, dynamic whitelist, 3 modes défaillance, operator drift prevention.
-
-### Couche 3a: Vérification Faits Publics
-**État:** ✅ IMPLÉMENTÉE  
-
-Fact Verification avec Wikidata + SPARQL, entity resolution.
-
-### Couche 3b: Lab Logiciel + Arbitration
-**État:** 🟡 DESIGNÉ, PAS WIRED  
-
-RestrictedCouncil Framework, ExecutionLab subprocess-isolated, human arbitration channel.
-
-### Couche 4: Calibration / Fiabilité
-**État:** ✅ TESTÉ  
-
-Laplace Smoothed Scoring per-agent, per-domain accuracy.
-
-### Couche 5: Mémoire Persistante / Provenance
-**État:** 🟡 FRAGMENTÉE  
-
-SQLite store + hash entanglement + FastAPI server.
+`src/adn_store.rs`: SQLite store + hash entanglement. Pas encore unifiée avec la hash chain d'audit dans un seul schéma — les deux systèmes restent liés seulement par un hash partagé.
 
 ### Couche 6: Interface Humaine
-**État:** 🔶 SQUELETTE  
+**État:** 🟡 PARTIEL
 
-Graphify (589 nodes) + Obsidian vault.
+Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: inactif — l'outil n'est pas installé sur la machine de dev (vérifié le 2026-09-03), les données de graphe existantes (2026-08-26) décrivent l'ancien codebase Python et ne peuvent pas être régénérées sans installer l'outil d'abord.
 
 ### Couche 7: Agent Discovery & Routing (CSTL Natif)
-**État:** ❌ À CONSTRUIRE  
+**État:** ✅ CONSTRUITE ET CÂBLÉE LIVE
 
-Zero external dependencies. Agent Registry, Agent Cards, Service Discovery - tout CSTL natif.
+`src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur.
 
 ### Couche 8: Provenance Audit / Cryptographic Guarantee
-**État:** ✅ DESIGNÉ  
+**État:** ✅ DESIGNÉ
 
-Hash-Chained Audit Trail, Deontic Modality Audit.
+Hash-Chained Audit Trail (`src/server/audit.rs`), Deontic Modality Audit.
 
-### Couche 9: Orchestration Gouvernance Deontic
-**État:** ❌ À CONSTRUIRE
+### Couche 9: CASTLE (mode de compression)
+**État:** 🟡 ARCHITECTURÉ, PAS DE CODE
 
-Event-Driven Governance, Deontic Execution Model, Multi-Agent Orchestration.
+Session-amortized shared dictionary, event-driven orchestration. Pas encore implémenté.
 
 ## Relation au Centre: 10 Éléments Validés
 
@@ -164,42 +106,15 @@ vs Institutional AI: governance graphs only, pas deontic modality, pas arbitrati
 vs Constitutional Governance: règles simplistes vs deontic + arbitration
 vs MCP: agent-to-tool vs agent-to-agent sémantique natif
 
-## État Actuel & Timeline
-
-### Fait & Prouvé:
-- ✅ Couche 1: Transport 99.3%
-- ✅ Couche 2: Gouvernance 4/4 modes
-- ✅ Couche 3a: Fact verification Wikidata
-- ✅ Couche 4: Calibration Laplace
-- ✅ Couche 5a,5b: SQLite store + entanglement
-
-### À Compléter (4-5 semaines):
-- 🔴 Couche 3b: Arbitration channel wire (8h)
-- 🔴 Couche 5c: FastAPI server integration
-- 🔴 Couche 6: Graphify/Obsidian connection
-- 🔴 Couche 7: CSTL agent discovery + routing natif
-- 🔴 Couche 8: Hash-chained audit trail completion
-- 🔴 Couche 9: Event-driven orchestration
-
-### R8 Bugs (Rust Parser):
-- Bug 1: indexing on "name" not "id" (30 min)
-- Bug 2: extract_entity_type regex fix (30 min)
-
-### ArXiv Timeline:
-- Week 1: R8 bugs + arbitration wiring
-- Week 2-3: Couches 7-9 integration
-- Week 4-5: Testing + documentation
-- Target: September 15-20, 2026 submission
-
 ## Pourquoi C'est Unique
 
 1. Deontic modality première classe
 2. Semantic fidelity prouvée par tests
-3. Arbitration protocol structuré
+3. Arbitration protocol structuré (portée réduite: quorum=1, pas 2/3 — voir Couche 3b)
 4. Hash-chained immutable provenance
 5. Relations au centre
 6. Zero external dependencies (no MCP)
 
 ---
 
-C'est ta fondation. Le reste est détail d'implémentation.
+C'est la fondation. Le reste est détail d'implémentation — voir [`README.md`](../README.md) pour le détail vérifié fichier par fichier.
