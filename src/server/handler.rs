@@ -283,24 +283,70 @@ pub async fn handle_connection(
                     // du payload, on interroge Wikidata via kb_verify::KbVerifier.
                     // Le module cesse ici d'etre un exemple isole et devient une
                     // capacite reelle du serveur en cours d'execution.
-                    let mut verification_lines = String::new();
-                    for relation in &payload.relations {
-                        let subject = relation.get("subject").cloned();
-                        let object = relation.get("object").cloned();
-                        let predicate = relation.get("type").cloned();
-                        if let (Some(subject), Some(predicate), Some(object)) = (subject, predicate, object) {
+                    //
+                    // Trouvaille mineure de l'audit multi-angle (2026-09-03): cette
+                    // boucle attendait chaque appel SPARQL sortant SEQUENTIELLEMENT
+                    // (.await un par un) -- un payload avec N relations bloquait la
+                    // connexion (et retenait potentiellement des locks pris plus loin
+                    // dans le pipeline) pendant N fois la latence reseau vers Wikidata,
+                    // sans aucune borne sur N. Fix: les verifications sont lancees en
+                    // parallele (tokio::task::JoinSet, deja disponible via la dependance
+                    // tokio "full" existante -- pas de nouvelle dependance necessaire),
+                    // et on borne explicitement le nombre de relations verifiees par
+                    // payload (MAX_RELATIONS_TO_VERIFY) pour eviter qu'un payload avec
+                    // des centaines de RELATION ne devienne un vecteur de déni de
+                    // service par amplification de requetes sortantes.
+                    const MAX_RELATIONS_TO_VERIFY: usize = 50;
+                    let relations_to_verify: Vec<(usize, String, String, String)> = payload.relations.iter()
+                        .enumerate()
+                        .filter_map(|(idx, relation)| {
+                            let subject = relation.get("subject").cloned()?;
+                            let predicate = relation.get("type").cloned()?;
+                            let object = relation.get("object").cloned()?;
+                            Some((idx, subject, predicate, object))
+                        })
+                        .take(MAX_RELATIONS_TO_VERIFY)
+                        .collect();
+                    if payload.relations.len() > MAX_RELATIONS_TO_VERIFY {
+                        eprintln!(
+                            "[Handler] ⚠️  {} relations dans le payload, verification KB bornee aux {} premieres",
+                            payload.relations.len(), MAX_RELATIONS_TO_VERIFY
+                        );
+                    }
+
+                    let mut verify_tasks = tokio::task::JoinSet::new();
+                    for (idx, subject, predicate, object) in relations_to_verify {
+                        let kb_verifier = kb_verifier.clone();
+                        verify_tasks.spawn(async move {
                             eprintln!("[Handler] 🔎 Verifying relation: {} {} {}", subject, predicate, object);
                             let result = kb_verifier.verify_relation(&subject, &predicate, &object, "fr", 4, 40).await;
                             eprintln!("[Handler]    -> {} ({})", result.verified, result.reason);
-                            verification_lines.push_str(&format!(
-                                "VERIFICATION [subject={}, predicate={}, object={}, verified={}, source={}]\n",
-                                subject,
-                                predicate,
-                                object,
-                                result.verified,
-                                result.source_url.unwrap_or_else(|| "none".to_string())
-                            ));
+                            (idx, subject, predicate, object, result)
+                        });
+                    }
+
+                    let mut verification_results = Vec::new();
+                    while let Some(joined) = verify_tasks.join_next().await {
+                        match joined {
+                            Ok(tuple) => verification_results.push(tuple),
+                            Err(e) => eprintln!("[Handler] ⚠️  tache de verification KB annulee/paniquee: {}", e),
                         }
+                    }
+                    // Ordre de completion des taches paralleles != ordre du payload --
+                    // on retrie par index d'origine pour une reponse deterministe,
+                    // stable d'un run a l'autre independamment de la latence reseau.
+                    verification_results.sort_by_key(|(idx, ..)| *idx);
+
+                    let mut verification_lines = String::new();
+                    for (_idx, subject, predicate, object, result) in verification_results {
+                        verification_lines.push_str(&format!(
+                            "VERIFICATION [subject={}, predicate={}, object={}, verified={}, source={}]\n",
+                            subject,
+                            predicate,
+                            object,
+                            result.verified,
+                            result.source_url.unwrap_or_else(|| "none".to_string())
+                        ));
                     }
 
                     // STEP 3c: Coherence interne (ExecutionLab, couche 3b partielle) —
