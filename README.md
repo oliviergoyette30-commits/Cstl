@@ -5,7 +5,7 @@
 > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-75%20passing-brightgreen.svg)](src/tests.rs)
+[![Tests](https://img.shields.io/badge/tests-86%20passing-brightgreen.svg)](src/tests.rs)
 
 ---
 
@@ -47,10 +47,10 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 |---|---|---|
 | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
 | 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | ✅ Tested (4/4 modes) |
-| 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented |
-| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Designed, not wired |
+| 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` quorum still not built |
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
-| 5 | **Persistent memory / provenance** — SQLite store, hash entanglement, FastAPI server | 🟡 Fragmented |
+| 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live; not yet unified with the hash chain into one store |
 | 6 | **Human interface** — Graphify (589 nodes, 1142 edges), Obsidian vault | 🔶 Skeleton |
 | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ❌ To build |
 | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ Designed |
@@ -116,7 +116,7 @@ Level 4 is defined as: *several LLMs coordinate a real task without semantic los
 | Component | Role | Status |
 |---|---|---|
 | **Hypothesis engine** | Entanglement detection over a bounded knowledge graph (Wikidata subgraph): find node pairs with high common-neighbour overlap and no direct edge, then propose a speculative CSTL relation at deliberately low σ (`ASSUMES` / `DOUBTS`, never `KNOWS`) | 🟡 Components exist (Graphify, SPARQL integration), generative step untested |
-| **Simulation / validation lab** | `ExecutionLab` for computationally checkable hypotheses (internal consistency, contradiction, temporal cycle detection). Empirical world-facts stay permanently low-σ until independently corroborated — by design, not as a gap | 🟡 Consistency checker prototyped; domain simulators require funding |
+| **Simulation / validation lab** | `ExecutionLab` for computationally checkable hypotheses (internal consistency, contradiction, temporal cycle detection). Empirical world-facts stay permanently low-σ until independently corroborated — by design, not as a gap | 🟡 Contradiction + 2-node cycle detection implemented and wired live (`src/execution_lab.rs`, tested); scoped to relations within a single received payload — not yet cross-referenced against ADN store history; longer cycles, temporal-cycle detection and domain simulators not built |
 | **Human council** | `RestrictedCouncil`, 2/3 quorum — plausibility and harm filter before storage, not a truth oracle | 🟡 Designed, matches published precedent (Wikidata Primary Sources Tool pattern) |
 
 **What CSTL contributes specifically.** Discovery is graph mathematics; validation is sandbox logic — both would work in any format. CSTL's contribution is the **auditable epistemic transport between them**:
@@ -133,7 +133,7 @@ validated:   BELIEVES x_influenced_y [σ=0.75 source=hypothesis_engine
 
 The full σ trajectory — speculation to confirmed belief, with every step attributable — is what no competing format carries natively.
 
-**Discriminative power, not theatre.** A lab that accepts everything validates nothing. Prototype `consistency_lab.py` runs both a plausible and a deliberately contradictory hypothesis: the first passes (σ 0.30 → 0.75), the second is rejected via direct conflict *and* temporal cycle detection (σ 0.30 → 0.09). Negative controls are mandatory before any positive result counts.
+**Discriminative power, not theatre.** A lab that accepts everything validates nothing. `src/execution_lab.rs` (Rust, tested, wired live) runs both a plausible and a deliberately contradictory case: a valid transitive chain passes (`test_valid_chain_is_not_a_cycle`, σ → 0.75), a functional-predicate contradiction and a 2-node cycle are both rejected (`test_detects_functional_predicate_contradiction`, `test_detects_two_node_cycle`, σ → 0.09). Current scope: final σ is computed in one step from the consistency check — the ASSUMES(0.3) → BELIEVES(0.75) two-stage transition shown below is the target shape, not yet what the running code does. Negative controls are mandatory before any positive result counts.
 
 ---
 
@@ -158,9 +158,9 @@ verify_integrity()   ──►  detects any break in the chain
 
 Deterministic, tamper-evident, tested (including `test_parent_hash_excluded_from_hash`, `test_integrity_detects_break`). Known issue: async reload hits a `blocking_lock()` conflict inside the tokio runtime — deferred refactor.
 
-### Python ADN store — `cstl_adn_store.py` 🟡
+### Rust ADN store — `src/adn_store.rs` 🟡
 
-Content-addressed semantic memory with three tables:
+Content-addressed semantic memory with three tables, built natively in Rust (SQLite via `rusqlite`), wired live into the server:
 
 | Table | Role |
 |---|---|
@@ -168,7 +168,7 @@ Content-addressed semantic memory with three tables:
 | `adn_council_log` | every council action — `commit` / `revoke`, by whom, with a note and timestamp. **This is the human arbitration audit trail.** |
 | `emergence_proofs` | per-question record of each model's *solo* answer (Claude, GPT, Gemini, others), the *final* collective decision, **who changed position**, what they changed to, and the resulting `delta_sigma` |
 
-Retrieval is TF-IDF over stored payloads, with a `get_primer()` / `load_context()` pair that reconstructs conversational context from hashes alone — so context is *referenced*, never re-transmitted. `ADNDeltaDetector` reports whether an incoming payload is genuinely new relative to what is already stored (`novel_tokens`, `closest_hash`, `delta_sigma`).
+**Not built yet, honestly flagged:** TF-IDF retrieval, `get_primer()` / `load_context()` context reconstruction, and `ADNDeltaDetector` (novelty detection against existing entries). `commit()` / `revoke()` exist on `AdnStore` but nothing in the running server calls them — there is no `RestrictedCouncil` yet to make that call, so every entry currently written stays `committed=false` permanently.
 
 **Why `emergence_proofs` matters for Level 4.** Level 4 asks whether several LLMs coordinating produce something no single one produced alone. That table is the instrument for answering it empirically: it records the counterfactual (each solo answer) alongside the outcome, making position changes and σ shifts auditable rather than asserted.
 
@@ -190,7 +190,7 @@ BELIEVES x_influenced_y [σ=0.75 validated_by=executionlab_run_xyz
 
 Nothing becomes an anchored fact without a logged human commit. Rejection is equally traceable: a contradicted hypothesis drops to σ≈0.09 and stays queryable rather than being deleted.
 
-**Honest status.** The Rust chain is tested and operational. The Python ADN store is implemented but **not wired into the live pipeline** — the two systems are not yet unified, and the council-log/emergence tables have no production data. Consolidating them is open work.
+**Honest status.** Both systems are now Rust, tested, and wired into the live server — the ADN store previously described here as Python did not actually exist anywhere in this repository until this pass (verified by exhaustive search before writing `src/adn_store.rs`). They are not yet *unified* into one schema: the hash chain and the ADN store are two separate stores, linked only by the ADN store reusing the hash chain's `hash` as its key. The council-log and emergence-proofs tables exist but have zero production data — nothing has ever been committed, because `RestrictedCouncil` (the human 2/3 quorum) is not built.
 
 ---
 
@@ -230,7 +230,7 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
 cargo test
 ```
 
-75 tests passing, 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
+86 tests passing, 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
 
 ---
 
@@ -241,10 +241,11 @@ cargo test
 - Open-weight LLMs (Llama, Mistral, Qwen): partially validated only.
 - Standard-mode compression advantage largely disappears after gzip.
 - CASTLE mode: architecture only, no implementation, no benchmark.
-- Layers 3b, 5, 6, 7: designed or partial, not production-wired.
+- Layer 3b: only the `ExecutionLab` consistency check is wired live; `RestrictedCouncil` (human quorum) is not built, so nothing is ever committed. Layers 6, 7: designed or partial, not production-wired.
 - Human council resolution rate: never measured under production conditions.
-- Two parallel audit systems (Rust hash chain, Python ADN store) not yet unified.
-- `adn_council_log` and `emergence_proofs` tables: implemented, zero production data.
+- Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
+- `adn_council_log` and `emergence_proofs` tables: implemented (Rust), zero production data — no commit has ever happened, `commit()`/`revoke()` are unreachable from any running code path.
+- `ExecutionLab` consistency check is scoped to relations within a single received payload — not yet cross-referenced against the full ADN store history.
 - Level 4 hypothesis engine: generative step (proposing novel relations) not yet demonstrated.
 - Simulation lab: consistency checking prototyped; domain-specific simulators not built.
 - Zero external adopters.
