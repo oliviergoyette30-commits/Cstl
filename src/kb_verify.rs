@@ -33,8 +33,21 @@ fn predicate_to_property(predicate: &str) -> Option<&'static str> {
 
 /// Propriétés pour lesquelles une chaîne transitive à plusieurs sauts a un
 /// sens sémantique réel (hiérarchies d'imbrication géographique/administrative).
+///
+/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03):
+/// cette fonction encodait independamment (`matches!(property_id, "P131" |
+/// "P361")`) la MEME notion que `execution_lab::CHAINABLE_PREDICATES`
+/// (`["part_of", "located_in"]`), dans un espace de cles different (ID
+/// Wikidata ici, nom de predicat CSTL la-bas), sans aucune reference
+/// croisee. Un ajout dans l'une sans l'autre desynchronisait silencieusement
+/// la verification KB (Couche 3a) et le calcul de coherence interne
+/// (ExecutionLab). Desormais derivee directement de
+/// execution_lab::CHAINABLE_PREDICATES via predicate_to_property -- une
+/// seule source de verite, plus de liste dupliquee a maintenir a la main.
 fn is_chainable(property_id: &str) -> bool {
-    matches!(property_id, "P131" | "P361")
+    crate::execution_lab::CHAINABLE_PREDICATES
+        .iter()
+        .any(|predicate| predicate_to_property(predicate) == Some(property_id))
 }
 
 #[derive(Debug, Serialize)]
@@ -350,5 +363,33 @@ mod tests {
         assert!(is_chainable("P131"));
         assert!(is_chainable("P361"));
         assert!(!is_chainable("P19"));
+    }
+
+    /// Garde-fou anti-desync (audit multi-angle 2026-09-03, finding majeure):
+    /// verifie mecaniquement que TOUT predicat CSTL liste dans
+    /// `execution_lab::CHAINABLE_PREDICATES` se mappe, via `predicate_to_property`,
+    /// vers un ID Wikidata que `is_chainable` accepte. Si quelqu'un ajoute un
+    /// predicat a l'un sans penser a l'autre, ce test casse immediatement --
+    /// au lieu d'une desynchronisation silencieuse entre Couche 3a (kb_verify)
+    /// et ExecutionLab.
+    #[test]
+    fn test_chainable_predicates_stay_in_sync_with_execution_lab() {
+        for &predicate in crate::execution_lab::CHAINABLE_PREDICATES {
+            let property = predicate_to_property(predicate).unwrap_or_else(|| {
+                panic!(
+                    "predicat '{}' present dans execution_lab::CHAINABLE_PREDICATES \
+                     mais absent de la table predicate_to_property de kb_verify.rs",
+                    predicate
+                )
+            });
+            assert!(
+                is_chainable(property),
+                "predicat '{}' (-> {}) est dans execution_lab::CHAINABLE_PREDICATES \
+                 mais is_chainable('{}') retourne false -- desync",
+                predicate,
+                property,
+                property
+            );
+        }
     }
 }
