@@ -9,6 +9,8 @@
 /// - No circular dependencies
 
 use super::parser::CstlPayload;
+use crate::ast::Relation as AstRelation;
+use crate::semantic::SemanticValidator;
 
 #[derive(Debug, Clone)]
 pub struct ValidationError {
@@ -104,6 +106,66 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
     result
 }
 
+/// Branche la whitelist des 35 opérateurs SDL officiels + dépréciation MUTUAL
+/// (semantic.rs::SemanticValidator, jusqu'ici jamais appelée sur le chemin
+/// TCP réel -- découverte en creusant la trouvaille majeure MUTUAL de
+/// l'audit multi-angle du 2026-09-03) sur les RELATION d'un payload réel.
+///
+/// Retourne des AVERTISSEMENTS UNIQUEMENT -- ne modifie jamais
+/// `ValidationResult.valid` -- pour une raison de conception précise :
+/// le champ RELATION `type=` sert ici à DEUX vocabulaires disjoints qui
+/// partagent le même nom de champ sans aucun marqueur pour les distinguer :
+///
+///   1. les opérateurs SDL officiels de semantic.rs (EQUALS, CONTRADICTS,
+///      COMMAND, INTENT, ...) -- toujours en MAJUSCULES dans la spec et
+///      dans tous les tests existants ;
+///   2. les prédicats factuels vérifiables contre Wikidata de kb_verify.rs
+///      (born_in, part_of, located_in, capital_of, ...) -- toujours en
+///      snake_case minuscule.
+///
+/// Appliquer la whitelist SDL à TOUTE valeur de `type=` casserait donc en
+/// silence la vérification KB (Couche 3a) : chaque relation `part_of` ou
+/// `located_in`, parfaitement légitime, deviendrait un faux "opérateur
+/// inconnu". On ne vérifie donc que les valeurs qui RESSEMBLENT DÉJÀ à un
+/// opérateur SDL revendiqué (tout MAJUSCULES, `.`/`_` autorisés, ≥2
+/// caractères -- même heuristique que semantic.rs::token_is_operator_candidate) ;
+/// les prédicats KB en minuscules sont ignorés par construction, pas par
+/// accident.
+pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
+    fn looks_like_sdl_operator(tok: &str) -> bool {
+        !tok.is_empty()
+            && tok.chars().all(|c| c.is_ascii_uppercase() || c == '.' || c == '_')
+            && tok.len() >= 2
+    }
+
+    let relations: Vec<AstRelation> = payload.relations.iter()
+        .filter_map(|r| {
+            let operator = r.get("type").cloned().unwrap_or_default();
+            if !looks_like_sdl_operator(&operator) {
+                return None;
+            }
+            Some(AstRelation {
+                subject: r.get("subject").cloned().unwrap_or_default(),
+                operator,
+                object: r.get("object").cloned().unwrap_or_default(),
+                attrs: Vec::new(),
+                modality: None,
+                line: 0,
+            })
+        })
+        .collect();
+
+    if relations.is_empty() {
+        return Vec::new();
+    }
+
+    SemanticValidator::new(&relations, &[])
+        .check_operator_whitelist()
+        .into_iter()
+        .map(|e| format!("{}: {}", e.code, e.message))
+        .collect()
+}
+
 fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationResult) {
     // Check for conflicting MUST constraints
     for relation in &payload.relations {
@@ -186,5 +248,77 @@ mod tests {
         let result = validate_payload(&payload);
         assert!(!result.valid);
         assert!(result.errors.len() >= 3); // Missing purpose, sender, receiver
+    }
+
+    // ── check_sdl_operator_whitelist (branchement semantic.rs sur le pipeline reel) ──
+    // Audit multi-angle 2026-09-03 : semantic.rs::SemanticValidator n'etait
+    // appele nulle part sur le chemin TCP reel, decouvert en creusant le fix
+    // de la desync MUTUAL. Ces tests verifient le branchement ET la
+    // disambiguation SDL-operator (MAJUSCULES) vs predicat-KB (minuscule).
+
+    fn relation(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn test_kb_predicates_lowercase_produce_no_sdl_warning() {
+        // part_of / located_in / born_in sont des predicats KB (kb_verify.rs),
+        // pas des operateurs SDL -- ne doivent JAMAIS declencher un warning
+        // "operateur inconnu", meme s'ils sont absents des 35 officiels.
+        let payload = CstlPayload {
+            version: "v5.0.0".into(), mode: "A".into(),
+            meta: HashMap::new(), intent: HashMap::new(),
+            relations: vec![
+                relation(&[("subject", "paris"), ("type", "part_of"), ("object", "france")]),
+                relation(&[("subject", "paris"), ("type", "located_in"), ("object", "france")]),
+                relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
+            ],
+            raw: String::new(),
+        };
+        let warnings = check_sdl_operator_whitelist(&payload);
+        assert!(warnings.is_empty(), "predicats KB minuscules ne doivent pas warner: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_known_sdl_operator_uppercase_produces_no_warning() {
+        let payload = CstlPayload {
+            version: "v5.0.0".into(), mode: "A".into(),
+            meta: HashMap::new(), intent: HashMap::new(),
+            relations: vec![
+                relation(&[("subject", "x"), ("type", "EQUALS"), ("object", "y")]),
+            ],
+            raw: String::new(),
+        };
+        let warnings = check_sdl_operator_whitelist(&payload);
+        assert!(warnings.is_empty(), "EQUALS est un operateur officiel: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_unknown_uppercase_operator_warns() {
+        let payload = CstlPayload {
+            version: "v5.0.0".into(), mode: "A".into(),
+            meta: HashMap::new(), intent: HashMap::new(),
+            relations: vec![
+                relation(&[("subject", "x"), ("type", "FOOBAR"), ("object", "y")]),
+            ],
+            raw: String::new(),
+        };
+        let warnings = check_sdl_operator_whitelist(&payload);
+        assert!(warnings.iter().any(|w| w.contains("FOOBAR")), "FOOBAR devrait warner: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_mutual_uppercase_warns_as_deprecated_via_real_pipeline_adapter() {
+        let payload = CstlPayload {
+            version: "v5.0.0".into(), mode: "A".into(),
+            meta: HashMap::new(), intent: HashMap::new(),
+            relations: vec![
+                relation(&[("subject", "x"), ("type", "MUTUAL"), ("object", "y")]),
+            ],
+            raw: String::new(),
+        };
+        let warnings = check_sdl_operator_whitelist(&payload);
+        assert!(warnings.iter().any(|w| w.contains("MUTUAL") && w.contains("W601")),
+                "MUTUAL devrait warner W601 via l'adaptateur reel: {:?}", warnings);
     }
 }

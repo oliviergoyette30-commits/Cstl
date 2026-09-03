@@ -134,7 +134,13 @@ impl<'a> SemanticValidator<'a> {
     }
 
     /// E101 — LE FIX CENTRAL. N'existe nulle part ailleurs dans le code.
-    fn check_operator_whitelist(&self) -> Vec<SemanticError> {
+    ///
+    /// `pub` depuis le branchement dans le pipeline TCP reel (audit multi-angle,
+    /// 2026-09-03) : server::validator::check_sdl_operator_whitelist() appelle
+    /// UNIQUEMENT ce check (pas validate() en entier, qui suppose un format de
+    /// bloc/valeur -- "sujet OP cible" en une seule string -- que le parser reel
+    /// ne produit jamais) sur des Relation adaptees depuis un vrai CstlPayload.
+    pub fn check_operator_whitelist(&self) -> Vec<SemanticError> {
         let mut errors: Vec<SemanticError> = self.all.iter()
             .filter(|r| !r.operator.is_empty())
             .filter(|r| !OFFICIAL_OPERATORS.contains(&r.operator.as_str()))

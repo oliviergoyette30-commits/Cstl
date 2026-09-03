@@ -86,6 +86,28 @@ pub async fn handle_connection(
                 if validation.valid {
                     eprintln!("[Handler] ✅ Validation passed");
 
+                    // STEP 2c: whitelist des 35 operateurs SDL officiels + MUTUAL
+                    // deprecie (semantic.rs) -- avant cette passe, aucun des deux
+                    // modules de validation semantique du depot (semantic.rs,
+                    // validator_semantic.rs) n'etait jamais appele sur le chemin
+                    // TCP reel (trouvaille de l'audit multi-angle 2026-09-03,
+                    // decouverte en creusant le fix de la desync MUTUAL). Warnings
+                    // uniquement, jamais un rejet -- voir le commentaire de
+                    // check_sdl_operator_whitelist pour pourquoi (les predicats KB
+                    // en minuscules comme part_of/located_in/born_in ne sont pas
+                    // dans ce vocabulaire et sont ignores par construction).
+                    let semantic_warnings = validator::check_sdl_operator_whitelist(&payload);
+                    let mut semantic_warning_lines = String::new();
+                    if !semantic_warnings.is_empty() {
+                        eprintln!("[Handler] ⚠️  Semantic operator warnings: {:?}", semantic_warnings);
+                        for w in &semantic_warnings {
+                            semantic_warning_lines.push_str(&format!(
+                                "SEMANTIC_WARNING [detail={}]\n",
+                                w.replace(',', ";").replace('[', "(").replace(']', ")")
+                            ));
+                        }
+                    }
+
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
                     // — purpose=council_decision est traite a part: ce n'est pas un
                     // nouveau fait a verifier/stocker, c'est une action sur une entree
@@ -360,12 +382,14 @@ pub async fn handle_connection(
                             RELATION [type=received, subject={}, status=valid]\n\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
                             purpose,
                             verification_lines,
                             consistency_line,
+                            semantic_warning_lines,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq
