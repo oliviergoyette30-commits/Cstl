@@ -25,6 +25,22 @@ use super::audit::HashChain;
 use super::parser;
 use super::validator;
 
+/// Cherche `---END---` dans `buf` et retourne l'offset EXCLUSIF juste apres
+/// (et apres le `\n` qui suit immediatement, s'il y en a un) -- c'est-a-dire
+/// la limite jusqu'a laquelle `drain()` doit couper pour extraire UN message
+/// CSTL complet de l'accumulateur, en laissant tout ce qui suit (pipelining)
+/// intact pour la prochaine iteration. `None` si aucun `---END---` complet
+/// n'est encore dans le buffer.
+fn find_message_end(buf: &[u8]) -> Option<usize> {
+    const MARKER: &[u8] = b"---END---";
+    let pos = buf.windows(MARKER.len()).position(|w| w == MARKER)?;
+    let mut end = pos + MARKER.len();
+    if buf.get(end) == Some(&b'\n') {
+        end += 1;
+    }
+    Some(end)
+}
+
 pub async fn handle_connection(
     mut socket: TcpStream,
     registry: Arc<AgentRegistry>,
@@ -35,18 +51,50 @@ pub async fn handle_connection(
     telegram: Option<Arc<TelegramNotifier>>,
     obsidian: Option<Arc<ObsidianEscalation>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut buffer = vec![0; 8192];
-    
+    let mut buffer = vec![0u8; 8192];
+    // Trouvaille mineure de l'audit multi-angle (2026-09-03): le buffer de
+    // reception etait fixe a 8192 octets et jamais reassemble -- un payload
+    // CSTL legitime plus grand qu'un seul read() TCP (frequent: TCP segmente
+    // arbitrairement, rien ne garantit qu'un message applicatif tienne dans
+    // un seul appel read()) etait tronque en silence des que raw.len() >
+    // 8192, avec un `---END---` jamais atteint -> ParseError::MissingEndMarker
+    // trompeur (le payload N'ETAIT PAS malforme, juste coupe par le transport).
+    // Fix: accumulateur persistant entre les read(), on n'extrait un message
+    // complet que lorsque `---END---` apparait DANS l'accumulateur. Gere
+    // aussi le pipelining (plusieurs payloads dans le meme flux TCP): tout
+    // ce qui suit le `---END---` du message courant reste dans l'accumulateur
+    // pour la prochaine iteration au lieu d'etre perdu.
+    let mut accumulated: Vec<u8> = Vec::new();
+    const MAX_PAYLOAD_SIZE: usize = 1024 * 1024; // 1 MiB -- tres au-dessus de tout payload CSTL reel observe cette session
+
     loop {
-        let n = socket.read(&mut buffer).await?;
-        
-        if n == 0 {
-            eprintln!("[Handler] Connection closed");
-            return Ok(());
-        }
-        
-        let raw_payload = String::from_utf8_lossy(&buffer[..n]).to_string();
-        eprintln!("[Handler] Received {} bytes", n);
+        let raw_payload = loop {
+            if let Some(end) = find_message_end(&accumulated) {
+                let complete: Vec<u8> = accumulated.drain(..end).collect();
+                break String::from_utf8_lossy(&complete).to_string();
+            }
+            if accumulated.len() > MAX_PAYLOAD_SIZE {
+                eprintln!(
+                    "[Handler] 🚫 Payload accumule depasse MAX_PAYLOAD_SIZE ({} octets) sans ---END--- -- connexion fermee",
+                    MAX_PAYLOAD_SIZE
+                );
+                let rejection = "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=payload_too_large]\n---END---\n";
+                socket.write_all(rejection.as_bytes()).await?;
+                return Ok(());
+            }
+
+            let n = socket.read(&mut buffer).await?;
+            if n == 0 {
+                if accumulated.is_empty() {
+                    eprintln!("[Handler] Connection closed");
+                } else {
+                    eprintln!("[Handler] Connection closed avec {} octets incomplets (pas de ---END---)", accumulated.len());
+                }
+                return Ok(());
+            }
+            accumulated.extend_from_slice(&buffer[..n]);
+        };
+        eprintln!("[Handler] Received complete message ({} bytes)", raw_payload.len());
 
         // STEP 0: Security scan (Sessions #6+#7) -- trouve dans un audit multi-angle
         // (2026-09-03) que security::security_scan existait depuis sa creation sans
@@ -150,11 +198,14 @@ pub async fn handle_connection(
                                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=unknown_decision]\n---END---\n"
                                         ),
                                         Err(e) => {
+                                            // Trouvaille mineure de l'audit multi-angle (2026-09-03):
+                                            // e.to_string() ici est un rusqlite::Error -- peut exposer
+                                            // des details internes (schema, contraintes SQL...) a un
+                                            // client TCP quelconque. On logge le detail complet cote
+                                            // serveur (deja fait ci-dessus) mais on ne renvoie plus
+                                            // qu'un code generique au client.
                                             eprintln!("[Handler] ⚠️  council decision failed: {}", e);
-                                            format!(
-                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_failed, detail={}]\n---END---\n",
-                                                e.to_string().replace("\"", "'")
-                                            )
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_failed, detail=internal_error]\n---END---\n".to_string()
                                         }
                                     }
                                 }
@@ -206,11 +257,10 @@ pub async fn handle_connection(
                                     )
                                 }
                                 Err(e) => {
+                                    // Meme fix que council_decision_failed juste au-dessus: erreur
+                                    // sqlite interne loggee cote serveur, jamais renvoyee brute au client.
                                     eprintln!("[Handler] ⚠️  detect_emergence failed: {}", e);
-                                    format!(
-                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_failed, detail={}]\n---END---\n",
-                                        e.to_string().replace("\"", "'")
-                                    )
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_failed, detail=internal_error]\n---END---\n".to_string()
                                 }
                             }
                         };
@@ -425,13 +475,29 @@ pub async fn handle_connection(
             Err(e) => {
                 // Parse failed - send parse error
                 eprintln!("[Handler] ❌ Parse failed: {}", e);
-                
+
+                // Trouvaille mineure de l'audit multi-angle (2026-09-03): les variantes
+                // ParseError::InvalidFormat/MalformedBlock embarquent des fragments du
+                // payload BRUT envoye par le client (potentiellement adversarial). Les
+                // reinjecter tels quels dans le champ `details=` de la reponse wire
+                // permettait a un client malveillant de casser le format wire de la
+                // reponse elle-meme (ex: un fragment contenant `]` ou `,`). On classe
+                // desormais l'erreur par variante (categorie sure, sans le contenu brut)
+                // plutot que de renvoyer e.to_string() -- le detail complet reste loggé
+                // cote serveur ci-dessus pour le debug.
+                let details = match &e {
+                    parser::ParseError::MissingHashbang => "missing_hashbang",
+                    parser::ParseError::InvalidFormat(_) => "invalid_format",
+                    parser::ParseError::MissingEndMarker => "missing_end_marker",
+                    parser::ParseError::MalformedBlock(_) => "malformed_block",
+                };
+
                 let error_response = format!(
                     "#!CSTL v5.0.0 MODE=A\n\
                     META [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
                     INTENT_PAYLOAD [purpose=parse_error, details={}]\n\
                     ---END---\n",
-                    e.to_string().replace("\"", "\\\"")
+                    details
                 );
                 
                 socket.write_all(error_response.as_bytes()).await?;
@@ -448,5 +514,54 @@ mod tests {
     fn test_handler_module_compiles() {
         // Just verify the module compiles
         // Real testing requires async runtime
+    }
+
+    // ── find_message_end (fix reassemblage TCP, audit multi-angle 2026-09-03) ──
+
+    #[test]
+    fn test_find_message_end_none_when_marker_absent() {
+        assert_eq!(find_message_end(b"#!CSTL v5.0.0 MODE=A\nMETA [x=y]"), None);
+    }
+
+    #[test]
+    fn test_find_message_end_splits_exactly_after_marker_and_newline() {
+        let buf = b"#!CSTL v5.0.0 MODE=A\nMETA [x=y]\n---END---\nRESTE";
+        let end = find_message_end(buf).expect("marker present");
+        let (message, rest) = buf.split_at(end);
+        assert!(message.ends_with(b"---END---\n"));
+        assert_eq!(rest, b"RESTE");
+    }
+
+    #[test]
+    fn test_find_message_end_handles_marker_split_across_two_reads() {
+        // Simule exactement le cas qui cassait avant ce fix: le marker de fin
+        // (ou tout le reste du message) arrive dans un DEUXIEME appel read().
+        // Avant: chaque read() etait traite comme un message complet isole ->
+        // le premier fragment (sans ---END---) declenchait un
+        // ParseError::MissingEndMarker trompeur, meme si le payload etait
+        // parfaitement valide et juste segmente par le transport TCP.
+        let mut accumulated: Vec<u8> = b"#!CSTL v5.0.0 MODE=A\nMETA [x=y]\n---EN".to_vec();
+        assert_eq!(find_message_end(&accumulated), None, "message incomplet, pas encore de ---END---");
+
+        accumulated.extend_from_slice(b"D---\n");
+        let end = find_message_end(&accumulated).expect("le marker complet est maintenant present");
+        let complete: Vec<u8> = accumulated.drain(..end).collect();
+        assert!(String::from_utf8(complete).unwrap().contains("---END---"));
+        assert!(accumulated.is_empty(), "rien ne doit rester apres un message unique complet");
+    }
+
+    #[test]
+    fn test_find_message_end_leaves_pipelined_second_message_intact() {
+        // Deux payloads dans le meme flux TCP (pipelining) : seul le premier
+        // doit etre extrait, le second doit rester intact dans l'accumulateur.
+        let mut accumulated: Vec<u8> =
+            b"#!CSTL v5.0.0 MODE=A\nMETA [a=1]\n---END---\n#!CSTL v5.0.0 MODE=A\nMETA [b=2]\n---END---\n".to_vec();
+        let end = find_message_end(&accumulated).unwrap();
+        let first: Vec<u8> = accumulated.drain(..end).collect();
+        assert_eq!(String::from_utf8(first).unwrap(), "#!CSTL v5.0.0 MODE=A\nMETA [a=1]\n---END---\n");
+        assert_eq!(
+            String::from_utf8(accumulated.clone()).unwrap(),
+            "#!CSTL v5.0.0 MODE=A\nMETA [b=2]\n---END---\n"
+        );
     }
 }
