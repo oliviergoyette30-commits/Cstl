@@ -17,9 +17,14 @@
 //! d'un domaine (ex. PRESCRIRE en médical) en plus des 36 opérateurs du noyau.
 
 use crate::ast::Relation;
-use crate::ast::Block;
-use crate::validator_semantic::extract_entity_type;
-use crate::validator_semantic::DEPRECATED_OPERATORS;
+
+/// Opérateurs dépréciés depuis v5.0 : encore reconnus (warning, pas erreur),
+/// migration recommandée. Vivait avant dans validator_semantic.rs (module
+/// supprimé le 2026-09-04, item #2 de la liste des choses a faire -- son
+/// seul autre contenu etait un systeme de validation Block/AST jamais
+/// branche sur le chemin TCP reel, voir ast.rs pour le detail) -- rapatrie
+/// ici, seul consommateur reel restant.
+pub const DEPRECATED_OPERATORS: &[&str] = &["MUTUAL"];
 
 const OFFICIAL_OPERATORS: &[&str] = &[
     "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
@@ -32,10 +37,6 @@ const OFFICIAL_OPERATORS: &[&str] = &[
     "BEFORE", "AFTER", "DURING",
 ];
 
-// DEPRECATED_OPERATORS vit maintenant dans validator_semantic.rs -- source
-// unique partagee entre les deux modules, corrige la desync MUTUAL de
-// l'audit multi-angle (2026-09-03). Voir le commentaire au-dessus de
-// validator_semantic::OFFICIAL_OPERATORS pour le detail.
 // `pub` depuis le 2026-09-04: reutilisees par
 // execution_lab::check_deontic_consistency_with_history (Couche 8, audit
 // deontique HISTORIQUE) pour rester l'unique source de verite sur ce qui
@@ -99,16 +100,15 @@ fn attr_tau(rel: &Relation) -> Option<String> {
 pub struct SemanticValidator<'a> {
     all: &'a [Relation],
     domain: Option<&'a str>,
-    blocks: &'a [Block],
 }
 
 impl<'a> SemanticValidator<'a> {
-    pub fn new(all: &'a [Relation], blocks: &'a [Block]) -> Self {
-        SemanticValidator { all, domain: None, blocks }
+    pub fn new(all: &'a [Relation]) -> Self {
+        SemanticValidator { all, domain: None }
     }
 
-    pub fn with_domain(all: &'a [Relation], domain: &'a str, blocks: &'a [Block]) -> Self {
-        SemanticValidator { all, domain: Some(domain), blocks }
+    pub fn with_domain(all: &'a [Relation], domain: &'a str) -> Self {
+        SemanticValidator { all, domain: Some(domain) }
     }
 
     fn constraints(&self) -> impl Iterator<Item = &Relation> {
@@ -134,8 +134,6 @@ impl<'a> SemanticValidator<'a> {
         errors.extend(self.check_knows_calibration());
         errors.extend(self.check_doubts_calibration());
         errors.extend(self.check_temporal_pair_consistency());
-        errors.extend(self.check_undefined_entity_reference());
-        errors.extend(self.check_coref_with());
         errors
     }
 
@@ -362,94 +360,15 @@ impl<'a> SemanticValidator<'a> {
         errors
     }
 
-    fn defined_entities(&self) -> std::collections::HashMap<String, String> {
-        let mut store = std::collections::HashMap::new();
-        for block in self.blocks {
-            if block.name == "DEFINE" || block.name.starts_with("DEFINE_") || block.name.starts_with("DEFINE:") {
-                let mut name: Option<String> = None;
-                let mut entity_type: Option<String> = None;
-                for f in &block.fields {
-                    if f.name == "name" {
-                        name = Some(f.value.clone());
-                    }
-                    if f.name == "type" {
-                        entity_type = Some(f.value.clone());
-                    }
-                }
-                if entity_type.is_none() {
-                    entity_type = extract_entity_type(block);
-                }
-                if let (Some(n), Some(t)) = (name, entity_type) {
-                    store.insert(n, t);
-                }
-            }
-        }
-        store
-    }
-
-    fn check_undefined_entity_reference(&self) -> Vec<SemanticError> {
-        let mut errors = Vec::new();
-        let store = self.defined_entities();
-        if store.is_empty() {
-            return errors;
-        }
-        for r in self.relations() {
-            for entity in [&r.subject, &r.object] {
-                if !store.contains_key(entity) {
-                    errors.push(SemanticError {
-                        code: "W606".to_string(),
-                        message: format!(
-                            "Entity '{}' referenced in relation but not declared via DEFINE",
-                            entity
-                        ),
-                        line: r.line,
-                    });
-                }
-            }
-        }
-        errors
-    }
-
-    /// R8 (coref_with) — spec §13 : coref_with=eXXX doit référencer un
-    /// id=eXXX déclaré dans un bloc DEFINE du même payload. Sinon warning
-    /// (pas erreur — loi de Postel, cf. spec ligne 497-498).
-    fn check_coref_with(&self) -> Vec<SemanticError> {
-        let mut errors = Vec::new();
-        let mut declared_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-        for block in self.blocks {
-            if block.name == "DEFINE" || block.name.starts_with("DEFINE_") || block.name.starts_with("DEFINE:") {
-                for f in &block.fields {
-                    if f.name == "id" || f.name == "\u{03B9}" {
-                        declared_ids.insert(f.value.clone());
-                    }
-                }
-            }
-        }
-
-        for block in self.blocks {
-            if block.name == "DEFINE" || block.name.starts_with("DEFINE_") || block.name.starts_with("DEFINE:") {
-                for f in &block.fields {
-                    if f.name == "coref_with" {
-                        if !declared_ids.contains(&f.value) {
-                            errors.push(SemanticError {
-                                code: "R8".to_string(),
-                                message: format!(
-                                    "coref_with='{}' ne correspond à aucun id= déclaré dans ce payload (ligne {})",
-                                    f.value, block.line
-                                ),
-                                line: block.line,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        errors
-    }
-
-
-
+    // `defined_entities`/`check_undefined_entity_reference` (W606) et
+    // `check_coref_with` (R8) ont ete retires le 2026-09-04 (item #2 de la
+    // liste des choses a faire): les deux dependaient de `self.blocks`
+    // (arbre `ast::Block`), or AUCUN code de ce depot ne construit jamais de
+    // `Block` hors tests -- le format reellement parse sur le fil est plat
+    // (HashMap), pas un arbre de blocs. Ces deux checks etaient donc morts a
+    // vie (blocks toujours vide en pratique), pas juste non branches -- voir
+    // le commentaire de tete de ast.rs pour le detail complet de la
+    // trouvaille.
 
 
 
@@ -578,14 +497,14 @@ mod tests {
     #[test]
     fn test_invalid_operator_in_relation() {
         let data = vec![rel("patient", "TRANSMIT_FAUSH", "risk", 0.85, "n", None)];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "E101"));
     }
 
     #[test]
     fn test_valid_operator_passes() {
         let data = vec![rel("patient", "POSSESSES", "risk", 0.85, "n", None)];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E101"));
     }
 
@@ -593,7 +512,7 @@ mod tests {
     fn test_invalid_operator_in_constraint() {
         // Une contrainte utilise aussi `operator` pour le verbe : ex PRESCRIBE
         let data = vec![rel("physician", "PRESCRIBEZ", "drug_A", 0.92, "n", Some("MUST"))];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         // PRESCRIBEZ n'est même pas dans la liste officielle des 36 —
         // ceci teste que la whitelist s'applique aussi aux CONSTRAINTS
         assert!(v.validate().iter().any(|e| e.code == "E101"));
@@ -605,7 +524,7 @@ mod tests {
             rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
             rel("physician", "PRESCRIBE", "drug_A", 1.0, "n", Some("MUST_NOT")),
         ];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "E107"),
                 "Axiome D doit être détecté quand MUST et MUST_NOT partagent sujet+objet");
     }
@@ -616,7 +535,7 @@ mod tests {
             rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
             rel("patient", "TAKE", "drug_A", 1.0, "n", Some("MUST_NOT")),
         ];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E107"));
     }
 
@@ -626,14 +545,14 @@ mod tests {
             rel("drug_A", "AMP", "treatment_response", 0.88, "n", None),
             rel("drug_A", "INH", "treatment_response", 0.75, "n", None),
         ];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "E109"));
     }
 
     #[test]
     fn test_maintain_past_invalid() {
         let data = vec![rel("physician", "MAINTAIN", "audit_trace", 0.90, "p", None)];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "W502"));
     }
 
@@ -650,7 +569,7 @@ mod tests {
             rel("patient", "POSSESSES", "risk", 0.85, "n", None),
             rel("physician", "KNOWS", "diagnosis", 0.97, "n", None),
         ];
-        let v = SemanticValidator::with_domain(&data, "médical", &[]);
+        let v = SemanticValidator::with_domain(&data, "médical");
         let hard: Vec<_> = v.validate().iter().filter(|e| e.code.starts_with('E')).cloned().collect();
         assert!(hard.is_empty(), "Payload propre : {:?}", hard);
     }
@@ -675,14 +594,14 @@ mod tests {
     #[test]
     fn test_r9_canonical_value_passes() {
         let data = vec![rel_with_attrs("x", "STATE", "y", vec![("polarity", "positive")])];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "R9"));
     }
 
     #[test]
     fn test_r9_non_canonical_value_warns() {
         let data = vec![rel_with_attrs("x", "STATE", "y", vec![("polarity", "maybe")])];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "R9"));
     }
 
@@ -690,7 +609,7 @@ mod tests {
     fn test_r9_unknown_key_ignored() {
         // Clé custom hors ontologie sémantique : permissif, pas de warning R9.
         let data = vec![rel_with_attrs("x", "STATE", "y", vec![("custom_key", "anything")])];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "R9"));
     }
 
@@ -698,7 +617,7 @@ mod tests {
     fn test_r10_under_warn_threshold_clean() {
         let extra: Vec<(&str, &str)> = (0..5).map(|_| ("modifier", "x")).collect();
         let data = vec![rel_with_attrs("x", "STATE", "y", extra)];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "R10" || e.code == "W504"));
     }
 
@@ -707,7 +626,7 @@ mod tests {
         // 11 attrs custom + 1 sigma = 12 total : au-dessus de 9, au plus 12 → warning
         let extra: Vec<(&str, &str)> = (0..11).map(|_| ("modifier", "x")).collect();
         let data = vec![rel_with_attrs("x", "STATE", "y", extra)];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         let errs = v.validate();
         assert!(errs.iter().any(|e| e.code == "W504"), "devrait avertir (W504)");
         assert!(!errs.iter().any(|e| e.code == "R10"), "ne devrait PAS être une erreur fatale à ce niveau");
@@ -717,59 +636,13 @@ mod tests {
     fn test_r10_over_12_errors() {
         let extra: Vec<(&str, &str)> = (0..15).map(|_| ("modifier", "x")).collect();
         let data = vec![rel_with_attrs("x", "STATE", "y", extra)];
-        let v = SemanticValidator::new(&data, &[]);
+        let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "R10"));
     }
-    #[test]
-    fn test_r8_coref_with_valid_reference_no_warning() {
-        let blocks = vec![
-            Block {
-                name: "DEFINE".to_string(),
-                fields: vec![
-                    Field { name: "id".to_string(), type_hint: None, value: "e001".to_string(), line: 1 },
-                    Field { name: "name".to_string(), type_hint: None, value: "alice".to_string(), line: 1 },
-                    Field { name: "type".to_string(), type_hint: None, value: "human".to_string(), line: 1 },
-                ],
-                subblocks: vec![],
-                line: 1,
-            },
-            Block {
-                name: "DEFINE".to_string(),
-                fields: vec![
-                    Field { name: "id".to_string(), type_hint: None, value: "e002".to_string(), line: 2 },
-                    Field { name: "name".to_string(), type_hint: None, value: "elle".to_string(), line: 2 },
-                    Field { name: "type".to_string(), type_hint: None, value: "human".to_string(), line: 2 },
-                    Field { name: "coref_with".to_string(), type_hint: None, value: "e001".to_string(), line: 2 },
-                ],
-                subblocks: vec![],
-                line: 2,
-            },
-        ];
-        let data: Vec<Relation> = vec![];
-        let v = SemanticValidator::new(&data, &blocks);
-        assert!(!v.validate().iter().any(|e| e.code == "R8"),
-            "coref_with valide ne devrait déclencher aucun warning R8");
-    }
-
-    #[test]
-    fn test_r8_coref_with_undefined_reference_warns() {
-        let blocks = vec![
-            Block {
-                name: "DEFINE".to_string(),
-                fields: vec![
-                    Field { name: "id".to_string(), type_hint: None, value: "e002".to_string(), line: 1 },
-                    Field { name: "name".to_string(), type_hint: None, value: "elle".to_string(), line: 1 },
-                    Field { name: "type".to_string(), type_hint: None, value: "human".to_string(), line: 1 },
-                    Field { name: "coref_with".to_string(), type_hint: None, value: "e999".to_string(), line: 1 },
-                ],
-                subblocks: vec![],
-                line: 1,
-            },
-        ];
-        let data: Vec<Relation> = vec![];
-        let v = SemanticValidator::new(&data, &blocks);
-        assert!(v.validate().iter().any(|e| e.code == "R8"),
-            "coref_with vers une entité non déclarée devrait déclencher R8");
-    }
-
+    // test_r8_coref_with_valid_reference_no_warning /
+    // test_r8_coref_with_undefined_reference_warns ont ete retires le
+    // 2026-09-04 avec check_coref_with lui-meme (voir le commentaire a sa
+    // place d'origine, plus haut dans ce fichier) -- ils construisaient des
+    // `ast::Block` a la main, un type que ni le tokenizer ni le parser reel
+    // ne produisent jamais.
 }

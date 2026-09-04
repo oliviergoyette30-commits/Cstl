@@ -184,7 +184,7 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
         return Vec::new();
     }
 
-    SemanticValidator::new(&relations, &[])
+    SemanticValidator::new(&relations)
         .check_operator_whitelist()
         .into_iter()
         .map(|e| format!("{}: {}", e.code, e.message))
@@ -237,7 +237,7 @@ fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationRe
         return;
     }
 
-    for err in SemanticValidator::new(&relations, &[]).check_axiom_d() {
+    for err in SemanticValidator::new(&relations).check_axiom_d() {
         result.errors.push(ValidationError {
             code: err.code, // "E107"
             message: err.message,

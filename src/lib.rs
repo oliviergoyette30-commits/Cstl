@@ -7,7 +7,6 @@ pub mod agent_discovery;
 pub mod server;
 pub mod ast;
 pub mod semantic;
-pub mod validator_semantic;
 pub mod domains;
 pub mod kb_verify;
 pub mod adn_store;
