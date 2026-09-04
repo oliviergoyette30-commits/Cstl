@@ -16,7 +16,6 @@
 /// 6. Signature corrompue (un caractere hex change) -> signature_rejected,
 ///    reason=signature_invalid.
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
-use cstl_parser::adn_store::AdnStore;
 use cstl_parser::restricted_council::RestrictedCouncil;
 use cstl_parser::server::audit::signing_bytes;
 use cstl_parser::server::parser::parse_payload;
@@ -64,7 +63,11 @@ fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
 }
 
 fn make_test_server(port: u16) -> CstlNativeServer {
-    let mut server = CstlNativeServer::new(port);
+    // Voir le commentaire equivalent dans governance_smoke_test.rs:
+    // with_data_path evite un open+load reel sur "cstl_adn.db" avant que
+    // .adn_store soit ecrase (Couche 5, audit_store/chain seedes des le
+    // demarrage depuis le 2026-09-04).
+    let mut server = CstlNativeServer::with_data_path(port, ":memory:");
     let mut registry = AgentRegistry::new();
     // Agent bootstrap "communication" legacy (public_key: None) -- necessaire
     // pour que STEP 4 (routage) trouve une destination, independamment de
@@ -78,7 +81,6 @@ fn make_test_server(port: u16) -> CstlNativeServer {
         public_key: None,
     });
     server.agent_registry = Arc::new(Mutex::new(registry));
-    server.adn_store = Arc::new(Mutex::new(AdnStore::open(":memory:").expect("in-memory adn_store")));
     server.restricted_council = Arc::new(RestrictedCouncil::single_member("Olivier"));
     server
 }

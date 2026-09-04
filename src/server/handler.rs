@@ -25,6 +25,7 @@ use crate::governance::GovernanceTracker;
 use crate::agent_discovery::AgentCard;
 use crate::signing::{self, SignatureCheck};
 use super::audit::HashChain;
+use super::audit_store::AuditStore;
 use super::parser;
 use super::validator;
 
@@ -48,6 +49,7 @@ pub async fn handle_connection(
     mut socket: TcpStream,
     registry: Arc<Mutex<AgentRegistry>>,
     chain: Arc<Mutex<HashChain>>,
+    audit_store: Arc<Mutex<AuditStore>>,
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,
     restricted_council: Arc<RestrictedCouncil>,
@@ -400,7 +402,21 @@ pub async fn handle_connection(
                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
                     let entry = { chain.lock().await.append(&payload) };
-                    
+
+                    // Persistance de la chaine (Couche 5/8, cable live le
+                    // 2026-09-04 -- audit_store.rs etait du code mort avant
+                    // cette passe, voir son commentaire de tete). Sans cet
+                    // appel, `chain.append()` ci-dessus reste PUREMENT en
+                    // memoire et un redemarrage du serveur romprait
+                    // silencieusement la continuite seq/parent_hash, alors
+                    // meme que adn_store.put() (plus bas) persiste deja le
+                    // payload avec ce meme hash. Echec loggue, jamais
+                    // bloquant -- meme politique que le reste du pipeline de
+                    // stockage (adn_store.put/put_relations ci-dessous).
+                    if let Err(e) = audit_store.lock().await.save(&entry) {
+                        eprintln!("[Handler] ⚠️  audit_store.save failed (chain persistence): {}", e);
+                    }
+
                     // STEP 3: Extract routing info
                     let receiver = payload.intent.get("receiver").cloned().unwrap_or_else(|| "unknown".to_string());
                     let purpose = payload.intent.get("purpose").cloned().unwrap_or_else(|| "unknown".to_string());

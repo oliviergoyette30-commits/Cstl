@@ -94,9 +94,45 @@ Fact Verification avec Wikidata + SPARQL, entity resolution. Appelée pour chaqu
 Laplace Smoothed Scoring per-agent, per-domain accuracy.
 
 ### Couche 5: Mémoire Persistante / Provenance
-**État:** 🟡 Construite en Rust, câblée live
+**État:** 🟡 Construite en Rust, câblée live — persistance de la chaîne corrigée le 2026-09-04
 
-`src/adn_store.rs`: SQLite store + hash entanglement. Pas encore unifiée avec la hash chain d'audit dans un seul schéma — les deux systèmes restent liés seulement par un hash partagé.
+`src/adn_store.rs`: SQLite store + hash entanglement.
+
+**Trouvaille corrigée (2026-09-04):** avant cette passe, la chaîne de hachage
+(`seq`/`parent_hash`, `src/server/audit.rs::HashChain`) était **purement en
+mémoire** — remise à zéro à CHAQUE redémarrage du serveur, alors même que
+`adn_store.rs` persistait déjà l'historique des payloads (avec leur propre
+`parent_hash`) sur disque. `AuditStore` (`src/server/audit_store.rs`)
+implémentait déjà exactement la persistance nécessaire, mais n'était appelé
+NULLE PART en dehors de son propre test unitaire — code mort depuis sa
+création. Un redémarrage réel cassait donc silencieusement la continuité
+seq/parent_hash de la chaîne, une régression invisible de la garantie de
+"provenance immuable" (Couche 8) que rien ne signalait ni ne testait.
+
+Corrigé: `CstlNativeServer::with_data_path` (nouveau constructeur, `new()`
+l'appelle avec `"cstl_adn.db"`) ouvre `AuditStore` sur le MÊME fichier que
+`adn_store` et charge la chaîne persistée au démarrage
+(`AuditStore::load_chain`); `server/handler.rs` appelle `audit_store.save()`
+juste après chaque `chain.append()`. `AuditStore::save` est passé de
+`INSERT` strict à `INSERT OR IGNORE` — nécessaire car `HashChain::append` en
+mémoire n'a jamais dédupliqué les hash (un payload de contenu identique
+soumis deux fois produit deux `AuditEntry` avec le même hash mais des `seq`
+différents), un `INSERT` strict aurait donc fait planter la persistance dès
+le premier renvoi d'un payload identique.
+
+Vérifié en direct avec un **vrai arrêt puis redémarrage du binaire de
+production** (pas seulement une simulation in-process): le second processus
+affiche `[AuditStore] Loaded 2 entries from disk` et le payload suivant
+continue correctement à `seq=2` (au lieu de repartir à `seq=0`/`parent=root`)
+— confirmé aussi par un smoke-test dédié
+(`examples/audit_persistence_smoke_test.rs`, 2 instances `CstlNativeServer`
+séquentielles pointées sur le même fichier réel).
+
+Limite assumée, pas encore faite: ceci reste DEUX connexions SQLite
+(`adn_store`, `audit_store`) vers le MÊME fichier, pas encore fusionnées en
+un seul schéma/une seule `Connection`/un seul verrou — un rapprochement réel
+("un seul fichier" au lieu de deux systèmes disjoints), mais pas la fusion
+complète.
 
 ### Couche 6: Interface Humaine
 **État:** 🟡 PARTIEL
@@ -109,9 +145,9 @@ Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérif
 `src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur. Jusqu'au 2026-09-04, le registre était figé à la compilation (alice/bob codés en dur dans `main.rs`, `Arc` immuable) — aucune inscription dynamique possible, contrairement aux Agent Cards d'A2A. Corrigé: `AgentRegistry` est maintenant `Arc<Mutex<_>>`, et `purpose=agent_register` (nouveau message wire, `server/handler.rs`) permet à un agent de s'enregistrer/se réenregistrer (upsert par nom) via une auto-signature Ed25519 (réutilise la vérification de la Couche 2 ci-dessus) — vérifié en direct (mêmes 6 scénarios que la signature). Un agent LLM réel (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) s'enregistre et signe ses messages avec cette voie — vérifié en direct contre le serveur Rust réel (enregistrement, rejet du non-signé, acceptation du signé) ; la génération de contenu par un vrai modèle Claude reste à vérifier par l'utilisateur (aucun paquet `anthropic` ni clé API dans ce sandbox).
 
 ### Couche 8: Provenance Audit / Cryptographic Guarantee
-**État:** ✅ DESIGNÉ
+**État:** 🟡 Hash-chained audit trail câblée live ET persistée (2026-09-04) ; "Deontic Modality Audit" reste un intitulé sans code correspondant
 
-Hash-Chained Audit Trail (`src/server/audit.rs`), Deontic Modality Audit.
+Hash-Chained Audit Trail (`src/server/audit.rs::HashChain`, canonicalisation NFC+BTreeMap, SHA-256): calculée et vérifiée en direct sur chaque payload depuis plusieurs passes de cette session, et depuis le 2026-09-04 sa continuité (`seq`/`parent_hash`) survit aussi à un redémarrage réel du serveur (voir Couche 5 ci-dessus pour le détail de ce correctif — `AuditStore` était du code mort jusque-là). Le badge "✅ DESIGNÉ" d'avant cette passe sous-estimait déjà ce qui existait (le hachage/chaînage tournait en production depuis longtemps) tout en survolant une vraie régression (la non-persistance) que rien ne signalait — corrigé aux deux bouts. "Deontic Modality Audit" reste un intitulé sans implémentation trouvée dans ce dépôt (recherche exhaustive: aucune occurrence hors de cette ligne) — pas vérifié dans cette passe, à traiter séparément si le besoin est réel.
 
 ### Couche 9: CASTLE (mode de compression)
 **État:** 🟡 ARCHITECTURÉ, PAS DE CODE

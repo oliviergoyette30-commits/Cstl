@@ -18,7 +18,6 @@
 /// 4. Council a 1 membre (config par defaut, celle d'aujourd'hui): un seul
 ///    commit -> committed=true immediatement, comportement inchange.
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
-use cstl_parser::adn_store::AdnStore;
 use cstl_parser::restricted_council::RestrictedCouncil;
 use cstl_parser::server::CstlNativeServer;
 use std::sync::Arc;
@@ -81,7 +80,14 @@ fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
 }
 
 fn make_test_server(port: u16, council: RestrictedCouncil) -> CstlNativeServer {
-    let mut server = CstlNativeServer::new(port);
+    // with_data_path(":memory:") plutot que new()+override: depuis que
+    // audit_store/chain sont aussi seedes au demarrage (Couche 5, 2026-09-04),
+    // new() ferait un vrai open+load sur le fichier "cstl_adn.db" reel du
+    // repertoire courant AVANT que .adn_store soit ecrase plus bas -- ce
+    // chargement (contrairement a adn_store avant ce fix) alimenterait .chain
+    // avec un historique reel potentiellement present sur disque, rendant ce
+    // smoke-test non-deterministe. with_data_path evite ce probleme a la racine.
+    let mut server = CstlNativeServer::with_data_path(port, ":memory:");
     let mut registry = AgentRegistry::new();
     registry.register(AgentCard {
         name: "smoke_agent".to_string(),
@@ -91,7 +97,6 @@ fn make_test_server(port: u16, council: RestrictedCouncil) -> CstlNativeServer {
         public_key: None,
     });
     server.agent_registry = Arc::new(Mutex::new(registry));
-    server.adn_store = Arc::new(Mutex::new(AdnStore::open(":memory:").expect("in-memory adn_store")));
     server.restricted_council = Arc::new(council);
     server
 }
