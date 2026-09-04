@@ -191,6 +191,70 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
         .collect()
 }
 
+/// Convertit TOUTES les RELATION d'un payload (pas seulement celles qui
+/// RESSEMBLENT a un operateur SDL, contrairement a `check_sdl_operator_whitelist`
+/// ci-dessus) en `AstRelation`, `attrs` inclus: chaque champ de la RELATION
+/// autre que subject/type/object/modality (ex. `sigma=`, `tau=`, `polarity=`)
+/// devient un `ast::Field`, sans quoi `check_attribute_ontology`/
+/// `check_attribute_bombing` (ci-dessous) n'auraient jamais rien a examiner
+/// (attrs vide en permanence). Pas de filtre "ressemble a un operateur SDL"
+/// ici: les checks de `check_additional_diagnostics` comparent `operator` a
+/// des chaines SDL officielles precises (MAINTAIN, AMP, INH, KNOWS,
+/// DOUBTS...), donc un predicat KB minuscule (born_in, part_of...) ne peut
+/// jamais matcher par accident -- pas besoin de l'heuristique majuscules
+/// utilisee pour la whitelist generique.
+fn relations_to_ast_full(payload: &CstlPayload) -> Vec<AstRelation> {
+    payload.relations.iter()
+        .map(|r| {
+            let attrs: Vec<crate::ast::Field> = r.iter()
+                .filter(|(k, _)| !matches!(k.as_str(), "subject" | "type" | "object" | "modality"))
+                .map(|(k, v)| crate::ast::Field {
+                    name: k.clone(),
+                    type_hint: None,
+                    value: v.clone(),
+                    line: 0,
+                })
+                .collect();
+            AstRelation {
+                subject: r.get("subject").cloned().unwrap_or_default(),
+                operator: r.get("type").cloned().unwrap_or_default(),
+                object: r.get("object").cloned().unwrap_or_default(),
+                attrs,
+                modality: r.get("modality").cloned(),
+                line: 0,
+            }
+        })
+        .collect()
+}
+
+/// Branche les 11 checks de `semantic.rs::SemanticValidator::
+/// check_additional_diagnostics` (E108/E109/E701/W502/W503/R9/R10/W602/
+/// W603/W604/W605) sur un payload reel -- item #2 de la liste des choses a
+/// faire (2026-09-04), trouvaille annexe en supprimant le systeme Block/AST
+/// mort (voir ast.rs): ces checks operent tous sur `Relation` (donc
+/// branchables sans dependre d'un parser Block qui n'a jamais existe),
+/// mais etaient testes depuis des mois SANS JAMAIS etre appeles par le
+/// serveur reel -- seuls `check_operator_whitelist` et `check_axiom_d`
+/// l'etaient.
+///
+/// Meme politique que `check_sdl_operator_whitelist`: AVERTISSEMENTS
+/// UNIQUEMENT, jamais un rejet. Ces 11 checks n'ont jamais ete concus ni
+/// testes comme des motifs de rejet d'un payload en production -- les
+/// promouvoir directement en erreurs bloquantes serait un changement de
+/// comportement non demande (et non verifie) sur des payloads qui passaient
+/// jusqu'ici, pas juste "reveiller du code mort".
+pub fn check_extended_semantic_diagnostics(payload: &CstlPayload) -> Vec<String> {
+    let relations = relations_to_ast_full(payload);
+    if relations.is_empty() {
+        return Vec::new();
+    }
+    SemanticValidator::new(&relations)
+        .check_additional_diagnostics()
+        .into_iter()
+        .map(|e| format!("{}: {}", e.code, e.message))
+        .collect()
+}
+
 /// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
 /// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
 /// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE

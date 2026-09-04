@@ -123,6 +123,30 @@ impl<'a> SemanticValidator<'a> {
         let mut errors = Vec::new();
         errors.extend(self.check_operator_whitelist());
         errors.extend(self.check_axiom_d());
+        errors.extend(self.check_additional_diagnostics());
+        errors
+    }
+
+    /// Tous les checks de `validate()` SAUF `check_operator_whitelist`
+    /// (E101/W601) et `check_axiom_d` (E107) -- ceux-la sont deja branches
+    /// separement sur le chemin TCP reel (respectivement
+    /// `server/validator.rs::check_sdl_operator_whitelist`, en avertissement
+    /// seul, et `validate_deontic_constraints`, bloquant) depuis fix19/
+    /// l'audit multi-angle du 2026-09-03.
+    ///
+    /// `pub` depuis le 2026-09-04 (item #2 de la liste des choses a faire,
+    /// trouvaille annexe en supprimant le systeme Block/AST mort): ces 11
+    /// checks (E108/E109/E701/W502/W503/R9/R10/W602/W603/W604/W605)
+    /// operent tous sur `Relation` (jamais sur `Block`, contrairement a ce
+    /// qui a ete retire), donc branchables sans dependre d'un parser Block
+    /// qui n'a jamais existe -- mais ils etaient testes ici depuis des mois
+    /// SANS JAMAIS etre appeles par le serveur reel. Brancheur:
+    /// `server/validator.rs::check_extended_semantic_diagnostics`, meme
+    /// politique qu'`check_operator_whitelist` (avertissement seul, jamais
+    /// un rejet -- ces checks n'ont jamais ete conçus ni testes comme des
+    /// motifs de rejet d'un payload en production).
+    pub fn check_additional_diagnostics(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
         errors.extend(self.check_temporal_contradiction());
         errors.extend(self.check_maintain_tau());
         errors.extend(self.check_amp_inh_conflict());

@@ -148,7 +148,16 @@ pub async fn handle_connection(
                     // check_sdl_operator_whitelist pour pourquoi (les predicats KB
                     // en minuscules comme part_of/located_in/born_in ne sont pas
                     // dans ce vocabulaire et sont ignores par construction).
-                    let semantic_warnings = validator::check_sdl_operator_whitelist(&payload);
+                    let mut semantic_warnings = validator::check_sdl_operator_whitelist(&payload);
+                    // Item #2 de la liste des choses a faire (2026-09-04):
+                    // les 11 autres checks de semantic.rs (E108/E109/E701/
+                    // W502/W503/R9/R10/W602/W603/W604/W605) etaient testes
+                    // depuis des mois sans jamais etre appeles par le
+                    // serveur reel -- brancher aux cotes de la whitelist
+                    // d'operateurs, meme format de reponse, meme politique
+                    // (avertissement seul, voir le commentaire de tete de
+                    // check_extended_semantic_diagnostics pour pourquoi).
+                    semantic_warnings.extend(validator::check_extended_semantic_diagnostics(&payload));
                     let mut semantic_warning_lines = String::new();
                     if !semantic_warnings.is_empty() {
                         eprintln!("[Handler] ⚠️  Semantic operator warnings: {:?}", semantic_warnings);
