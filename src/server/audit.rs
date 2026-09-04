@@ -1,26 +1,20 @@
-/// Audit Trail — canonical hashing + hash chain
-///
-/// Principe: le hash est calcule par l'ORCHESTRATEUR (ce serveur),
-/// jamais par un LLM. Un LLM ne peut pas produire de SHA-256 reel.
-/// PARENT_HASH=root ou unverified_no_hash_tool_available cote agent,
-/// remplace ici par le vrai hash calcule.
-///
-/// Note honnete (audit multi-angle, 2026-09-03 -- decouverte en creusant
-/// le fix NFC de src/canonical.rs): CE canonical_hash() ci-dessous, et non
-/// canonical::canonical_hash(), est celui reellement utilise par le
-/// serveur TCP en production (via HashChain::append, appele depuis
-/// server/handler.rs pour chaque payload recu -- c'est la cle primaire de
-/// adn_store). src/canonical.rs implemente un algorithme DIFFERENT
-/// (canonicalisation de texte brut, documente comme normatif dans
-/// CSTL_SPEC_v5_0.md section 15) mais n'est appele NULLE PART dans ce
-/// depot -- corriger canonical.rs (fait plus tot dans cette session, ajout
-/// de la normalisation NFC) n'avait donc AUCUN effet sur le hash reel
-/// produit par le serveur qui tourne. Les deux fonctions partagent le nom
-/// canonical_hash et l'intention (determinisme, immutabilite) mais
-/// operent sur des donnees differentes (texte brut CSTL vs CstlPayload
-/// deja parse) et ne sont PAS interchangeables -- corriger celle-ci ne
-/// dispense pas de garder canonical.rs a jour si un jour un appelant
-/// reel apparait pour elle.
+//! Audit Trail — canonical hashing + hash chain
+//!
+//! Principe: le hash est calcule par l'ORCHESTRATEUR (ce serveur),
+//! jamais par un LLM. Un LLM ne peut pas produire de SHA-256 reel.
+//! PARENT_HASH=root ou unverified_no_hash_tool_available cote agent,
+//! remplace ici par le vrai hash calcule.
+//!
+//! Mise a jour honnete (2026-09-04, audit du repo): `src/canonical.rs`,
+//! mentionne ci-dessous dans une note plus ancienne, a ete supprime --
+//! il implementait un second algorithme de hachage (canonicalisation de
+//! texte brut CSTL, documente comme normatif dans CSTL_SPEC_v5_0.md
+//! section 15) qui n'avait JAMAIS eu d'appelant reel dans ce depot. CE
+//! `canonical_hash()` ci-dessous est et reste le seul qui existe: c'est
+//! lui qui est reellement utilise par le serveur TCP en production (via
+//! `HashChain::append`, appele depuis `server/handler.rs` pour chaque
+//! payload recu -- c'est la cle primaire de `adn_store`). Il n'y a plus
+//! de risque de divergence entre deux implementations du meme nom.
 
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;

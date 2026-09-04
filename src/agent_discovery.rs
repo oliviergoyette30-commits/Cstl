@@ -1,4 +1,4 @@
-/// Layer 7: Agent Discovery & Routing (CSTL Native)
+//! Layer 7: Agent Discovery & Routing (CSTL Native)
 
 pub struct AgentCard {
     pub name: String,
@@ -15,6 +15,12 @@ pub struct AgentCard {
 
 pub struct AgentRegistry {
     pub agents: Vec<AgentCard>,
+}
+
+impl Default for AgentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AgentRegistry {

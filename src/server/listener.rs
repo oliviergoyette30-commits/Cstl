@@ -17,6 +17,11 @@ pub async fn create_listener(addr: &str) -> Result<TcpListener, Box<dyn std::err
     Ok(listener)
 }
 
+// 9 parametres: chaque `Arc<Mutex<..>>` est un sous-systeme distinct partage
+// entre connexions (registre, chaine d'audit, ADN store, conseil, etc.) --
+// les regrouper dans une struct "contexte serveur" casserait la mutabilite
+// independante de chacun deja en place; pas fait pour ce fix cosmetique.
+#[allow(clippy::too_many_arguments)]
 pub async fn accept_connections(
     listener: TcpListener,
     agent_registry: Arc<Mutex<AgentRegistry>>,

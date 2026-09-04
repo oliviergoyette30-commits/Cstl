@@ -39,7 +39,7 @@ impl RestrictedCouncil {
     /// ceil(a/b) = (a+b-1)/b avec a=2n, b=3.
     pub fn quorum_size(&self) -> usize {
         let n = self.member_count().max(1);
-        (2 * n + 2) / 3
+        (2 * n).div_ceil(3)
     }
 
     /// Charge la liste des membres autorisés depuis `CSTL_COUNCIL_MEMBERS`

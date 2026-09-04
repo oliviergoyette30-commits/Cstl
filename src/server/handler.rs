@@ -1,12 +1,12 @@
-/// Connection Handler - Wire Parser + Validator + Router
-/// 
-/// Flow:
-/// 1. Receive TCP payload
-/// 2. Parse as CSTL
-/// 3. Validate constraints
-/// 4. Route to destination agent
-/// 5. Record audit trail
-/// 6. Send response
+//! Connection Handler - Wire Parser + Validator + Router
+//!
+//! Flow:
+//! 1. Receive TCP payload
+//! 2. Parse as CSTL
+//! 3. Validate constraints
+//! 4. Route to destination agent
+//! 5. Record audit trail
+//! 6. Send response
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -44,6 +44,9 @@ fn find_message_end(buf: &[u8]) -> Option<usize> {
     Some(end)
 }
 
+// Meme justification qu'accept_connections (listener.rs): 9 sous-systemes
+// partages distincts, pas une struct de config qui gagnerait a etre groupee.
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_connection(
     mut socket: TcpStream,
     registry: Arc<Mutex<AgentRegistry>>,

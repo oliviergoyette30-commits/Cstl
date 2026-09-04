@@ -1,12 +1,12 @@
-/// CSTL Semantic Validator
-/// Validates CSTL payloads against deontic constraints
-/// 
-/// Rules:
-/// - META must have encoder + produced_by
-/// - INTENT_PAYLOAD must have purpose + sender + receiver
-/// - RELATIONS must have type + subject + object
-/// - MUST constraints cannot be violated
-/// - No circular dependencies
+//! CSTL Semantic Validator
+//! Validates CSTL payloads against deontic constraints
+//!
+//! Rules:
+//! - META must have encoder + produced_by
+//! - INTENT_PAYLOAD must have purpose + sender + receiver
+//! - RELATIONS must have type + subject + object
+//! - MUST constraints cannot be violated
+//! - No circular dependencies
 
 use super::parser::CstlPayload;
 use crate::ast::Relation as AstRelation;
