@@ -8,3 +8,8 @@ __pycache__/
 .graphify-venv/
 .venv-graphify/
 .venv/
+
+# Sortie regeneree par `graphify update .` (graph.json/html + cache) --
+# artefact local reconstructible a la demande, pas versionne (voir README.md
+# Couche 6 / docs/ARCHITECTURE.md pour la commande et les chiffres actuels).
+graphify-out/
