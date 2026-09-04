@@ -1,6 +1,6 @@
 # CSTL OS Kernel Architecture Complète
 
-**Date de dernière vérification:** 3 Septembre 2026
+**Date de dernière vérification:** 4 Septembre 2026 (audit multi-angle du repo)
 **Version:** 5.0.0
 **Auteur:** Olivier Goyette
 **Concept fondateur:** Les relations sont plus importantes que l'information
@@ -11,6 +11,12 @@
 > et sa section "Honest Limitations" — ce document-ci est resynchronisé avec ces
 > deux sources au moment de la date ci-dessus, mais README.md reste la source de
 > vérité en cas de divergence future.
+>
+> **Note sur les comptes de tests cités ci-dessous** (audit du 2026-09-04): plusieurs
+> nombres différents apparaissent dans ce document (148, 166, 181...) — ce sont des
+> INSTANTANÉS HISTORIQUES datés, valides au moment où chaque passage a été écrit, pas
+> une affirmation du compte actuel. Le compte actuel se vérifie avec `cargo test --lib`
+> (143 au 2026-09-04) ou dans README.md, jamais en lisant un nombre isolé ici.
 
 ## Philosophie fondamentale
 
@@ -135,9 +141,16 @@ signés casseraient tous pour fermer un risque qui ne concerne, dans les
 faits, que les identités déjà établies. Pas de PKI/CA: une auto-signature
 prouve seulement la possession de la clé privée, pas une identité
 pré-existante (modèle de confiance mono-opérateur, cohérent avec
-`RestrictedCouncil`). Limite documentée: aucune vérification
-d'autorisation de rotation contre l'ANCIENNE clé lors d'un
-réenregistrement.
+`RestrictedCouncil`). **Limite comblée (2026-09-04, plus tard le même jour):**
+un réenregistrement (`purpose=agent_register`) avec une clé publique DIFFÉRENTE de
+celle déjà sur fichier exige désormais un `INTENT_PAYLOAD.rotation_signature` —
+signature du même message, mais avec l'ANCIENNE clé privée, prouvant que
+l'auteur du changement possède bien l'ancienne clé, pas seulement la nouvelle
+(`signing::check_rotation_signature`, vérifiée en direct sur une vraie connexion
+TCP, `examples/key_rotation_smoke_test.rs`, 5 scénarios: premier enregistrement,
+ré-enregistrement même clé, nouvelle clé sans preuve → rejeté, nouvelle clé avec
+preuve d'un IMPOSTEUR → rejeté, nouvelle clé avec la vraie preuve de rotation →
+acceptée, ancienne clé rejetée ensuite).
 
 ### Couche 3a: Vérification Faits Publics
 **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
@@ -189,11 +202,15 @@ continue correctement à `seq=2` (au lieu de repartir à `seq=0`/`parent=root`)
 (`examples/audit_persistence_smoke_test.rs`, 2 instances `CstlNativeServer`
 séquentielles pointées sur le même fichier réel).
 
-Limite assumée, pas encore faite: ceci reste DEUX connexions SQLite
-(`adn_store`, `audit_store`) vers le MÊME fichier, pas encore fusionnées en
-un seul schéma/une seule `Connection`/un seul verrou — un rapprochement réel
-("un seul fichier" au lieu de deux systèmes disjoints), mais pas la fusion
-complète.
+**Fusion complétée (2026-09-04, plus tard le même jour):** ce qui restait DEUX
+connexions SQLite (`adn_store`, `audit_store`) vers le même fichier, chacune
+derrière son propre verrou en mémoire, a été fusionné en un seul schéma sur une
+seule `Connection`/un seul `Arc<Mutex<..>>` — `src/server/audit_store.rs` a été
+supprimé, `AdnStore` porte maintenant la table `audit_trail` en plus de ses
+tables existantes (`save_audit_entry`/`load_chain`/`audit_count`). Le
+paragraphe ci-dessus, qui documentait AuditStore comme un module séparé
+(état réel au moment où ce fix a été écrit), ne décrit donc plus l'état actuel
+du fichier — voir README.md section "Rust hash chain" pour l'état courant.
 
 **Deuxième trouvaille, même jour, trouvée en direct sur la machine de
 l'utilisateur en re-vérifiant le correctif ci-dessus (pas anticipée au
@@ -260,7 +277,7 @@ Construit en deux volets, sur demande explicite ("construire le vrai audit histo
 
 Vérifié en direct (`examples/deontic_audit_smoke_test.rs`, 4 scénarios sur une vraie connexion TCP, dev et release): un `MUST_NOT` isolé passe normalement (régression du faux positif fermée); une vraie contradiction dans le même payload est rejetée (E107); un `MUST_NOT` établi par un premier payload puis un `MUST` sur la même (subject, object) dans un second payload distinct est accepté (jamais rejeté) mais signalé par `DEONTIC_AUDIT`; l'absence de conflit ne produit aucun bloc `DEONTIC_AUDIT` (pas de bruit sur le trafic normal). 181 tests unitaires au total (dev+release, +9 depuis la trouvaille: 4 dans `server/validator.rs`, 6 dans `execution_lab.rs`, 3 dans `adn_store.rs` — dont le test de migration sur schéma réel pré-existant).
 
-Limite honnête, non traitée ici: l'audit historique ne couvre que les relations dont la `modality` est explicitement portée par le wire format — aucune inférence de modalité depuis un texte libre ou un autre vocabulaire (ex: le format bloc `(MUST)`/`(RULE)` de `validator_semantic.rs`/`ast.rs`, qui reste, lui, non branché sur le chemin TCP réel — un système de parsing entièrement différent, jamais utilisé par le serveur en production).
+Limite honnête, non traitée ici: l'audit historique ne couvre que les relations dont la `modality` est explicitement portée par le wire format — aucune inférence de modalité depuis un texte libre ou un autre vocabulaire. **Mise à jour honnête (2026-09-04, audit du repo):** le format bloc `(MUST)`/`(RULE)` mentionné ici comme alternative non branchée s'appuyait sur `ast::Block` et `validator_semantic.rs` — les deux ont été supprimés le même jour, 100% code mort, aucun producteur réel n'a jamais construit de `Block` en dehors de tests. Il n'existe donc plus aucune trace de ce second système de parsing dans le dépôt ; le format wire réel reste exclusivement le format à plat `RELATION[key=value,...]` (`HashMap`, `src/server/parser.rs`).
 
 ### Couche 9: CASTLE (mode de compression)
 **État:** 🟡 ARCHITECTURÉ, PAS DE CODE
@@ -296,7 +313,7 @@ vs MCP: agent-to-tool vs agent-to-agent sémantique natif
 3. Arbitration protocol structuré (quorum 2/3 implémenté et testé — voir Couche 2/3b; production encore configurée à un seul membre, donc quorum=1 en pratique)
 4. Hash-chained immutable provenance
 5. Relations au centre
-6. Zero external dependencies (no MCP)
+6. Sémantique native agent-à-agent, pas un protocole d'intégration d'outils (vs MCP) — **corrigé 2026-09-04**: "Zero external dependencies" était faux pour la couche serveur (`tokio`, `rusqlite`, `sha2`, `ed25519-dalek`, `serde` sont des dépendances de production réelles, voir README.md section "Rust Server") et n'a jamais été le point de différenciation réel — le point réel est l'absence de dépendance à un protocole d'intégration d'outils tiers comme MCP, pas l'absence de toute dépendance Cargo
 
 ---
 
