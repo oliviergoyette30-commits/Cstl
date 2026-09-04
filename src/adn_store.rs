@@ -11,6 +11,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
+use crate::server::audit::{AuditEntry, HashChain};
 
 #[derive(Debug, Clone)]
 pub struct AdnEntry {
@@ -131,7 +132,15 @@ impl AdnStore {
                 object TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
-            CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);",
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);
+            CREATE TABLE IF NOT EXISTS audit_trail (
+                seq INTEGER PRIMARY KEY,
+                hash TEXT NOT NULL UNIQUE,
+                parent_hash TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                receiver TEXT NOT NULL,
+                purpose TEXT NOT NULL
+            );",
         )?;
         // Migration idempotente (2026-09-04, Couche 8: audit deontique
         // historique): `adn_relations` existe deja sur les bases reelles de
@@ -465,6 +474,78 @@ impl AdnStore {
             params![question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, now_unix()],
         )?;
         Ok(self.conn.last_insert_rowid())
+    }
+
+    // ── Chaine d'audit (Couche 5/8) -- fusionnee depuis l'ancien module
+    // `server/audit_store.rs` le 2026-09-04 (item #1 de la liste des choses
+    // a faire): les deux tables (`adn_store`/`adn_relations` ici,
+    // `audit_trail` avant dans un fichier separe) pointaient deja sur le
+    // MEME fichier SQLite via deux `Connection` distinctes -- un vrai risque
+    // (deux connexions non coordonnees vers le meme fichier, deux verrous
+    // `Mutex` en memoire different pour un seul et unique fichier sur
+    // disque), pas seulement de la dette cosmetique. Desormais une seule
+    // `Connection`, un seul schema, un seul `Arc<Mutex<AdnStore>>> cote
+    // serveur (voir `server/mod.rs`).
+
+    /// Sauvegarde une entree de la chaine d'audit (append-only). `INSERT OR
+    /// IGNORE`, pas `INSERT` brut: un payload de contenu identique (meme
+    /// `canonical_hash`) soumis deux fois doit rester idempotent, comme
+    /// `put()` ci-dessus -- `HashChain::append` en memoire ne deduplique pas
+    /// lui-meme (voir server/audit.rs).
+    pub fn save_audit_entry(&self, entry: &AuditEntry) -> Result<(), rusqlite::Error> {
+        let rows_affected = self.conn.execute(
+            "INSERT OR IGNORE INTO audit_trail (seq, hash, parent_hash, sender, receiver, purpose)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            params![
+                entry.seq,
+                &entry.hash,
+                &entry.parent_hash,
+                &entry.sender,
+                &entry.receiver,
+                &entry.purpose,
+            ],
+        )?;
+        if rows_affected > 0 {
+            eprintln!("[AdnStore] Audit persisted seq={}", entry.seq);
+        } else {
+            eprintln!("[AdnStore] Audit seq={} ignore (hash {} deja present)", entry.seq, entry.hash);
+        }
+        Ok(())
+    }
+
+    /// Charge toute la chaine d'audit persistee depuis `audit_trail`, du
+    /// plus ancien au plus recent -- utilise au demarrage du serveur pour
+    /// que `seq`/`parent_hash` survivent a un redemarrage reel (voir
+    /// `server/mod.rs::with_data_path`).
+    pub fn load_chain(&self) -> Result<HashChain, rusqlite::Error> {
+        let mut chain = HashChain::new();
+
+        let mut stmt = self.conn.prepare(
+            "SELECT seq, hash, parent_hash, sender, receiver, purpose
+             FROM audit_trail ORDER BY seq",
+        )?;
+
+        let entries = stmt.query_map([], |row| {
+            Ok(AuditEntry {
+                hash: row.get(1)?,
+                parent_hash: row.get(2)?,
+                sender: row.get(3)?,
+                receiver: row.get(4)?,
+                purpose: row.get(5)?,
+                seq: row.get(0)?,
+            })
+        })?;
+
+        for entry_result in entries {
+            chain.entries.push(entry_result?);
+        }
+
+        eprintln!("[AdnStore] Loaded {} audit entries from disk", chain.len());
+        Ok(chain)
+    }
+
+    pub fn audit_count(&self) -> Result<u64, rusqlite::Error> {
+        self.conn.query_row("SELECT COUNT(*) FROM audit_trail", [], |row| row.get(0))
     }
 
     /// Tous les emergence_proofs enregistres, du plus ancien au plus recent.
@@ -853,6 +934,88 @@ mod tests {
         let history = store.deontic_relations_history().unwrap();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST"));
+
+        let _ = std::fs::remove_file(&tmp_path_str);
+    }
+
+    // ── Chaine d'audit fusionnee (ex server/audit_store.rs) ──
+
+    #[test]
+    fn test_audit_persist_and_load() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let entry = AuditEntry {
+            hash: "sha256:abc123".to_string(),
+            parent_hash: "root".to_string(),
+            sender: "alice".to_string(),
+            receiver: "bob".to_string(),
+            purpose: "test".to_string(),
+            seq: 0,
+        };
+        store.save_audit_entry(&entry).unwrap();
+        assert_eq!(store.audit_count().unwrap(), 1);
+        let chain = store.load_chain().unwrap();
+        assert_eq!(chain.len(), 1);
+        assert_eq!(chain.entries[0].hash, "sha256:abc123");
+    }
+
+    #[test]
+    fn test_audit_save_is_idempotent_on_duplicate_hash() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let entry1 = AuditEntry {
+            hash: "sha256:dup".to_string(), parent_hash: "root".to_string(),
+            sender: "alice".to_string(), receiver: "bob".to_string(),
+            purpose: "test".to_string(), seq: 0,
+        };
+        let entry2 = AuditEntry {
+            hash: "sha256:dup".to_string(), parent_hash: "sha256:dup".to_string(),
+            sender: "alice".to_string(), receiver: "bob".to_string(),
+            purpose: "test".to_string(), seq: 1,
+        };
+        store.save_audit_entry(&entry1).unwrap();
+        store.save_audit_entry(&entry2).unwrap(); // ne doit pas retourner Err
+        assert_eq!(store.audit_count().unwrap(), 1, "le second save (hash duplique) doit etre ignore, pas ajoute");
+    }
+
+    #[test]
+    fn test_audit_persistence_survives_reopen_on_real_file_and_shares_adn_store_data() {
+        // Verifie a la fois la survie au redemarrage (deja teste avant la
+        // fusion) ET la vraie raison d'etre de cette fusion: audit_trail et
+        // adn_store/adn_relations vivent maintenant dans LE MEME fichier ET
+        // la MEME Connection -- put() et save_audit_entry() sur la meme
+        // instance doivent cohabiter sans se marcher dessus.
+        let tmp_path = std::env::temp_dir().join(format!(
+            "cstl_adn_store_audit_merge_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+        ));
+        let tmp_path_str = tmp_path.to_str().unwrap().to_string();
+        let _ = std::fs::remove_file(&tmp_path_str);
+
+        {
+            let store = AdnStore::open(&tmp_path_str).unwrap();
+            store.put("sha256:persisted1", "payload", None, None, 0.5, None, None, None).unwrap();
+            store.save_audit_entry(&AuditEntry {
+                hash: "sha256:persisted1".to_string(), parent_hash: "root".to_string(),
+                sender: "alice".to_string(), receiver: "bob".to_string(),
+                purpose: "test".to_string(), seq: 0,
+            }).unwrap();
+            store.save_audit_entry(&AuditEntry {
+                hash: "sha256:persisted2".to_string(), parent_hash: "sha256:persisted1".to_string(),
+                sender: "bob".to_string(), receiver: "alice".to_string(),
+                purpose: "test".to_string(), seq: 1,
+            }).unwrap();
+            // `store` sort de portee ici -- simule un redemarrage complet.
+        }
+
+        let reopened = AdnStore::open(&tmp_path_str).unwrap();
+        let chain = reopened.load_chain().unwrap();
+        assert_eq!(chain.len(), 2, "les 2 entrees du 'run precedent' doivent survivre a la reouverture");
+        assert_eq!(chain.entries[0].hash, "sha256:persisted1");
+        assert_eq!(chain.entries[1].parent_hash, "sha256:persisted1");
+        assert!(chain.verify_integrity().is_ok());
+        // Le payload adn_store du meme run precedent doit lui aussi survivre
+        // -- meme fichier, une seule Connection.
+        assert!(reopened.get("sha256:persisted1").unwrap().is_some());
 
         let _ = std::fs::remove_file(&tmp_path_str);
     }

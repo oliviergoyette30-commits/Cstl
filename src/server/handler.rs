@@ -25,7 +25,6 @@ use crate::governance::GovernanceTracker;
 use crate::agent_discovery::AgentCard;
 use crate::signing::{self, SignatureCheck};
 use super::audit::HashChain;
-use super::audit_store::AuditStore;
 use super::parser;
 use super::validator;
 
@@ -49,7 +48,6 @@ pub async fn handle_connection(
     mut socket: TcpStream,
     registry: Arc<Mutex<AgentRegistry>>,
     chain: Arc<Mutex<HashChain>>,
-    audit_store: Arc<Mutex<AuditStore>>,
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,
     restricted_council: Arc<RestrictedCouncil>,
@@ -468,17 +466,20 @@ pub async fn handle_connection(
                     let entry = { chain.lock().await.append(&payload) };
 
                     // Persistance de la chaine (Couche 5/8, cable live le
-                    // 2026-09-04 -- audit_store.rs etait du code mort avant
-                    // cette passe, voir son commentaire de tete). Sans cet
-                    // appel, `chain.append()` ci-dessus reste PUREMENT en
-                    // memoire et un redemarrage du serveur romprait
-                    // silencieusement la continuite seq/parent_hash, alors
-                    // meme que adn_store.put() (plus bas) persiste deja le
-                    // payload avec ce meme hash. Echec loggue, jamais
+                    // 2026-09-04). Sans cet appel, `chain.append()` ci-dessus
+                    // reste PUREMENT en memoire et un redemarrage du serveur
+                    // romprait silencieusement la continuite seq/parent_hash,
+                    // alors meme que adn_store.put() (plus bas) persiste deja
+                    // le payload avec ce meme hash. Echec loggue, jamais
                     // bloquant -- meme politique que le reste du pipeline de
                     // stockage (adn_store.put/put_relations ci-dessous).
-                    if let Err(e) = audit_store.lock().await.save(&entry) {
-                        eprintln!("[Handler] ⚠️  audit_store.save failed (chain persistence): {}", e);
+                    // Depuis la fusion du 2026-09-04 (ex server/audit_store.rs,
+                    // deuxieme Connection SQLite vers le meme fichier), cet
+                    // appel passe par adn_store -- une seule Connection, un
+                    // seul verrou. adn_store n'est tenu nulle part ailleurs a
+                    // ce point du pipeline, donc pas de double-lock ici.
+                    if let Err(e) = adn_store.lock().await.save_audit_entry(&entry) {
+                        eprintln!("[Handler] ⚠️  adn_store.save_audit_entry failed (chain persistence): {}", e);
                     }
 
                     // STEP 3: Extract routing info
