@@ -1,5 +1,5 @@
-/// CSTL-Native Server
-/// Main entry point - starts TCP listener on port 5050 (5000 est souvent pris par AirPlay Receiver sur macOS)
+//! CSTL-Native Server
+//! Main entry point - starts TCP listener on port 5050 (5000 est souvent pris par AirPlay Receiver sur macOS)
 
 use cstl_parser::server::CstlNativeServer;
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
@@ -34,8 +34,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     eprintln!("✅ Registered agents: alice, bob");
 
-    // Create server with registry
-    let mut server = CstlNativeServer::new(5050);
+    // Create server with registry -- try_with_data_path plutot que new()/with_data_path
+    // (qui paniquent avec un backtrace Rust brut) pour que le processus puisse sortir
+    // proprement avec un message actionnable si la base ADN est corrompue/verrouillee
+    // au demarrage (trouvaille de l'audit du repo, 2026-09-04).
+    let mut server = match CstlNativeServer::try_with_data_path(5050, "cstl_adn.db") {
+        Ok(server) => server,
+        Err(msg) => {
+            eprintln!("❌ Demarrage impossible: {msg}");
+            std::process::exit(1);
+        }
+    };
     server.agent_registry = Arc::new(Mutex::new(registry));
 
     eprintln!("📡 Starting server on port 5050...");

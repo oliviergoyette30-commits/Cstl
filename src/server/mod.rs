@@ -1,12 +1,12 @@
-/// CSTL-Native Server
-/// Agent-to-agent communication natively in CSTL
-/// 
-/// Architecture:
-/// 1. TCP Listener (incoming CSTL payloads)
-/// 2. Parser (validates CSTL format)
-/// 3. Validator (semantic checking)
-/// 4. Router (finds destination agent)
-/// 5. Audit Trail (immutable SHA-256 record)
+//! CSTL-Native Server
+//! Agent-to-agent communication natively in CSTL
+//!
+//! Architecture:
+//! 1. TCP Listener (incoming CSTL payloads)
+//! 2. Parser (validates CSTL format)
+//! 3. Validator (semantic checking)
+//! 4. Router (finds destination agent)
+//! 5. Audit Trail (immutable SHA-256 record)
 
 pub mod listener;
 pub mod handler;
@@ -70,17 +70,41 @@ impl CstlNativeServer {
     /// chaque champ apres coup. Une seule `Connection` SQLite vers
     /// `data_path` depuis la fusion du 2026-09-04 (voir le commentaire de
     /// `adn_store` ci-dessus).
+    /// Panique si l'ouverture/le chargement echoue -- pratique pour les tests et
+    /// smoke-tests (base ":memory:" ou fichiers de test jetables, ou un echec
+    /// DOIT arreter le test immediatement). Pour un vrai processus serveur
+    /// (main.rs), preferer `try_with_data_path` et gerer l'erreur proprement:
+    /// un `.expect()` ici produisait un panic Rust brut (backtrace, pas de
+    /// message actionnable) sur un fichier SQLite corrompu/verrouille au
+    /// demarrage -- trouvaille de l'audit du repo du 2026-09-04. Le
+    /// comportement fail-fast (refuser de demarrer avec une base illisible)
+    /// est correct et conserve ici; ce qui change, c'est que l'appelant peut
+    /// maintenant choisir COMMENT il echoue.
     pub fn with_data_path(port: u16, data_path: &str) -> Self {
-        let adn_store = AdnStore::open(data_path).expect("failed to open cstl_adn.db");
+        match Self::try_with_data_path(port, data_path) {
+            Ok(server) => server,
+            Err(msg) => panic!("{msg}"),
+        }
+    }
+
+    /// Meme construction que `with_data_path`, mais retourne un `Result` au
+    /// lieu de paniquer -- permet a `main.rs` d'afficher un message clair et
+    /// de sortir proprement (`std::process::exit`) plutot que de crasher avec
+    /// un panic Rust brut sur une base SQLite corrompue/verrouillee.
+    pub fn try_with_data_path(port: u16, data_path: &str) -> Result<Self, String> {
+        let adn_store = AdnStore::open(data_path)
+            .map_err(|e| format!("impossible d'ouvrir la base ADN '{data_path}': {e}"))?;
         // Seed la chaine en memoire depuis ce qui est deja persiste --
         // AVANT le 2026-09-04, ce chargement n'existait pas du tout:
         // `chain` demarrait toujours vide, meme quand cette meme base SQLite
         // contenait deja des payloads avec leur propre lignee de parent_hash.
         // Un redemarrage rompait donc silencieusement la continuite de la
         // chaine de hachage.
-        let chain = adn_store.load_chain().expect("failed to load persisted audit chain");
+        let chain = adn_store
+            .load_chain()
+            .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
 
-        CstlNativeServer {
+        Ok(CstlNativeServer {
             port,
             agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
             chain: Arc::new(Mutex::new(chain)),
@@ -104,7 +128,7 @@ impl CstlNativeServer {
             // propre, le serveur marche pareil sans escalade Obsidian.
             obsidian: ObsidianEscalation::from_env().map(Arc::new),
             governance: Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
-        }
+        })
     }
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
