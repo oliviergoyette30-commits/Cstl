@@ -183,6 +183,34 @@ impl HashChain {
     }
 
     /// Append-only. Retourne le hash reel calcule pour ce payload.
+    ///
+    /// Trouvaille honnete (2026-09-04, decouverte en direct sur la vraie
+    /// machine de l'utilisateur, lors du test de redemarrage reel qui
+    /// verifiait le fix Couche 5 precedent -- pas anticipee au design de
+    /// ce fix-la): `seq` etait calcule comme `self.entries.len()`, ce qui
+    /// suppose que `entries` ne contient JAMAIS de trou. Or
+    /// `AuditStore::save()` utilise `INSERT OR IGNORE` (necessaire pour
+    /// rester idempotent sur un payload de contenu identique renvoye deux
+    /// fois -- cf. audit_store.rs) : un renvoi identique/duplique cree une
+    /// `AuditEntry` en memoire avec un `seq` qui ne sera JAMAIS ecrit sur
+    /// disque (ignore silencieusement par la contrainte UNIQUE(hash)),
+    /// laissant un trou dans la table `audit_trail` persistee (ex: seq=0
+    /// et seq=2 presents, seq=1 absent). Au redemarrage suivant,
+    /// `load_chain()` recharge exactement les entrees persistees (donc
+    /// SEULEMENT 2 lignes, avec le trou), et `entries.len()` vaut alors 2
+    /// -- le prochain `append()` recalculait donc `seq=2`, entrant en
+    /// collision avec la ligne seq=2 DEJA sur disque. `audit_store.save()`
+    /// pour cette entree pourtant reellement NOUVELLE se faisait alors
+    /// silencieusement ignorer par la meme contrainte `PRIMARY KEY` sur
+    /// `seq` -- perte silencieuse d'un payload jamais vu, confirmee en
+    /// direct sur `~/Cstl/cstl_adn.db` (payload x3/y3, hash
+    /// 8d7132bd..., seq=2 rapporte au client, absent de `audit_trail`
+    /// apres un vrai redemarrage du processus). Corrige: `seq` se calcule
+    /// desormais a partir du DERNIER `seq` reellement present (`+1`), pas
+    /// du COMPTE d'entrees -- robuste aux trous, que la source soit un
+    /// rechargement partiel depuis le disque ou toute autre cause future
+    /// de desynchronisation entre `entries.len()` et le plus haut `seq`
+    /// utilise.
     pub fn append(&mut self, payload: &CstlPayload) -> AuditEntry {
         let parent_hash = self
             .entries
@@ -192,13 +220,15 @@ impl HashChain {
 
         let hash = canonical_hash(payload);
 
+        let next_seq = self.entries.last().map(|e| e.seq + 1).unwrap_or(0);
+
         let entry = AuditEntry {
             hash,
             parent_hash,
             sender: payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".into()),
             receiver: payload.intent.get("receiver").cloned().unwrap_or_else(|| "unknown".into()),
             purpose: payload.intent.get("purpose").cloned().unwrap_or_else(|| "unknown".into()),
-            seq: self.entries.len() as u64,
+            seq: next_seq,
         };
 
         eprintln!(
@@ -359,5 +389,48 @@ mod tests {
         chain.append(&mk("bob", "reply"));
         chain.entries[1].parent_hash = "sha256:tampered".to_string();
         assert!(chain.verify_integrity().is_err());
+    }
+
+    /// Regression pour la trouvaille du 2026-09-04 (confirmee en direct sur
+    /// la machine de l'utilisateur, cf. le commentaire de doc sur `append`):
+    /// simule ce que `AuditStore::load_chain()` produit reellement apres
+    /// qu'un renvoi de contenu identique a ete ignore silencieusement a la
+    /// persistance (`INSERT OR IGNORE`, cf. audit_store.rs) -- une `Vec`
+    /// avec un TROU de seq (ici seq=0 et seq=2, pas de seq=1), exactement
+    /// ce qui a ete observe via `sqlite3 ... SELECT seq FROM audit_trail`
+    /// sur `~/Cstl/cstl_adn.db`. Avant le fix, `append()` suivant aurait
+    /// recalcule `seq=self.entries.len()=2`, entrant en collision avec la
+    /// ligne seq=2 deja presente -- perte silencieuse du prochain payload
+    /// pourtant reellement nouveau. Le fix (`last().seq+1`) doit produire
+    /// seq=3, jamais 2.
+    #[test]
+    fn test_append_seq_survives_gap_from_deduplicated_reload() {
+        let mut chain = HashChain::new();
+        let e0 = AuditEntry {
+            hash: "sha256:seq0".to_string(),
+            parent_hash: "root".to_string(),
+            sender: "alice".to_string(),
+            receiver: "bob".to_string(),
+            purpose: "restart_test".to_string(),
+            seq: 0,
+        };
+        let e2 = AuditEntry {
+            hash: "sha256:seq2".to_string(),
+            parent_hash: "sha256:seq0".to_string(),
+            sender: "alice".to_string(),
+            receiver: "bob".to_string(),
+            purpose: "restart_test".to_string(),
+            seq: 2, // trou volontaire: seq=1 n'a jamais ete persiste (duplicata ignore)
+        };
+        chain.entries.push(e0);
+        chain.entries.push(e2);
+        assert_eq!(chain.len(), 2, "seule la realite persistee (2 lignes) est rechargee, pas 3");
+
+        let next = chain.append(&mk("alice", "restart_test_new"));
+        assert_eq!(
+            next.seq, 3,
+            "doit continuer apres le plus haut seq REEL (2), pas apres entries.len() (2 aussi, mais par coincidence -- \
+             le vrai bug apparait ici: avant le fix ce test aurait donne seq=2, en collision avec la ligne seq=2 deja sur disque"
+        );
     }
 }

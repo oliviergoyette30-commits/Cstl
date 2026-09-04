@@ -134,6 +134,47 @@ un seul schéma/une seule `Connection`/un seul verrou — un rapprochement réel
 ("un seul fichier" au lieu de deux systèmes disjoints), mais pas la fusion
 complète.
 
+**Deuxième trouvaille, même jour, trouvée en direct sur la machine de
+l'utilisateur en re-vérifiant le correctif ci-dessus (pas anticipée au
+moment où ce correctif a été conçu/livré):** `HashChain::append` calculait
+`seq` comme `self.entries.len()`, ce qui suppose implicitement l'absence de
+trou dans `entries`. Or `INSERT OR IGNORE` (le correctif ci-dessus,
+nécessaire à l'idempotence sur un renvoi de contenu identique) fait
+exactement l'inverse quand un doublon est réellement renvoyé: la ligne est
+ignorée côté disque, laissant un TROU dans les `seq` persistés (observé en
+direct: `seq=0` et `seq=2` présents dans `audit_trail`, `seq=1` absent — le
+premier envoi avait timeout côté client à 5s mais complété côté serveur, le
+renvoi client a donc été un doublon de contenu correctement dédupliqué à la
+persistance, mais avec un trou de seq comme conséquence). Au redémarrage
+réel suivant, `load_chain()` recharge exactement les lignes persistées (donc
+seulement 2, avec le trou), et `entries.len()` vaut alors 2 — le prochain
+`append()` recalculait donc `seq=2`, entrant en collision avec la ligne
+`seq=2` déjà sur disque. `audit_store.save()` pour cette entrée pourtant
+RÉELLEMENT NOUVELLE se faisait alors ignorer silencieusement par la même
+contrainte `PRIMARY KEY` sur `seq` — perte silencieuse d'un payload jamais
+vu auparavant, plus grave que le bug corrigé plus haut (qui ne perdait
+qu'un doublon).
+
+Confirmé en direct sur `~/Cstl/cstl_adn.db` de l'utilisateur: un vrai
+redémarrage du binaire (kill + `cargo run`, nouveau PID confirmé, `[AuditStore]
+Loaded 2 entries from disk` confirmé), suivi de l'envoi d'un payload
+réellement nouveau (`x3/y3`, hash `sha256:8d7132bd...` jamais vu) — le
+client a reçu une réponse `seq=2` normale, mais `SELECT seq,hash FROM
+audit_trail` après coup ne contenait toujours que les 2 lignes d'avant; le
+hash `8d7132bd...` n'apparaît nulle part sur disque.
+
+Corrigé: `seq` se calcule maintenant comme
+`self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — ancré sur le plus
+haut `seq` réellement présent, pas sur le compte d'entrées. Test de
+régression ajouté (`test_append_seq_survives_gap_from_deduplicated_reload`,
+`src/server/audit.rs`) simulant exactement l'état à trou observé sur
+disque. Revérifié: 166/166 tests unitaires (dev + release), les 3
+smoke-tests TCP existants (`audit_persistence_smoke_test.rs`,
+`governance_smoke_test.rs`, `signing_registration_smoke_test.rs`) toujours
+verts, et le scénario de redémarrage réel ci-dessus rejoué en pensée contre
+le nouveau code (le trou seq=0/seq=2 chargé au redémarrage donnerait
+désormais `seq=3` au prochain append, jamais `seq=2`).
+
 ### Couche 6: Interface Humaine
 **État:** 🟡 PARTIEL
 
