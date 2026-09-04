@@ -550,7 +550,7 @@ toutes dans `src/server/audit.rs`.
 
 ## 16. Codes d'erreur
 
-### 16.1 Codes v4.9.3 (21 codes normatifs)
+### 16.1 Codes v4.9.3 (21 codes normatifs, spec Python d'origine)
 
 | Plage | Catégorie |
 |---|---|
@@ -561,7 +561,7 @@ toutes dans `src/server/audit.rs`.
 | E401–E404 | Quotas de ressources |
 | W501–W503 | Warnings produced_by |
 
-### 16.2 Mutualité E106–E112
+### 16.2 Mutualité E106–E112 (spec Python v4.9.3 — JAMAIS implémentée dans le moteur Rust)
 
 `SessionValidator` vérifie ces 7 formes à travers un ensemble de payloads.
 Le graphe de dépendance DOIT être un DAG (acyclique dirigé sans cycle).
@@ -576,7 +576,19 @@ Le graphe de dépendance DOIT être un DAG (acyclique dirigé sans cycle).
 | E111 | CircularDecision | A.decision dépend de B, B de A |
 | E112 | MutualProducedBy | A.produced_by=B, B.produced_by=A |
 
-### 16.3 Codes v5.0
+**Correction honnête (audit du repo, 2026-09-04) : ce `SessionValidator` n'existe nulle
+part dans le code Rust qui tourne réellement.** Cette section documente une conception
+de la spec Python v4.9.3, jamais portée. Pire : le moteur Rust réellement câblé
+(`src/semantic.rs`) **réutilise les codes E107, E108 et E109 pour des vérifications
+totalement différentes** — voir §16.4 ci-dessous. C'est une vraie collision de
+nomenclature, pas une simple omission : `E107`/`E108`/`E109` ne signifient PAS la même
+chose selon que ce document ou le moteur Rust les émet. Non résolue à ce jour
+(renuméroter l'un des deux casserait la compatibilité de tout consommateur qui
+matcherait déjà sur ces chaînes) — un lecteur ou un intégrateur ne doit jamais assumer
+la signification d'un de ces trois codes sans vérifier lequel des deux systèmes l'a
+émis.
+
+### 16.3 Codes v5.0 (spec Python v4.9.3 — statut d'implémentation Rust variable, voir §16.4)
 
 | Code | Sévérité | Condition |
 |---|---|---|
@@ -586,6 +598,42 @@ Le graphe de dépendance DOIT être un DAG (acyclique dirigé sans cycle).
 | W603 | warning | Fermeture transitive ENTAILS incomplète |
 | W604 | warning | KNOWS avec σ < 0.8 — considérer BELIEVES ou ASSUMES |
 | W605 | warning | DOUBTS avec σ > 0.5 — considérer BELIEVES |
+
+Ces 6 codes-ci, contrairement à ceux de §16.2, correspondent effectivement à des
+checks réels dans `src/semantic.rs` (E701/W602/W603/W604/W605 branchés sur le chemin
+serveur TCP depuis le 2026-09-04 — voir §16.4 ; W601 branché depuis plus longtemps).
+
+### 16.4 Codes réellement émis par le moteur Rust (`src/semantic.rs`, câblé live) — ajout honnête 2026-09-04
+
+Section absente des révisions précédentes de ce document : les codes ci-dessous sont
+ceux que `SemanticValidator::validate()` produit réellement sur chaque payload reçu
+par le serveur TCP (`server/handler.rs`), avertissement seul sauf mention contraire
+(un `SEMANTIC_WARNING` n'empêche jamais `status=processed`, sauf E107 qui est
+bloquant — seul code de ce tableau qui rejette le payload).
+
+| Code | Sévérité | Condition réelle (moteur Rust) |
+|---|---|---|
+| E101 | error (non bloquant, warning affiché) | Opérateur `RELATION.type` hors whitelist officielle/domaine/déprécié |
+| W601 | warning | `MUTUAL` déprécié |
+| E107 | **error, bloquant** | Axiome D SDL : `MUST`/`REQUIRE` et `MUST_NOT`/`FORBID` sur le même (sujet, objet) dans le même payload — **PAS** la même signification qu'E107 en §16.2 |
+| E108 | warning | Contradiction temporelle : `MUST_NOT(S,O,τ)` et `PERFORM(S,O,τ)` au même instant — **PAS** la même signification qu'E108 en §16.2 |
+| E109 | warning | `AMP` et `INH` déclarés sur la même paire (sujet, objet) — **PAS** la même signification qu'E109 en §16.2 |
+| E701 | warning | Contradiction temporelle : `BEFORE`/`AFTER` incohérents pour la même paire |
+| W502 | warning | `MAINTAIN` avec `tau=p`/`p_past` |
+| W503 | warning | `tau` hors des valeurs valides (`p`, `n`, `f`, `p_past`, `n_present`, `f_future`) |
+| W504 | warning | Dépassement du seuil d'attributs (voir R10, §19) |
+| R9 | warning | Valeur d'attribut hors ontologie (§13) |
+| R10 | warning | >9 attributs sur une relation |
+| W602 | warning | `CONTRADICTS` redondant (symétrie déjà impliquée) |
+| W603 | warning | Fermeture transitive `ENTAILS` incomplète |
+| W604 | warning | `KNOWS` avec σ < 0.8 |
+| W605 | warning | `DOUBTS` avec σ > 0.5 |
+
+Codes de validation structurelle/format (`src/server/validator.rs`, distinct de
+`semantic.rs`) : `E301`–`E307`, `E309`, `E310` (E308 a existé puis a été retiré —
+volontairement absent, un check cassé a été supprimé plutôt que réparé ; ne réapparaît
+jamais). Ce sont des codes DIFFÉRENTS de la plage E301–E304 "Typage" du v4.9.3
+documentée en §16.1, qui n'a jamais été portée telle quelle.
 
 ---
 
@@ -637,12 +685,22 @@ détectée via un `PARENT_HASH` invalide.
 | R5 | warning | Opérateur ou type d'entité hors officiels | ✅ vérifié |
 | R6 | fixed | Symboles σδτωι non redéfinissables par l'utilisateur | ✅ vérifié |
 | R7 | error | DEFINE avec crochets malformés → dropped + warning | ⚠️ partiel |
-| R8 | warning | Références coref_with validées contre les DEFINE existants | 🔧 spécifié |
-| R9 | warning | Valeurs d'attributs non conformes à la whitelist §13 | 🔧 spécifié |
-| R10 | error | >9 attributs par relation → warning + drop du surplus | 🔧 spécifié |
+| R8 | warning | Références coref_with validées contre les DEFINE existants | ❌ retiré (2026-09-04) |
+| R9 | warning | Valeurs d'attributs non conformes à la whitelist §13 | ✅ câblé live (`semantic.rs::check_attribute_ontology`, 2026-09-04) |
+| R10 | error | >9 attributs par relation → warning + drop du surplus | ✅ câblé live (`semantic.rs::check_attribute_bombing`, 2026-09-04) |
 | R11 | error | Clé META dupliquée → invalidation du document | ✅ vérifié |
 | R12 | error | Contenu textuel après `---END---` → truncation error | ✅ vérifié |
 | R13 | warning | Version hashbang non reconnue (ni v4.9.x ni v5.0.x) | ✅ vérifié |
+
+**Correction honnête (audit du repo, 2026-09-04) — R8** : ce check reposait sur
+`defined_entities()`/`check_undefined_entity_reference()` dans `semantic.rs`, qui
+opéraient sur le système `ast::Block` — retiré le même jour (100% mort, aucun
+producteur réel n'a jamais construit de `Block` en dehors de ses propres tests, voir
+CHANGELOG). R8 n'existe donc plus du tout, pas même à l'état "spécifié" — il faudrait
+le reconstruire sur `Relation` (le vrai modèle de données du chemin serveur) s'il
+redevient prioritaire un jour. R9/R10, en revanche, opéraient déjà sur `Relation`
+(jamais sur `Block`) et ont été branchés sur le chemin TCP réel le même jour, aux côtés
+de 9 autres checks jusque-là seulement testés en isolation (voir §16.4).
 
 Note : R10 applique le théorème k=9 au niveau du validator. k=9 est la
 justification formelle (croissance logarithmique avec la taille du corpus) ;
@@ -652,31 +710,65 @@ R10 est la règle d'implémentation correspondante.
 
 ## 20. Implémentations de référence
 
-### 20.1 Parser Rust (production)
+### 20.1 Parser Rust (production) — réécrite intégralement, 2026-09-04
 
-Rust pur, zéro dépendances externes, SHA-256 implémenté en-crate.
-Modules : `ast`, `token`, `parser`, `security`, `validator`, `canonical`,
-`relation_validator`, `validator_semantic`, `domains`.
+**Cette section décrivait une API qui n'a JAMAIS existé dans ce dépôt** — trouvaille
+de l'audit multi-angle du 2026-09-04. Aucun des points d'entrée listés ci-dessous
+(`parse()`, `is_valid()`, `equivalent()`, le type `CstlDocument`, le binaire CLI
+`cstl_validate`) n'a jamais été implémenté ; les modules `canonical`,
+`relation_validator` et `validator_semantic` cités ont soit été des tentatives
+abandonnées puis supprimées (`validator_semantic.rs`, 987 lignes, supprimé 2026-09-04
+— aucun appelant réel en dehors de ses propres tests), soit n'ont jamais eu
+d'appelant réel (`canonical.rs`, supprimé plus tôt cette même session). `token.rs` et
+`parser.rs`/`validator.rs` (racine) ont eux aussi été supprimés le 2026-09-04 pour la
+même raison (code mort, zéro appelant réel).
 
-Points d'entrée :
-- `parse(input: &str) -> CstlDocument`
-- `is_valid(input: &str) -> bool`
-- `equivalent(a: &str, b: &str) -> bool`
+**Ce qui existe réellement et tourne en production** (crate `cstl_parser`, voir
+`src/lib.rs` pour la liste exhaustive des modules) :
 
-API AST v5.0 :
-- `doc.relations` — `Vec<Relation>` nœuds structurés
-- `doc.relations_by_op("ENTAILS")` — filtre par opérateur
-- `doc.relations_by_subject("agent_A")` — filtre par sujet
-- `CstlDocument::relation_sigma(&rel)` — extrait sigma
+- Format wire à plat (pas d'AST/arbre `CstlDocument`) : chaque payload est parsé en
+  une structure `CstlPayload` (HashMap de blocs → HashMap de clé/valeur), pas en un
+  arbre de `Block`/`Field` structuré. Point d'entrée réel :
+  `server::parser::parse_payload(raw: &str) -> Result<CstlPayload, ParseError>`.
+- Validation structurelle/format : `server::validator::validate_payload(payload:
+  &CstlPayload) -> ValidationResult` (codes E301–E310, voir §16.4).
+- Validation sémantique : `semantic::SemanticValidator::validate()` (codes E101,
+  E107–E109, E701, W502–W605, R9, R10, voir §16.4).
+- Hachage canonique et chaîne d'audit : `server::audit::canonical_hash()` /
+  `HashChain` (SHA-256, via la crate `sha2` — voir la note "pas zéro dépendance"
+  ci-dessous).
+- Persistance : `adn_store::AdnStore` (SQLite via `rusqlite`, une seule `Connection`
+  pour l'historique ADN et la chaîne d'audit depuis la fusion du 2026-09-04).
+- Identité cryptographique : `signing::check_signature`/`check_rotation_signature`
+  (Ed25519 via `ed25519-dalek`).
+- Serveur TCP natif : `server::CstlNativeServer` (`with_data_path`/
+  `try_with_data_path`, `start()`).
 
-CLI : `cstl_validate <file.cstl>` ou `cstl_validate -` (stdin).
-**112 tests, 0 failures, 0 warnings** — 13–40 µs par payload.
+**"Rust pur, zéro dépendances externes" est faux** et l'a toujours été pour la couche
+serveur : `tokio` (TCP async), `rusqlite` (ADN store), `sha2` (hash), `ed25519-dalek`
+(signature), `serde`/`serde_json`, `unicode-normalization` sont des dépendances de
+production réelles. Voir README.md section "Rust Server" pour le détail — cette
+correction-là datait déjà du 2026-09-03 dans le README ; cette section de la spec ne
+l'avait jamais reprise.
 
-### 20.2 Parser Python (référence)
+Aucun binaire CLI `cstl_validate` n'existe. Le seul binaire du crate est le serveur
+TCP lui-même (`src/main.rs`, port 5050).
 
-`CSTLError(Exception)`. Helpers : `cstl.equivalent()`, `cstl.canonicalize()`.
-**201 tests** (baseline v4.9.3) + 15 opérateurs v5.0, 0 warnings R5.
-`SessionValidator` : détection E106–E112 sur ensemble de payloads.
+Compte de tests : voir `cargo test --lib` — ce nombre change à chaque session de
+travail et une valeur figée ici divergerait rapidement (trouvaille de l'audit :
+6 chiffres différents coexistaient déjà entre ce document, README.md et
+docs/ARCHITECTURE.md avant cette correction). Ne pas re-figer de nombre ici.
+
+### 20.2 Parser Python (référence) — également fictif, corrigé 2026-09-04
+
+**Cette sous-section décrivait elle aussi une implémentation qui n'existe pas dans ce
+dépôt.** Aucun `CSTLError`, aucune fonction `cstl.equivalent()`/`cstl.canonicalize()`,
+aucun `SessionValidator` Python n'a été trouvé — ni dans `sdk/python/`, ni ailleurs.
+Zéro fichier de test Python existe dans ce dépôt (`sdk/python/` contient
+`cstl_client.py`, `cstl_llm_agent.py`, `cstl_orchestrator.py` : des clients/relais TCP
+vers le serveur Rust, pas un second parser/validateur indépendant). Le nombre "201
+tests" cité ici n'a jamais pu être vérifié et est retiré plutôt que corrigé, faute de
+code auquel le rattacher.
 
 ---
 
@@ -878,6 +970,33 @@ DECISION: example_decision [sigma=0.88]
 ---
 
 ## 26. CHANGELOG
+
+### v5.0.0 — révision 5 (4 septembre 2026, corrections d'audit)
+- **Corrigé (critique)** : §20.1 décrivait une API Rust entièrement fictive
+  (`parse()`/`is_valid()`/`equivalent()`, type `CstlDocument`, CLI `cstl_validate`,
+  modules `canonical`/`relation_validator`/`validator_semantic` — aucun n'a jamais
+  existé ou tous ont depuis été supprimés). Réécrite pour décrire les points d'entrée
+  réels (`server::parser::parse_payload`, `server::validator::validate_payload`,
+  `semantic::SemanticValidator::validate`, etc.) et retirer la fausse affirmation
+  "zéro dépendances externes".
+- **Corrigé (critique)** : §20.2 décrivait un parser Python (`CSTLError`,
+  `SessionValidator`, "201 tests") qui n'existe pas non plus dans ce dépôt — retirée
+  et remplacée par un constat honnête (`sdk/python/` ne contient que des clients TCP
+  vers le serveur Rust, zéro fichier de test Python).
+- **Corrigé (critique)** : §16.2 documentait `SessionValidator`/E106–E112 comme
+  implémentés — jamais portés en Rust. Collision de nomenclature signalée : le moteur
+  Rust réel (`semantic.rs`) réutilise E107/E108/E109 pour des vérifications
+  différentes (Axiome D, contradiction temporelle, conflit AMP/INH) — voir la
+  nouvelle §16.4 qui documente les codes réellement émis.
+- **Corrigé** : §19 R8 marqué "spécifié" alors que son unique implémentation
+  (`defined_entities`/`check_undefined_entity_reference`, sur le système `Block`
+  mort) a été supprimée le même jour — passé à "retiré". R9/R10 marqués "spécifié"
+  alors qu'ils sont câblés live depuis le 2026-09-04 — passés à "câblé live".
+- Audit complet mené le même jour (hors périmètre normatif de ce document) :
+  désynchronisation des comptes de tests entre README.md/docs/ARCHITECTURE.md/ce
+  document, code mort supprimé dans `domains.rs`/`token.rs`/`arbitration_wire.rs`,
+  robustesse du démarrage serveur — voir les commits Rust correspondants et
+  README.md/docs/ARCHITECTURE.md pour le détail.
 
 ### v5.0.0 — révision 4 (22 juin 2026)
 - Corrigé : §10.5 notation BEFORE/AFTER en notation Allen standard (end/start)
