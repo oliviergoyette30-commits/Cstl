@@ -145,7 +145,14 @@ pub fn signing_bytes(payload: &CstlPayload) -> Vec<u8> {
     let intent: BTreeMap<_, _> = payload.intent.iter().collect();
     canon.push_str("\nINTENT");
     for (k, v) in intent {
-        if k == "signature" {
+        // "signature" (auto-signature avec la cle META.public_key revendiquee)
+        // et "rotation_signature" (Couche 7, 2026-09-04 -- preuve de
+        // possession de l'ANCIENNE cle lors d'un re-enregistrement, voir
+        // signing.rs::check_rotation_signature) sont tous deux exclus: un
+        // message ne peut pas se signer lui-meme, et les deux signatures
+        // doivent porter sur EXACTEMENT le meme message pour etre
+        // comparables/verifiables independamment.
+        if k == "signature" || k == "rotation_signature" {
             continue;
         }
         canon.push('|');

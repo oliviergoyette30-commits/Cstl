@@ -45,6 +45,37 @@ fn decode_hex_fixed<const N: usize>(hex_str: &str) -> Result<[u8; N], &'static s
     bytes.try_into().map_err(|_| "bad_length")
 }
 
+/// Coeur partage de la verification: un message brut, une cle publique hex,
+/// une signature hex -- sans savoir d'ou l'appelant a tire la cle (le
+/// message lui-meme via META.public_key pour `check_signature`, ou le
+/// registre pour `check_rotation_signature` ci-dessous). Extrait le
+/// 2026-09-04 (Couche 7, item #1 de la liste des choses a faire) pour que
+/// les deux appelants partagent EXACTEMENT la meme logique de decodage/
+/// verification plutot que de la dupliquer avec un risque de divergence.
+fn verify_raw(message: &[u8], public_key_hex: &str, signature_hex: &str) -> SignatureCheck {
+    let public_key_bytes: [u8; 32] = match decode_hex_fixed(public_key_hex) {
+        Ok(b) => b,
+        Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),
+        Err(_) => return SignatureCheck::Invalid("bad_public_key_length".to_string()),
+    };
+    let signature_bytes: [u8; 64] = match decode_hex_fixed(signature_hex) {
+        Ok(b) => b,
+        Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),
+        Err(_) => return SignatureCheck::Invalid("bad_signature_length".to_string()),
+    };
+
+    let verifying_key = match VerifyingKey::from_bytes(&public_key_bytes) {
+        Ok(k) => k,
+        Err(_) => return SignatureCheck::Invalid("bad_public_key_length".to_string()),
+    };
+    let signature = Signature::from_bytes(&signature_bytes);
+
+    match verifying_key.verify(message, &signature) {
+        Ok(()) => SignatureCheck::Valid,
+        Err(_) => SignatureCheck::Invalid("verification_failed".to_string()),
+    }
+}
+
 /// Vérifie la signature d'un payload. Ne regarde JAMAIS le registre
 /// d'agents — la correction cryptographique ne dépend que du message
 /// lui-même ; c'est à l'appelant (handler.rs) de décider, séparément, si
@@ -66,28 +97,32 @@ pub fn check_signature(payload: &CstlPayload) -> SignatureCheck {
         }
     };
 
-    let public_key_bytes: [u8; 32] = match decode_hex_fixed(public_key_hex) {
-        Ok(b) => b,
-        Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),
-        Err(_) => return SignatureCheck::Invalid("bad_public_key_length".to_string()),
-    };
-    let signature_bytes: [u8; 64] = match decode_hex_fixed(signature_hex) {
-        Ok(b) => b,
-        Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),
-        Err(_) => return SignatureCheck::Invalid("bad_signature_length".to_string()),
-    };
+    verify_raw(&signing_bytes(payload), public_key_hex, signature_hex)
+}
 
-    let verifying_key = match VerifyingKey::from_bytes(&public_key_bytes) {
-        Ok(k) => k,
-        Err(_) => return SignatureCheck::Invalid("bad_public_key_length".to_string()),
+/// Preuve de rotation de clé (Couche 7, 2026-09-04, item #1 de la liste des
+/// choses à faire). Trouvaille: `purpose=agent_register` acceptait un
+/// ré-enregistrement avec une NOUVELLE clé publique sur simple auto-
+/// signature -- celle-ci prouve seulement "je possède cette nouvelle clé",
+/// jamais "je suis le même agent que celui déjà enregistré sous ce nom".
+/// N'importe qui connaissant juste le NOM d'un agent déjà enregistré
+/// pouvait donc lui voler son identité en soumettant un nouvel
+/// `agent_register` avec sa propre paire de clés.
+///
+/// Corrigé: quand la clé publique embarquée diffère de celle déjà
+/// enregistrée pour ce nom, le message doit AUSSI porter
+/// `INTENT_PAYLOAD.rotation_signature=<hex 128 car.>` — une signature du
+/// MÊME message (`signing_bytes`, qui exclut `signature` ET
+/// `rotation_signature`) mais faite avec l'ANCIENNE clé privée. Ça prouve
+/// la possession simultanée de l'ancienne ET de la nouvelle clé -- une
+/// vraie rotation, pas juste une revendication. `old_public_key_hex` vient
+/// TOUJOURS du registre (jamais du message lui-même, qui pourrait mentir).
+pub fn check_rotation_signature(payload: &CstlPayload, old_public_key_hex: &str) -> SignatureCheck {
+    let rotation_signature_hex = match payload.intent.get("rotation_signature") {
+        Some(sig) => sig,
+        None => return SignatureCheck::NotPresent,
     };
-    let signature = Signature::from_bytes(&signature_bytes);
-
-    let message = signing_bytes(payload);
-    match verifying_key.verify(&message, &signature) {
-        Ok(()) => SignatureCheck::Valid,
-        Err(_) => SignatureCheck::Invalid("verification_failed".to_string()),
-    }
+    verify_raw(&signing_bytes(payload), old_public_key_hex, rotation_signature_hex)
 }
 
 #[cfg(test)]
@@ -199,6 +234,91 @@ mod tests {
     fn test_wrong_length_signature() {
         let payload = mk_payload(&[("public_key", &"aa".repeat(32))], &[("signature", "aabb")]);
         assert_eq!(check_signature(&payload), SignatureCheck::Invalid("bad_signature_length".to_string()));
+    }
+
+    // ── check_rotation_signature (Couche 7, item #1) ──
+
+    #[test]
+    fn test_rotation_signature_absent_is_not_present() {
+        let payload = mk_payload(&[("public_key", &"bb".repeat(32))], &[("signature", &"aa".repeat(64))]);
+        let old_key = "cc".repeat(32);
+        assert_eq!(check_rotation_signature(&payload, &old_key), SignatureCheck::NotPresent);
+    }
+
+    #[test]
+    fn test_rotation_signature_valid_with_old_key() {
+        let mut csprng = rand_core_shim();
+        let old_key = SigningKey::generate(&mut csprng);
+        let new_key = SigningKey::generate(&mut csprng);
+        let old_pubkey_hex = hex::encode(old_key.verifying_key().to_bytes());
+        let new_pubkey_hex = hex::encode(new_key.verifying_key().to_bytes());
+
+        // Le message final porte les DEUX signatures: l'auto-signature avec
+        // la nouvelle cle (deja teste ailleurs) ET rotation_signature avec
+        // l'ancienne -- signing_bytes exclut les deux champs, donc les deux
+        // signatures portent sur EXACTEMENT le meme message.
+        let unsigned = mk_payload(&[("public_key", &new_pubkey_hex)], &[]);
+        let message = signing_bytes(&unsigned);
+        let self_sig = new_key.sign(&message);
+        let rotation_sig = old_key.sign(&message);
+        let payload = mk_payload(
+            &[("public_key", &new_pubkey_hex)],
+            &[
+                ("signature", &hex::encode(self_sig.to_bytes())),
+                ("rotation_signature", &hex::encode(rotation_sig.to_bytes())),
+            ],
+        );
+
+        assert_eq!(check_signature(&payload), SignatureCheck::Valid);
+        assert_eq!(check_rotation_signature(&payload, &old_pubkey_hex), SignatureCheck::Valid);
+    }
+
+    #[test]
+    fn test_rotation_signature_from_wrong_old_key_fails() {
+        let mut csprng = rand_core_shim();
+        let real_old_key = SigningKey::generate(&mut csprng);
+        let impostor_key = SigningKey::generate(&mut csprng);
+        let new_key = SigningKey::generate(&mut csprng);
+        let new_pubkey_hex = hex::encode(new_key.verifying_key().to_bytes());
+        let real_old_pubkey_hex = hex::encode(real_old_key.verifying_key().to_bytes());
+
+        let unsigned = mk_payload(&[("public_key", &new_pubkey_hex)], &[]);
+        let message = signing_bytes(&unsigned);
+        // Un attaquant qui ne possede PAS la vraie ancienne cle prive tente
+        // de signer avec une cle quelconque -- ne doit jamais verifier
+        // contre la VRAIE ancienne cle du registre.
+        let fake_rotation_sig = impostor_key.sign(&message);
+        let payload = mk_payload(
+            &[("public_key", &new_pubkey_hex)],
+            &[("rotation_signature", &hex::encode(fake_rotation_sig.to_bytes()))],
+        );
+
+        assert_eq!(
+            check_rotation_signature(&payload, &real_old_pubkey_hex),
+            SignatureCheck::Invalid("verification_failed".to_string())
+        );
+    }
+
+    #[test]
+    fn test_rotation_signature_tampered_payload_fails() {
+        let mut csprng = rand_core_shim();
+        let old_key = SigningKey::generate(&mut csprng);
+        let new_key = SigningKey::generate(&mut csprng);
+        let old_pubkey_hex = hex::encode(old_key.verifying_key().to_bytes());
+        let new_pubkey_hex = hex::encode(new_key.verifying_key().to_bytes());
+
+        let unsigned = mk_payload(&[("public_key", &new_pubkey_hex)], &[]);
+        let rotation_sig = old_key.sign(&signing_bytes(&unsigned));
+        let mut payload = mk_payload(
+            &[("public_key", &new_pubkey_hex)],
+            &[("rotation_signature", &hex::encode(rotation_sig.to_bytes()))],
+        );
+        payload.intent.insert("name".to_string(), "tampered_after_signing".to_string());
+
+        assert_eq!(
+            check_rotation_signature(&payload, &old_pubkey_hex),
+            SignatureCheck::Invalid("verification_failed".to_string())
+        );
     }
 
     // ed25519-dalek 2.x attend un rand_core::CryptoRngCore -- rand 0.8's

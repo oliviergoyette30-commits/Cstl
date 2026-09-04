@@ -412,8 +412,23 @@ pub async fn handle_connection(
                     // verification). Bootstrap assume: la signature prouve seulement
                     // "je possede cette cle privee", pas "je suis deja connu" -- pas de
                     // PKI/CA, cohérent avec le modele de confiance mono-operateur deja
-                    // en place (RestrictedCouncil). Limite v1 documentee: aucune
-                    // verification d'autorisation de rotation contre l'ANCIENNE cle.
+                    // en place (RestrictedCouncil).
+                    //
+                    // Item #1 de la liste des choses a faire (2026-09-04): AVANT ce
+                    // fix, un ré-enregistrement avec une NOUVELLE clé publique passait
+                    // sur simple auto-signature -- celle-ci prouve seulement "je
+                    // possède cette nouvelle clé", jamais "je suis le même agent que
+                    // celui déjà enregistré sous ce nom". N'importe qui connaissant
+                    // juste le NOM d'un agent déjà enregistré pouvait donc voler son
+                    // identité en soumettant son propre `agent_register`. Corrigé:
+                    // quand le nom est déjà enregistré avec une clé DIFFÉRENTE de la
+                    // nouvelle, `INTENT_PAYLOAD.rotation_signature` (signature du même
+                    // message avec l'ANCIENNE clé privée, voir
+                    // signing::check_rotation_signature) devient obligatoire. Un
+                    // premier enregistrement (nom inconnu) ou un ré-enregistrement
+                    // avec la MÊME clé (rafraîchir capabilities/trust_score) ne
+                    // change pas de comportement -- aucune régression sur le bootstrap
+                    // ni sur les smoke-tests existants.
                     if payload.intent.get("purpose").map(String::as_str) == Some("agent_register") {
                         let name = payload.intent.get("name").cloned().unwrap_or_default();
                         let public_key = payload.meta.get("public_key").cloned();
@@ -429,19 +444,48 @@ pub async fn handle_connection(
                         } else {
                             match &sig_check {
                                 SignatureCheck::Valid => {
-                                    let card = AgentCard {
-                                        name: name.clone(),
-                                        version: payload.meta.get("encoder").cloned().unwrap_or_else(|| "unknown".to_string()),
-                                        capabilities,
-                                        trust_score,
-                                        public_key: public_key.clone(),
+                                    let existing_pubkey = {
+                                        let reg = registry.lock().await;
+                                        reg.agents.iter().find(|a| a.name == name).and_then(|a| a.public_key.clone())
                                     };
-                                    registry.lock().await.register(card);
-                                    eprintln!("[Handler] 🪪 agent_register: '{}' enregistre/mis a jour (trust_score={})", name, trust_score);
-                                    format!(
-                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=agent_register_ack, name={}]\n---END---\n",
-                                        name
-                                    )
+                                    let is_rotation = matches!(&existing_pubkey, Some(old) if Some(old) != public_key.as_ref());
+                                    let rotation_rejection: Option<(&'static str, String)> = if !is_rotation {
+                                        None
+                                    } else {
+                                        // unwrap() sur is_rotation: existing_pubkey est forcement Some ici.
+                                        let old_pubkey = existing_pubkey.as_ref().unwrap();
+                                        match signing::check_rotation_signature(&payload, old_pubkey) {
+                                            SignatureCheck::Valid => None,
+                                            SignatureCheck::NotPresent => Some(("rotation_proof_required", "name already registered with a different public_key -- rotation_signature (signed with the OLD private key) is required".to_string())),
+                                            SignatureCheck::Invalid(detail) => Some(("rotation_proof_invalid", detail)),
+                                        }
+                                    };
+
+                                    if let Some((reason, detail)) = rotation_rejection {
+                                        eprintln!("[Handler] 🔐 agent_register rejete pour '{}': {} ({})", name, reason, detail);
+                                        format!(
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason={}, detail={}]\n---END---\n",
+                                            reason, detail
+                                        )
+                                    } else {
+                                        let card = AgentCard {
+                                            name: name.clone(),
+                                            version: payload.meta.get("encoder").cloned().unwrap_or_else(|| "unknown".to_string()),
+                                            capabilities,
+                                            trust_score,
+                                            public_key: public_key.clone(),
+                                        };
+                                        registry.lock().await.register(card);
+                                        if is_rotation {
+                                            eprintln!("[Handler] 🔄 agent_register: '{}' -- rotation de cle prouvee, cle mise a jour (trust_score={})", name, trust_score);
+                                        } else {
+                                            eprintln!("[Handler] 🪪 agent_register: '{}' enregistre/mis a jour (trust_score={})", name, trust_score);
+                                        }
+                                        format!(
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=agent_register_ack, name={}]\n---END---\n",
+                                            name
+                                        )
+                                    }
                                 }
                                 SignatureCheck::Invalid(detail) => {
                                     eprintln!("[Handler] 🔐 agent_register rejete pour '{}': signature invalide ({})", name, detail);
