@@ -53,11 +53,66 @@ explicite cohérente avec le seul mécanisme de blocage réel du pipeline
 maintenant l'arithmétique réelle du quorum 2/3 (ceil(2/3·n)) et
 `AdnStore::cast_commit_vote` compte les votants distincts par hash —
 vérifié en direct avec un council à 2 membres
-(`examples/governance_smoke_test.rs`). Limites assumées: la config de
-production (`main.rs`) n'enregistre encore qu'un seul membre ("Olivier"),
-donc quorum=1 en pratique aujourd'hui ; l'état du breaker/drift est en
-mémoire uniquement, perdu au redémarrage. Le "✅ TESTÉ - 4/4 modes" affiché
+(`examples/governance_smoke_test.rs`). Limite restante: l'état du
+breaker/drift est en mémoire uniquement, perdu au redémarrage (contrairement
+à la chaîne d'audit, corrigée Couche 5). Le "✅ TESTÉ - 4/4 modes" affiché
 ici avant le 2026-09-03 n'a jamais été vrai.
+
+**Quorum multi-membres réellement sécurisé (2026-09-04, deuxième passe le
+même jour):** la config de production n'enregistrait jusque-là qu'un seul
+membre ("Olivier" codé en dur dans `server/mod.rs`), donc quorum=1 en
+pratique — demandé explicitement: rendre ça réellement utilisable à
+plusieurs. Deux choses distinctes ont dû changer, pas une seule:
+
+1. **Membres configurables**: `RestrictedCouncil::from_env()`
+   (`src/restricted_council.rs`) lit `CSTL_COUNCIL_MEMBERS` (noms séparés
+   par des virgules); absent → `single_member("Olivier")`, aucune
+   régression sur la config par défaut.
+2. **Le vrai trou de sécurité, découvert en concevant (1)**: ajouter
+   simplement un deuxième nom n'aurait été QUE du théâtre de sécurité.
+   `RestrictedCouncil::is_authorized(sender)` est une comparaison de
+   chaîne — tant qu'un seul acteur légitime existait ("Olivier"), qu'un
+   tiers puisse forger `sender=Olivier` sans preuve n'était pas un risque
+   réel (il n'y avait personne d'autre à usurper). Dès qu'un DEUXIÈME
+   membre existe, n'importe qui connecté au TCP et connaissant juste les
+   deux noms ("Olivier", "Alice") pouvait fabriquer 2 votes non
+   authentifiés et atteindre seul le quorum. STEP 2a (signature Ed25519,
+   ci-dessus) ne fermait PAS non plus ce trou à lui seul:
+   `signing::check_signature` vérifie seulement que la signature d'un
+   message correspond à la clé que CE message revendique lui-même dans
+   `META.public_key` — jamais que cette clé est bien celle enregistrée
+   pour le nom prétendu. Un attaquant pouvait donc signer valablement avec
+   SA PROPRE clé tout en mettant `sender=Olivier` dans `INTENT_PAYLOAD`, et
+   STEP 2a laissait passer (signature présente, interne-cohérente).
+
+   Corrigé dans le bloc `council_decision` de `server/handler.rs`: un vote
+   n'est accepté que si (a) le sender est sur la liste autorisée, (b) le
+   message porte une signature Ed25519 **valide** (`sig_check ==
+   SignatureCheck::Valid`, pas seulement "présente"), ET (c) la clé
+   publique EMBARQUÉE dans ce message correspond EXACTEMENT à celle
+   enregistrée pour ce nom via `agent_register` — ça lie enfin l'identité
+   revendiquée à une preuve cryptographique ancrée au registre, pas
+   seulement la cohérence interne du message avec lui-même. Vérifié en
+   direct (`examples/governance_smoke_test.rs`, 6 scénarios désormais):
+   quorum 2/3 légitime avec votes signés (scénarios 3/4, comportement
+   inchangé côté trafic normal), vote non signé d'un membre autorisé mais
+   jamais enregistré → rejeté (`signature_required`, scénario 5), vote
+   signé par la clé d'un IMPOSTEUR tout en usurpant `sender=alice_h` →
+   rejeté (`public_key_mismatch`, scénario 6 — le cas de forgerie
+   d'identité que ce correctif ferme réellement).
+
+   Limite honnête, non traitée dans cette passe: ceci sécurise
+   spécifiquement `council_decision` (l'action la plus à conséquence du
+   serveur — ratifier une entrée de l'`adn_store`). La vérification
+   globale (STEP 2a) pour tous les AUTRES `purpose` ne fait toujours QUE la
+   cohérence interne message↔sa-propre-clé, jamais message↔registre — un
+   attaquant pourrait toujours signer valablement un payload ordinaire
+   (pas un vote) en prétendant un `sender` déjà connu mais avec sa propre
+   clé, tant que ce sender n'est pas déjà enregistré (auquel cas STEP 2a
+   forcerait une signature, mais toujours sans comparer la clé au
+   registre). Étendre la vérification clé↔registre à TOUS les messages,
+   pas seulement `council_decision`, reste à faire si le besoin se
+   confirme.
 
 **Identité/authentification (2026-09-04, `src/signing.rs`):** signature
 Ed25519 par message, câblée live et vérifiée en direct

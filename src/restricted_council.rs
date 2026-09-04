@@ -41,6 +41,46 @@ impl RestrictedCouncil {
         let n = self.member_count().max(1);
         (2 * n + 2) / 3
     }
+
+    /// Charge la liste des membres autorisés depuis `CSTL_COUNCIL_MEMBERS`
+    /// (noms séparés par des virgules), même patron que
+    /// `TelegramNotifier::from_env()`. Absent/vide -> `single_member("Olivier")`,
+    /// comportement identique à avant cette fonction (aucune régression sur
+    /// la config par défaut mono-membre).
+    ///
+    /// Note honnête (2026-09-04): ceci ne suffit PAS a lui seul a rendre le
+    /// quorum multi-membres reellement securise -- ajouter un deuxieme nom
+    /// ici sans plus n'aurait ete que du theatre de securite, puisque
+    /// `is_authorized()` compare une simple chaine de caracteres.
+    /// `handler.rs::handle_connection` (bloc `council_decision`) exige
+    /// desormais, en plus de `is_authorized()`, une signature Ed25519
+    /// valide ET que la cle publique embarquee dans le message corresponde
+    /// EXACTEMENT a celle enregistree pour ce nom via `agent_register` --
+    /// c'est cette combinaison, pas seulement la liste de noms ici, qui
+    /// rend un vote de conseil reellement infalsifiable par un tiers
+    /// connaissant simplement les noms des membres.
+    pub fn from_env() -> Self {
+        match std::env::var("CSTL_COUNCIL_MEMBERS") {
+            Ok(raw) => Self::from_members_str(&raw),
+            Err(_) => Self::single_member("Olivier"),
+        }
+    }
+
+    /// Logique pure de `from_env()`, extraite pour etre testable sans
+    /// manipuler de variables d'environnement (source de flakiness dans des
+    /// tests paralleles).
+    fn from_members_str(raw: &str) -> Self {
+        let members: Vec<String> = raw
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if members.is_empty() {
+            Self::single_member("Olivier")
+        } else {
+            Self::new(members)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -95,5 +135,29 @@ mod tests {
             "a".to_string(), "b".to_string(), "c".to_string(), "d".to_string(),
         ]);
         assert_eq!(council.quorum_size(), 3);
+    }
+
+    #[test]
+    fn test_from_members_str_parses_comma_separated_names() {
+        let council = RestrictedCouncil::from_members_str("Olivier, Alice ,Bob");
+        assert_eq!(council.member_count(), 3);
+        assert!(council.is_authorized("Olivier"));
+        assert!(council.is_authorized("Alice"));
+        assert!(council.is_authorized("Bob"));
+        assert_eq!(council.quorum_size(), 2);
+    }
+
+    #[test]
+    fn test_from_members_str_empty_falls_back_to_single_olivier() {
+        // Meme comportement que single_member("Olivier") si la variable
+        // d'environnement existe mais est vide/blanche -- pas de regression
+        // silencieuse vers un conseil a zero membre (quorum jamais atteignable).
+        let council = RestrictedCouncil::from_members_str("");
+        assert_eq!(council.member_count(), 1);
+        assert!(council.is_authorized("Olivier"));
+
+        let council2 = RestrictedCouncil::from_members_str("  ,  ,");
+        assert_eq!(council2.member_count(), 1);
+        assert!(council2.is_authorized("Olivier"));
     }
 }

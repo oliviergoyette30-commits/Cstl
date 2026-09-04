@@ -214,11 +214,54 @@ pub async fn handle_connection(
                         let decision = payload.intent.get("decision").cloned();
                         let note = payload.intent.get("note").cloned();
 
-                        let response = if !restricted_council.is_authorized(&sender) {
-                            eprintln!("[Handler] ⛔ Council decision rejected: '{}' non autorise", sender);
+                        // Durci le 2026-09-04, en meme temps que le passage a un
+                        // conseil potentiellement multi-membres (CSTL_COUNCIL_MEMBERS,
+                        // restricted_council.rs::from_env()): `is_authorized()` seul
+                        // ne fait qu'une comparaison de chaine sur `sender` -- avec un
+                        // seul membre ("Olivier"), n'importe qui connectait pouvait
+                        // deja se pretendre "Olivier" sans preuve, mais ce n'etait pas
+                        // un vrai risque tant qu'il n'y avait qu'UN acteur legitime
+                        // possible de toute facon. Des qu'un DEUXIEME membre existe,
+                        // ca devient un vrai theatre de securite: n'importe qui
+                        // connaissant juste les noms ("Olivier", "Alice") peut
+                        // fabriquer 2 votes non authentifies et atteindre le quorum
+                        // seul. STEP 2a plus haut ne suffit pas non plus a lui seul:
+                        // `signing::check_signature` ne verifie QUE la coherence
+                        // interne du message (la signature correspond a la cle
+                        // qu'IL revendique dans META.public_key) -- jamais que cette
+                        // cle est bien celle enregistree pour ce nom. Un attaquant
+                        // pourrait donc signer valablement avec SA PROPRE cle tout en
+                        // mettant sender=Olivier dans INTENT_PAYLOAD, et STEP 2a
+                        // laisserait passer (signature presente et interne-coherente).
+                        // Pour un council_decision specifiquement (l'action la plus a
+                        // consequence du serveur: ratifier une entree de l'adn_store),
+                        // on exige donc EN PLUS que la cle publique EMBARQUEE dans ce
+                        // message corresponde EXACTEMENT a celle enregistree pour ce
+                        // nom via agent_register -- ca lie enfin l'identite revendiquee
+                        // a la preuve cryptographique, pas seulement le message a
+                        // lui-meme.
+                        let embedded_pubkey = payload.meta.get("public_key").cloned();
+                        let registered_pubkey = {
+                            let reg = registry.lock().await;
+                            reg.agents.iter().find(|a| a.name == sender).and_then(|a| a.public_key.clone())
+                        };
+                        let council_auth_failure: Option<&'static str> = if !restricted_council.is_authorized(&sender) {
+                            Some("not_authorized")
+                        } else if sig_check != SignatureCheck::Valid {
+                            Some("signature_required")
+                        } else if registered_pubkey.is_none() {
+                            Some("sender_not_registered")
+                        } else if embedded_pubkey != registered_pubkey {
+                            Some("public_key_mismatch")
+                        } else {
+                            None
+                        };
+
+                        let response = if let Some(reason) = council_auth_failure {
+                            eprintln!("[Handler] ⛔ Council decision rejected: '{}' -- {}", sender, reason);
                             format!(
-                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason=not_authorized, sender={}]\n---END---\n",
-                                sender
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=council_decision_rejected, reason={}, sender={}]\n---END---\n",
+                                reason, sender
                             )
                         } else {
                             match (target_hash, decision) {

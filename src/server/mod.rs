@@ -89,7 +89,14 @@ impl CstlNativeServer {
             // Portee reduite v1, decision explicite de l'utilisateur: un seul membre
             // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
             // decrit dans le README.
-            restricted_council: Arc::new(RestrictedCouncil::single_member("Olivier")),
+            // Config production (2026-09-04): CSTL_COUNCIL_MEMBERS (noms
+            // separes par des virgules) permet un vrai conseil multi-membres;
+            // absent -> single_member("Olivier"), comportement identique a
+            // avant ce changement. Voir restricted_council.rs::from_env()
+            // pour le detail, et handler.rs (bloc council_decision) pour la
+            // verification de signature qui rend ce quorum reellement
+            // infalsifiable (pas seulement arithmetiquement correct).
+            restricted_council: Arc::new(RestrictedCouncil::from_env()),
             // None si TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents de l'environnement -
             // degradation propre, le serveur marche pareil sans notification.
             telegram: TelegramNotifier::from_env().map(Arc::new),
