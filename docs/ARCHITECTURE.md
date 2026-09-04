@@ -101,18 +101,24 @@ plusieurs. Deux choses distinctes ont dû changer, pas une seule:
    rejeté (`public_key_mismatch`, scénario 6 — le cas de forgerie
    d'identité que ce correctif ferme réellement).
 
-   Limite honnête, non traitée dans cette passe: ceci sécurise
-   spécifiquement `council_decision` (l'action la plus à conséquence du
-   serveur — ratifier une entrée de l'`adn_store`). La vérification
-   globale (STEP 2a) pour tous les AUTRES `purpose` ne fait toujours QUE la
-   cohérence interne message↔sa-propre-clé, jamais message↔registre — un
-   attaquant pourrait toujours signer valablement un payload ordinaire
-   (pas un vote) en prétendant un `sender` déjà connu mais avec sa propre
-   clé, tant que ce sender n'est pas déjà enregistré (auquel cas STEP 2a
-   forcerait une signature, mais toujours sans comparer la clé au
-   registre). Étendre la vérification clé↔registre à TOUS les messages,
-   pas seulement `council_decision`, reste à faire si le besoin se
-   confirme.
+   **Extension immédiate, même jour**: la limite ci-dessus ("seulement
+   `council_decision`") a été fermée dans la foulée, sur demande explicite.
+   STEP 2a (`server/handler.rs`) fait désormais le même rapprochement
+   clé↔registre pour TOUT le trafic signé, pas seulement les votes: un seul
+   lookup de registre sert maintenant à la fois à `signature_required`
+   (comme avant) ET à une nouvelle branche `public_key_mismatch` — rejetée
+   dès qu'un sender déjà enregistré envoie un message dont la clé embarquée
+   diffère de celle sur fichier. `purpose=agent_register` reste exempté
+   (une rotation de clé légitime n'est, comme documenté plus haut, pas
+   vérifiée contre l'ancienne clé — limite v1 distincte, toujours
+   assumée). Vérifié en direct: le trafic ordinaire d'un agent enregistré
+   signé avec sa vraie clé passe normalement (scénario 7), le même trafic
+   signé par la clé d'un imposteur usurpant ce nom est rejeté
+   (`public_key_mismatch`, scénario 8) — `examples/governance_smoke_test.rs`
+   couvre désormais 8 scénarios. Le bloc `council_decision` garde sa propre
+   vérification en plus (redondante mais inoffensive pour un sender déjà
+   enregistré, et seule protection restante pour un membre autorisé du
+   conseil mais jamais enregistré — cf. scénario 5).
 
 **Identité/authentification (2026-09-04, `src/signing.rs`):** signature
 Ed25519 par message, câblée live et vérifiée en direct

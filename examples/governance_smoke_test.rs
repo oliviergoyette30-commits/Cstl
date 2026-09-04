@@ -39,8 +39,17 @@
 ///    decrite ci-dessus est bien fermee.
 /// 6. Council a 2 membres, vote signe par la cle d'un IMPOSTEUR (differente
 ///    de celle enregistree pour "alice_h") mais avec sender=alice_h -> rejete
-///    (reason=public_key_mismatch) -- preuve qu'une signature valide-mais-
-///    non-liee-au-registre ne suffit plus.
+///    des STEP 2a (reason=public_key_mismatch, purpose=signature_rejected --
+///    intercepte avant meme d'atteindre le bloc council_decision, depuis
+///    l'extension du scenario 7/8 ci-dessous) -- preuve qu'une signature
+///    valide-mais-non-liee-au-registre ne suffit plus.
+/// 7. Trafic ORDINAIRE (pas un vote): "alice_h" envoie un payload normal
+///    signe avec SA VRAIE cle -> traite normalement (aucune regression sur
+///    le trafic legitime d'un agent deja enregistre).
+/// 8. Meme trafic ordinaire, mais signe par la cle d'un IMPOSTEUR tout en
+///    pretendant sender=alice_h -> rejete (public_key_mismatch) -- preuve
+///    que la protection ajoutee le 2026-09-04 (deuxieme passe) couvre bien
+///    TOUT le trafic signe, pas seulement council_decision.
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
 use cstl_parser::restricted_council::RestrictedCouncil;
 use cstl_parser::server::audit::signing_bytes;
@@ -79,6 +88,37 @@ fn born_in_payload(sender: &str, subject: &str, city: &str) -> String {
          RELATION [type=born_in, subject={subject}, object={city}]\n\
          ---END---\n"
     )
+}
+
+/// Meme payload que born_in_payload, mais avec public_key/signature -- pour
+/// verifier la protection cle<->registre sur du trafic ORDINAIRE (pas un
+/// council_decision), scenarios 7/8.
+fn born_in_draft(sender: &str, subject: &str, city: &str, pubkey_hex: &str) -> String {
+    format!(
+        "#!CSTL v5.0.0 MODE=A\n\
+         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
+         INTENT_PAYLOAD [purpose=governance_smoke, sender={sender}, receiver=server]\n\
+         RELATION [type=born_in, subject={subject}, object={city}]\n\
+         ---END---\n"
+    )
+}
+
+fn born_in_signed(sender: &str, subject: &str, city: &str, pubkey_hex: &str, sig_hex: &str) -> String {
+    format!(
+        "#!CSTL v5.0.0 MODE=A\n\
+         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
+         INTENT_PAYLOAD [purpose=governance_smoke, sender={sender}, receiver=server, signature={sig_hex}]\n\
+         RELATION [type=born_in, subject={subject}, object={city}]\n\
+         ---END---\n"
+    )
+}
+
+fn sign_born_in(sk: &SigningKey, sender: &str, subject: &str, city: &str, pubkey_hex: &str) -> String {
+    let draft = born_in_draft(sender, subject, city, pubkey_hex);
+    let parsed = parse_payload(&draft).expect("le brouillon born_in doit parser");
+    let sig = sk.sign(&signing_bytes(&parsed));
+    let sig_hex = hex::encode(sig.to_bytes());
+    born_in_signed(sender, subject, city, pubkey_hex, &sig_hex)
 }
 
 /// Brouillon non signe d'un council_decision, avec public_key embarquee.
@@ -208,7 +248,7 @@ async fn main() {
     let mut failures = Vec::new();
 
     // ---- Scenario 1: payload normal et coherent ----
-    println!("[1/6] Payload normal, coherent...");
+    println!("[1/8] Payload normal, coherent...");
     let resp1 = send(port_a, &born_in_payload("agent_gov_1", "governance_smoke_subject_1", "Varsovie")).await;
     let status1 = extract_field(&resp1, "META", "status");
     let circuit1 = extract_field(&resp1, "GOVERNANCE", "circuit");
@@ -218,7 +258,7 @@ async fn main() {
     }
 
     // ---- Scenario 2: incoherence repetee -> breaker ouvert, jamais rejete ----
-    println!("[2/6] Incoherence repetee (meme sujet, villes differentes)...");
+    println!("[2/8] Incoherence repetee (meme sujet, villes differentes)...");
     let subject2 = "governance_smoke_subject_2";
     let _ = send(port_a, &born_in_payload("agent_gov_2", subject2, "Varsovie")).await; // baseline
     let _ = send(port_a, &born_in_payload("agent_gov_2", subject2, "Paris")).await; // trip 1
@@ -240,7 +280,7 @@ async fn main() {
     }
 
     // ---- Scenario 3: quorum 2/3 sur serveur B, votes SIGNES ----
-    println!("[3/6] Quorum 2/3 (council a 2 membres, votes signes)...");
+    println!("[3/8] Quorum 2/3 (council a 2 membres, votes signes)...");
     let resp_seed = send(port_b, &born_in_payload("agent_gov_3", "governance_smoke_subject_3", "Rome")).await;
     let target_hash = extract_field(&resp_seed, "AUDIT", "hash").expect("hash pour scenario 3");
     let vote1 = send(port_b, &sign_council_decision(&sk_alice, "alice_h", &target_hash, "commit", &pk_alice)).await;
@@ -261,7 +301,7 @@ async fn main() {
     }
 
     // ---- Scenario 4: config a 1 membre (aujourd'hui), vote SIGNE -- aucune regression ----
-    println!("[4/6] Config a 1 membre, vote signe (comportement d'avant ce changement)...");
+    println!("[4/8] Config a 1 membre, vote signe (comportement d'avant ce changement)...");
     let resp_seed4 = send(port_a, &born_in_payload("agent_gov_4", "governance_smoke_subject_4", "Tokyo")).await;
     let target_hash4 = extract_field(&resp_seed4, "AUDIT", "hash").expect("hash pour scenario 4");
     let vote4 = send(port_a, &sign_council_decision(&sk_olivier, "Olivier", &target_hash4, "commit", &pk_olivier)).await;
@@ -278,7 +318,7 @@ async fn main() {
     // pour un sender DEJA enregistre avec une cle -- ce n'est justement PAS
     // le cas ici, donc si le bloc council ne verifiait pas lui-meme, ce
     // vote non authentifie passerait).
-    println!("[5/6] Vote NON signe d'un membre autorise mais jamais enregistre (doit etre rejete)...");
+    println!("[5/8] Vote NON signe d'un membre autorise mais jamais enregistre (doit etre rejete)...");
     let resp_seed5 = send(port_b, &born_in_payload("agent_gov_5", "governance_smoke_subject_5", "Vienne")).await;
     let target_hash5 = extract_field(&resp_seed5, "AUDIT", "hash").expect("hash pour scenario 5");
     let unsigned_vote = format!(
@@ -296,7 +336,14 @@ async fn main() {
     }
 
     // ---- Scenario 6: vote signe par la cle d'un IMPOSTEUR, sender usurpe ----
-    println!("[6/6] Vote signe par une cle d'imposteur, sender=alice_h usurpe (doit etre rejete)...");
+    // Depuis l'extension du 2026-09-04 (meme jour, deuxieme passe) de la
+    // comparaison cle<->registre a TOUT le trafic signe (pas seulement
+    // council_decision), ce cas est desormais intercepte encore plus tot,
+    // par STEP 2a elle-meme (purpose=signature_rejected), avant meme
+    // d'atteindre le bloc council_decision -- le reason reste identique
+    // (public_key_mismatch), seul le purpose change par rapport a avant
+    // cette extension.
+    println!("[6/8] Vote signe par une cle d'imposteur, sender=alice_h usurpe (doit etre rejete)...");
     let resp_seed6 = send(port_b, &born_in_payload("agent_gov_6", "governance_smoke_subject_6", "Madrid")).await;
     let target_hash6 = extract_field(&resp_seed6, "AUDIT", "hash").expect("hash pour scenario 6");
     // sk_impostor signe valablement -- le message EST auto-coherent (sa
@@ -307,8 +354,29 @@ async fn main() {
     let purpose6 = extract_field(&resp6, "INTENT_PAYLOAD", "purpose");
     let reason6 = extract_field(&resp6, "INTENT_PAYLOAD", "reason");
     println!("      purpose={:?} reason={:?}", purpose6, reason6);
-    if purpose6.as_deref() != Some("council_decision_rejected") || reason6.as_deref() != Some("public_key_mismatch") {
-        failures.push("scenario 6: un vote signe par une cle differente de celle enregistree pour ce nom doit etre rejete (public_key_mismatch)".to_string());
+    if purpose6.as_deref() != Some("signature_rejected") || reason6.as_deref() != Some("public_key_mismatch") {
+        failures.push("scenario 6: un vote signe par une cle differente de celle enregistree pour ce nom doit etre rejete (public_key_mismatch, intercepte des STEP 2a)".to_string());
+    }
+
+    // ---- Scenario 7: trafic ORDINAIRE, alice_h signe avec SA VRAIE cle ----
+    println!("[7/8] Trafic ordinaire signe correctement par un agent enregistre (aucune regression)...");
+    let resp7 = send(port_b, &sign_born_in(&sk_alice, "alice_h", "governance_smoke_subject_7", "Lisbonne", &pk_alice)).await;
+    let status7 = extract_field(&resp7, "META", "status");
+    println!("      status={:?}", status7);
+    if status7.as_deref() != Some("processed") {
+        failures.push("scenario 7: un payload ordinaire correctement signe par un agent deja enregistre doit etre traite normalement".to_string());
+    }
+
+    // ---- Scenario 8: trafic ORDINAIRE, IMPOSTEUR usurpe sender=alice_h ----
+    // Preuve directe de l'extension du 2026-09-04 (deuxieme passe): la
+    // protection cle<->registre ne se limite plus a council_decision.
+    println!("[8/8] Trafic ordinaire signe par un imposteur usurpant sender=alice_h (doit etre rejete)...");
+    let resp8 = send(port_b, &sign_born_in(&sk_impostor, "alice_h", "governance_smoke_subject_8", "Athenes", &pk_impostor)).await;
+    let purpose8 = extract_field(&resp8, "INTENT_PAYLOAD", "purpose");
+    let reason8 = extract_field(&resp8, "INTENT_PAYLOAD", "reason");
+    println!("      purpose={:?} reason={:?}", purpose8, reason8);
+    if purpose8.as_deref() != Some("signature_rejected") || reason8.as_deref() != Some("public_key_mismatch") {
+        failures.push("scenario 8: un payload ordinaire signe par la cle d'un imposteur usurpant un sender deja enregistre doit etre rejete (public_key_mismatch)".to_string());
     }
 
     println!();

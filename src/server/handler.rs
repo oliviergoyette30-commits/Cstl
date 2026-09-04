@@ -171,10 +171,26 @@ pub async fn handle_connection(
                     let sig_check = signing::check_signature(&payload);
                     let sig_sender = payload.intent.get("sender").cloned().unwrap_or_default();
                     let is_agent_register = payload.intent.get("purpose").map(String::as_str) == Some("agent_register");
-                    let signature_required = {
+                    // Trouvaille du 2026-09-04 (deuxieme passe, apres le durcissement de
+                    // council_decision): `signing::check_signature` ne verifie QUE la
+                    // coherence interne d'un message avec la cle QU'IL revendique
+                    // lui-meme dans META.public_key -- jamais que cette cle correspond
+                    // a celle REELLEMENT enregistree pour ce sender. Avant ce fix, meme
+                    // avec `signature_required=true` (sender deja enregistre), un
+                    // attaquant pouvait signer valablement un message ORDINAIRE avec SA
+                    // PROPRE cle tout en usurpant sender=<nom deja connu> -- le message
+                    // etait "Valid" (auto-coherent) et passait, sans jamais etre compare
+                    // au registre. Deja corrige pour purpose=council_decision (l'action
+                    // la plus a consequence) le meme jour; etendu ici a TOUT le trafic
+                    // signe par un sender deja enregistre. Un seul lookup de registre
+                    // sert desormais aux deux besoins (signature_required ET la
+                    // comparaison de cle) au lieu de deux lookups separes comme avant.
+                    let embedded_pubkey = payload.meta.get("public_key").cloned();
+                    let registered_pubkey_for_sender = {
                         let reg = registry.lock().await;
-                        reg.agents.iter().any(|a| a.name == sig_sender && a.public_key.is_some())
+                        reg.agents.iter().find(|a| a.name == sig_sender).and_then(|a| a.public_key.clone())
                     };
+                    let signature_required = registered_pubkey_for_sender.is_some();
                     // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
                     // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
                     // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
@@ -184,12 +200,17 @@ pub async fn handle_connection(
                     // "signature_invalid"/"incomplete_signature_fields", rendant les
                     // branches dediees du bloc agent_register inatteignables en pratique
                     // (trouvaille du smoke test live, pas anticipee dans le plan initial).
+                    // C'est aussi pourquoi la comparaison de cle ci-dessous n'affecte
+                    // jamais une (re)inscription legitime: un agent qui fait tourner sa
+                    // cle via un NOUVEL agent_register n'est jamais intercepte ici, quelle
+                    // que soit l'ancienne cle enregistree.
                     let sig_rejection: Option<&'static str> = if is_agent_register {
                         None
                     } else {
                         match &sig_check {
                             SignatureCheck::Invalid(_) => Some("signature_invalid"),
                             SignatureCheck::NotPresent if signature_required => Some("missing_signature_for_registered_agent"),
+                            SignatureCheck::Valid if signature_required && embedded_pubkey != registered_pubkey_for_sender => Some("public_key_mismatch"),
                             _ => None,
                         }
                     };
