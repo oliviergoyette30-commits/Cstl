@@ -191,18 +191,58 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
         .collect()
 }
 
+/// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
+/// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
+/// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE
+/// RELATION contenait a la fois les sous-chaines "MUST" et "MUST_NOT" -- un
+/// double bug, pas juste une lacune:
+///   1. Le format wire reel n'encode jamais MUST/MUST_NOT dans `type` --
+///      `type` porte soit un predicat KB (born_in, part_of...) soit un
+///      operateur SDL (EQUALS, CONTRADICTS...). Le VRAI moteur de
+///      contradiction deontique (SDL Axiome D, `semantic.rs::SemanticValidator
+///      ::check_axiom_d`, E107) existait deja, teste, mais n'etait JAMAIS
+///      appele sur le chemin TCP reel -- seul `check_operator_whitelist()`
+///      l'etait (audit multi-angle du 2026-09-03, decouvert a l'epoque pour
+///      le desync MUTUAL, jamais etendu a Axiome D depuis).
+///   2. Faux positif systematique: `"MUST_NOT".contains("MUST")` est vrai en
+///      Rust (MUST est une sous-chaine de MUST_NOT) -- N'IMPORTE QUELLE
+///      RELATION[type=MUST_NOT, ...] isolee, sans aucun MUST ailleurs,
+///      declenchait ce rejet a tort.
+///
+/// Corrige: la modalite deontique se declare desormais via un champ
+/// OPTIONNEL `modality=MUST|MUST_NOT|REQUIRE|FORBID` sur une RELATION
+/// (`RELATION [type=<operateur>, subject=..., object=..., modality=MUST]`)
+/// -- le format `RELATION[key=value,...]` etant deja generique (HashMap),
+/// aucun changement de parseur necessaire. Cette fonction construit de
+/// vraies `AstRelation` (avec `.modality` peuple) et appelle le vrai moteur
+/// SDL Axiome D deja ecrit et teste (`semantic.rs`) au lieu de reinventer
+/// une verification de substring.
 fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationResult) {
-    // Check for conflicting MUST constraints
-    for relation in &payload.relations {
-        if let Some(rel_type) = relation.get("type") {
-            if rel_type.contains("MUST") && rel_type.contains("MUST_NOT") {
-                result.errors.push(ValidationError {
-                    code: "E308".to_string(),
-                    message: "Conflicting MUST and MUST_NOT in same relation".to_string(),
-                });
-                result.valid = false;
-            }
-        }
+    let relations: Vec<AstRelation> = payload.relations.iter()
+        .map(|r| AstRelation {
+            subject: r.get("subject").cloned().unwrap_or_default(),
+            operator: r.get("type").cloned().unwrap_or_default(),
+            object: r.get("object").cloned().unwrap_or_default(),
+            attrs: Vec::new(),
+            modality: r.get("modality").cloned(),
+            line: 0,
+        })
+        .collect();
+
+    if relations.iter().all(|r| r.modality.is_none()) {
+        // Chemin rapide: aucune RELATION de ce payload ne porte de modalite
+        // -- pas la peine de construire le SemanticValidator pour rien
+        // (evite aussi de fabriquer des AstRelation avec operator="" pour
+        // les payloads sans aucune RELATION, comme les council_decision).
+        return;
+    }
+
+    for err in SemanticValidator::new(&relations, &[]).check_axiom_d() {
+        result.errors.push(ValidationError {
+            code: err.code, // "E107"
+            message: err.message,
+        });
+        result.valid = false;
     }
 }
 
@@ -345,5 +385,83 @@ mod tests {
         let warnings = check_sdl_operator_whitelist(&payload);
         assert!(warnings.iter().any(|w| w.contains("MUTUAL") && w.contains("W601")),
                 "MUTUAL devrait warner W601 via l'adaptateur reel: {:?}", warnings);
+    }
+
+    // ── validate_deontic_constraints (branchement Axiome D sur le pipeline
+    // reel, 2026-09-04) -- remplace l'ancien check casse (substring sur un
+    // seul champ RELATION.type, jamais capable de detecter une vraie
+    // contradiction ET generant un faux positif sur MUST_NOT isole).
+
+    fn payload_with(relations: Vec<HashMap<String, String>>) -> CstlPayload {
+        CstlPayload {
+            version: "v5.0.0".into(), mode: "A".into(),
+            meta: {
+                let mut m = HashMap::new();
+                m.insert("encoder".to_string(), "Agent".to_string());
+                m.insert("produced_by".to_string(), "Claude".to_string());
+                m
+            },
+            intent: {
+                let mut i = HashMap::new();
+                i.insert("purpose".to_string(), "test".to_string());
+                i.insert("sender".to_string(), "alice".to_string());
+                i.insert("receiver".to_string(), "bob".to_string());
+                i
+            },
+            relations,
+            raw: String::new(),
+        }
+    }
+
+    #[test]
+    fn test_lone_must_not_no_longer_false_positive() {
+        // Regression directe du bug corrige: "MUST_NOT".contains("MUST") est
+        // vrai en Rust -- avant ce fix, cette SEULE relation (aucun MUST
+        // ailleurs) declenchait a tort E308. Doit desormais passer.
+        let payload = payload_with(vec![
+            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST_NOT")]),
+        ]);
+        let result = validate_payload(&payload);
+        assert!(result.valid, "un MUST_NOT isole ne doit plus etre un faux positif: {:?}", result.errors);
+        assert!(!result.errors.iter().any(|e| e.code == "E308"), "E308 (ancien check casse) ne doit plus jamais apparaitre");
+    }
+
+    #[test]
+    fn test_real_deontic_contradiction_detected_e107() {
+        // Vraie contradiction: meme (subject, object) declare a la fois
+        // obligatoire (MUST) et interdit (MUST_NOT) -- doit etre rejete
+        // via le vrai moteur SDL Axiome D (E107), pas l'ancien substring check.
+        let payload = payload_with(vec![
+            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST")]),
+            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST_NOT")]),
+        ]);
+        let result = validate_payload(&payload);
+        assert!(!result.valid, "une vraie contradiction MUST/MUST_NOT doit etre rejetee");
+        assert!(result.errors.iter().any(|e| e.code == "E107"), "attendu E107 (Axiome D): {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_relations_without_modality_unaffected() {
+        // Chemin rapide: aucune modalite -> aucun cout, aucune interference
+        // avec la validation factuelle normale (regression sur tout le
+        // trafic existant, qui ne porte jamais de champ modality).
+        let payload = payload_with(vec![
+            relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
+        ]);
+        let result = validate_payload(&payload);
+        assert!(result.valid);
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_must_and_must_not_different_objects_no_contradiction() {
+        // MUST sur UN objet et MUST_NOT sur un objet DIFFERENT pour le meme
+        // sujet: pas une contradiction (deux obligations distinctes).
+        let payload = payload_with(vec![
+            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "backup_db"), ("modality", "MUST")]),
+            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST_NOT")]),
+        ]);
+        let result = validate_payload(&payload);
+        assert!(result.valid, "objets differents ne doivent pas etre traites comme contradictoires: {:?}", result.errors);
     }
 }

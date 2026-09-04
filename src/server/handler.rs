@@ -581,6 +581,39 @@ pub async fn handle_connection(
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
                     );
 
+                    // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
+                    // — meme principe que STEP 3c ci-dessus (charger seulement ce dont
+                    // on se sert), mais pour les relations portant `modality`. Verifie
+                    // les MUST/MUST_NOT du payload courant contre TOUT ce qui a ete
+                    // persiste par des payloads PRECEDENTS (potentiellement d'autres
+                    // agents) — une contradiction Axiome D qui s'etale sur plusieurs
+                    // requetes, invisible a la verification intra-payload bloquante
+                    // (server/validator.rs::validate_deontic_constraints, STEP 2).
+                    // INFORMATIF SEULEMENT, comme la coherence factuelle ci-dessus:
+                    // jamais de rejet, une contradiction a travers l'historique peut
+                    // etre un vrai desaccord entre agents/moments, pas une erreur de
+                    // protocole (contrairement a se contredire dans le meme souffle).
+                    let deontic_history = {
+                        let store = adn_store.lock().await;
+                        store.deontic_relations_history().unwrap_or_else(|e| {
+                            eprintln!("[Handler] ⚠️  adn_store.deontic_relations_history failed: {}", e);
+                            Vec::new()
+                        })
+                    };
+                    let deontic_audit = execution_lab::check_deontic_consistency_with_history(&payload.relations, &deontic_history);
+                    if !deontic_audit.consistent {
+                        eprintln!(
+                            "[Handler] ⚖️  Deontic audit: {} violation(s) Axiome D detectee(s) contre l'historique",
+                            deontic_audit.violations.len()
+                        );
+                        for v in &deontic_audit.violations {
+                            eprintln!(
+                                "[Handler]    -> ({}) {} {} vs ({}) {} {}",
+                                v.required_by, v.subject, v.object, v.forbidden_by, v.subject, v.object
+                            );
+                        }
+                    }
+
                     // Resume lisible du dilemme pour la notification Telegram — sans
                     // ca, "committer" est un clic aveugle, pas une decision informee.
                     let mut telegram_details = verification_lines.clone();
@@ -727,7 +760,18 @@ pub async fn handle_connection(
                         "CONSISTENCY [consistent={}, contradictions={}, cycles={}, sigma={}]\n",
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
                     );
-                    
+                    // Absent quand aucune RELATION de ce payload ne porte de `modality`
+                    // ET que l'audit contre l'historique est propre -- pas de bruit sur
+                    // le trafic factuel normal (l'immense majorite des payloads).
+                    let deontic_audit_line = if deontic_audit.violations.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "DEONTIC_AUDIT [consistent=false, violations={}]\n",
+                            deontic_audit.violations.len()
+                        )
+                    };
+
                     // STEP 4: Try to route to agent — agent_registry est maintenant
                     // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
                     // du lock pour ne jamais tenir le MutexGuard pendant le
@@ -749,12 +793,14 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
                             purpose,
                             verification_lines,
                             consistency_line,
+                            deontic_audit_line,
                             semantic_warning_lines,
                             governance_line,
                             entry.hash,

@@ -36,8 +36,14 @@ const OFFICIAL_OPERATORS: &[&str] = &[
 // unique partagee entre les deux modules, corrige la desync MUTUAL de
 // l'audit multi-angle (2026-09-03). Voir le commentaire au-dessus de
 // validator_semantic::OFFICIAL_OPERATORS pour le detail.
-const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
-const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
+// `pub` depuis le 2026-09-04: reutilisees par
+// execution_lab::check_deontic_consistency_with_history (Couche 8, audit
+// deontique HISTORIQUE) pour rester l'unique source de verite sur ce qui
+// compte comme "obligatoire" vs "interdit" -- plutot que dupliquer ces deux
+// listes et risquer qu'elles divergent de l'Axiome D intra-payload
+// (check_axiom_d ci-dessous).
+pub const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
+pub const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
 const PERFORMED_OPERATORS:  &[&str] = &["PERFORM", "ARR", "ARR.CREATE", "ARR.PRODUCE"];
 const VALID_TAU: &[&str] = &["p", "n", "f", "p_past", "n_present", "f_future"];
 
@@ -175,7 +181,14 @@ impl<'a> SemanticValidator<'a> {
     }
 
     /// E107 — Axiome D de SDL : ¬(MUST p ∧ MUST_NOT p)
-    fn check_axiom_d(&self) -> Vec<SemanticError> {
+    ///
+    /// `pub` depuis le 2026-09-04 (meme raison que `check_operator_whitelist`
+    /// ci-dessus): branchee sur le pipeline TCP reel
+    /// (`server/validator.rs::validate_deontic_constraints`), qui remplace
+    /// un check casse (comparaison de sous-chaines sur un seul champ
+    /// `RELATION.type`, jamais capable de detecter une vraie contradiction
+    /// deontique et generant meme des faux positifs sur `MUST_NOT` isole).
+    pub fn check_axiom_d(&self) -> Vec<SemanticError> {
         let mut errors = Vec::new();
         let constraints: Vec<&Relation> = self.constraints().collect();
         for c1 in &constraints {

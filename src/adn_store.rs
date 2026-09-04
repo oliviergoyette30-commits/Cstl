@@ -133,6 +133,22 @@ impl AdnStore {
             CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
             CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);",
         )?;
+        // Migration idempotente (2026-09-04, Couche 8: audit deontique
+        // historique): `adn_relations` existe deja sur les bases reelles de
+        // production (dont celle de l'utilisateur) SANS colonne `modality` --
+        // l'ajouter au CREATE TABLE ci-dessus ne suffirait pas (IF NOT EXISTS
+        // ne modifie jamais un schema deja present). ADD COLUMN echoue avec
+        // "duplicate column name" sur une base qui l'a deja (execution
+        // repetee de ce open(), ou base neuve creee apres ce fix -- possible
+        // seulement si une version future remet modality dans CREATE TABLE)
+        // -- cette erreur precise est ignoree ; toute AUTRE erreur est
+        // loggee, jamais avalee en silence.
+        if let Err(e) = conn.execute("ALTER TABLE adn_relations ADD COLUMN modality TEXT", []) {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column name") {
+                eprintln!("[AdnStore] ⚠️  migration modality echouee (inattendu): {}", msg);
+            }
+        }
         Ok(Self { conn })
     }
 
@@ -316,18 +332,50 @@ impl AdnStore {
     /// `ExecutionLab::check_consistency_with_history` puisse les retrouver lors
     /// d'une requete future. Appelee separement de `put()`: un payload sans
     /// relations (purpose=council_decision, etc.) n'a rien a inserer ici.
+    /// Persiste aussi `modality` quand le champ est present sur la RELATION
+    /// (`modality=MUST|MUST_NOT|...`, Couche 8 -- audit deontique historique,
+    /// 2026-09-04) -- NULL sinon (l'immense majorite des relations
+    /// factuelles), colonne ajoutee par la migration idempotente dans open().
     pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
         for rel in relations {
             if let (Some(subject), Some(predicate), Some(object)) =
                 (rel.get("subject"), rel.get("type"), rel.get("object"))
             {
                 self.conn.execute(
-                    "INSERT INTO adn_relations (hash, subject, predicate, object) VALUES (?1, ?2, ?3, ?4)",
-                    params![hash, subject, predicate, object],
+                    "INSERT INTO adn_relations (hash, subject, predicate, object, modality) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![hash, subject, predicate, object, rel.get("modality")],
                 )?;
             }
         }
         Ok(())
+    }
+
+    /// Toutes les relations deontiques (modality IS NOT NULL) jamais
+    /// persistees, tous hashes/agents confondus -- l'historique que
+    /// `execution_lab::check_deontic_consistency_with_history` (Couche 8)
+    /// utilise pour detecter une contradiction Axiome D (MUST/MUST_NOT sur
+    /// le meme (subject, object)) qui s'etale sur PLUSIEURS payloads/agents,
+    /// pas seulement a l'interieur d'un seul (deja couvert, bloquant, par
+    /// `server/validator.rs::validate_deontic_constraints`). Meme filtre SQL
+    /// que `relations_for_predicates` (charge seulement ce qui compte, pas
+    /// tout `adn_relations`).
+    pub fn deontic_relations_history(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT subject, predicate, object, modality FROM adn_relations WHERE modality IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            m.insert("modality".to_string(), row.get::<_, String>(3)?);
+            Ok(m)
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     /// Toutes les relations jamais stockees, tous hashes confondus -- l'historique
@@ -710,5 +758,102 @@ mod tests {
         assert_eq!(all.len(), 1);
         assert!(all[0].position_changed_by.is_none());
         assert!(all[0].delta_sigma.is_none());
+    }
+
+    // ── modality (Couche 8, audit deontique historique, 2026-09-04) ──
+
+    fn deontic_relation(subject: &str, object: &str, modality: &str) -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        m.insert("subject".to_string(), subject.to_string());
+        m.insert("type".to_string(), "PERFORM".to_string());
+        m.insert("object".to_string(), object.to_string());
+        m.insert("modality".to_string(), modality.to_string());
+        m
+    }
+
+    #[test]
+    fn test_put_relations_persists_and_roundtrips_modality() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h1", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.put_relations("h1", &[deontic_relation("agent_x", "delete_prod_db", "MUST_NOT")]).unwrap();
+
+        let history = store.deontic_relations_history().unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].get("subject").map(String::as_str), Some("agent_x"));
+        assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST_NOT"));
+    }
+
+    #[test]
+    fn test_factual_relations_without_modality_excluded_from_deontic_history() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h2", "payload", None, None, 0.75, None, None, None).unwrap();
+        let mut factual = HashMap::new();
+        factual.insert("subject".to_string(), "alice".to_string());
+        factual.insert("type".to_string(), "born_in".to_string());
+        factual.insert("object".to_string(), "quebec".to_string());
+        store.put_relations("h2", &[factual]).unwrap();
+
+        let history = store.deontic_relations_history().unwrap();
+        assert!(history.is_empty(), "une relation factuelle (sans modality) ne doit jamais apparaitre dans l'historique deontique");
+    }
+
+    #[test]
+    fn test_open_migrates_real_file_with_old_schema_missing_modality_column() {
+        // Simule EXACTEMENT l'etat d'une vraie base de production existante
+        // (dont celle de l'utilisateur): adn_relations deja cree, SANS
+        // colonne modality, AVANT ce fix -- via une Connection brute, pas
+        // AdnStore::open() (qui appliquerait deja la migration). Confirme
+        // que la migration idempotente dans open() gere ce cas reel sans
+        // paniquer ni perdre les donnees deja presentes.
+        let tmp_path = std::env::temp_dir().join(format!(
+            "cstl_adn_store_migration_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+        ));
+        let tmp_path_str = tmp_path.to_str().unwrap().to_string();
+        let _ = std::fs::remove_file(&tmp_path_str);
+
+        {
+            // Ancien schema, sans modality -- exactement ce que ce depot
+            // produisait avant ce fix.
+            let raw = Connection::open(&tmp_path_str).unwrap();
+            raw.execute_batch(
+                "CREATE TABLE adn_store (
+                    hash TEXT PRIMARY KEY, payload TEXT NOT NULL, encoder TEXT,
+                    produced_by TEXT, sigma REAL NOT NULL, parent_hash TEXT,
+                    conversation_id TEXT, turn INTEGER, committed INTEGER NOT NULL DEFAULT 0,
+                    committed_by TEXT, committed_at INTEGER, created_at INTEGER NOT NULL
+                );
+                CREATE TABLE adn_relations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hash TEXT NOT NULL REFERENCES adn_store(hash),
+                    subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL
+                );",
+            ).unwrap();
+            raw.execute(
+                "INSERT INTO adn_store (hash, payload, sigma, created_at) VALUES ('h_old', 'p', 0.5, 0)",
+                [],
+            ).unwrap();
+            raw.execute(
+                "INSERT INTO adn_relations (hash, subject, predicate, object) VALUES ('h_old', 'paris', 'part_of', 'france')",
+                [],
+            ).unwrap();
+        }
+
+        // Rouvre via AdnStore::open() -- ne doit PAS paniquer, et doit avoir
+        // migre la colonne modality (NULL pour la ligne pre-existante).
+        let store = AdnStore::open(&tmp_path_str).unwrap();
+        let old_entry = store.get("h_old").unwrap();
+        assert!(old_entry.is_some(), "les donnees pre-existantes doivent survivre a la migration");
+
+        // put_relations avec modality doit maintenant fonctionner sur ce
+        // meme fichier migre.
+        store.put("h_new", "p2", None, None, 0.5, None, None, None).unwrap();
+        store.put_relations("h_new", &[deontic_relation("agent_x", "delete_prod_db", "MUST")]).unwrap();
+        let history = store.deontic_relations_history().unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST"));
+
+        let _ = std::fs::remove_file(&tmp_path_str);
     }
 }

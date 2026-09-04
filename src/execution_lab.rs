@@ -291,6 +291,103 @@ pub fn check_consistency_with_history(
     }
 }
 
+/// Une violation de l'Axiome D SDL (¬(MUST p ∧ MUST_NOT p)) detectee entre
+/// l'historique persiste et un payload NOUVEAU.
+#[derive(Debug, Clone)]
+pub struct DeonticViolation {
+    pub subject: String,
+    pub object: String,
+    pub required_by: String, // le nom exact de la modalite obligatoire (MUST/REQUIRE)
+    pub forbidden_by: String, // le nom exact de la modalite interdite (MUST_NOT/FORBID)
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DeonticAuditReport {
+    pub consistent: bool,
+    pub violations: Vec<DeonticViolation>,
+}
+
+/// Couche 8 (2026-09-04) — audit deontique HISTORIQUE: verifie les
+/// relations portant une `modality` (MUST/MUST_NOT/REQUIRE/FORBID) d'un
+/// payload NOUVEAU contre TOUT ce qui a ete persiste par des payloads
+/// PRECEDENTS (potentiellement d'agents differents, a des moments
+/// differents) -- pas seulement a l'interieur d'un seul payload (deja
+/// couvert, et BLOQUANT, par `server/validator.rs::validate_deontic_
+/// constraints` via `semantic.rs::check_axiom_d`, appele en STEP 2 avant
+/// meme d'atteindre cette fonction).
+///
+/// Meme patron que `check_consistency_with_history` ci-dessus, pas
+/// invente ici: une "position etablie" par (subject, object) est
+/// construite depuis l'historique, mise a jour au fil du nouveau payload,
+/// et une violation n'est rapportee QUE si une relation du NOUVEAU payload
+/// contredit une position deja etablie -- deux entrees de l'historique qui
+/// se contredisaient deja entre elles ne sont jamais re-signalees (elles
+/// l'auraient ete au moment ou leur deuxieme moitie est arrivee).
+///
+/// Design assume, pas un oubli: contrairement au check intra-payload
+/// (bloquant, E107 -- une auto-contradiction dans UN MEME payload est
+/// presque toujours une erreur d'auteur), une contradiction a travers
+/// l'HISTOIRE reste INFORMATIVE ici (jamais de rejet), exactement comme
+/// `check_consistency_with_history` pour les faits: des agents differents,
+/// ou le meme agent a des moments differents, peuvent legitimement changer
+/// de position ou etre en desaccord -- ce n'est pas force une erreur de
+/// protocole, contrairement a se contredire dans le meme souffle.
+pub fn check_deontic_consistency_with_history(
+    new_relations: &[HashMap<String, String>],
+    history_relations: &[HashMap<String, String>],
+) -> DeonticAuditReport {
+    use crate::semantic::{FORBIDDEN_MODALITIES, REQUIRED_MODALITIES};
+
+    // (subject, object) -> modalite (le premier des deux camps rencontre,
+    // obligatoire OU interdit) etablie par l'historique, puis par ce
+    // payload au fur et a mesure.
+    let mut established: HashMap<(String, String), (bool, String)> = HashMap::new(); // bool: is_required
+
+    let classify = |m: &str| -> Option<bool> {
+        if REQUIRED_MODALITIES.contains(&m) { Some(true) }
+        else if FORBIDDEN_MODALITIES.contains(&m) { Some(false) }
+        else { None }
+    };
+
+    for rel in history_relations {
+        let (Some(subject), Some(object), Some(modality)) =
+            (rel.get("subject"), rel.get("object"), rel.get("modality"))
+        else { continue };
+        let Some(is_required) = classify(modality) else { continue };
+        established.entry((subject.clone(), object.clone())).or_insert((is_required, modality.clone()));
+    }
+
+    let mut violations = Vec::new();
+    for rel in new_relations {
+        let (Some(subject), Some(object), Some(modality)) =
+            (rel.get("subject"), rel.get("object"), rel.get("modality"))
+        else { continue };
+        let Some(is_required) = classify(modality) else { continue };
+        let key = (subject.clone(), object.clone());
+        match established.get(&key) {
+            Some((prev_is_required, prev_modality)) if *prev_is_required != is_required => {
+                let (required_by, forbidden_by) = if is_required {
+                    (modality.clone(), prev_modality.clone())
+                } else {
+                    (prev_modality.clone(), modality.clone())
+                };
+                violations.push(DeonticViolation {
+                    subject: subject.clone(),
+                    object: object.clone(),
+                    required_by,
+                    forbidden_by,
+                });
+            }
+            Some(_) => {}
+            None => {
+                established.insert(key, (is_required, modality.clone()));
+            }
+        }
+    }
+
+    DeonticAuditReport { consistent: violations.is_empty(), violations }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,5 +532,86 @@ mod tests {
         let report = check_consistency_with_history(&new_relations, &history);
         assert!(report.consistent);
         assert_eq!(report.cycles.len(), 0);
+    }
+
+    // ── check_deontic_consistency_with_history (Couche 8, 2026-09-04) ──
+
+    fn deontic_rel(subject: &str, object: &str, modality: &str) -> HashMap<String, String> {
+        let mut m = rel(subject, "PERFORM", object);
+        m.insert("modality".to_string(), modality.to_string());
+        m
+    }
+
+    #[test]
+    fn test_no_history_no_violation() {
+        let new_relations = vec![deontic_rel("agent_x", "backup_db", "MUST")];
+        let report = check_deontic_consistency_with_history(&new_relations, &[]);
+        assert!(report.consistent);
+        assert!(report.violations.is_empty());
+    }
+
+    #[test]
+    fn test_new_must_contradicts_established_history_must_not() {
+        // Un payload PASSE a etabli MUST_NOT(agent_x, delete_prod_db). Un
+        // NOUVEAU payload (potentiellement d'un autre agent, ou du meme
+        // agent plus tard) declare MUST sur la MEME (subject, object) --
+        // c'est exactement le cas que la verification intra-payload
+        // (Axiome D, bloquante) ne peut PAS voir, puisque les deux moities
+        // n'ont jamais partage un seul payload.
+        let history = vec![deontic_rel("agent_x", "delete_prod_db", "MUST_NOT")];
+        let new_relations = vec![deontic_rel("agent_x", "delete_prod_db", "MUST")];
+        let report = check_deontic_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
+        assert_eq!(report.violations.len(), 1);
+        assert_eq!(report.violations[0].subject, "agent_x");
+        assert_eq!(report.violations[0].object, "delete_prod_db");
+        assert_eq!(report.violations[0].required_by, "MUST");
+        assert_eq!(report.violations[0].forbidden_by, "MUST_NOT");
+    }
+
+    #[test]
+    fn test_same_modality_repeated_is_not_a_violation() {
+        // Deux payloads (l'historique et le nouveau) qui declarent la MEME
+        // modalite sur la meme (subject, object) -- une repetition n'est
+        // pas une contradiction.
+        let history = vec![deontic_rel("agent_x", "backup_db", "MUST")];
+        let new_relations = vec![deontic_rel("agent_x", "backup_db", "MUST")];
+        let report = check_deontic_consistency_with_history(&new_relations, &history);
+        assert!(report.consistent);
+    }
+
+    #[test]
+    fn test_different_objects_no_violation() {
+        let history = vec![deontic_rel("agent_x", "backup_db", "MUST")];
+        let new_relations = vec![deontic_rel("agent_x", "delete_prod_db", "MUST_NOT")];
+        let report = check_deontic_consistency_with_history(&new_relations, &history);
+        assert!(report.consistent);
+    }
+
+    #[test]
+    fn test_preexisting_history_contradiction_not_reported_again() {
+        // Meme logique de dedup que check_consistency_with_history: si
+        // l'HISTOIRE contenait deja une contradiction (les deux moities
+        // sont deja persistees), un nouveau payload SANS RAPPORT ne doit
+        // pas la re-signaler a chaque fois -- ce serait du bruit repete,
+        // pas de l'information nouvelle (elle a deja ete rapportee quand
+        // sa 2e moitie est arrivee, a l'epoque).
+        let history = vec![
+            deontic_rel("agent_x", "delete_prod_db", "MUST"),
+            deontic_rel("agent_x", "delete_prod_db", "MUST_NOT"),
+        ];
+        let new_relations = vec![deontic_rel("agent_y", "other_action", "MUST")];
+        let report = check_deontic_consistency_with_history(&new_relations, &history);
+        assert!(report.consistent, "une contradiction deja presente dans l'historique ne doit pas etre re-signalee: {:?}", report.violations);
+    }
+
+    #[test]
+    fn test_forbid_and_require_synonyms_also_detected() {
+        // FORBID/REQUIRE sont les synonymes de MUST_NOT/MUST (memes listes
+        // que semantic.rs::check_axiom_d, reutilisees ici -- pas dupliquees).
+        let history = vec![deontic_rel("agent_x", "delete_prod_db", "FORBID")];
+        let new_relations = vec![deontic_rel("agent_x", "delete_prod_db", "REQUIRE")];
+        let report = check_deontic_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
     }
 }
