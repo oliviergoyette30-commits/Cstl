@@ -88,8 +88,9 @@ fn make_test_server(port: u16, council: RestrictedCouncil) -> CstlNativeServer {
         version: "5.0.0".to_string(),
         capabilities: vec!["communication".to_string()],
         trust_score: 0.9,
+        public_key: None,
     });
-    server.agent_registry = Arc::new(registry);
+    server.agent_registry = Arc::new(Mutex::new(registry));
     server.adn_store = Arc::new(Mutex::new(AdnStore::open(":memory:").expect("in-memory adn_store")));
     server.restricted_council = Arc::new(council);
     server

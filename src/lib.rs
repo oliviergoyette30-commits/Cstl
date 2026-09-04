@@ -17,3 +17,4 @@ pub mod telegram_council;
 pub mod obsidian_escalation;
 pub mod emergence;
 pub mod governance;
+pub mod signing;

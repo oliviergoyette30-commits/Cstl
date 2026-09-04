@@ -19,7 +19,7 @@ pub async fn create_listener(addr: &str) -> Result<TcpListener, Box<dyn std::err
 
 pub async fn accept_connections(
     listener: TcpListener,
-    agent_registry: Arc<AgentRegistry>,
+    agent_registry: Arc<Mutex<AgentRegistry>>,
     chain: Arc<Mutex<HashChain>>,
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,

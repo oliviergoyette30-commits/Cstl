@@ -23,6 +23,11 @@ path = "src/lib.rs"
 # (NFC). Corrige le 2026-09-03.
 
 [dev-dependencies]
+# Requis par les tests de src/signing.rs (SigningKey::generate(&mut csprng))
+# -- ed25519-dalek 2.x exige un CryptoRngCore, rand 0.8's OsRng l'implemente.
+# dev-dependency seulement: aucun code de production n'en depend, seulement
+# les tests qui generent des paires de cles ephemeres.
+rand = "0.8"
 
 [profile.release]
 opt-level = 3
@@ -60,3 +65,19 @@ version = "1"
 
 [dependencies.unicode-normalization]
 version = "0.1"
+
+[dependencies.ed25519-dalek]
+# Premiere dependance crypto de ce projet en dehors du hachage (sha2) --
+# signature de messages par agent (Couche 2/securite, 2026-09-04), ferme
+# OWASP ASI03/ASI07 (identite/integrite inter-agents non authentifiees).
+# Feature "rand_core" necessaire pour SigningKey::generate(&mut csprng)
+# utilise dans les tests de src/signing.rs -- pas activee par defaut.
+version = "2"
+features = ["rand_core"]
+
+[dependencies.hex]
+# Le hex hand-roule via `{:x}` (server/audit.rs) marche seulement sur le
+# GenericArray retourne par sha2 -- pas sur les octets bruts [u8;N] des
+# cles/signatures Ed25519. Petite dependance dediee plutot que refaire un
+# encodeur hex a la main.
+version = "0.4"

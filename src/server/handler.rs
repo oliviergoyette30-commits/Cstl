@@ -22,6 +22,8 @@ use crate::obsidian_escalation::ObsidianEscalation;
 use crate::emergence;
 use crate::security;
 use crate::governance::GovernanceTracker;
+use crate::agent_discovery::AgentCard;
+use crate::signing::{self, SignatureCheck};
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -44,7 +46,7 @@ fn find_message_end(buf: &[u8]) -> Option<usize> {
 
 pub async fn handle_connection(
     mut socket: TcpStream,
-    registry: Arc<AgentRegistry>,
+    registry: Arc<Mutex<AgentRegistry>>,
     chain: Arc<Mutex<HashChain>>,
     kb_verifier: Arc<KbVerifier>,
     adn_store: Arc<Mutex<AdnStore>>,
@@ -156,6 +158,48 @@ pub async fn handle_connection(
                                 w.replace(',', ";").replace('[', "(").replace(']', ")")
                             ));
                         }
+                    }
+
+                    // STEP 2a: Verification de signature Ed25519 (Couche 2/securite,
+                    // src/signing.rs) — optionnelle globalement, obligatoire seulement
+                    // pour un expediteur DEJA enregistre avec une public_key. On rejette
+                    // ici (bloquant, meme categorie que securite/parse/validation) plutot
+                    // que de laisser passer avec un simple avertissement: une signature
+                    // invalide est une tentative d'usurpation, pas un signal consultatif.
+                    let sig_check = signing::check_signature(&payload);
+                    let sig_sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                    let is_agent_register = payload.intent.get("purpose").map(String::as_str) == Some("agent_register");
+                    let signature_required = {
+                        let reg = registry.lock().await;
+                        reg.agents.iter().any(|a| a.name == sig_sender && a.public_key.is_some())
+                    };
+                    // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
+                    // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
+                    // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
+                    // d'enregistrement (self_signature_required, etc.) -- sans cette
+                    // exemption, un agent_register sans signature ou avec une signature
+                    // incomplete serait TOUJOURS intercepte ici avec le message generique
+                    // "signature_invalid"/"incomplete_signature_fields", rendant les
+                    // branches dediees du bloc agent_register inatteignables en pratique
+                    // (trouvaille du smoke test live, pas anticipee dans le plan initial).
+                    let sig_rejection: Option<&'static str> = if is_agent_register {
+                        None
+                    } else {
+                        match &sig_check {
+                            SignatureCheck::Invalid(_) => Some("signature_invalid"),
+                            SignatureCheck::NotPresent if signature_required => Some("missing_signature_for_registered_agent"),
+                            _ => None,
+                        }
+                    };
+                    if let Some(reason) = sig_rejection {
+                        eprintln!("[Handler] 🔐 Signature rejetee pour '{}': {}", sig_sender, reason);
+                        let detail = if let SignatureCheck::Invalid(d) = &sig_check { d.clone() } else { reason.to_string() };
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=signature_rejected, reason={}, detail={}]\n---END---\n",
+                            reason, detail
+                        );
+                        socket.write_all(response.as_bytes()).await?;
+                        continue;
                     }
 
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
@@ -291,6 +335,60 @@ pub async fn handle_connection(
                                     // sqlite interne loggee cote serveur, jamais renvoyee brute au client.
                                     eprintln!("[Handler] ⚠️  detect_emergence failed: {}", e);
                                     "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_failed, detail=internal_error]\n---END---\n".to_string()
+                                }
+                            }
+                        };
+
+                        socket.write_all(response.as_bytes()).await?;
+                        continue;
+                    }
+
+                    // B-2: purpose=agent_register (Couche 7, enregistrement dynamique)
+                    // — reutilise sig_check deja calcule en STEP 2a (pas de double
+                    // verification). Bootstrap assume: la signature prouve seulement
+                    // "je possede cette cle privee", pas "je suis deja connu" -- pas de
+                    // PKI/CA, cohérent avec le modele de confiance mono-operateur deja
+                    // en place (RestrictedCouncil). Limite v1 documentee: aucune
+                    // verification d'autorisation de rotation contre l'ANCIENNE cle.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("agent_register") {
+                        let name = payload.intent.get("name").cloned().unwrap_or_default();
+                        let public_key = payload.meta.get("public_key").cloned();
+                        let capabilities: Vec<String> = payload.intent.get("capabilities")
+                            .map(|c| c.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+                            .unwrap_or_default();
+                        let trust_score: f64 = payload.intent.get("trust_score")
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0.5);
+
+                        let response = if name.is_empty() || public_key.is_none() {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=missing_name_or_public_key]\n---END---\n".to_string()
+                        } else {
+                            match &sig_check {
+                                SignatureCheck::Valid => {
+                                    let card = AgentCard {
+                                        name: name.clone(),
+                                        version: payload.meta.get("encoder").cloned().unwrap_or_else(|| "unknown".to_string()),
+                                        capabilities,
+                                        trust_score,
+                                        public_key: public_key.clone(),
+                                    };
+                                    registry.lock().await.register(card);
+                                    eprintln!("[Handler] 🪪 agent_register: '{}' enregistre/mis a jour (trust_score={})", name, trust_score);
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=agent_register_ack, name={}]\n---END---\n",
+                                        name
+                                    )
+                                }
+                                SignatureCheck::Invalid(detail) => {
+                                    eprintln!("[Handler] 🔐 agent_register rejete pour '{}': signature invalide ({})", name, detail);
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=signature_invalid, detail={}]\n---END---\n",
+                                        detail
+                                    )
+                                }
+                                SignatureCheck::NotPresent => {
+                                    eprintln!("[Handler] 🔐 agent_register rejete pour '{}': signature absente (auto-signature obligatoire)", name);
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=self_signature_required]\n---END---\n".to_string()
                                 }
                             }
                         };
@@ -550,10 +648,17 @@ pub async fn handle_connection(
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
                     );
                     
-                    // STEP 4: Try to route to agent
-                    if let Some(agent) = registry.route("communication") {
-                        eprintln!("[Handler] ✅ Found agent: {}", agent.name);
-                        
+                    // STEP 4: Try to route to agent — agent_registry est maintenant
+                    // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
+                    // du lock pour ne jamais tenir le MutexGuard pendant le
+                    // write_all().await qui suit.
+                    let routed_agent_name = {
+                        let reg = registry.lock().await;
+                        reg.route("communication").map(|a| a.name.clone())
+                    };
+                    if let Some(agent_name) = routed_agent_name {
+                        eprintln!("[Handler] ✅ Found agent: {}", agent_name);
+
                         // STEP 5: Build response
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\n\

@@ -59,6 +59,25 @@ donc quorum=1 en pratique aujourd'hui ; l'état du breaker/drift est en
 mémoire uniquement, perdu au redémarrage. Le "✅ TESTÉ - 4/4 modes" affiché
 ici avant le 2026-09-03 n'a jamais été vrai.
 
+**Identité/authentification (2026-09-04, `src/signing.rs`):** signature
+Ed25519 par message, câblée live et vérifiée en direct
+(`examples/signing_registration_smoke_test.rs`, 6 scénarios sur une vraie
+connexion TCP + dev/release). Ferme partiellement OWASP ASI03 (Identity &
+Privilege Abuse) et ASI07 (Insecure Inter-Agent Communication) — avant ce
+travail, `sender`/`receiver` étaient de simples chaînes de texte sans
+AUCUNE vérification cryptographique. Portée v1 assumée, pas une découverte
+après coup: la signature est **optionnelle globalement, obligatoire
+seulement pour un expéditeur déjà enregistré avec une `public_key`**
+(`META.public_key`, `INTENT_PAYLOAD.signature`, STEP 2a de
+`server/handler.rs`) — sinon les 148 tests et smoke-tests legacy non
+signés casseraient tous pour fermer un risque qui ne concerne, dans les
+faits, que les identités déjà établies. Pas de PKI/CA: une auto-signature
+prouve seulement la possession de la clé privée, pas une identité
+pré-existante (modèle de confiance mono-opérateur, cohérent avec
+`RestrictedCouncil`). Limite documentée: aucune vérification
+d'autorisation de rotation contre l'ANCIENNE clé lors d'un
+réenregistrement.
+
 ### Couche 3a: Vérification Faits Publics
 **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
 
@@ -85,9 +104,9 @@ Laplace Smoothed Scoring per-agent, per-domain accuracy.
 Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel désormais — corrige une contradiction avec README.md détectée par l'audit multi-angle du 2026-09-03 (ce document disait encore "inactif, pas installé" alors que README.md documentait déjà l'installation et la régénération). L'outil (`graphifyy`, PyPI, venv local) a été installé et le graphe régénéré le 2026-09-03 : 967 nœuds, 1800 arêtes, 63 communautés étiquetées sémantiquement, construit depuis le commit `3326f917`. Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé.
 
 ### Couche 7: Agent Discovery & Routing (CSTL Natif)
-**État:** ✅ CONSTRUITE ET CÂBLÉE LIVE
+**État:** ✅ CONSTRUITE ET CÂBLÉE LIVE — enregistrement désormais dynamique (2026-09-04)
 
-`src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur.
+`src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur. Jusqu'au 2026-09-04, le registre était figé à la compilation (alice/bob codés en dur dans `main.rs`, `Arc` immuable) — aucune inscription dynamique possible, contrairement aux Agent Cards d'A2A. Corrigé: `AgentRegistry` est maintenant `Arc<Mutex<_>>`, et `purpose=agent_register` (nouveau message wire, `server/handler.rs`) permet à un agent de s'enregistrer/se réenregistrer (upsert par nom) via une auto-signature Ed25519 (réutilise la vérification de la Couche 2 ci-dessus) — vérifié en direct (mêmes 6 scénarios que la signature). Un agent LLM réel (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) s'enregistre et signe ses messages avec cette voie — vérifié en direct contre le serveur Rust réel (enregistrement, rejet du non-signé, acceptation du signé) ; la génération de contenu par un vrai modèle Claude reste à vérifier par l'utilisateur (aucun paquet `anthropic` ni clé API dans ce sandbox).
 
 ### Couche 8: Provenance Audit / Cryptographic Guarantee
 **État:** ✅ DESIGNÉ

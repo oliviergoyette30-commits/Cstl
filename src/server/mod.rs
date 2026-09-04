@@ -24,7 +24,11 @@ use crate::governance::GovernanceTracker;
 
 pub struct CstlNativeServer {
     pub port: u16,
-    pub agent_registry: Arc<AgentRegistry>,
+    /// Mutable derriere un verrou depuis l'ajout de purpose=agent_register
+    /// (2026-09-04) -- avant ca, le registre etait fige a la compilation
+    /// (alice/bob en dur dans main.rs), aucun agent ne pouvait s'inscrire
+    /// au runtime.
+    pub agent_registry: Arc<Mutex<AgentRegistry>>,
     pub chain: Arc<Mutex<audit::HashChain>>,
     pub kb_verifier: Arc<KbVerifier>,
     pub adn_store: Arc<Mutex<AdnStore>>,
@@ -41,7 +45,7 @@ impl CstlNativeServer {
     pub fn new(port: u16) -> Self {
         CstlNativeServer {
             port,
-            agent_registry: Arc::new(AgentRegistry::new()),
+            agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
             chain: Arc::new(Mutex::new(audit::HashChain::new())),
             kb_verifier: Arc::new(KbVerifier::new()),
             adn_store: Arc::new(Mutex::new(AdnStore::open("cstl_adn.db").expect("failed to open cstl_adn.db"))),

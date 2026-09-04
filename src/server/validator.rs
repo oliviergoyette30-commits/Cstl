@@ -97,6 +97,31 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
         }
     }
 
+    // Signature Ed25519 (Couche 2/securite, src/signing.rs) -- ici, verification
+    // de FORMAT seulement (longueur hex attendue), jamais d'erreur sur absence
+    // (l'optionnalite globale/obligation-si-deja-enregistre vit dans handler.rs,
+    // STEP 2a, pas ici). E309/E310 plutot que E306/E307 deja pris par les
+    // RELATION per-index ci-dessus -- collision qui aurait ete introduite si le
+    // plan initial (E306/E307) avait ete suivi tel quel.
+    if let Some(pk) = payload.meta.get("public_key") {
+        if pk.len() != 64 || !pk.chars().all(|c| c.is_ascii_hexdigit()) {
+            result.errors.push(ValidationError {
+                code: "E309".to_string(),
+                message: "META.public_key doit etre 64 caracteres hexadecimaux (32 octets)".to_string(),
+            });
+            result.valid = false;
+        }
+    }
+    if let Some(sig) = payload.intent.get("signature") {
+        if sig.len() != 128 || !sig.chars().all(|c| c.is_ascii_hexdigit()) {
+            result.errors.push(ValidationError {
+                code: "E310".to_string(),
+                message: "INTENT_PAYLOAD.signature doit etre 128 caracteres hexadecimaux (64 octets)".to_string(),
+            });
+            result.valid = false;
+        }
+    }
+
     // Validate deontic constraints (MUST/MUST_NOT)
     validate_deontic_constraints(payload, &mut result);
 

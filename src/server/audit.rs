@@ -113,6 +113,70 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
     format!("sha256:{:x}", hasher.finalize())
 }
 
+/// Octets a signer/verifier pour un payload (src/signing.rs, Couche 2/
+/// securite, 2026-09-04). Duplique DELIBEREMENT la logique de
+/// canonicalisation de `canonical_hash` ci-dessus plutot que de la
+/// refactorer -- eviter tout risque sur le hash de production deja
+/// verifie en direct cette session. Differences volontaires par rapport
+/// au hash d'audit: exclut `INTENT.signature` (un message ne peut pas se
+/// signer lui-meme) EN PLUS de `META.PARENT_HASH` deja exclu ; inclut
+/// `META.public_key` (lie la signature a la cle revendiquee -- sans ca,
+/// un attaquant pourrait rejouer une signature valide sous une autre cle).
+pub fn signing_bytes(payload: &CstlPayload) -> Vec<u8> {
+    let mut canon = String::new();
+
+    canon.push_str("VERSION|");
+    canon.push_str(&nfc(&payload.version));
+    canon.push_str("\nMODE|");
+    canon.push_str(&nfc(&payload.mode));
+
+    let meta: BTreeMap<_, _> = payload.meta.iter().collect();
+    canon.push_str("\nMETA");
+    for (k, v) in meta {
+        if k == "PARENT_HASH" {
+            continue;
+        }
+        canon.push('|');
+        canon.push_str(&nfc(k));
+        canon.push('=');
+        canon.push_str(&nfc(v));
+    }
+
+    let intent: BTreeMap<_, _> = payload.intent.iter().collect();
+    canon.push_str("\nINTENT");
+    for (k, v) in intent {
+        if k == "signature" {
+            continue;
+        }
+        canon.push('|');
+        canon.push_str(&nfc(k));
+        canon.push('=');
+        canon.push_str(&nfc(v));
+    }
+
+    let mut rel_strings: Vec<String> = payload
+        .relations
+        .iter()
+        .map(|r| {
+            let sorted: BTreeMap<_, _> = r.iter().collect();
+            sorted
+                .iter()
+                .map(|(k, v)| format!("{}={}", nfc(k), nfc(v)))
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect();
+    rel_strings.sort();
+
+    canon.push_str("\nRELATIONS");
+    for r in rel_strings {
+        canon.push('|');
+        canon.push_str(&r);
+    }
+
+    canon.into_bytes()
+}
+
 impl HashChain {
     pub fn new() -> Self {
         HashChain { entries: Vec::new() }
@@ -255,6 +319,37 @@ mod tests {
         assert_eq!(e2.parent_hash, e1.hash);
         assert_eq!(chain.len(), 2);
         assert!(chain.verify_integrity().is_ok());
+    }
+
+    #[test]
+    fn test_signing_bytes_deterministic() {
+        let a = mk("alice", "query");
+        let b = mk("alice", "query");
+        assert_eq!(signing_bytes(&a), signing_bytes(&b));
+    }
+
+    #[test]
+    fn test_signing_bytes_excludes_own_signature_field() {
+        let a = mk("alice", "query");
+        let mut b = mk("alice", "query");
+        b.intent.insert("signature".to_string(), "deadbeef".repeat(16));
+        assert_eq!(signing_bytes(&a), signing_bytes(&b), "un message ne peut pas se signer lui-meme");
+    }
+
+    #[test]
+    fn test_signing_bytes_excludes_parent_hash_like_canonical_hash() {
+        let a = mk("alice", "query");
+        let mut b = mk("alice", "query");
+        b.meta.insert("PARENT_HASH".to_string(), "sha256:deadbeef".to_string());
+        assert_eq!(signing_bytes(&a), signing_bytes(&b));
+    }
+
+    #[test]
+    fn test_signing_bytes_includes_public_key() {
+        let a = mk("alice", "query");
+        let mut b = mk("alice", "query");
+        b.meta.insert("public_key".to_string(), "aa".repeat(32));
+        assert_ne!(signing_bytes(&a), signing_bytes(&b), "la cle publique doit etre liee a la signature");
     }
 
     #[test]
