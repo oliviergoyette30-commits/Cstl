@@ -7,6 +7,7 @@ use std::collections::{HashSet, VecDeque};
 use std::time::Duration;
 use serde::Serialize;
 use serde_json::Value;
+use crate::hypothesis_engine::{EntanglementHypothesis, overlap_coefficient};
 
 const WIKIDATA_SEARCH_API: &str = "https://www.wikidata.org/w/api.php";
 const WIKIDATA_SPARQL_ENDPOINT: &str = "https://query.wikidata.org/sparql";
@@ -282,6 +283,109 @@ impl KbVerifier {
                 chain: None, property_id,
             }
         }
+    }
+
+    /// Voisinage generique d'une entite (toute propriete, pas seulement les 12
+    /// mappees dans `predicate_to_property`) -- utilise par le moteur d'hypotheses
+    /// (Level 4, `src/hypothesis_engine.rs`) pour detecter un recouvrement de
+    /// voisinage entre deux entites, pas pour verifier une relation CSTL precise
+    /// comme `query_property_neighbors` ci-dessus.
+    pub async fn query_generic_neighbors(&self, qid: &str, limit: usize) -> HashSet<String> {
+        let query = format!(
+            "SELECT DISTINCT ?n WHERE {{ {{ wd:{qid} ?p ?n . }} UNION {{ ?n ?p wd:{qid} . }} \
+             FILTER(STRSTARTS(STR(?n), \"http://www.wikidata.org/entity/Q\")) }} LIMIT {limit}"
+        );
+        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+            .query(&[("query", query.as_str()), ("format", "json")])
+            .timeout(Duration::from_secs(15))
+            .send().await;
+        let json: Value = match resp {
+            Ok(r) => match r.json().await { Ok(j) => j, Err(_) => return HashSet::new() },
+            Err(_) => return HashSet::new(),
+        };
+        json.pointer("/results/bindings").and_then(Value::as_array).cloned().unwrap_or_default()
+            .iter()
+            .filter_map(|b| b.pointer("/n/value").and_then(Value::as_str))
+            .filter_map(|uri| uri.rsplit('/').next())
+            .filter(|qid| qid.starts_with('Q'))
+            .map(String::from)
+            .collect()
+    }
+
+    /// Label lisible d'un QID (`rdfs:label`, langue demandee sinon anglais en
+    /// repli) -- utilise pour rendre une hypothese generee lisible par un humain
+    /// plutot que de n'afficher que des QID.
+    pub async fn resolve_label(&self, qid: &str, lang: &str) -> Option<String> {
+        let query = format!(
+            "SELECT ?label WHERE {{ wd:{qid} rdfs:label ?label . \
+             FILTER(lang(?label) = \"{lang}\" || lang(?label) = \"en\") }} LIMIT 1"
+        );
+        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+            .query(&[("query", query.as_str()), ("format", "json")])
+            .timeout(Duration::from_secs(10))
+            .send().await.ok()?;
+        let json: Value = resp.json().await.ok()?;
+        json.pointer("/results/bindings/0/label/value").and_then(Value::as_str).map(String::from)
+    }
+
+    /// `Some(true)`/`Some(false)` si une relation directe (n'importe quelle
+    /// propriete) existe deja entre les deux entites -- reutilise
+    /// `query_any_relation_exists`. `None` sur echec reseau: jamais traite comme
+    /// "pas de relation" par l'appelant, pour ne jamais generer une hypothese a
+    /// partir d'une incertitude reseau plutot que d'un vrai signal.
+    pub async fn has_direct_relation(&self, a: &str, b: &str) -> Option<bool> {
+        self.query_any_relation_exists(a, b).await.0
+    }
+
+    /// Point d'entree du moteur d'hypotheses (Level 4, "Future Architecture" --
+    /// voir `src/hypothesis_engine.rs`). Pour chaque candidat, calcule le
+    /// recouvrement de voisinage avec `subject_qid` et propose une
+    /// `EntanglementHypothesis` quand (a) aucune relation directe connue n'existe
+    /// deja entre les deux entites et (b) le nombre de voisins communs atteint
+    /// `min_common_neighbors`. Ne propose RIEN sur un echec/vide reseau partiel --
+    /// un voisinage vide ou une verification de relation directe indisponible fait
+    /// sauter le candidat plutot que de generer une hypothese depuis une
+    /// incertitude. Non verifiable en direct depuis ce sandbox (wikidata.org
+    /// bloque par la liste blanche reseau) -- voir l'en-tete de
+    /// `hypothesis_engine.rs`.
+    pub async fn detect_entanglement(
+        &self,
+        subject_qid: &str,
+        candidate_qids: &[String],
+        neighbor_limit: usize,
+        min_common_neighbors: usize,
+        lang: &str,
+    ) -> Vec<EntanglementHypothesis> {
+        let subject_neighbors = self.query_generic_neighbors(subject_qid, neighbor_limit).await;
+        if subject_neighbors.is_empty() {
+            return Vec::new();
+        }
+        let mut hypotheses = Vec::new();
+        for object_qid in candidate_qids {
+            if object_qid == subject_qid {
+                continue;
+            }
+            match self.has_direct_relation(subject_qid, object_qid).await {
+                Some(false) => {}
+                Some(true) | None => continue, // deja lie, ou incertitude reseau -- rien a proposer
+            }
+            let object_neighbors = self.query_generic_neighbors(object_qid, neighbor_limit).await;
+            if object_neighbors.is_empty() {
+                continue;
+            }
+            let common = subject_neighbors.intersection(&object_neighbors).count();
+            if common < min_common_neighbors {
+                continue;
+            }
+            let overlap = overlap_coefficient(&subject_neighbors, &object_neighbors);
+            let subject_label = self.resolve_label(subject_qid, lang).await;
+            let object_label = self.resolve_label(object_qid, lang).await;
+            hypotheses.push(EntanglementHypothesis::new(
+                subject_qid, object_qid.as_str(), subject_label, object_label, common, overlap,
+            ));
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        hypotheses
     }
 
     /// Point d'entrée principal — couche 3a.

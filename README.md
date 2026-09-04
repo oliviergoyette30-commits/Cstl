@@ -5,7 +5,7 @@
 > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-153%20passing-brightgreen.svg)
 
 ---
 
@@ -115,7 +115,7 @@ Level 4 is defined as: *several LLMs coordinate a real task without semantic los
 
 | Component | Role | Status |
 |---|---|---|
-| **Hypothesis engine** | Entanglement detection over a bounded knowledge graph (Wikidata subgraph): find node pairs with high common-neighbour overlap and no direct edge, then propose a speculative CSTL relation at deliberately low σ (`ASSUMES` / `DOUBTS`, never `KNOWS`) | 🟡 SPARQL integration exists (`src/kb_verify.rs`); Graphify (now installed, used for codebase visualization) is unrelated to this feature; generative step untested |
+| **Hypothesis engine** | Entanglement detection over a bounded knowledge graph (Wikidata subgraph): find node pairs with high common-neighbour overlap and no direct edge, then propose a speculative CSTL relation at deliberately low σ (`ASSUMES` / `DOUBTS`, never `KNOWS`) | 🟡 **Generative step built 2026-09-04** (`src/hypothesis_engine.rs`, wired into `src/kb_verify.rs::KbVerifier::detect_entanglement`): overlap-coefficient computation (not Jaccard — a high-degree node would tank Jaccard even at full overlap on the small side, drowning the signal), sigma formula capped at 0.35 (never reaches the 0.8 `KNOWS` threshold — see `semantic.rs::check_knows_calibration`), and CSTL relation formatting are unit-tested here (10 tests, no network). `examples/hypothesis_engine_demo.rs` verifies the pipeline end-to-end offline. **Honest limit**: the network orchestration (`query_generic_neighbors`/`resolve_label`/`detect_entanglement` against real Wikidata) could not be verified live in this environment — wikidata.org returns 403 on this sandbox's outbound proxy (confirmed with a direct `curl` before writing the code) — needs verification on a machine with real network access |
 | **Simulation / validation lab** | `ExecutionLab` for computationally checkable hypotheses (internal consistency, contradiction, temporal cycle detection). Empirical world-facts stay permanently low-σ until independently corroborated — by design, not as a gap | 🟡 Contradiction + 2-node cycle detection implemented and wired live (`src/execution_lab.rs`, tested); `check_consistency_with_history` cross-references each new payload against the full ADN store history (`adn_relations` table), not just relations within the same payload; only re-flags a contradiction/cycle when the NEW payload is what triggers it (pre-existing history-vs-history issues are not re-reported on every unrelated future request); longer cycles, temporal-cycle detection and domain simulators not built |
 | **Human council** | `RestrictedCouncil`, 2/3 quorum — plausibility and harm filter before storage, not a truth oracle | 🟡 Designed, matches published precedent (Wikidata Primary Sources Tool pattern) |
 
@@ -253,7 +253,7 @@ not checked by any live code today.
 cargo test --lib
 ```
 
-143 tests passing, 0 failures (as of 2026-09-04 — this number drifts with every session, verify with `cargo test --lib` rather than trusting a fixed figure; six different stale counts were found across this file, `docs/ARCHITECTURE.md` and `CSTL_SPEC_v5_0.md` before this correction). Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
+153 tests passing, 0 failures (as of 2026-09-04, updated same day with the hypothesis engine — this number drifts with every session, verify with `cargo test --lib` rather than trusting a fixed figure; six different stale counts were found across this file, `docs/ARCHITECTURE.md` and `CSTL_SPEC_v5_0.md` before this correction). Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
 
 ---
 
@@ -269,7 +269,7 @@ cargo test --lib
 - Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
 - `emergence_proofs` table: real, tested CRUD (`AdnStore::put_emergence_proof`/`get_emergence_proofs`), now reachable live via `purpose=detect_emergence` on `INTENT_PAYLOAD` (`src/emergence.rs`, a Rust port of the Python `RevisionOrchestrator` that existed nowhere in this repo before). Design matches how the project's own multi-LLM sessions actually happened (`CSTL_v4_9_1_REFERENCE_DEMO`: a human relays the same question to several LLMs and forwards their responses) — no API keys, no automated cross-vendor calling; the server only compares payloads its agents already submitted. Decision matching is a naive textual comparison (trim + lowercase), not semantic. Still zero production data — nobody has run a real tripartite session through this path yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.
 - `ExecutionLab` consistency check now cross-references each new payload against the full ADN store history (`src/execution_lab.rs::check_consistency_with_history`, wired live in `handler.rs`), not just relations within the same payload. Still scoped to functional-predicate contradictions and 2-node cycles — no temporal-cycle detection, no cross-domain simulators.
-- Level 4 hypothesis engine: generative step (proposing novel relations) not yet demonstrated.
+- Level 4 hypothesis engine: generative step now built (`src/hypothesis_engine.rs`, 2026-09-04) and unit-tested offline (overlap coefficient, sigma formula, CSTL formatting) — the network orchestration against real Wikidata is unverified in this environment (network blocked), needs confirmation on a machine with real access.
 - Simulation lab: consistency checking prototyped; domain-specific simulators not built.
 - Zero external adopters.
 
