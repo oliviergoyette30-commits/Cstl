@@ -1,17 +1,21 @@
-//! src/execution_lab.rs — Couche 3b (partielle) de l'architecture CSTL.
+//! src/execution_lab.rs — Couche 3b de l'architecture CSTL.
 //! `ExecutionLab`: vérification de cohérence interne, computationnellement checkable,
 //! SANS jugement de vérité empirique (ça, c'est le rôle de kb_verify / Wikidata).
 //!
-//! Portée honnête de cette version: cohérence DANS un seul payload reçu (les relations
-//! qui arrivent ensemble dans une même requête TCP). Deux checks réels:
+//! Deux checks réels, appliqués via `check_consistency_with_history` (le seul chemin
+//! réellement appelé par le serveur, voir handler.rs) contre le payload NOUVEAU plus
+//! tout l'historique persisté dans l'ADN store (pas seulement les relations reçues
+//! dans la même requête TCP — mise à jour 2026-09-04, voir sa propre doc ci-dessous
+//! pour la portée exacte) :
 //!   1. Contradiction directe: un prédicat "fonctionnel" (au plus un objet valide par
 //!      sujet — né quelque part une fois, capitale d'un seul pays, etc.) apparaît deux
 //!      fois pour le même sujet avec deux objets différents.
 //!   2. Cycle: une chaîne de prédicats transitifs (located_in / part_of) qui revient
 //!      sur son point de départ (A part_of B, B part_of A).
-//! PAS encore fait (honnête, pas caché): `RestrictedCouncil` (quorum humain 2/3),
-//! détection de cycle temporel, consistance croisée avec l'historique complet de
-//! l'ADN store (seulement la portée du payload courant pour l'instant).
+//!
+//! PAS encore fait (honnête, pas caché): détection de cycle temporel. Le quorum humain
+//! (`RestrictedCouncil`, portée réduite v1 — un seul membre par défaut) est implémenté
+//! ailleurs, voir src/restricted_council.rs, pas dans ce module.
 
 use std::collections::{HashMap, HashSet};
 
@@ -50,38 +54,6 @@ impl ConsistencyReport {
     pub fn sigma_adjustment(&self) -> f64 {
         if self.consistent { 0.75 } else { 0.09 }
     }
-}
-
-fn find_contradictions(relations: &[HashMap<String, String>]) -> Vec<Contradiction> {
-    // (subject, predicate) -> premier objet vu
-    let mut seen: HashMap<(String, String), String> = HashMap::new();
-    let mut out = Vec::new();
-
-    for rel in relations {
-        let (Some(subject), Some(predicate), Some(object)) =
-            (rel.get("subject"), rel.get("type"), rel.get("object"))
-        else { continue };
-
-        if !FUNCTIONAL_PREDICATES.contains(&predicate.as_str()) {
-            continue;
-        }
-        let key = (subject.clone(), predicate.clone());
-        match seen.get(&key) {
-            Some(prev_object) if prev_object != object => {
-                out.push(Contradiction {
-                    subject: subject.clone(),
-                    predicate: predicate.clone(),
-                    object_a: prev_object.clone(),
-                    object_b: object.clone(),
-                });
-            }
-            Some(_) => {} // même objet répété — pas une contradiction
-            None => {
-                seen.insert(key, object.clone());
-            }
-        }
-    }
-    out
 }
 
 fn find_cycles(relations: &[HashMap<String, String>]) -> Vec<Cycle> {
@@ -184,18 +156,6 @@ pub fn relevant_predicates() -> Vec<&'static str> {
         .collect()
 }
 
-/// Point d'entrée principal — vérifie la cohérence interne de toutes les
-/// relations d'un même payload.
-pub fn check_consistency(relations: &[HashMap<String, String>]) -> ConsistencyReport {
-    let contradictions = find_contradictions(relations);
-    let cycles = find_cycles(relations);
-    ConsistencyReport {
-        consistent: contradictions.is_empty() && cycles.is_empty(),
-        contradictions,
-        cycles,
-    }
-}
-
 fn edges_set(relations: &[HashMap<String, String>], predicates: &[&str]) -> HashSet<(String, String, String)> {
     // (predicate, subject, object)
     let mut set = HashSet::new();
@@ -213,7 +173,13 @@ fn edges_set(relations: &[HashMap<String, String>], predicates: &[&str]) -> Hash
 
 /// Vérifie la cohérence d'un payload NOUVEAU contre tout l'historique de
 /// l'ADN store, pas seulement les relations reçues dans la même requête.
-/// Portée honnête et ce qui change par rapport à `check_consistency`:
+/// Seule fonction publique de ce genre (2026-09-04): l'ancienne
+/// `check_consistency(relations)`, qui ne regardait que le payload courant
+/// sans historique, a été retirée -- elle n'avait plus aucun appelant réel
+/// (le chemin serveur appelle uniquement `check_consistency_with_history`
+/// depuis l'ajout de la vérification croisée avec l'ADN store). Un appel
+/// équivalent à l'ancien comportement reste possible en passant `&[]` comme
+/// `history_relations`.
 ///
 ///   - Contradictions: la valeur "établie" pour un (sujet, prédicat)
 ///     fonctionnel vient d'abord de l'historique, puis est mise à jour par les
@@ -411,7 +377,7 @@ mod tests {
 
     #[test]
     fn test_no_relations_is_consistent() {
-        let report = check_consistency(&[]);
+        let report = check_consistency_with_history(&[], &[]);
         assert!(report.consistent);
     }
 
@@ -421,7 +387,7 @@ mod tests {
             rel("Marie Curie", "born_in", "Warsaw"),
             rel("Marie Curie", "born_in", "Paris"),
         ];
-        let report = check_consistency(&relations);
+        let report = check_consistency_with_history(&relations, &[]);
         assert!(!report.consistent);
         assert_eq!(report.contradictions.len(), 1);
         assert_eq!(report.sigma_adjustment(), 0.09);
@@ -433,7 +399,7 @@ mod tests {
             rel("Marie Curie", "born_in", "Warsaw"),
             rel("Marie Curie", "born_in", "Warsaw"),
         ];
-        let report = check_consistency(&relations);
+        let report = check_consistency_with_history(&relations, &[]);
         assert!(report.consistent);
     }
 
@@ -443,7 +409,7 @@ mod tests {
             rel("A", "part_of", "B"),
             rel("B", "part_of", "A"),
         ];
-        let report = check_consistency(&relations);
+        let report = check_consistency_with_history(&relations, &[]);
         assert!(!report.consistent);
         assert_eq!(report.cycles.len(), 1);
     }
@@ -462,7 +428,7 @@ mod tests {
             rel("A", "part_of", "C"),
             rel("C", "part_of", "A"),
         ];
-        let report = check_consistency(&relations);
+        let report = check_consistency_with_history(&relations, &[]);
         assert!(!report.consistent, "le cycle A->C->A doit etre detecte malgre le successeur B qui n'aboutit pas");
         assert_eq!(report.cycles.len(), 1);
         assert_eq!(report.sigma_adjustment(), 0.09);
@@ -477,7 +443,7 @@ mod tests {
             rel("A", "part_of", "C"),
             rel("C", "part_of", "D"),
         ];
-        let report = check_consistency(&relations);
+        let report = check_consistency_with_history(&relations, &[]);
         assert!(report.consistent);
         assert!(report.cycles.is_empty());
     }
