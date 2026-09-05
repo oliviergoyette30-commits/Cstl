@@ -634,8 +634,9 @@ pub async fn handle_connection(
                     let consistency = execution_lab::check_consistency_with_history(&payload.relations, &history_relations);
                     let sigma = consistency.sigma_adjustment();
                     eprintln!(
-                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} -> sigma={}",
-                        consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
+                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} -> sigma={}",
+                        consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(),
+                        consistency.temporal_cycles.len(), sigma
                     );
 
                     // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
@@ -685,6 +686,12 @@ pub async fn handle_connection(
                     if !consistency.cycles.is_empty() {
                         telegram_details.push_str("\nCycles:\n");
                         for cy in &consistency.cycles {
+                            telegram_details.push_str(&format!("- {}: {}\n", cy.predicate, cy.path.join(" -> ")));
+                        }
+                    }
+                    if !consistency.temporal_cycles.is_empty() {
+                        telegram_details.push_str("\nTemporal cycles (E702):\n");
+                        for cy in &consistency.temporal_cycles {
                             telegram_details.push_str(&format!("- {}: {}\n", cy.predicate, cy.path.join(" -> ")));
                         }
                     }
@@ -844,6 +851,24 @@ pub async fn handle_connection(
                         "CONSISTENCY [consistent={}, contradictions={}, cycles={}, sigma={}]\n",
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
                     );
+                    // Ligne dediee (comme deontic_audit_line ci-dessous) pour le cycle
+                    // temporel (E702, 2026-09-05) -- absente quand aucun cycle temporel
+                    // n'est detecte, pas de bruit sur le trafic normal. Code separe de
+                    // la ligne CONSISTENCY generique ci-dessus parce qu'un cycle
+                    // temporel a un code d'erreur documente (voir CSTL_SPEC_v5_0.md
+                    // §16.4) que les cycles part_of/located_in n'ont pas.
+                    let temporal_cycle_line = if consistency.temporal_cycles.is_empty() {
+                        String::new()
+                    } else {
+                        let paths = consistency.temporal_cycles.iter()
+                            .map(|cy| cy.path.join(" -> "))
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        format!(
+                            "SEMANTIC_WARNING [detail=E702: temporal cycle detected ({})]\n",
+                            paths
+                        )
+                    };
                     // Absent quand aucune RELATION de ce payload ne porte de `modality`
                     // ET que l'audit contre l'historique est propre -- pas de bruit sur
                     // le trafic factuel normal (l'immense majorite des payloads).
@@ -878,12 +903,14 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
                             purpose,
                             verification_lines,
                             consistency_line,
+                            temporal_cycle_line,
                             deontic_audit_line,
                             semantic_warning_lines,
                             governance_line,

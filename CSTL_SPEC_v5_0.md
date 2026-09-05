@@ -628,6 +628,7 @@ bloquant — seul code de ce tableau qui rejette le payload).
 | W603 | warning | Fermeture transitive `ENTAILS` incomplète |
 | W604 | warning | `KNOWS` avec σ < 0.8 |
 | W605 | warning | `DOUBTS` avec σ > 0.5 |
+| E702 | warning | **`src/execution_lab.rs`, pas `semantic.rs`** — cycle temporel : une CHAÎNE de relations `BEFORE`/`AFTER` sur PLUSIEURS paires de sujets qui revient sur son point de départ (ex. A BEFORE B, B BEFORE C, C BEFORE A). `BEFORE`/`AFTER` sont normalisés en une seule direction avant construction du graphe (A BEFORE B ⟺ B AFTER A), réutilise le même algorithme de détection de cycle par backtracking (`dfs_find_cycle`) que les cycles `part_of`/`located_in`. Vérifié contre le payload courant ET tout l'historique de l'ADN store, via `check_consistency_with_history` (`ConsistencyReport.temporal_cycles`), même politique que le cycle `part_of`/`located_in` (voir README.md, section "Future Architecture — Level 4"). **Ajouté le 2026-09-05**, distinct d'E701 ci-dessus (E701 = incohérence PAIRWISE, même paire, même payload ; E702 = cycle sur PLUSIEURS paires, potentiellement réparties entre payloads) |
 
 Codes de validation structurelle/format (`src/server/validator.rs`, distinct de
 `semantic.rs`) : `E301`–`E307`, `E309`, `E310` (E308 a existé puis a été retiré —

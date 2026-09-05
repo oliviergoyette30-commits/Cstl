@@ -13,9 +13,24 @@
 //!   2. Cycle: une chaîne de prédicats transitifs (located_in / part_of) qui revient
 //!      sur son point de départ (A part_of B, B part_of A).
 //!
-//! PAS encore fait (honnête, pas caché): détection de cycle temporel. Le quorum humain
-//! (`RestrictedCouncil`, portée réduite v1 — un seul membre par défaut) est implémenté
-//! ailleurs, voir src/restricted_council.rs, pas dans ce module.
+//! Un troisième check (2026-09-05, code E702, voir §16.4 de CSTL_SPEC_v5_0.md) a été
+//! ajouté depuis: cycle temporel — une CHAÎNE de relations `BEFORE`/`AFTER` sur
+//! PLUSIEURS paires de sujets qui revient sur son point de départ (A BEFORE B,
+//! B BEFORE C, C BEFORE A). À ne pas confondre avec `semantic.rs::
+//! check_temporal_pair_consistency` (code E701): E701 détecte une incohérence
+//! PAIRWISE — A BEFORE B et A AFTER B déclarés pour la MÊME paire, dans le MÊME
+//! payload — alors qu'E702 détecte un cycle qui s'étend sur PLUSIEURS paires
+//! distinctes, potentiellement réparties entre le payload courant et l'historique
+//! de l'ADN store, exactement comme le cycle part_of/located_in ci-dessus. `BEFORE`
+//! et `AFTER` sont des inverses stricts l'un de l'autre (A BEFORE B ⟺ B AFTER A):
+//! `normalize_temporal_edges` ci-dessous les ramène tous les deux à une seule
+//! direction avant de construire le graphe, sinon un cycle mélangeant les deux
+//! prédicats serait invisible (ou un faux cycle serait inventé si AFTER était
+//! traité comme un sens indépendant plutôt que comme l'inverse exact de BEFORE).
+//!
+//! Le quorum humain (`RestrictedCouncil`, portée réduite v1 — un seul membre par
+//! défaut) est implémenté ailleurs, voir src/restricted_council.rs, pas dans ce
+//! module.
 
 use std::collections::{HashMap, HashSet};
 
@@ -26,6 +41,11 @@ pub const FUNCTIONAL_PREDICATES: &[&str] = &["born_in", "died_in", "spouse", "ca
 /// Prédicats transitifs pour lesquels un cycle est une incohérence structurelle
 /// (une hiérarchie d'imbrication ne peut pas revenir sur elle-même).
 pub const CHAINABLE_PREDICATES: &[&str] = &["part_of", "located_in"];
+
+/// Prédicats temporels: `BEFORE`/`AFTER` sont des inverses stricts l'un de
+/// l'autre (voir `normalize_temporal_edges`). Un cycle dans le graphe orienté
+/// résultant est une impossibilité temporelle (un ordre ne peut pas boucler).
+pub const TEMPORAL_PREDICATES: &[&str] = &["BEFORE", "AFTER"];
 
 #[derive(Debug, Clone)]
 pub struct Contradiction {
@@ -46,6 +66,13 @@ pub struct ConsistencyReport {
     pub consistent: bool,
     pub contradictions: Vec<Contradiction>,
     pub cycles: Vec<Cycle>,
+    /// Cycles temporels (code E702) — voir le commentaire de tête du module.
+    /// Champ séparé de `cycles` (part_of/located_in) plutôt que fusionné:
+    /// un cycle temporel n'est pas une incohérence de hiérarchie d'imbrication,
+    /// c'est une impossibilité d'ordre, et le code émis (E702) doit rester
+    /// distinguable du cycle structurel (qui n'a pas de code dédié, voir
+    /// consistency_line dans server/handler.rs).
+    pub temporal_cycles: Vec<Cycle>,
 }
 
 impl ConsistencyReport {
@@ -143,15 +170,75 @@ fn dfs_find_cycle<'a>(start: &'a str, adjacency: &HashMap<&'a str, Vec<&'a str>>
     dfs(start, start, adjacency, &mut path, &mut on_path)
 }
 
-/// Union de FUNCTIONAL_PREDICATES et CHAINABLE_PREDICATES — les seuls
-/// prédicats dont `check_consistency_with_history` se sert. Existe pour que
-/// l'appelant (le handler, via `AdnStore::relations_for_predicates`) puisse
-/// ne charger que ça depuis la DB, sans dupliquer la liste à la main et
-/// risquer qu'elle diverge des constantes ci-dessus si l'une des deux change.
+/// Ramène `BEFORE`/`AFTER` à une seule direction avant de construire le
+/// graphe: AFTER(A, B) ("A survient après B") est l'exact inverse de
+/// BEFORE(B, A), donc produit ici la même arête normalisée (B -> A) que
+/// BEFORE(B, A) l'aurait produite directement. Sans cette normalisation,
+/// un cycle qui mélange les deux prédicats (ex: A BEFORE B, C AFTER B,
+/// C BEFORE A — soit A->B, B->C, C->A une fois normalisé) serait invisible
+/// si BEFORE et AFTER étaient traités comme deux graphes séparés, ou un
+/// faux cycle pourrait être inventé si AFTER était traité comme un sens
+/// de relation indépendant plutôt que comme l'inverse strict de BEFORE.
+fn normalize_temporal_edges(relations: &[HashMap<String, String>]) -> Vec<(String, String)> {
+    let mut edges = Vec::new();
+    for rel in relations {
+        let (Some(subject), Some(predicate), Some(object)) =
+            (rel.get("subject"), rel.get("type"), rel.get("object"))
+        else { continue };
+        match predicate.as_str() {
+            "BEFORE" => edges.push((subject.clone(), object.clone())),
+            "AFTER" => edges.push((object.clone(), subject.clone())),
+            _ => {}
+        }
+    }
+    edges
+}
+
+/// Cycle temporel (code E702): réutilise le même `dfs_find_cycle` par
+/// backtracking que les cycles part_of/located_in ci-dessus, sur le graphe
+/// orienté obtenu après normalisation BEFORE/AFTER — pas de nouvel
+/// algorithme réinventé ici. Toutes les arêtes normalisées partagent un seul
+/// graphe (contrairement à `find_cycles`, qui garde un graphe séparé PAR
+/// prédicat chainable): BEFORE et AFTER décrivent le MÊME ordre temporel une
+/// fois normalisés, donc une seule recherche de cycle a du sens, pas une par
+/// prédicat d'origine.
+fn find_temporal_cycles(relations: &[HashMap<String, String>]) -> Vec<Cycle> {
+    let edges = normalize_temporal_edges(relations);
+    let mut adjacency: HashMap<&str, Vec<&str>> = HashMap::new();
+    for (s, o) in &edges {
+        adjacency.entry(s.as_str()).or_default().push(o.as_str());
+    }
+
+    let mut cycles = Vec::new();
+    let mut already_in_a_cycle: HashSet<&str> = HashSet::new();
+    for (&start, _) in adjacency.iter() {
+        if already_in_a_cycle.contains(start) {
+            continue;
+        }
+        if let Some(path) = dfs_find_cycle(start, &adjacency) {
+            for &node in &path {
+                already_in_a_cycle.insert(node);
+            }
+            cycles.push(Cycle {
+                predicate: "BEFORE".to_string(),
+                path: path.into_iter().map(String::from).collect(),
+            });
+        }
+    }
+    cycles
+}
+
+/// Union de FUNCTIONAL_PREDICATES, CHAINABLE_PREDICATES et
+/// TEMPORAL_PREDICATES — les seuls prédicats dont
+/// `check_consistency_with_history` se sert. Existe pour que l'appelant (le
+/// handler, via `AdnStore::relations_for_predicates`) puisse ne charger que
+/// ça depuis la DB, sans dupliquer la liste à la main et risquer qu'elle
+/// diverge des constantes ci-dessus si l'une des trois change.
 pub fn relevant_predicates() -> Vec<&'static str> {
     FUNCTIONAL_PREDICATES
         .iter()
         .chain(CHAINABLE_PREDICATES.iter())
+        .chain(TEMPORAL_PREDICATES.iter())
         .copied()
         .collect()
 }
@@ -197,6 +284,11 @@ fn edges_set(relations: &[HashMap<String, String>], predicates: &[&str]) -> Hash
 ///     rapporté QUE s'il contient au moins une arête introduite par CE
 ///     payload. Un cycle qui existait déjà entièrement dans l'historique
 ///     aurait déjà été rapporté quand son arête de fermeture est arrivée.
+///   - Cycles temporels (E702): même principe que les cycles ci-dessus
+///     (graphe complet historique + nouveau, rapporté seulement si une
+///     arête normalisée BEFORE/AFTER de CE payload en fait partie), mais sur
+///     un graphe distinct construit après normalisation BEFORE/AFTER — voir
+///     `find_temporal_cycles`.
 pub fn check_consistency_with_history(
     new_relations: &[HashMap<String, String>],
     history_relations: &[HashMap<String, String>],
@@ -250,10 +342,23 @@ pub fn check_consistency_with_history(
         })
         .collect();
 
+    let new_temporal_edges: HashSet<(String, String)> =
+        normalize_temporal_edges(new_relations).into_iter().collect();
+    let temporal_cycles: Vec<Cycle> = find_temporal_cycles(&combined)
+        .into_iter()
+        .filter(|cycle| {
+            cycle
+                .path
+                .windows(2)
+                .any(|edge| new_temporal_edges.contains(&(edge[0].clone(), edge[1].clone())))
+        })
+        .collect();
+
     ConsistencyReport {
-        consistent: contradictions.is_empty() && cycles.is_empty(),
+        consistent: contradictions.is_empty() && cycles.is_empty() && temporal_cycles.is_empty(),
         contradictions,
         cycles,
+        temporal_cycles,
     }
 }
 
@@ -367,10 +472,10 @@ mod tests {
     }
 
     #[test]
-    fn test_relevant_predicates_contains_all_six_and_nothing_else() {
+    fn test_relevant_predicates_contains_all_eight_and_nothing_else() {
         let preds = relevant_predicates();
-        assert_eq!(preds.len(), 6);
-        for p in ["born_in", "died_in", "spouse", "capital_of", "part_of", "located_in"] {
+        assert_eq!(preds.len(), 8);
+        for p in ["born_in", "died_in", "spouse", "capital_of", "part_of", "located_in", "BEFORE", "AFTER"] {
             assert!(preds.contains(&p), "predicat manquant: {p}");
         }
     }
@@ -498,6 +603,75 @@ mod tests {
         let report = check_consistency_with_history(&new_relations, &history);
         assert!(report.consistent);
         assert_eq!(report.cycles.len(), 0);
+    }
+
+    // ── Cycle temporel (E702, 2026-09-05) ──
+
+    #[test]
+    fn test_detects_three_node_temporal_cycle() {
+        // A BEFORE B, B BEFORE C, C BEFORE A -- impossible temporellement,
+        // un ordre (partiel ou total) ne peut pas boucler sur lui-meme.
+        let relations = vec![
+            rel("A", "BEFORE", "B"),
+            rel("B", "BEFORE", "C"),
+            rel("C", "BEFORE", "A"),
+        ];
+        let report = check_consistency_with_history(&relations, &[]);
+        assert!(!report.consistent);
+        assert_eq!(report.temporal_cycles.len(), 1);
+        assert_eq!(report.sigma_adjustment(), 0.09);
+    }
+
+    #[test]
+    fn test_no_false_positive_on_non_cyclic_temporal_chain() {
+        // Plusieurs BEFORE/AFTER qui forment une chaine lineaire (jamais un
+        // cycle) -- ne doit surtout pas etre signale comme un cycle temporel.
+        let relations = vec![
+            rel("A", "BEFORE", "B"),
+            rel("B", "BEFORE", "C"),
+            rel("D", "AFTER", "C"), // C BEFORE D une fois normalise
+        ];
+        let report = check_consistency_with_history(&relations, &[]);
+        assert!(report.consistent);
+        assert!(report.temporal_cycles.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_before_after_cycle_detected_via_normalization() {
+        // A BEFORE B, C AFTER B (== B BEFORE C), C BEFORE A -- un cycle reel
+        // (A->B->C->A une fois normalise) mais qui melange les deux
+        // predicats: sans normaliser AFTER en son inverse BEFORE avant de
+        // construire le graphe, ce cycle serait invisible (deux graphes
+        // separes) ou un faux cycle serait invente ailleurs.
+        let relations = vec![
+            rel("A", "BEFORE", "B"),
+            rel("C", "AFTER", "B"),
+            rel("C", "BEFORE", "A"),
+        ];
+        let report = check_consistency_with_history(&relations, &[]);
+        assert!(!report.consistent, "le cycle A->B->C->A doit etre detecte malgre le melange BEFORE/AFTER");
+        assert_eq!(report.temporal_cycles.len(), 1);
+    }
+
+    #[test]
+    fn test_temporal_cycle_detected_across_history_and_new_payload() {
+        // Meme patron que test_history_closes_cycle_with_new_edge, mais pour
+        // le graphe temporel: l'historique etablit A BEFORE B, un nouveau
+        // payload ferme le cycle avec B BEFORE A.
+        let history = vec![rel("A", "BEFORE", "B")];
+        let new_relations = vec![rel("B", "BEFORE", "A")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
+        assert_eq!(report.temporal_cycles.len(), 1);
+    }
+
+    #[test]
+    fn test_preexisting_history_temporal_cycle_not_reported_again() {
+        let history = vec![rel("A", "BEFORE", "B"), rel("B", "BEFORE", "A")];
+        let new_relations = vec![rel("X", "BEFORE", "Y")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(report.consistent);
+        assert_eq!(report.temporal_cycles.len(), 0);
     }
 
     // ── check_deontic_consistency_with_history (Couche 8, 2026-09-04) ──
