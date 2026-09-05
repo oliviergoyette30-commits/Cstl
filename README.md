@@ -165,8 +165,18 @@ file, a real coordination risk (not just cosmetic debt). Fully merged into `AdnS
 lock). Deterministic, tamper-evident, tested (including
 `test_parent_hash_excluded_from_hash`, `test_integrity_detects_break`,
 `test_audit_persistence_survives_reopen_on_real_file_and_shares_adn_store_data`).
-Known issue: async reload hits a `blocking_lock()` conflict inside the tokio runtime
-— deferred refactor.
+**Verifie 2026-09-05 (audit du `blocking_lock()` ci-dessus, jamais traite jusqu'ici)**:
+recherche exhaustive dans `src/` et dans tout l'historique git (`git log -p --all`) --
+aucun appel `.blocking_lock()` ni `std::sync::Mutex` bloquant n'existe, ni n'a jamais
+existe, dans le code Rust de ce depot. Tous les verrous partages du serveur
+(`agent_registry`, `chain`, `adn_store`, `governance`) sont deja des
+`tokio::sync::Mutex` asynchrones (voir `src/server/mod.rs`), et le seed de la
+`HashChain` au demarrage (`try_with_data_path` -> `adn_store.load_chain()`) est un
+appel synchrone fait AVANT toute construction d'`Arc<Mutex<..>>` -- il ne prend donc
+aucun verrou et ne peut pas entrer en conflit avec le runtime tokio. La ligne
+"Known issue" ci-dessus decrivait un probleme qui ne correspond a aucun code reel
+de ce depot; elle est retiree plutot que "corrigee" pour ne pas inventer un fix a un
+bug qui n'existe pas.
 
 ### Rust ADN store — `src/adn_store.rs` 🟡
 
