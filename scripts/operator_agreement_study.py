@@ -345,7 +345,7 @@ class GeminiBackend(OperatorChoiceBackend):
             self.name = f"gemini:{self.model}"
 
     @classmethod
-    def from_env(cls, model: str = "gemini-2.0-flash") -> Optional["GeminiBackend"]:
+    def from_env(cls, model: str = "gemini-3.6-flash") -> Optional["GeminiBackend"]:
         try:
             from google import genai  # type: ignore
         except ImportError:

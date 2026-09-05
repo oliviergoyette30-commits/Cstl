@@ -323,8 +323,17 @@ class GeminiAgentBrain:
     client: object
     model: str
 
+    # Defaut corrige le 2026-09-05 (gemini-2.0-flash -> gemini-3.6-flash),
+    # sur un vrai appel de l'utilisateur contre l'API Gemini reelle: erreur
+    # 404 explicite de Google ("This model models/gemini-2.0-flash is no
+    # longer available... use models/gemini-3.6-flash"). Pas une supposition
+    # -- le nom du modele courant vient directement de la reponse d'erreur
+    # de l'API, la seule verification live possible sans cle dans ce
+    # sandbox. Un modele nomme dans le code a une duree de vie courte cote
+    # fournisseur -- si ce defaut echoue de nouveau avec un 404 similaire,
+    # passer --model/model= explicitement plutot que de patcher ce fichier.
     @classmethod
-    def from_env(cls, model: str = "gemini-2.0-flash") -> Optional["GeminiAgentBrain"]:
+    def from_env(cls, model: str = "gemini-3.6-flash") -> Optional["GeminiAgentBrain"]:
         try:
             from google import genai  # type: ignore
         except ImportError:
@@ -361,16 +370,23 @@ class GeminiAgentBrain:
             raise ValueError(f"reponse du modele non-JSON: {text!r}")
 
 
-def resolve_brain(provider: str) -> Optional[object]:
+def resolve_brain(provider: str, model: str | None = None) -> Optional[object]:
     """`provider` in {"anthropic", "gemini", "auto"}. "auto" essaie Gemini
     en premier (palier gratuit reel, accessible sans frais a l'utilisateur)
-    puis retombe sur Anthropic -- ordre delibere, pas arbitraire."""
+    puis retombe sur Anthropic -- ordre delibere, pas arbitraire.
+
+    `model` surcharge le defaut de chaque backend quand fourni -- utile si
+    le fournisseur retire encore un nom de modele (voir le commentaire
+    au-dessus de GeminiAgentBrain.from_env(): deja arrive une fois avec
+    gemini-2.0-flash -> gemini-3.6-flash, decouvert via l'erreur 404 d'un
+    vrai appel utilisateur) sans avoir a patcher ce fichier."""
+    kwargs = {"model": model} if model else {}
     if provider == "anthropic":
-        return AnthropicAgentBrain.from_env()
+        return AnthropicAgentBrain.from_env(**kwargs)
     if provider == "gemini":
-        return GeminiAgentBrain.from_env()
+        return GeminiAgentBrain.from_env(**kwargs)
     if provider == "auto":
-        return GeminiAgentBrain.from_env() or AnthropicAgentBrain.from_env()
+        return GeminiAgentBrain.from_env(**kwargs) or AnthropicAgentBrain.from_env(**kwargs)
     raise ValueError(f"provider inconnu: {provider!r}")
 
 
@@ -379,7 +395,17 @@ def resolve_brain(provider: str) -> Optional[object]:
 # ---------------------------------------------------------------------------
 
 def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
-                   topic: str, turns: int, peer_mode: str, provider: str = "auto") -> int:
+                   topic: str, turns: int, peer_mode: str, provider: str = "auto",
+                   model: str | None = None) -> int:
+    if model and provider == "auto":
+        print(
+            "[LlmAgent] ECHEC: --model exige --provider anthropic|gemini explicite "
+            "(en mode auto, un seul nom de modele ne peut pas s'appliquer aux deux "
+            "fournisseurs sans ambiguite).",
+            file=sys.stderr,
+        )
+        return 3
+
     sk, pubkey_hex = load_or_create_keypair(keyfile)
     client = CstlClient(host=host, port=port, timeout=15.0)
 
@@ -390,7 +416,7 @@ def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
         print("[LlmAgent] ECHEC: enregistrement refuse, arret.", file=sys.stderr)
         return 1
 
-    brain = resolve_brain(provider)
+    brain = resolve_brain(provider, model)
     if brain is None:
         print(
             "[LlmAgent] Aucun modele disponible pour provider="
@@ -514,6 +540,11 @@ def main() -> int:
     ap.add_argument("--provider", choices=["anthropic", "gemini", "auto"], default="auto",
                      help="Backend LLM. 'auto' (defaut) essaie Gemini en premier (palier gratuit reel) "
                           "puis retombe sur Anthropic si Gemini est indisponible.")
+    ap.add_argument("--model", default=None,
+                     help="Surcharge le nom de modele par defaut du backend choisi -- exige "
+                          "--provider anthropic|gemini explicite (pas 'auto'). Utile si le "
+                          "fournisseur retire le modele par defaut code ici (deja arrive une "
+                          "fois avec gemini-2.0-flash, voir GeminiAgentBrain.from_env()).")
     ap.add_argument("--structural-selftest", action="store_true",
                      help="Verifie signing_bytes/keypair/degradation sans toucher au reseau.")
     args = ap.parse_args()
@@ -522,7 +553,7 @@ def main() -> int:
         return _structural_selftest()
 
     return run_llm_relay(args.host, args.port, args.keyfile, args.name,
-                          args.topic, args.turns, args.peer_mode, args.provider)
+                          args.topic, args.turns, args.peer_mode, args.provider, args.model)
 
 
 if __name__ == "__main__":

@@ -197,15 +197,15 @@ def test_gemini_backend_choose_operator_parses_real_client_shape():
 
     class FakeModels:
         def generate_content(self, model, contents):  # noqa: ARG002
-            assert model == "gemini-2.0-flash"
+            assert model == "gemini-3.6-flash"
             assert isinstance(contents, str) and len(contents) > 0
             return FakeResponse()
 
     class FakeClient:
         models = FakeModels()
 
-    backend = GeminiBackend(client=FakeClient(), model="gemini-2.0-flash")
-    assert backend.name == "gemini:gemini-2.0-flash"
+    backend = GeminiBackend(client=FakeClient(), model="gemini-3.6-flash")
+    assert backend.name == "gemini:gemini-3.6-flash"
 
     choice = backend.choose_operator(REFERENCE_FACTS[0])
     assert choice.operator == "KNOWS"
