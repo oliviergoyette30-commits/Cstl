@@ -589,12 +589,54 @@ pub async fn handle_connection(
                         );
                     }
 
+                    // Budget mur-a-mur par relation (2026-09-05, trouvaille en direct sur
+                    // une vraie machine utilisateur): `verify_relation` peut declencher
+                    // jusqu'a `max_expansions` (40) appels SPARQL sequentiels lors d'une
+                    // expansion de chaine transitive (`find_property_chain`), chacun avec
+                    // son propre timeout de 15s -- sur un reseau lent/instable vers
+                    // Wikidata (confirme en direct: erreurs `network_error` intermittentes
+                    // sur la meme machine), la latence totale d'UNE SEULE relation a
+                    // largement depasse le timeout socket du client Python
+                    // (`cstl_client.py`, 15s), provoquant un TimeoutError cote client alors
+                    // que le serveur avait deja repondu avec succes quelques secondes plus
+                    // tard (log serveur: "Response sent" + "Connection closed" bien apres
+                    // le timeout du client). Cette couche (3a) est documentee comme
+                    // PUREMENT INFORMATIVE -- elle n'a jamais pu rejeter ni modifier le
+                    // statut d'un payload (deja valide et persiste en adn_store avant
+                    // d'atteindre ce bloc) -- donc la couper court sur un budget global est
+                    // sans risque de correction, seulement une degradation "unproven" au
+                    // lieu d'une reponse tardive. KB_VERIFICATION_WALL_CLOCK_BUDGET choisi
+                    // nettement sous le timeout client (15s) pour laisser une vraie marge
+                    // de securite plutot que de deplacer le probleme d'un cran.
+                    const KB_VERIFICATION_WALL_CLOCK_BUDGET: std::time::Duration = std::time::Duration::from_secs(8);
+
                     let mut verify_tasks = tokio::task::JoinSet::new();
                     for (idx, subject, predicate, object) in relations_to_verify {
                         let kb_verifier = kb_verifier.clone();
                         verify_tasks.spawn(async move {
                             eprintln!("[Handler] 🔎 Verifying relation: {} {} {}", subject, predicate, object);
-                            let result = kb_verifier.verify_relation(&subject, &predicate, &object, "fr", 4, 40).await;
+                            let result = match tokio::time::timeout(
+                                KB_VERIFICATION_WALL_CLOCK_BUDGET,
+                                kb_verifier.verify_relation(&subject, &predicate, &object, "fr", 4, 40),
+                            ).await {
+                                Ok(result) => result,
+                                Err(_) => {
+                                    eprintln!(
+                                        "[Handler]    ⏱️  verification KB interrompue apres {:?} (budget mur-a-mur depasse, reseau Wikidata lent/instable) -- traitee comme non concluante, jamais bloquant",
+                                        KB_VERIFICATION_WALL_CLOCK_BUDGET
+                                    );
+                                    crate::kb_verify::VerificationResult {
+                                        verified: "unchallenged_unproven".to_string(),
+                                        source_url: None,
+                                        reason: "kb_verification_wall_clock_timeout_exceeded".to_string(),
+                                        subject_qid: None,
+                                        object_qid: None,
+                                        check_method: None,
+                                        chain: None,
+                                        property_id: None,
+                                    }
+                                }
+                            };
                             eprintln!("[Handler]    -> {} ({})", result.verified, result.reason);
                             (idx, subject, predicate, object, result)
                         });
