@@ -65,6 +65,8 @@ pub struct VerificationResult {
 
 pub struct KbVerifier {
     client: reqwest::Client,
+    search_api: String,
+    sparql_endpoint: String,
 }
 
 impl Default for KbVerifier {
@@ -79,12 +81,34 @@ impl KbVerifier {
             .user_agent(USER_AGENT)
             .build()
             .expect("failed to build reqwest client");
-        Self { client }
+        Self {
+            client,
+            search_api: WIKIDATA_SEARCH_API.to_string(),
+            sparql_endpoint: WIKIDATA_SPARQL_ENDPOINT.to_string(),
+        }
+    }
+
+    /// Comme `new()`, mais pointe vers des endpoints arbitraires au lieu des
+    /// constantes Wikidata codees en dur -- seul moyen d'exercer reellement
+    /// l'orchestration HTTP (`detect_entanglement` et les methodes qu'il
+    /// appelle) contre un serveur mock local plutot que le vrai wikidata.org.
+    /// `new()` n'est pas modifie et continue a viser les vraies URLs de
+    /// production -- ce constructeur est strictement additif.
+    pub fn with_endpoints(search_api: impl Into<String>, sparql_endpoint: impl Into<String>) -> Self {
+        let client = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .build()
+            .expect("failed to build reqwest client");
+        Self {
+            client,
+            search_api: search_api.into(),
+            sparql_endpoint: sparql_endpoint.into(),
+        }
     }
 
     async fn is_disambiguation_page(&self, qid: &str) -> bool {
         let query = format!("ASK {{ wd:{qid} wdt:P31 wd:{DISAMBIGUATION_PAGE_QID} . }}");
-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+        let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
             .timeout(Duration::from_secs(10))
             .send().await;
@@ -108,7 +132,7 @@ impl KbVerifier {
         }
 
         for language in languages_to_try {
-            let resp = self.client.get(WIKIDATA_SEARCH_API)
+            let resp = self.client.get(&self.search_api)
                 .query(&[
                     ("action", "wbsearchentities"),
                     ("search", label),
@@ -153,7 +177,7 @@ impl KbVerifier {
             "ASK {{ {{ wd:{subject_qid} wdt:{property_id} wd:{object_qid} . }} UNION \
              {{ wd:{object_qid} wdt:{property_id} wd:{subject_qid} . }} }}"
         );
-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+        let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
             .timeout(Duration::from_secs(15))
             .send().await;
@@ -171,7 +195,7 @@ impl KbVerifier {
             "SELECT DISTINCT ?n WHERE {{ {{ wd:{qid} wdt:{property_id} ?n . }} UNION \
              {{ ?n wdt:{property_id} wd:{qid} . }} }} LIMIT {limit}"
         );
-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+        let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
             .timeout(Duration::from_secs(15))
             .send().await;
@@ -237,7 +261,7 @@ impl KbVerifier {
             "SELECT ?prop WHERE {{ {{ wd:{subject_qid} ?prop wd:{object_qid} . }} UNION \
              {{ wd:{object_qid} ?prop wd:{subject_qid} . }} }} LIMIT 5"
         );
-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+        let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
             .timeout(Duration::from_secs(15))
             .send().await;
@@ -295,7 +319,7 @@ impl KbVerifier {
             "SELECT DISTINCT ?n WHERE {{ {{ wd:{qid} ?p ?n . }} UNION {{ ?n ?p wd:{qid} . }} \
              FILTER(STRSTARTS(STR(?n), \"http://www.wikidata.org/entity/Q\")) }} LIMIT {limit}"
         );
-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+        let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
             .timeout(Duration::from_secs(15))
             .send().await;
@@ -320,7 +344,7 @@ impl KbVerifier {
             "SELECT ?label WHERE {{ wd:{qid} rdfs:label ?label . \
              FILTER(lang(?label) = \"{lang}\" || lang(?label) = \"en\") }} LIMIT 1"
         );
-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
+        let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
             .timeout(Duration::from_secs(10))
             .send().await.ok()?;

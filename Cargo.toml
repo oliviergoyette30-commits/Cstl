@@ -29,6 +29,14 @@ path = "src/lib.rs"
 # les tests qui generent des paires de cles ephemeres.
 rand = "0.8"
 
+[dev-dependencies.wiremock]
+# Serveur HTTP mock local pour tests/kb_verify_mock_wikidata_test.rs -- exerce
+# reellement l'orchestration reseau de KbVerifier::detect_entanglement (appels
+# HTTP, parsing JSON) contre un serveur qui reproduit le format de reponse
+# SPARQL de Wikidata, sans dependre du vrai wikidata.org (bloque sur ce
+# sandbox). dev-dependency seulement: aucun code de production n'en depend.
+version = "0.6"
+
 [profile.release]
 opt-level = 3
 lto = true

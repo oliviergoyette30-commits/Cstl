@@ -21,9 +21,18 @@
 //! recouvrement, formule de sigma, formatage CSTL) est testee ici sans reseau.
 //! L'orchestration reseau (`KbVerifier::query_generic_neighbors`/`resolve_label`/
 //! `has_direct_relation`/`detect_entanglement`, ajoutee a `src/kb_verify.rs`) ne
-//! peut PAS etre verifiee en direct depuis ce sandbox: wikidata.org est bloque par
-//! la liste blanche reseau de cet environnement (403 confirme sur le proxy sortant
-//! via un `curl` direct avant d'ecrire ce module). A verifier sur ta propre machine
+//! peut PAS etre verifiee en direct contre le VRAI wikidata.org depuis ce
+//! sandbox: wikidata.org est bloque par la liste blanche reseau de cet
+//! environnement (403 confirme sur le proxy sortant via un `curl` direct avant
+//! d'ecrire ce module). **2026-09-05**: cette orchestration reseau EST
+//! desormais verifiee en direct contre un vrai serveur HTTP local qui
+//! reproduit le format de reponse SPARQL de Wikidata (`wiremock`,
+//! `tests/kb_verify_mock_wikidata_test.rs`, 4 tests incluant un controle
+//! positif, deux controles negatifs et deux scenarios de panne reseau) --
+//! l'appel HTTP reel, la construction de requete et le parsing JSON sont donc
+//! reellement exerces. Ca ne remplace pas une verification contre le vrai
+//! wikidata.org (format de reponse reel, latence reelle, cas de donnees
+//! imprevus) -- toujours a faire sur une machine avec acces reseau reel.
 //! -- voir README.md/docs/ARCHITECTURE.md pour le statut exact ("structurellement
 //! construit et teste hors-reseau, jamais execute en direct contre Wikidata").
 
