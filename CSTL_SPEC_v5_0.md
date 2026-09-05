@@ -611,6 +611,15 @@ par le serveur TCP (`server/handler.rs`), avertissement seul sauf mention contra
 (un `SEMANTIC_WARNING` n'empêche jamais `status=processed`, sauf E107 qui est
 bloquant — seul code de ce tableau qui rejette le payload).
 
+Exception au tableau, ajoutée le 2026-09-05 : `R8` n'est PAS émis par
+`SemanticValidator` — il vient directement de `server/validator.rs::
+check_coref_with_references(payload: &CstlPayload)`, qui compare `relations` et
+`defines` (deux champs de `CstlPayload`) entre eux. `SemanticValidator` ne connaît
+que `Relation` (jamais `defines`), donc ce check ne pouvait structurellement pas y
+vivre. Listé ici quand même parce que `server/handler.rs` l'agrège dans le même flux
+`SEMANTIC_WARNING` que les codes ci-dessous, avec la même politique (avertissement
+seul). Voir §19 pour l'historique complet de sa reconstruction.
+
 | Code | Sévérité | Condition réelle (moteur Rust) |
 |---|---|---|
 | E101 | error (non bloquant, warning affiché) | Opérateur `RELATION.type` hors whitelist officielle/domaine/déprécié |
@@ -622,6 +631,7 @@ bloquant — seul code de ce tableau qui rejette le payload).
 | W502 | warning | `MAINTAIN` avec `tau=p`/`p_past` |
 | W503 | warning | `tau` hors des valeurs valides (`p`, `n`, `f`, `p_past`, `n_present`, `f_future`) |
 | W504 | warning | Dépassement du seuil d'attributs (voir R10, §19) |
+| R8 | warning | `coref_with=<id>` sans DEFINE correspondant dans le même payload (`server/validator.rs::check_coref_with_references`, ajouté 2026-09-05) |
 | R9 | warning | Valeur d'attribut hors ontologie (§13) |
 | R10 | warning | >9 attributs sur une relation |
 | W602 | warning | `CONTRADICTS` redondant (symétrie déjà impliquée) |
@@ -685,23 +695,57 @@ détectée via un `PARENT_HASH` invalide.
 | R4 | info | Ordre canonique des blocs recommandé | ✅ |
 | R5 | warning | Opérateur ou type d'entité hors officiels | ✅ vérifié |
 | R6 | fixed | Symboles σδτωι non redéfinissables par l'utilisateur | ✅ vérifié |
-| R7 | error | DEFINE avec crochets malformés → dropped + warning | ⚠️ partiel |
-| R8 | warning | Références coref_with validées contre les DEFINE existants | ❌ retiré (2026-09-04) |
+| R7 | error | DEFINE avec crochets malformés → dropped + warning | ✅ câblé live (`server/parser.rs`, 2026-09-05) |
+| R8 | warning | Références coref_with validées contre les DEFINE existants | ✅ reconstruit + câblé live (2026-09-05, portée intra-payload — voir note ci-dessous) |
 | R9 | warning | Valeurs d'attributs non conformes à la whitelist §13 | ✅ câblé live (`semantic.rs::check_attribute_ontology`, 2026-09-04) |
 | R10 | error | >9 attributs par relation → warning + drop du surplus | ✅ câblé live (`semantic.rs::check_attribute_bombing`, 2026-09-04) |
 | R11 | error | Clé META dupliquée → invalidation du document | ✅ vérifié |
 | R12 | error | Contenu textuel après `---END---` → truncation error | ✅ vérifié |
 | R13 | warning | Version hashbang non reconnue (ni v4.9.x ni v5.0.x) | ✅ vérifié |
 
-**Correction honnête (audit du repo, 2026-09-04) — R8** : ce check reposait sur
+**Historique — R8 retiré le 2026-09-04** : ce check reposait sur
 `defined_entities()`/`check_undefined_entity_reference()` dans `semantic.rs`, qui
 opéraient sur le système `ast::Block` — retiré le même jour (100% mort, aucun
 producteur réel n'a jamais construit de `Block` en dehors de ses propres tests, voir
-CHANGELOG). R8 n'existe donc plus du tout, pas même à l'état "spécifié" — il faudrait
-le reconstruire sur `Relation` (le vrai modèle de données du chemin serveur) s'il
-redevient prioritaire un jour. R9/R10, en revanche, opéraient déjà sur `Relation`
-(jamais sur `Block`) et ont été branchés sur le chemin TCP réel le même jour, aux côtés
-de 9 autres checks jusque-là seulement testés en isolation (voir §16.4).
+CHANGELOG). R9/R10, en revanche, opéraient déjà sur `Relation` (jamais sur `Block`) et
+ont été branchés sur le chemin TCP réel le même jour, aux côtés de 9 autres checks
+jusque-là seulement testés en isolation (voir §16.4).
+
+**Reconstruction R8 (2026-09-05)** : avant de pouvoir reconstruire quoi que ce soit,
+il a fallu constater que les blocs DEFINE n'existaient MÊME PAS côté serveur — le
+parser réel (`server::parser::parse_payload`) ne reconnaissait que META,
+INTENT_PAYLOAD et RELATION ; DEFINE n'apparaissait nulle part dans `src/`. R8 était
+donc structurellement impossible à reconstruire dans QUELQUE forme que ce soit, pas
+seulement privé de son ancienne implémentation. Corrigé en deux temps :
+
+1. `server::parser::parse_payload` reconnaît désormais les blocs DEFINE au format
+   réel de la grammaire (§9) — `DEFINE <identifier> AS <entity_type> [attrs]`, une
+   ligne plate, PAS un arbre `Block` — et les stocke dans `CstlPayload.defines: Vec<
+   HashMap<String, String>>`, même esprit que `relations`. Aucune réintroduction
+   d'`ast::Block` : c'est une extension du format à plat déjà utilisé pour RELATION,
+   pas un nouveau système structurel.
+2. `server::validator::check_coref_with_references(payload)` compare chaque
+   `coref_with=<id>` porté par une RELATION du payload contre les `id=` collectés
+   dans `payload.defines` du MÊME payload, et émet un avertissement `R8` (chaîne
+   littérale, même convention que R9/R10) sur toute référence orpheline. Câblé sur
+   le chemin TCP réel (`server/handler.rs`), avertissement seul — jamais un rejet,
+   même politique que `check_sdl_operator_whitelist`/
+   `check_extended_semantic_diagnostics`.
+
+**Portée assumée** : intra-payload seulement, conforme au libellé de la spec §13
+("un DEFINE antérieur" — dans le même document). Ne consulte PAS l'historique
+cross-payload de `execution_lab::check_deontic_consistency_with_history`, qui répond
+à une question différente (cohérence déontique dans le temps, pas résolution de
+coréférence locale à un document). Étendre R8 à l'historique croisé (un
+`coref_with` qui référence une entité DEFINE-ée dans un PAYLOAD ANTÉRIEUR plutôt que
+dans le même document) reste un prolongement possible, non fait ici faute de besoin
+identifié.
+
+Tests : `server::parser::tests` (6 tests DEFINE/R7, dont malformation d'en-tête et
+crochet jamais fermé avant `---END---`) et `server::validator::tests` (4 tests R8,
+dont référence valide/orpheline/absence totale de DEFINE). Vérification live de bout
+en bout sur un vrai `CstlNativeServer` : `examples/coref_r8_r7_smoke_test.rs`
+(`cargo run --example coref_r8_r7_smoke_test`).
 
 Note : R10 applique le théorème k=9 au niveau du validator. k=9 est la
 justification formelle (croissance logarithmique avec la taille du corpus) ;
@@ -731,6 +775,10 @@ même raison (code mort, zéro appelant réel).
   une structure `CstlPayload` (HashMap de blocs → HashMap de clé/valeur), pas en un
   arbre de `Block`/`Field` structuré. Point d'entrée réel :
   `server::parser::parse_payload(raw: &str) -> Result<CstlPayload, ParseError>`.
+  Blocs reconnus : `META`, `INTENT_PAYLOAD`, `RELATION` (depuis l'origine) et
+  `DEFINE` (ajouté le 2026-09-05, pour reconstruire R8 — voir §19 — au format
+  réel de la grammaire §9, une ligne plate par entité, pas un bloc `RELATIONS[...]`
+  multi-lignes ni un arbre).
 - Validation structurelle/format : `server::validator::validate_payload(payload:
   &CstlPayload) -> ValidationResult` (codes E301–E310, voir §16.4).
 - Validation sémantique : `semantic::SemanticValidator::validate()` (codes E101,

@@ -255,6 +255,50 @@ pub fn check_extended_semantic_diagnostics(payload: &CstlPayload) -> Vec<String>
         .collect()
 }
 
+/// R8 -- reconstruit le 2026-09-05 sur le VRAI modele de donnees du chemin
+/// serveur (`CstlPayload`: `relations`/`defines` en `HashMap<String,String>`
+/// plats), PAS sur `ast::Block` (retire le 2026-09-04 -- voir semantic.rs et
+/// CSTL_SPEC_v5_0.md §19 pour l'historique complet). L'ancienne
+/// implementation (`defined_entities()`/`check_undefined_entity_reference()`)
+/// dependait d'un arbre `Block` que ni le tokenizer ni le parser reel n'ont
+/// jamais construit hors tests -- elle etait donc morte a vie, pas juste non
+/// branchee. Cette reconstruction n'a ete possible qu'apres avoir d'abord
+/// appris a `server::parser::parse_payload` a reconnaitre les blocs DEFINE
+/// (spec §9, `DEFINE <identifier> AS <entity_type> [attrs]`) : avant ca,
+/// AUCUNE entite DEFINE n'existait meme cote serveur -- `payload.defines`
+/// aurait ete vide en permanence, rendant R8 structurellement invalide dans
+/// N'IMPORTE QUELLE implementation.
+///
+/// Portee assumee : verifie uniquement les DEFINE du MEME payload (comme le
+/// dit la spec §13, "un DEFINE anterieur" -- pas l'historique cross-payload
+/// de `execution_lab::check_deontic_consistency_with_history`, qui repond a
+/// une question differente -- coherence deontique dans le temps, pas
+/// resolution de coreference locale). Avertissement seul, meme politique que
+/// `check_sdl_operator_whitelist`/`check_extended_semantic_diagnostics`: un
+/// coref orphelin est un signal de qualite (faute de frappe probable sur un
+/// id, ou DEFINE oublie), pas une contradiction structurelle qui justifierait
+/// un rejet.
+///
+/// Code choisi : `R8` (chaine litterale, meme convention que R9/R10 dans
+/// semantic.rs -- pas de collision, verifie contre §16.4 et les codes E/W
+/// deja emis par ce fichier et par semantic.rs).
+pub fn check_coref_with_references(payload: &CstlPayload) -> Vec<String> {
+    let defined_ids: std::collections::HashSet<&str> = payload.defines.iter()
+        .filter_map(|d| d.get("id").map(String::as_str))
+        .collect();
+
+    payload.relations.iter()
+        .filter_map(|r| r.get("coref_with").map(|id| (r, id.as_str())))
+        .filter(|(_, id)| !defined_ids.contains(id))
+        .map(|(r, id)| format!(
+            "R8: coref_with={} ne correspond a aucun DEFINE de ce payload (relation subject={:?}, object={:?})",
+            id,
+            r.get("subject").map(String::as_str).unwrap_or(""),
+            r.get("object").map(String::as_str).unwrap_or(""),
+        ))
+        .collect()
+}
+
 /// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
 /// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
 /// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE
@@ -334,6 +378,8 @@ mod tests {
                 i
             },
             relations: vec![],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
 
@@ -350,6 +396,8 @@ mod tests {
             meta: HashMap::new(),
             intent: HashMap::new(),
             relations: vec![],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
 
@@ -371,6 +419,8 @@ mod tests {
             },
             intent: HashMap::new(),
             relations: vec![],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
 
@@ -402,6 +452,8 @@ mod tests {
                 relation(&[("subject", "paris"), ("type", "located_in"), ("object", "france")]),
                 relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
             ],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -416,6 +468,8 @@ mod tests {
             relations: vec![
                 relation(&[("subject", "x"), ("type", "EQUALS"), ("object", "y")]),
             ],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -430,6 +484,8 @@ mod tests {
             relations: vec![
                 relation(&[("subject", "x"), ("type", "FOOBAR"), ("object", "y")]),
             ],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -444,6 +500,8 @@ mod tests {
             relations: vec![
                 relation(&[("subject", "x"), ("type", "MUTUAL"), ("object", "y")]),
             ],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -473,6 +531,8 @@ mod tests {
                 i
             },
             relations,
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         }
     }
@@ -527,5 +587,62 @@ mod tests {
         ]);
         let result = validate_payload(&payload);
         assert!(result.valid, "objets differents ne doivent pas etre traites comme contradictoires: {:?}", result.errors);
+    }
+
+    // ── check_coref_with_references (R8, reconstruit le 2026-09-05 sur le
+    // vrai CstlPayload -- PAS ast::Block, voir le commentaire de tete de la
+    // fonction pour l'historique complet de la trouvaille du 2026-09-04) ──
+
+    fn define(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn test_r8_coref_with_valid_reference_no_warning() {
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e002"), ("type", "EQUALS"), ("object", "e001"), ("coref_with", "e001")]),
+        ]);
+        payload.defines = vec![define(&[("name", "patient"), ("entity_type", "human"), ("id", "e001")])];
+
+        let warnings = check_coref_with_references(&payload);
+        assert!(warnings.is_empty(), "coref_with vers un DEFINE existant ne doit pas warner: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_r8_coref_with_undefined_reference_warns() {
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e003"), ("type", "EQUALS"), ("object", "e999"), ("coref_with", "e999")]),
+        ]);
+        payload.defines = vec![define(&[("name", "patient"), ("entity_type", "human"), ("id", "e001")])];
+
+        let warnings = check_coref_with_references(&payload);
+        assert!(warnings.iter().any(|w| w.starts_with("R8:") && w.contains("e999")),
+                "coref_with orphelin (e999, jamais DEFINE) doit warner R8: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_r8_no_coref_with_attribute_no_warning() {
+        // Chemin rapide implicite : aucune relation ne porte coref_with ->
+        // aucun cout, aucune interference avec le trafic existant (qui n'a
+        // jamais porte cet attribut jusqu'ici).
+        let payload = payload_with(vec![
+            relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
+        ]);
+        let warnings = check_coref_with_references(&payload);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_r8_no_defines_at_all_still_warns_on_coref() {
+        // Payload qui utilise coref_with sans avoir JAMAIS defini l'entite
+        // (aucun DEFINE du tout, pas seulement le mauvais id) -- doit quand
+        // meme warner, pas planter ni faire un faux-negatif silencieux.
+        let payload = payload_with(vec![
+            relation(&[("subject", "e002"), ("type", "EQUALS"), ("object", "e001"), ("coref_with", "e001")]),
+        ]);
+        assert!(payload.defines.is_empty());
+
+        let warnings = check_coref_with_references(&payload);
+        assert!(warnings.iter().any(|w| w.starts_with("R8:")));
     }
 }

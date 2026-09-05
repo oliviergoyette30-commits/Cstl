@@ -8,6 +8,27 @@ pub struct CstlPayload {
     pub meta: HashMap<String, String>,
     pub intent: HashMap<String, String>,
     pub relations: Vec<HashMap<String, String>>,
+    /// Blocs DEFINE (`DEFINE <identifier> AS <entity_type> [attr_list]`,
+    /// spec §9) -- ajoute le 2026-09-05 pour reconstruire R8 (coref_with)
+    /// sur le VRAI format wire, sans reintroduire `ast::Block` (retire le
+    /// 2026-09-04, voir semantic.rs). Avant ce fix, DEFINE n'etait meme pas
+    /// reconnu par ce parser -- seuls META/INTENT_PAYLOAD/RELATION
+    /// l'etaient -- donc R8 etait structurellement impossible a reconstruire,
+    /// pas seulement non branche. Chaque entree est un HashMap plat, meme
+    /// esprit que `relations`: "name" (identifiant, ex. "patient"),
+    /// "entity_type" (ex. "human"), plus tous les attributs `[id=..., ...]`
+    /// s'il y en a. Un DEFINE sans `id=` est conserve (les autres attributs
+    /// restent utiles) mais ne peut jamais satisfaire un coref_with, qui
+    /// reference toujours un `id`.
+    pub defines: Vec<HashMap<String, String>>,
+    /// Avertissements de parsing non fatals -- ex. bloc DEFINE avec crochets
+    /// malformes, silencieusement ignore avant ce fix (R7, §19 : "dropped +
+    /// warning" -- seul "dropped" existait). Ajoute le 2026-09-05 aux cotes
+    /// de `defines`. Ne couvre PAS (encore) les blocs RELATION malformes,
+    /// qui gardent leur comportement historique de drop silencieux
+    /// (`if let Ok(...) = parse_block(...)` plus bas) -- hors du perimetre
+    /// de R7, qui ne mentionne que DEFINE.
+    pub parse_warnings: Vec<String>,
     pub raw: String,
 }
 
@@ -39,6 +60,8 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         meta: HashMap::new(),
         intent: HashMap::new(),
         relations: Vec::new(),
+        defines: Vec::new(),
+        parse_warnings: Vec::new(),
         raw: raw.to_string(),
     };
 
@@ -74,8 +97,13 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         let is_meta = line.starts_with("META [");
         let is_intent = line.starts_with("INTENT_PAYLOAD [");
         let is_relation = line.starts_with("RELATION [");
+        // Contrairement a META/INTENT_PAYLOAD/RELATION, le mot-cle DEFINE
+        // n'est pas immediatement suivi de "[" -- la grammaire reelle (spec
+        // §9) est `DEFINE <identifier> AS <entity_type> [attrs]`, avec deux
+        // tokens (identifiant + type) entre le mot-cle et le crochet.
+        let is_define = line.starts_with("DEFINE ");
 
-        if is_meta || is_intent || is_relation {
+        if is_meta || is_intent || is_relation || is_define {
             // Save previous block if exists
             if !current_block.is_empty() && !block_name.is_empty() {
                 match block_name.as_str() {
@@ -86,17 +114,31 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                             payload.relations.push(relation);
                         }
                     }
+                    "DEFINE" => match parse_define_block(&current_block) {
+                        Ok(def) => payload.defines.push(def),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "R7: bloc DEFINE mal forme ignore -- {}", e
+                        )),
+                    },
                     _ => {}
                 }
             }
 
             // Start new block
             in_block = true;
-            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else { "RELATION" }.to_string();
+            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else { "DEFINE" }.to_string();
             current_block = line.to_string();
 
-            // Check if block ends on same line
-            if line.contains(']') {
+            // Check if block ends on same line. Cas particulier DEFINE : le
+            // groupe `[attrs]` etant optionnel dans la grammaire (§9), une
+            // ligne DEFINE sans aucun '[' n'a structurellement rien a
+            // attendre d'une ligne suivante -- la traiter comme multi-ligne
+            // (comme META/INTENT/RELATION le font quand ']' manque) la ferait
+            // engloutir la ligne ---END--- suivante par accident (bug reel
+            // trouve en ecrivant le test correspondant), puisqu'aucun '['
+            // jamais ouvert ne pourra jamais etre "ferme". Elle est donc
+            // complete des sa propre ligne.
+            if line.contains(']') || (block_name == "DEFINE" && !current_block.contains('[')) {
                 match block_name.as_str() {
                     "META" => payload.meta = parse_block(&current_block)?,
                     "INTENT_PAYLOAD" => payload.intent = parse_block(&current_block)?,
@@ -105,6 +147,12 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                             payload.relations.push(relation);
                         }
                     }
+                    "DEFINE" => match parse_define_block(&current_block) {
+                        Ok(def) => payload.defines.push(def),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "R7: bloc DEFINE mal forme ignore -- {}", e
+                        )),
+                    },
                     _ => {}
                 }
                 in_block = false;
@@ -123,6 +171,12 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                         payload.relations.push(relation);
                     }
                 }
+                "DEFINE" => match parse_define_block(&current_block) {
+                    Ok(def) => payload.defines.push(def),
+                    Err(e) => payload.parse_warnings.push(format!(
+                        "R7: bloc DEFINE mal forme ignore -- {}", e
+                    )),
+                },
                 _ => {}
             }
             in_block = false;
@@ -133,12 +187,76 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         }
     }
 
+    // R7 (suite) : un bloc DEFINE dont le crochet ouvrant n'est JAMAIS ferme
+    // avant ---END--- (ex. "DEFINE patient AS human [id=e001" sans "]" nulle
+    // part ensuite) ne declenche jamais la branche `line.contains(']')`
+    // ci-dessus -- avant ce fix, il restait accumule dans `current_block`
+    // jusqu'a la fin de la boucle puis etait perdu SANS AUCUN avertissement
+    // (silencieux, pas meme un "dropped" detectable). C'est le cas le plus
+    // litteral de "crochets malformes" vise par R7 (§19). Flush explicite ici
+    // -- uniquement pour DEFINE (hors perimetre pour META/INTENT_PAYLOAD/
+    // RELATION, qui gardent leur comportement historique : `?` propage une
+    // erreur dure pour META/INTENT, drop silencieux pour RELATION).
+    if block_name == "DEFINE" && !current_block.is_empty() {
+        match parse_define_block(&current_block) {
+            Ok(def) => payload.defines.push(def),
+            Err(e) => payload.parse_warnings.push(format!(
+                "R7: bloc DEFINE mal forme ignore (jamais ferme avant ---END---) -- {}", e
+            )),
+        }
+    }
+
     eprintln!("[Parser] Parsed CSTL v{} MODE={}", payload.version, payload.mode);
     eprintln!("[Parser] META: {} fields", payload.meta.len());
     eprintln!("[Parser] INTENT: {} fields", payload.intent.len());
     eprintln!("[Parser] RELATIONS: {} blocks", payload.relations.len());
+    eprintln!("[Parser] DEFINE: {} blocks ({} avertissement(s) R7)", payload.defines.len(), payload.parse_warnings.len());
 
     Ok(payload)
+}
+
+/// Parse un bloc `DEFINE <identifier> AS <entity_type> [attr_list]` (spec §9)
+/// en un HashMap plat -- meme esprit que `parse_block`, mais avec un en-tete
+/// a extraire avant les crochets (identifiant + type), pas seulement une
+/// liste d'attributs. `[attr_list]` est optionnel dans la grammaire ; sans
+/// lui, l'entite est quand meme enregistree (name/entity_type seuls) mais ne
+/// pourra jamais satisfaire un `coref_with` (qui reference toujours un `id`).
+///
+/// R7 : un en-tete malforme (pas exactement "identifiant AS type") ou des
+/// crochets malformes (`[` sans `]` ou vice-versa, via `parse_block`)
+/// produisent tous les deux un `ParseError::MalformedBlock` -- l'appelant
+/// (`parse_payload`) le transforme en avertissement `payload.parse_warnings`
+/// plutot que de faire echouer tout le payload : le bloc est "dropped" (pas
+/// enregistre dans `payload.defines`), avec avertissement, exactement la
+/// regle R7 (§19).
+fn parse_define_block(block: &str) -> Result<HashMap<String, String>, ParseError> {
+    let rest = block
+        .strip_prefix("DEFINE ")
+        .ok_or_else(|| ParseError::MalformedBlock("bloc DEFINE sans prefixe attendu".to_string()))?;
+
+    let header = match rest.find('[') {
+        Some(idx) => &rest[..idx],
+        None => rest,
+    };
+    let tokens: Vec<&str> = header.split_whitespace().collect();
+    if tokens.len() != 3 || tokens[1] != "AS" {
+        return Err(ParseError::MalformedBlock(format!(
+            "en-tete DEFINE invalide (attendu '<identifiant> AS <type>'): {:?}",
+            header.trim()
+        )));
+    }
+
+    // Les attributs `[...]` sont optionnels dans la grammaire (§9: le groupe
+    // "(SP \"[\" attr_list \"]\")?" est marque `?`). Sans '[', pas d'attrs.
+    let mut map = if rest.contains('[') {
+        parse_block(block)?
+    } else {
+        HashMap::new()
+    };
+
+    map.insert("name".to_string(), tokens[0].to_string());
+    map.insert("entity_type".to_string(), tokens[2].to_string());
+    Ok(map)
 }
 
 /// Coupe `content` sur les virgules de premier niveau seulement -- une virgule
@@ -272,5 +390,101 @@ INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
         let payload_str = "#!CSTL v5.0.0 MODE=A\nMETA [x=y]";
         let result = parse_payload(payload_str);
         assert!(matches!(result, Err(ParseError::MissingEndMarker)));
+    }
+
+    // ── DEFINE (spec §9), reconstruit le 2026-09-05 pour R8/R7 ──
+
+    #[test]
+    fn test_define_block_parsed_with_id() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+DEFINE patient AS human [id=e001, age=67]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert_eq!(payload.defines.len(), 1);
+        let d = &payload.defines[0];
+        assert_eq!(d.get("name"), Some(&"patient".to_string()));
+        assert_eq!(d.get("entity_type"), Some(&"human".to_string()));
+        assert_eq!(d.get("id"), Some(&"e001".to_string()));
+        assert_eq!(d.get("age"), Some(&"67".to_string()));
+        assert!(payload.parse_warnings.is_empty());
+    }
+
+    #[test]
+    fn test_define_block_without_attrs_still_parsed() {
+        // §9 : le groupe [attr_list] est optionnel dans la grammaire.
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+DEFINE patient AS human
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert_eq!(payload.defines.len(), 1);
+        assert_eq!(payload.defines[0].get("name"), Some(&"patient".to_string()));
+        assert_eq!(payload.defines[0].get("id"), None);
+    }
+
+    #[test]
+    fn test_multiple_defines_and_relations_coexist() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+DEFINE patient AS human [id=e001]
+DEFINE physician AS agent [id=e002]
+RELATION [type=EQUALS, subject=e001, object=e002]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert_eq!(payload.defines.len(), 2);
+        assert_eq!(payload.relations.len(), 1);
+    }
+
+    // ── R7 : DEFINE avec crochets/en-tete malformes -> dropped + warning ──
+
+    #[test]
+    fn test_r7_define_malformed_header_dropped_with_warning() {
+        // En-tete sans "AS" -- ne correspond pas a "<identifiant> AS <type>".
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+DEFINE patient human [id=e001]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.defines.is_empty(), "un DEFINE mal forme ne doit pas etre enregistre");
+        assert!(payload.parse_warnings.iter().any(|w| w.starts_with("R7:")),
+                "un avertissement R7 est attendu: {:?}", payload.parse_warnings);
+    }
+
+    #[test]
+    fn test_r7_define_never_closed_bracket_dropped_with_warning() {
+        // Crochet ouvrant jamais ferme avant ---END--- -- le cas le plus
+        // litteral de "crochets malformes" (R7, §19). Avant ce fix : perdu
+        // silencieusement, sans meme un avertissement.
+        let payload_str = "#!CSTL v5.0.0 MODE=A\n\
+            META [encoder=Agent_CLAUDE, produced_by=Claude]\n\
+            INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]\n\
+            DEFINE patient AS human [id=e001\n\
+            ---END---";
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.defines.is_empty());
+        assert!(payload.parse_warnings.iter().any(|w| w.starts_with("R7:")),
+                "un avertissement R7 est attendu: {:?}", payload.parse_warnings);
+    }
+
+    #[test]
+    fn test_r7_clean_define_produces_no_warning() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+DEFINE patient AS human [id=e001]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.parse_warnings.is_empty());
     }
 }

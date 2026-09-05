@@ -161,6 +161,16 @@ pub async fn handle_connection(
                     // (avertissement seul, voir le commentaire de tete de
                     // check_extended_semantic_diagnostics pour pourquoi).
                     semantic_warnings.extend(validator::check_extended_semantic_diagnostics(&payload));
+                    // R8 (reconstruit le 2026-09-05 sur le vrai CstlPayload --
+                    // voir validator::check_coref_with_references pour
+                    // l'historique complet). Meme politique que les deux
+                    // appels ci-dessus : avertissement seul, jamais un rejet.
+                    semantic_warnings.extend(validator::check_coref_with_references(&payload));
+                    // R7 (parser.rs) : un bloc DEFINE mal forme (en-tete ou
+                    // crochets) est deja "dropped" par le parser -- on
+                    // remonte aussi l'avertissement au client plutot que de
+                    // le laisser uniquement dans les logs serveur (eprintln!).
+                    semantic_warnings.extend(payload.parse_warnings.iter().cloned());
                     let mut semantic_warning_lines = String::new();
                     if !semantic_warnings.is_empty() {
                         eprintln!("[Handler] ⚠️  Semantic operator warnings: {:?}", semantic_warnings);

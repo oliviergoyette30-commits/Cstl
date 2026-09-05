@@ -298,6 +298,8 @@ mod tests {
             meta,
             intent,
             relations: vec![],
+            defines: vec![],
+            parse_warnings: vec![],
             raw: String::new(),
         }
     }
