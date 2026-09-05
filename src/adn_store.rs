@@ -140,6 +140,18 @@ impl AdnStore {
                 sender TEXT NOT NULL,
                 receiver TEXT NOT NULL,
                 purpose TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS governance_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT NOT NULL,
+                ts INTEGER NOT NULL,
+                inconsistency INTEGER NOT NULL,
+                semantic_warning INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_governance_events_ts ON governance_events(ts);
+            CREATE TABLE IF NOT EXISTS governance_alerts (
+                sender TEXT PRIMARY KEY,
+                last_alert_ts INTEGER NOT NULL
             );",
         )?;
         // Migration idempotente (2026-09-04, Couche 8: audit deontique
@@ -546,6 +558,88 @@ impl AdnStore {
 
     pub fn audit_count(&self) -> Result<u64, rusqlite::Error> {
         self.conn.query_row("SELECT COUNT(*) FROM audit_trail", [], |row| row.get(0))
+    }
+
+    // ── Gouvernance (Couche 2) -- persistance ajoutee le 2026-09-05.
+    // `governance.rs::GovernanceTracker` vivait purement en memoire
+    // (`Arc<Mutex<GovernanceTracker>>` cote serveur, remis a zero a chaque
+    // redemarrage) -- meme fichier/`Connection` que le reste (adn_store/
+    // audit_trail), pas une base separee, coherent avec la fusion du
+    // 2026-09-04. Un evenement = un appel `record()` (un payload traite),
+    // exactement le meme grain que `save_audit_entry` pour l'audit trail --
+    // deja le patron etabli de ce depot pour ce compromis latence/durabilite.
+
+    /// Sauvegarde un evenement de gouvernance (un appel `record()`) pour
+    /// `sender`, et purge dans la meme requete tout ce qui est devenu plus
+    /// vieux que `prune_before` (horodatage unix) -- sans cette purge,
+    /// `governance_events` grossirait sans limite sur un serveur qui tourne
+    /// des mois, alors que le mecanisme lui-meme (fenetre glissante) n'a
+    /// jamais besoin de plus que la plus grande fenetre (`DRIFT_WINDOW`).
+    /// L'appelant (`handler.rs`) calcule `prune_before` a partir des
+    /// constantes de `governance.rs` -- ce module reste agnostique du sens
+    /// de ces fenetres, il ne fait qu'ecrire/purger sur un seuil donne.
+    pub fn save_governance_event(
+        &self,
+        sender: &str,
+        ts: i64,
+        had_inconsistency: bool,
+        had_semantic_warning: bool,
+        prune_before: i64,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO governance_events (sender, ts, inconsistency, semantic_warning) VALUES (?1, ?2, ?3, ?4)",
+            params![sender, ts, had_inconsistency as i64, had_semantic_warning as i64],
+        )?;
+        self.conn.execute("DELETE FROM governance_events WHERE ts < ?1", params![prune_before])?;
+        Ok(())
+    }
+
+    /// Sauvegarde le dernier horodatage d'alerte connu pour `sender` --
+    /// upsert (un seul horodatage par sender a la fois a un sens pour le
+    /// cooldown anti-spam, pas un historique).
+    pub fn save_governance_alert(&self, sender: &str, ts: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO governance_alerts (sender, last_alert_ts) VALUES (?1, ?2)
+             ON CONFLICT(sender) DO UPDATE SET last_alert_ts = excluded.last_alert_ts",
+            params![sender, ts],
+        )?;
+        Ok(())
+    }
+
+    /// Charge tous les evenements de gouvernance dont l'horodatage est
+    /// superieur ou egal a `since` (deja filtre au niveau SQL -- pas la
+    /// peine de rapatrier ce qui est de toute facon hors de la plus grande
+    /// fenetre glissante), du plus ancien au plus recent -- utilise au
+    /// demarrage pour reconstruire `GovernanceTracker` via
+    /// `with_defaults_restored`.
+    pub fn load_governance_events(&self, since: i64) -> Result<Vec<(String, i64, bool, bool)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT sender, ts, inconsistency, semantic_warning FROM governance_events WHERE ts >= ?1 ORDER BY ts ASC",
+        )?;
+        let rows = stmt.query_map(params![since], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)? != 0,
+                row.get::<_, i64>(3)? != 0,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Charge tous les derniers horodatages d'alerte connus, un par sender.
+    pub fn load_governance_alerts(&self) -> Result<Vec<(String, i64)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare("SELECT sender, last_alert_ts FROM governance_alerts")?;
+        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     /// Tous les emergence_proofs enregistres, du plus ancien au plus recent.

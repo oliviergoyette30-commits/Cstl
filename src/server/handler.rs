@@ -725,6 +725,33 @@ pub async fn handle_connection(
                     let gov_state = {
                         governance.lock().await.record(&governance_sender, &governance_reasons)
                     };
+                    // Persistance (2026-09-05): meme grain que l'audit trail
+                    // (un evenement par payload, via save_audit_entry
+                    // plus bas) -- l'etat de gouvernance survivait avant ca
+                    // uniquement dans `governance` en memoire, perdu au
+                    // redemarrage. `prune_before` supprime dans la meme
+                    // requete tout ce qui est deja hors de la plus grande
+                    // fenetre glissante (DRIFT_WINDOW), pour que la table ne
+                    // grossisse jamais sans limite.
+                    let gov_ts = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    let gov_prune_before = gov_ts - crate::governance::DRIFT_WINDOW.as_secs() as i64;
+                    if let Err(e) = adn_store.lock().await.save_governance_event(
+                        &governance_sender,
+                        gov_ts,
+                        !consistency.consistent,
+                        !semantic_warnings.is_empty(),
+                        gov_prune_before,
+                    ) {
+                        eprintln!("[Handler] ⚠️  governance event persist failed: {}", e);
+                    }
+                    if gov_state.should_alert {
+                        if let Err(e) = adn_store.lock().await.save_governance_alert(&governance_sender, gov_ts) {
+                            eprintln!("[Handler] ⚠️  governance alert persist failed: {}", e);
+                        }
+                    }
                     eprintln!(
                         "[Handler] 🏛️  Governance: sender={} circuit={} breaker_trips={} drift_ratio={:.2} drift_flagged={}",
                         governance_sender,

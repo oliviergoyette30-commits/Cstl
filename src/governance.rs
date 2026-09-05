@@ -17,13 +17,22 @@
 //! Ajouter un chemin bloquant ici aurait introduit un précédent que rien
 //! n'a demandé.
 //!
-//! Limite v1 assumée: l'état est en mémoire uniquement
-//! (`Arc<Mutex<GovernanceTracker>>` sur le serveur, même schéma que
-//! `chain`/`adn_store`) — il repart à zéro à chaque redémarrage du
-//! serveur. Acceptable parce que le mécanisme est une fenêtre glissante
-//! auto-cicatrisante par construction, contrairement à l'audit/la
-//! provenance (`adn_store.rs`) qui doivent, elles, survivre à un
-//! redémarrage.
+//! Persistance (2026-09-05): contrairement à ce que ce commentaire
+//! affirmait avant, l'état N'EST PLUS uniquement en mémoire. Même schéma
+//! que la chaîne d'audit (`adn_store.rs::save_audit_entry`/`load_chain`,
+//! une seule `Connection` SQLite fusionnée) : chaque événement significatif
+//! (`record()` appelé depuis `handler.rs`) est aussi écrit dans les tables
+//! `governance_events`/`governance_alerts` de cette même base, et
+//! `CstlNativeServer::try_with_data_path` recharge cet état au démarrage
+//! via `GovernanceTracker::with_defaults_restored` pour reconstruire les
+//! fenêtres glissantes plutôt que repartir de zéro. Ce qui reste vrai et
+//! motive le CHOIX de granularité (un événement par payload, comme l'audit
+//! trail, pas un snapshot périodique): le mécanisme est une fenêtre
+//! glissante auto-cicatrisante par construction — perdre les tout derniers
+//! événements non encore flushés lors d'un crash brutal (pas un arrêt
+//! propre) ne fausse jamais durablement rien, contrairement à l'audit/la
+//! provenance (`adn_store.rs`) où perdre une entrée casserait la chaîne de
+//! hachage elle-même.
 //!
 //! Un seul mécanisme générique ("compteur d'événements par expéditeur, à
 //! fenêtre glissante, avec une étiquette de raison") sert à la fois pour
@@ -33,7 +42,16 @@
 //! séparés.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+/// Horodatage unix courant (secondes) -- meme fonction que `adn_store::now_unix`,
+/// dupliquee ici pour ne pas faire dependre `governance.rs` (module pur,
+/// sans dependance SQL) de `adn_store`. Utilisee uniquement pour convertir
+/// entre les `Instant` (horloge monotone, en memoire) de ce module et les
+/// horodatages unix (horloge murale) que la base SQLite persiste.
+fn now_unix() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
 
 /// Fenêtre du circuit breaker: nombre d'incohérences tolérées sur cette
 /// durée avant que le circuit ne s'ouvre pour cet expéditeur.
@@ -124,6 +142,69 @@ impl GovernanceTracker {
             drift_ratio_threshold,
             alert_cooldown,
         }
+    }
+
+    /// Reconstruit un tracker a partir de l'etat persiste (`adn_store`,
+    /// tables `governance_events`/`governance_alerts`) -- utilise au
+    /// demarrage du serveur (`server/mod.rs::try_with_data_path`) a la
+    /// place de `with_defaults()` des qu'une base existante contient de
+    /// l'historique. `events` et `alerts` sont deja filtres par l'appelant
+    /// (seulement ce qui tombe encore dans la plus grande fenetre, voir
+    /// `AdnStore::load_governance_events`) -- ce constructeur ne fait que
+    /// les rejouer, chacun via `restore_event`/`restore_alert`.
+    pub fn with_defaults_restored(
+        events: &[(String, i64, bool, bool)],
+        alerts: &[(String, i64)],
+    ) -> Self {
+        let mut tracker = Self::with_defaults();
+        for (sender, ts_unix, had_inconsistency, had_semantic_warning) in events {
+            tracker.restore_event(sender, *ts_unix, *had_inconsistency, *had_semantic_warning);
+        }
+        for (sender, ts_unix) in alerts {
+            tracker.restore_alert(sender, *ts_unix);
+        }
+        tracker
+    }
+
+    /// Convertit un horodatage unix passe en un `Instant` equivalent,
+    /// relatif a MAINTENANT -- `Instant` n'a pas de representation absolue
+    /// (horloge monotone, pas murale), donc la seule facon de "rejouer" un
+    /// evenement persiste est de calculer son age (secondes ecoulees) et de
+    /// reculer d'autant depuis `Instant::now()`. `saturating_sub` cote age
+    /// (jamais negatif) + `checked_sub` cote Instant (jamais avant le debut
+    /// du programme) couvrent les deux cas limites: horodatage dans le futur
+    /// (derive d'horloge) et age qui deborderait le point de reference du
+    /// monotone clock -- dans les deux cas on retombe sur "maintenant"
+    /// plutot que paniquer.
+    fn instant_for(ts_unix: i64) -> Instant {
+        let age_secs = (now_unix() - ts_unix).max(0) as u64;
+        Instant::now().checked_sub(Duration::from_secs(age_secs)).unwrap_or_else(Instant::now)
+    }
+
+    /// Rejoue UN evenement persiste (un appel `record()` passe) dans la
+    /// fenetre du sender concerne, sans recalculer/retourner d'etat (pas
+    /// d'alerte a re-declencher pour un evenement deja traite dans une
+    /// session precedente) -- seul `record()` fait ca pour un evenement en
+    /// direct. `had_inconsistency` alimente `inconsistency_events` (breaker),
+    /// `had_semantic_warning` alimente `drift_samples` (drift) -- exactement
+    /// comme le fait `record()` pour un evenement live, colonne par colonne.
+    pub fn restore_event(&mut self, sender: &str, ts_unix: i64, had_inconsistency: bool, had_semantic_warning: bool) {
+        let instant = Self::instant_for(ts_unix);
+        let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
+        if had_inconsistency {
+            window.inconsistency_events.push(instant);
+        }
+        window.drift_samples.push((instant, had_semantic_warning));
+    }
+
+    /// Rejoue le dernier horodatage d'alerte connu pour `sender` -- pour que
+    /// le cooldown anti-spam (`ALERT_COOLDOWN`) reste effectif juste apres un
+    /// redemarrage, pas seulement apres le premier `record()` de la nouvelle
+    /// session.
+    pub fn restore_alert(&mut self, sender: &str, ts_unix: i64) {
+        let instant = Self::instant_for(ts_unix);
+        let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
+        window.last_alert = Some(instant);
     }
 
     /// Enregistre un événement pour `sender` (0..n raisons portées par ce

@@ -53,8 +53,11 @@ pub struct CstlNativeServer {
     pub telegram: Option<Arc<TelegramNotifier>>,
     pub obsidian: Option<Arc<ObsidianEscalation>>,
     /// Couche 2 (gouvernance/resilience) -- circuit breaker + drift
-    /// d'operateur, observation seule (voir src/governance.rs). Etat en
-    /// memoire uniquement, perdu au redemarrage -- limite v1 assumee.
+    /// d'operateur, observation seule (voir src/governance.rs). Seede
+    /// depuis `adn_store` au demarrage (voir `try_with_data_path`, meme
+    /// patron que `chain` juste au-dessus) depuis le 2026-09-05 -- avant
+    /// ca, toujours reconstruit vide (`with_defaults()`), meme quand la
+    /// base SQLite avait deja de l'historique de breaker/drift sur disque.
     pub governance: Arc<Mutex<GovernanceTracker>>,
 }
 
@@ -104,6 +107,25 @@ impl CstlNativeServer {
             .load_chain()
             .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
 
+        // Seed la Couche 2 (gouvernance) depuis ce qui est deja persiste --
+        // meme logique que `chain` juste au-dessus. `since` ne rapatrie que
+        // ce qui tombe encore dans la plus grande des deux fenetres
+        // glissantes (DRIFT_WINDOW, 1h > BREAKER_WINDOW, 10 min) -- un
+        // evenement plus vieux que ca n'aurait de toute facon plus aucun
+        // effet sur `record()` (retire des le premier appel).
+        let governance_since = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+            - crate::governance::DRIFT_WINDOW.as_secs() as i64;
+        let governance_events = adn_store
+            .load_governance_events(governance_since)
+            .map_err(|e| format!("impossible de charger les evenements de gouvernance persistes depuis '{data_path}': {e}"))?;
+        let governance_alerts = adn_store
+            .load_governance_alerts()
+            .map_err(|e| format!("impossible de charger les alertes de gouvernance persistees depuis '{data_path}': {e}"))?;
+        let governance = GovernanceTracker::with_defaults_restored(&governance_events, &governance_alerts);
+
         Ok(CstlNativeServer {
             port,
             agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
@@ -127,7 +149,7 @@ impl CstlNativeServer {
             // None si OBSIDIAN_VAULT_PATH absent de l'environnement - degradation
             // propre, le serveur marche pareil sans escalade Obsidian.
             obsidian: ObsidianEscalation::from_env().map(Arc::new),
-            governance: Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
+            governance: Arc::new(Mutex::new(governance)),
         })
     }
 
