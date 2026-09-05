@@ -2,7 +2,8 @@
 """
 cstl_llm_agent.py -- agent LLM reel branche sur le serveur CSTL v5.0.0 par
 TCP, via cstl_client.py (feature C, 2026-09-04). Stdlib + `cryptography`
-(Ed25519) + `anthropic` (optionnel, degradation propre si absent).
+(Ed25519) + `anthropic` et/ou `google-genai` (optionnels, degradation
+propre si absents -- voir GeminiAgentBrain, ajoute le 2026-09-05).
 
 Ce que ce fichier ferme concretement: avant lui, CSTL n'avait jamais eu
 qu'un seul "agent" reel -- l'utilisateur humain, tapant des payloads a la
@@ -28,22 +29,32 @@ un seul processus Python, tours alternes, un cote genere par le LLM,
 l'autre par stdin (ou un second AnthropicAgentBrain si --peer-mode llm).
 
 Ce qui N'A PAS ete verifie en direct dans ce sandbox (ni paquet
-`anthropic`, ni ANTHROPIC_API_KEY disponibles ici -- confirme par
-`pip show anthropic` et `echo $ANTHROPIC_API_KEY`, tous deux vides):
-une vraie reponse generee par un modele Claude. AnthropicAgentBrain.from_env()
-est concu pour degrader proprement (retourne None) dans exactement cet
-etat -- verifie ci-dessous, dans ce sandbox, que c'est bien ce qui se
-passe. La verification AVEC un vrai modele reste a faire par l'utilisateur
-sur sa propre machine (instructions en bas de ce fichier).
+`anthropic`/`google-genai`, ni ANTHROPIC_API_KEY/GEMINI_API_KEY disponibles
+ici -- confirme par `pip show anthropic`/`echo $ANTHROPIC_API_KEY` et
+`echo $GEMINI_API_KEY`, tous vides, bien que `google-genai` ait ete
+installe et importe avec succes pour ecrire GeminiAgentBrain): une vraie
+reponse generee par un modele. `AnthropicAgentBrain.from_env()` et
+`GeminiAgentBrain.from_env()` sont concus pour degrader proprement
+(retournent None) dans exactement cet etat -- verifie ci-dessous, dans ce
+sandbox, que c'est bien ce qui se passe. La verification AVEC un vrai
+modele reste a faire par l'utilisateur sur sa propre machine (instructions
+en bas de ce fichier).
 
 Usage (une fois un vrai modele disponible, sur la machine de l'utilisateur):
+    # Option Gemini -- palier gratuit reel, cle sur aistudio.google.com/apikey,
+    # aucune carte de credit requise (contrairement a l'API Anthropic):
+    pip install google-genai
+    export GEMINI_API_KEY=...
+    # Option Anthropic (API payante, distincte d'un abonnement Claude Max
+    # qui ne donne acces qu'au chat, pas a l'API):
     pip install anthropic
     export ANTHROPIC_API_KEY=sk-...
-    cargo run --release &                          # serveur CSTL, port 5050
-    python3 sdk/python/cstl_llm_agent.py --peer-mode stdin --turns 4
 
-Auto-test structurel (fonctionne sans `anthropic` ni cle -- c'est ce qui
-EST verifiable ici):
+    cargo run --release &                          # serveur CSTL, port 5050
+    python3 sdk/python/cstl_llm_agent.py --peer-mode stdin --turns 4 --provider auto
+
+Auto-test structurel (fonctionne sans `anthropic`/`google-genai` ni cle --
+c'est ce qui EST verifiable ici):
     python3 sdk/python/cstl_llm_agent.py --structural-selftest
 """
 
@@ -285,11 +296,90 @@ class AnthropicAgentBrain:
 
 
 # ---------------------------------------------------------------------------
+# Cerveau Gemini -- meme interface (generate_relation) et meme patron
+# from_env() qu'AnthropicAgentBrain ci-dessus, ajoute le 2026-09-05.
+#
+# Motivation: Gemini a un palier gratuit reel (cle sur
+# aistudio.google.com/apikey, aucune carte de credit requise), contrairement
+# a l'API Anthropic -- ce qui rend un VRAI tour de dialogue LLM->serveur
+# CSTL accessible a l'utilisateur sans frais, l'API Claude payante restant
+# hors de portee ici (l'abonnement Max de l'utilisateur ne donne pas acces
+# a l'API, seulement au chat).
+#
+# `run_llm_relay` traite `AnthropicAgentBrain` et `GeminiAgentBrain` de
+# facon polymorphe par duck-typing (les deux exposent `generate_relation`)
+# -- pas d'ABC commune ajoutee ici pour rester coherent avec le fait
+# qu'AnthropicAgentBrain elle-meme n'en avait pas.
+#
+# Verifie dans ce sandbox (2026-09-05): le paquet `google-genai` (SDK
+# unifie actuel, PAS l'ancien `google-generativeai` deprecie) s'installe et
+# s'importe avec succes. AUCUNE cle (`GEMINI_API_KEY`) n'est presente ici
+# -- seule la degradation propre de from_env() (retourne None) a pu etre
+# verifiee en direct, jamais un vrai tour de dialogue contre l'API Gemini.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class GeminiAgentBrain:
+    client: object
+    model: str
+
+    @classmethod
+    def from_env(cls, model: str = "gemini-2.0-flash") -> Optional["GeminiAgentBrain"]:
+        try:
+            from google import genai  # type: ignore
+        except ImportError:
+            print("[GeminiAgentBrain] paquet 'google-genai' absent -- pip install google-genai. Degradation: None.", file=sys.stderr)
+            return None
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            print("[GeminiAgentBrain] GEMINI_API_KEY absent de l'environnement. Degradation: None.", file=sys.stderr)
+            return None
+        client = genai.Client(api_key=api_key)
+        return cls(client=client, model=model)
+
+    def generate_relation(self, topic: str, peer_message: str | None) -> dict:
+        """Meme contrat que AnthropicAgentBrain.generate_relation: un objet
+        JSON {"type", "subject", "object"}, meme prompt (a la formulation
+        pres, inevitable entre deux API differentes), meme tolerance de
+        parsing (texte autour du JSON)."""
+        prompt = (
+            "Tu es un agent CSTL. Reponds UNIQUEMENT avec un objet JSON "
+            '{"type": "...", "subject": "...", "object": "..."} '
+            "representant une relation factuelle ou une prise de position "
+            f"sur le sujet suivant: {topic!r}."
+        )
+        if peer_message:
+            prompt += f" Le pair vient de dire: {peer_message!r}."
+        response = self.client.models.generate_content(model=self.model, contents=prompt)
+        text = response.text or ""
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            start, end = text.find("{"), text.rfind("}")
+            if start != -1 and end != -1:
+                return json.loads(text[start:end + 1])
+            raise ValueError(f"reponse du modele non-JSON: {text!r}")
+
+
+def resolve_brain(provider: str) -> Optional[object]:
+    """`provider` in {"anthropic", "gemini", "auto"}. "auto" essaie Gemini
+    en premier (palier gratuit reel, accessible sans frais a l'utilisateur)
+    puis retombe sur Anthropic -- ordre delibere, pas arbitraire."""
+    if provider == "anthropic":
+        return AnthropicAgentBrain.from_env()
+    if provider == "gemini":
+        return GeminiAgentBrain.from_env()
+    if provider == "auto":
+        return GeminiAgentBrain.from_env() or AnthropicAgentBrain.from_env()
+    raise ValueError(f"provider inconnu: {provider!r}")
+
+
+# ---------------------------------------------------------------------------
 # Relais tours-alternes (mirroir de cstl_orchestrator.py::run_relay)
 # ---------------------------------------------------------------------------
 
 def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
-                   topic: str, turns: int, peer_mode: str) -> int:
+                   topic: str, turns: int, peer_mode: str, provider: str = "auto") -> int:
     sk, pubkey_hex = load_or_create_keypair(keyfile)
     client = CstlClient(host=host, port=port, timeout=15.0)
 
@@ -300,17 +390,21 @@ def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
         print("[LlmAgent] ECHEC: enregistrement refuse, arret.", file=sys.stderr)
         return 1
 
-    brain = AnthropicAgentBrain.from_env()
+    brain = resolve_brain(provider)
     if brain is None:
         print(
-            "[LlmAgent] Aucun modele disponible (paquet 'anthropic' ou "
-            "ANTHROPIC_API_KEY manquant) -- l'enregistrement et la "
-            "signature sont verifies, mais aucun tour de dialogue reel ne "
-            "peut avoir lieu ici. Voir le README du SDK pour verifier "
-            "cette partie sur une machine avec un vrai modele.",
+            "[LlmAgent] Aucun modele disponible pour provider="
+            f"{provider!r} (paquet 'anthropic'/'google-genai' ou "
+            "ANTHROPIC_API_KEY/GEMINI_API_KEY manquant) -- l'enregistrement "
+            "et la signature sont verifies, mais aucun tour de dialogue "
+            "reel ne peut avoir lieu ici. Gemini a un palier gratuit "
+            "(cle sur aistudio.google.com/apikey) si l'API Anthropic n'est "
+            "pas disponible. Voir le README du SDK pour verifier cette "
+            "partie sur une machine avec un vrai modele.",
             file=sys.stderr,
         )
         return 2
+    print(f"[LlmAgent] modele: {type(brain).__name__} ({brain.model})")
 
     peer_message: str | None = None
     for turn in range(1, turns + 1):
@@ -341,7 +435,7 @@ def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
 def _structural_selftest() -> int:
     failures = []
 
-    print("[1/3] cryptography disponible et generation de cle...")
+    print("[1/4] cryptography disponible et generation de cle...")
     if not _HAS_CRYPTOGRAPHY:
         failures.append("le paquet 'cryptography' est absent -- ne peut pas etre teste plus loin")
     else:
@@ -355,7 +449,7 @@ def _structural_selftest() -> int:
             else:
                 print(f"      OK (public_key stable: {pk1[:16]}...)")
 
-    print("[2/3] cstl_signing_bytes -- fixture croisee Rust/Python...")
+    print("[2/4] cstl_signing_bytes -- fixture croisee Rust/Python...")
     # Fixture IDENTIQUE a examples/print_signing_bytes_fixture.rs, verifiee
     # manuellement octet-par-octet dans cette session (2026-09-04).
     expected_hex = (
@@ -383,12 +477,19 @@ def _structural_selftest() -> int:
     else:
         print("      OK (identique octet-par-octet a signing_bytes() cote Rust)")
 
-    print("[3/3] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
+    print("[3/4] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
     brain = AnthropicAgentBrain.from_env()
     if brain is not None:
         print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
     else:
         print("      OK (None, comme attendu dans un environnement sans 'anthropic'/ANTHROPIC_API_KEY)")
+
+    print("[4/4] GeminiAgentBrain.from_env() degrade proprement sans paquet/cle...")
+    gemini_brain = GeminiAgentBrain.from_env()
+    if gemini_brain is not None:
+        print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
+    else:
+        print("      OK (None, comme attendu dans un environnement sans 'google-genai'/GEMINI_API_KEY)")
 
     print()
     if failures:
@@ -410,6 +511,9 @@ def main() -> int:
     ap.add_argument("--turns", type=int, default=3)
     ap.add_argument("--peer-mode", choices=["stdin", "self"], default="self",
                      help="'stdin': un humain repond a chaque tour. 'self': le meme LLM alimente les deux cotes.")
+    ap.add_argument("--provider", choices=["anthropic", "gemini", "auto"], default="auto",
+                     help="Backend LLM. 'auto' (defaut) essaie Gemini en premier (palier gratuit reel) "
+                          "puis retombe sur Anthropic si Gemini est indisponible.")
     ap.add_argument("--structural-selftest", action="store_true",
                      help="Verifie signing_bytes/keypair/degradation sans toucher au reseau.")
     args = ap.parse_args()
@@ -418,7 +522,7 @@ def main() -> int:
         return _structural_selftest()
 
     return run_llm_relay(args.host, args.port, args.keyfile, args.name,
-                          args.topic, args.turns, args.peer_mode)
+                          args.topic, args.turns, args.peer_mode, args.provider)
 
 
 if __name__ == "__main__":

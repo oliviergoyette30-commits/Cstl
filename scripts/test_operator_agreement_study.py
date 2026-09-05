@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from operator_agreement_study import (  # noqa: E402
     REFERENCE_FACTS,
     DeterministicStubBackend,
+    GeminiBackend,
+    build_prompt,
     build_report,
     cohens_kappa,
     collect_responses,
@@ -173,6 +175,52 @@ def test_backend_names_must_be_unique_and_report_stable():
     # seul nom present, avec la reponse du DERNIER backend fourni.
     assert list(results["F01"].keys()) == ["dup"]
     assert results["F01"]["dup"].operator == "DOUBTS"
+
+
+def test_gemini_backend_from_env_degrades_cleanly_without_key(monkeypatch):
+    """Meme contrat que AnthropicBackend.from_env(): pas d'exception, un
+    simple None quand GEMINI_API_KEY est absente -- verifiable sans reseau
+    ni cle, contrairement a un vrai appel a l'API Gemini."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    assert GeminiBackend.from_env() is None
+
+
+def test_gemini_backend_choose_operator_parses_real_client_shape():
+    """Verifie la plomberie reelle de GeminiBackend.choose_operator (appel
+    de la vraie forme d'API google-genai, `client.models.generate_content(...)
+    .text`, puis parsing JSON) SANS reseau, via un faux client injecte a la
+    place du vrai `genai.Client` -- seule partie testable ici sans
+    GEMINI_API_KEY ni appel reseau reel (voir l'en-tete du module)."""
+
+    class FakeResponse:
+        text = '{"operator": "KNOWS", "justification": "fait etabli"}'
+
+    class FakeModels:
+        def generate_content(self, model, contents):  # noqa: ARG002
+            assert model == "gemini-2.0-flash"
+            assert isinstance(contents, str) and len(contents) > 0
+            return FakeResponse()
+
+    class FakeClient:
+        models = FakeModels()
+
+    backend = GeminiBackend(client=FakeClient(), model="gemini-2.0-flash")
+    assert backend.name == "gemini:gemini-2.0-flash"
+
+    choice = backend.choose_operator(REFERENCE_FACTS[0])
+    assert choice.operator == "KNOWS"
+    assert choice.justification == "fait etabli"
+
+
+def test_build_prompt_is_identical_shape_for_every_backend():
+    """Condition necessaire pour que l'accord mesure entre Anthropic et
+    Gemini reflete une difference de jugement du modele, pas une difference
+    de formulation du prompt : build_prompt ne depend d'aucun backend."""
+    prompt1 = build_prompt(REFERENCE_FACTS[0])
+    prompt2 = build_prompt(REFERENCE_FACTS[0])
+    assert prompt1 == prompt2
+    assert REFERENCE_FACTS[0].text in prompt1
+    assert "JSON" in prompt1
 
 
 if __name__ == "__main__":

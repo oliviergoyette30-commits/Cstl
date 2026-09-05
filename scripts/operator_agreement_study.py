@@ -31,19 +31,21 @@ Meme patron de degradation propre que AnthropicAgentBrain.from_env()
 
 POUR L'UTILISATEUR -- comment produire une VRAIE mesure une fois pret :
 
-    pip install anthropic          # et/ou openai, google-generativeai...
+    pip install anthropic google-genai     # et/ou openai...
     export ANTHROPIC_API_KEY=sk-...
-    # optionnel, pour comparer plusieurs fournisseurs :
-    export OPENAI_API_KEY=sk-...
+    # Gemini a un palier gratuit reel (cle sur aistudio.google.com/apikey,
+    # aucune carte de credit requise) -- la comparaison inter-modeles la
+    # plus accessible sans frais :
+    export GEMINI_API_KEY=...
 
-    python3 scripts/operator_agreement_study.py --backends anthropic
+    python3 scripts/operator_agreement_study.py --backends anthropic,gemini
 
     # Comparaison inter-modeles reelle (le but scientifique de la question
-    # posee dans la spec) necessite au moins deux backends reels. Ce
-    # fichier ne fournit qu'une implementation reelle (AnthropicBackend) --
-    # ajouter un OpenAIBackend/GeminiBackend est une extension directe :
-    # implementer la classe abstraite OperatorChoiceBackend ci-dessous et
-    # l'ajouter a BACKEND_REGISTRY.
+    # posee dans la spec) necessite au moins deux backends reels -- c'est
+    # exactement ce que anthropic+gemini ci-dessus donne. Un OpenAIBackend
+    # supplementaire est une extension directe : implementer la classe
+    # abstraite OperatorChoiceBackend ci-dessous et l'ajouter a
+    # BACKEND_REGISTRY, meme patron que GeminiBackend.
 
     # Mode 100% local, sans reseau, pour verifier que le harnais tourne :
     python3 scripts/operator_agreement_study.py --dry-run
@@ -52,7 +54,11 @@ POUR L'UTILISATEUR -- comment produire une VRAIE mesure une fois pret :
 
 Aucun appel LLM reel n'a ete effectue par ce script dans le depot au
 moment de son ecriture -- seul --dry-run / --backends stub* a ete execute
-ici.
+ici. `google-genai` a ete installe et importe avec succes dans ce sandbox
+(2026-09-05) pour ecrire et verifier structurellement GeminiBackend, mais
+GEMINI_API_KEY est absente ici comme ANTHROPIC_API_KEY -- seule la
+degradation propre de from_env() (retourne None) a pu etre verifiee en
+direct, jamais un vrai appel a l'API Gemini.
 """
 
 from __future__ import annotations
@@ -312,6 +318,54 @@ class AnthropicBackend(OperatorChoiceBackend):
 
 
 # ---------------------------------------------------------------------------
+# Backend Gemini reel -- meme patron from_env() qu'AnthropicBackend ci-dessus.
+# Ajoute le 2026-09-05 : Gemini a un palier gratuit reel (cle API sur
+# aistudio.google.com/apikey, aucune carte de credit requise contrairement a
+# l'API Anthropic), ce qui rend une VRAIE comparaison inter-modeles
+# accessible a l'utilisateur sans frais -- Claude restant disponible via le
+# chat (abonnement Max de l'utilisateur), pas via l'API payante.
+#
+# Paquet `google-genai` (le SDK unifie actuel, PAS l'ancien
+# `google-generativeai` deprecie) installe et importe avec succes dans ce
+# sandbox (`pip install google-genai`, confirme). Comme pour AnthropicBackend,
+# AUCUNE cle (`GEMINI_API_KEY`) n'est presente ici (confirme avec
+# `echo $GEMINI_API_KEY`, vide) -- seule la degradation propre de
+# `from_env()` (retourne None) a pu etre verifiee en direct dans ce sandbox,
+# jamais un vrai appel reseau a l'API Gemini.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class GeminiBackend(OperatorChoiceBackend):
+    client: object
+    model: str
+    name: str = field(default="")
+
+    def __post_init__(self):
+        if not self.name:
+            self.name = f"gemini:{self.model}"
+
+    @classmethod
+    def from_env(cls, model: str = "gemini-2.0-flash") -> Optional["GeminiBackend"]:
+        try:
+            from google import genai  # type: ignore
+        except ImportError:
+            print("[GeminiBackend] paquet 'google-genai' absent -- pip install google-genai. Degradation: None.", file=sys.stderr)
+            return None
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            print("[GeminiBackend] GEMINI_API_KEY absent de l'environnement. Degradation: None.", file=sys.stderr)
+            return None
+        client = genai.Client(api_key=api_key)
+        return cls(client=client, model=model)
+
+    def choose_operator(self, fact: ReferenceFact) -> OperatorChoice:
+        prompt = build_prompt(fact)
+        response = self.client.models.generate_content(model=self.model, contents=prompt)
+        text = response.text or ""
+        return _parse_json_choice(text)
+
+
+# ---------------------------------------------------------------------------
 # Backend factice deterministe -- AUCUN reseau. Le seul backend utilisable
 # dans ce sandbox. Deux modes de construction :
 #   - `fixed_operator`: repond toujours le meme operateur (utile pour un
@@ -519,6 +573,7 @@ BACKEND_REGISTRY: dict[str, "callable"] = {
     "stub_a": lambda: DeterministicStubBackend(name="stub_a"),
     "stub_b": lambda: DeterministicStubBackend(name="stub_b"),
     "anthropic": lambda: AnthropicBackend.from_env(),
+    "gemini": lambda: GeminiBackend.from_env(),
 }
 
 
