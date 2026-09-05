@@ -123,6 +123,7 @@ impl<'a> SemanticValidator<'a> {
         let mut errors = Vec::new();
         errors.extend(self.check_operator_whitelist());
         errors.extend(self.check_axiom_d());
+        errors.extend(self.check_axiom_k_entailment());
         errors.extend(self.check_additional_diagnostics());
         errors
     }
@@ -227,6 +228,98 @@ impl<'a> SemanticValidator<'a> {
                         message: format!(
                             "SDL Axiome D violé : ({}) {} {} et ({}) {} {} coexistent (lignes {}, {})",
                             m1, c1.subject, c1.object, m2, c2.subject, c2.object, c1.line, c2.line
+                        ),
+                        line: c2.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// E110 — Axiome K de SDL (distributivité) sur des chaînes `ENTAILS`
+    /// factuelles : O(φ→ψ) → (O(φ)→O(ψ)). `check_axiom_d` (E107) ne détecte
+    /// une contradiction que quand MUST et MUST_NOT portent EXACTEMENT le
+    /// même (subject, object) — un trou réel : rien ne relie aujourd'hui une
+    /// obligation sur A à une interdiction sur B même quand le payload
+    /// affirme lui-même, explicitement, `A ENTAILS B`.
+    ///
+    /// Exemple concret que E107 seul laisse passer : `(MUST) physician
+    /// PRESCRIBE drug_A` + `(therapy) ENTAILS monitoring_required` +
+    /// `(drug_A) ENTAILS monitoring_required` + `(MUST_NOT) physician
+    /// PERFORM monitoring_required` — deux objets différents (`drug_A` vs
+    /// `monitoring_required`), donc `check_axiom_d` ne voit rien, alors que
+    /// le payload affirme lui-même que prescrire drug_A entraîne
+    /// monitoring_required : obliger le premier tout en interdisant le
+    /// second, pour le MÊME sujet, est la même contradiction que E107,
+    /// simplement transportée par une chaîne ENTAILS que l'auteur a rendue
+    /// explicite plutôt que par une coïncidence de (subject, object).
+    ///
+    /// Portée volontairement restreinte pour éviter les faux positifs :
+    /// ENTAILS relie ici des OBJETS de relations à modalité (`c.object`),
+    /// jamais des sujets ni des relations factuelles sans modalité; la
+    /// fermeture transitive est calculée par un simple parcours en largeur
+    /// sur les arêtes ENTAILS déclarées dans CE payload (pas d'historique —
+    /// contrairement à `execution_lab::check_deontic_consistency_with_
+    /// history`, une chaîne ENTAILS qui ne tient que sur un seul payload est
+    /// déjà une auto-contradiction de l'auteur, donc bloquant comme E107,
+    /// pas seulement informatif) ; et le MUST et le MUST_NOT comparés
+    /// doivent partager le même `subject` — deux agents différents peuvent
+    /// légitimement avoir des obligations opposées sur des propositions
+    /// liées (l'un doit faire A, l'autre doit s'assurer que B n'arrive pas),
+    /// ce n'est pas une contradiction d'auteur.
+    pub fn check_axiom_k_entailment(&self) -> Vec<SemanticError> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        let mut entails_edges: HashMap<&str, Vec<&str>> = HashMap::new();
+        for r in self.relations() {
+            if r.operator == "ENTAILS" {
+                entails_edges.entry(r.subject.as_str()).or_default().push(r.object.as_str());
+            }
+        }
+        if entails_edges.is_empty() {
+            return Vec::new();
+        }
+
+        // Fermeture transitive par parcours en largeur depuis `start`,
+        // arrêt si un cycle ENTAILS ramène sur `start` lui-même (pas notre
+        // problème ici — un cycle ENTAILS pathologique n'est pas ce que ce
+        // check vérifie, on l'ignore simplement pour ne pas boucler).
+        let reachable = |start: &str| -> HashSet<String> {
+            let mut seen: HashSet<String> = HashSet::new();
+            let mut queue: VecDeque<&str> = VecDeque::new();
+            queue.push_back(start);
+            while let Some(node) = queue.pop_front() {
+                if let Some(next) = entails_edges.get(node) {
+                    for &n in next {
+                        if seen.insert(n.to_string()) {
+                            queue.push_back(n);
+                        }
+                    }
+                }
+            }
+            seen
+        };
+
+        let mut errors = Vec::new();
+        let constraints: Vec<&Relation> = self.constraints().collect();
+        for c1 in &constraints {
+            let Some(ref m1) = c1.modality else { continue };
+            if !REQUIRED_MODALITIES.contains(&m1.as_str()) { continue }
+            let entailed = reachable(c1.object.as_str());
+            if entailed.is_empty() { continue }
+            for c2 in &constraints {
+                let Some(ref m2) = c2.modality else { continue };
+                if FORBIDDEN_MODALITIES.contains(&m2.as_str())
+                    && c1.subject == c2.subject
+                    && c1.object != c2.object
+                    && entailed.contains(c2.object.as_str())
+                {
+                    errors.push(SemanticError {
+                        code: "E110".to_string(),
+                        message: format!(
+                            "SDL Axiome K violé : ({}) {} {} ENTAILS (transitivement) {}, mais ({}) {} {} l'interdit (lignes {}, {})",
+                            m1, c1.subject, c1.object, c2.object, m2, c2.subject, c2.object, c1.line, c2.line
                         ),
                         line: c2.line,
                     });
@@ -561,6 +654,78 @@ mod tests {
         ];
         let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E107"));
+    }
+
+    #[test]
+    fn test_axiom_k_entailment_violation_direct() {
+        // (MUST) physician PRESCRIBE drug_A + drug_A ENTAILS monitoring_required
+        // + (MUST_NOT) physician PERFORM monitoring_required -- E107 seul ne
+        // voit rien (objets differents: drug_A vs monitoring_required), E110 doit
+        // detecter la contradiction transportee par la chaine ENTAILS explicite.
+        let data = vec![
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("drug_A", "ENTAILS", "monitoring_required", 0.95, "n", None),
+            rel("physician", "PERFORM", "monitoring_required", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E110"),
+                "Axiome K doit etre detecte via une chaine ENTAILS directe");
+    }
+
+    #[test]
+    fn test_axiom_k_entailment_violation_transitive_two_hops() {
+        // therapy ENTAILS monitoring_required ENTAILS renal_monitoring --
+        // la contradiction doit etre detectee meme a 2 sauts de distance.
+        let data = vec![
+            rel("physician", "PRESCRIBE", "therapy", 0.92, "n", Some("MUST")),
+            rel("therapy", "ENTAILS", "monitoring_required", 0.92, "n", None),
+            rel("monitoring_required", "ENTAILS", "renal_monitoring", 0.95, "n", None),
+            rel("physician", "PERFORM", "renal_monitoring", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E110"),
+                "Axiome K doit etre detecte a travers une chaine ENTAILS transitive (2 sauts)");
+    }
+
+    #[test]
+    fn test_axiom_k_entailment_different_subjects_no_violation() {
+        // Deux agents differents peuvent legitimement porter des obligations
+        // opposees sur des propositions liees -- pas une contradiction d'auteur.
+        let data = vec![
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("drug_A", "ENTAILS", "monitoring_required", 0.95, "n", None),
+            rel("nurse", "PERFORM", "monitoring_required", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E110"));
+    }
+
+    #[test]
+    fn test_axiom_k_entailment_no_chain_no_violation() {
+        // Memes MUST/MUST_NOT sur des objets differents, mais AUCUNE relation
+        // ENTAILS ne les relie -- pas de contradiction a inferer.
+        let data = vec![
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("physician", "PERFORM", "monitoring_required", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E110"));
+    }
+
+    #[test]
+    fn test_axiom_k_entailment_does_not_duplicate_axiom_d() {
+        // MUST et MUST_NOT sur le MEME objet -- deja couvert par E107 (meme
+        // objet), E110 ne doit pas re-signaler la meme paire en double (sa
+        // portee explicite exclut c1.object == c2.object).
+        let data = vec![
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("physician", "PRESCRIBE", "drug_A", 1.0, "n", Some("MUST_NOT")),
+        ];
+        let v = SemanticValidator::new(&data);
+        let errors = v.validate();
+        assert!(errors.iter().any(|e| e.code == "E107"));
+        assert!(!errors.iter().any(|e| e.code == "E110"),
+                "E110 ne doit pas dupliquer E107 sur le meme (subject, object)");
     }
 
     #[test]

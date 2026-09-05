@@ -345,9 +345,10 @@ fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationRe
         return;
     }
 
-    for err in SemanticValidator::new(&relations).check_axiom_d() {
+    let validator = SemanticValidator::new(&relations);
+    for err in validator.check_axiom_d().into_iter().chain(validator.check_axiom_k_entailment()) {
         result.errors.push(ValidationError {
-            code: err.code, // "E107"
+            code: err.code, // "E107" ou "E110"
             message: err.message,
         });
         result.valid = false;
@@ -562,6 +563,21 @@ mod tests {
         let result = validate_payload(&payload);
         assert!(!result.valid, "une vraie contradiction MUST/MUST_NOT doit etre rejetee");
         assert!(result.errors.iter().any(|e| e.code == "E107"), "attendu E107 (Axiome D): {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_real_deontic_distributed_contradiction_detected_e110() {
+        // Contradiction distribuee via une chaine ENTAILS EXPLICITE dans le
+        // payload -- E107 seul ne la voit pas (objets differents: drug_A vs
+        // monitoring_required), E110 doit la detecter sur le vrai pipeline.
+        let payload = payload_with(vec![
+            relation(&[("subject", "physician"), ("type", "PRESCRIBE"), ("object", "drug_A"), ("modality", "MUST")]),
+            relation(&[("subject", "drug_A"), ("type", "ENTAILS"), ("object", "monitoring_required")]),
+            relation(&[("subject", "physician"), ("type", "PERFORM"), ("object", "monitoring_required"), ("modality", "MUST_NOT")]),
+        ]);
+        let result = validate_payload(&payload);
+        assert!(!result.valid, "une contradiction distribuee via ENTAILS doit etre rejetee");
+        assert!(result.errors.iter().any(|e| e.code == "E110"), "attendu E110 (Axiome K): {:?}", result.errors);
     }
 
     #[test]

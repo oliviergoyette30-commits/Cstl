@@ -40,6 +40,20 @@
 ///    HISTORIQUE, invisible au check intra-payload, est bien detectee.
 /// 4. Meme modalite repetee (MUST puis MUST_NOT sur un objet DIFFERENT) ->
 ///    aucun bloc DEONTIC_AUDIT (pas de faux positif sur l'historique).
+///
+/// Ajoute le 2026-09-05 (item #4/"verification deontique forte" de la liste
+/// des choses a faire -- aucun `cstl_verifier.py` reel n'a ete retrouve nulle
+/// part dans ce depot ni dans les docs du projet malgre la mention de la
+/// liste, seulement une reference a un fichier qui n'a jamais existe comme
+/// code fonctionnel ; ce qui suit est donc construit directement en Rust a
+/// partir des axiomes SDL deja documentes dans CSTL_SPEC_v5_0.md §3, pas un
+/// port) :
+///
+/// 5. Axiome K (distributivite, semantic.rs::check_axiom_k_entailment, E110):
+///    (MUST) physician PRESCRIBE drug_A, drug_A ENTAILS monitoring_required,
+///    et (MUST_NOT) physician PERFORM monitoring_required -- E107 seul ne
+///    detecte rien (objets differents), E110 doit rejeter la contradiction
+///    transportee explicitement par la chaine ENTAILS du payload.
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
 use cstl_parser::server::CstlNativeServer;
 use std::sync::Arc;
@@ -121,7 +135,7 @@ async fn main() {
     let mut failures = Vec::new();
 
     // ---- Scenario 1: MUST_NOT isole -- regression du faux positif ----
-    println!("[1/4] RELATION[modality=MUST_NOT] isolee (doit passer normalement)...");
+    println!("[1/5] RELATION[modality=MUST_NOT] isolee (doit passer normalement)...");
     let resp1 = send(port, &deontic_payload("agent_1", "agent_x", "delete_prod_db", &["MUST_NOT"])).await;
     let status1 = extract_field(&resp1, "META", "status");
     println!("      status={:?}", status1);
@@ -130,7 +144,7 @@ async fn main() {
     }
 
     // ---- Scenario 2: MUST + MUST_NOT meme (subject,object), MEME payload ----
-    println!("[2/4] MUST et MUST_NOT sur le meme (subject,object), meme payload (doit etre rejete E107)...");
+    println!("[2/5] MUST et MUST_NOT sur le meme (subject,object), meme payload (doit etre rejete E107)...");
     let resp2 = send(port, &deontic_payload("agent_2", "agent_y", "backup_db", &["MUST", "MUST_NOT"])).await;
     let purpose2 = extract_field(&resp2, "INTENT_PAYLOAD", "purpose");
     let has_e107 = resp2.contains("E107");
@@ -140,7 +154,7 @@ async fn main() {
     }
 
     // ---- Scenario 3: MUST_NOT (payload A) puis MUST (payload B distinct) ----
-    println!("[3/4] MUST_NOT etabli par un payload, MUST sur le meme (subject,object) dans un AUTRE payload...");
+    println!("[3/5] MUST_NOT etabli par un payload, MUST sur le meme (subject,object) dans un AUTRE payload...");
     let resp3a = send(port, &deontic_payload("agent_3a", "agent_z", "wipe_logs", &["MUST_NOT"])).await;
     let status3a = extract_field(&resp3a, "META", "status");
     if status3a.as_deref() != Some("processed") {
@@ -159,12 +173,29 @@ async fn main() {
     }
 
     // ---- Scenario 4: aucun conflit -- pas de bloc DEONTIC_AUDIT ----
-    println!("[4/4] Nouvelle modalite sur un objet DIFFERENT (aucun conflit attendu)...");
+    println!("[4/5] Nouvelle modalite sur un objet DIFFERENT (aucun conflit attendu)...");
     let resp4 = send(port, &deontic_payload("agent_4", "agent_z", "rotate_keys", &["MUST"])).await;
     let has_audit_block4 = resp4.contains("DEONTIC_AUDIT");
     println!("      DEONTIC_AUDIT_present={}", has_audit_block4);
     if has_audit_block4 {
         failures.push(format!("scenario 4: aucun conflit reel -- le bloc DEONTIC_AUDIT ne doit pas apparaitre, reponse: {}", resp4));
+    }
+
+    // ---- Scenario 5: contradiction distribuee via une chaine ENTAILS ----
+    println!("[5/5] MUST sur A, A ENTAILS B, MUST_NOT sur B (doit etre rejete E110, Axiome K)...");
+    let payload5 = "#!CSTL v5.0.0 MODE=A\n\
+         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
+         INTENT_PAYLOAD [purpose=deontic_audit_smoke, sender=agent_5, receiver=server]\n\
+         RELATION [type=PRESCRIBE, subject=physician, object=drug_A, modality=MUST]\n\
+         RELATION [type=ENTAILS, subject=drug_A, object=monitoring_required]\n\
+         RELATION [type=PERFORM, subject=physician, object=monitoring_required, modality=MUST_NOT]\n\
+         ---END---\n";
+    let resp5 = send(port, payload5).await;
+    let purpose5 = extract_field(&resp5, "INTENT_PAYLOAD", "purpose");
+    let has_e110 = resp5.contains("E110");
+    println!("      purpose={:?} E110_present={}", purpose5, has_e110);
+    if purpose5.as_deref() != Some("validation_error") || !has_e110 {
+        failures.push(format!("scenario 5: contradiction distribuee via ENTAILS doit etre rejetee avec E110, reponse: {}", resp5));
     }
 
     println!();
