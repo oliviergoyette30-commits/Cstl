@@ -985,8 +985,8 @@ DECISION: example_decision [sigma=0.88]
 ## 23. Ce qui reste à faire (par priorité)
 
 1. **Courbe multi-hop** — dégradation sémantique sur 1/2/3/5 hops (BLOCKER arXiv)
-2. **Aligner R7** — préciser : crochets malformés → error ; type inconnu → warning
-3. **Implémenter R8/R9/R10** dans le parser Rust
+2. ~~Aligner R7~~ — fait le 2026-09-05 : crochets malformés → error (dropped + warning), câblé live dans `server/parser.rs` (voir §19)
+3. ~~Implémenter R8/R9/R10~~ — fait : R9/R10 câblés depuis le 2026-09-04 (`semantic.rs`), R8 reconstruit et câblé le 2026-09-05 (`server/validator.rs::check_coref_with_references`, portée intra-payload — voir §19 pour la limite honnête)
 4. **Mesure accord inter-opérateurs** — quel opérateur les LLM choisissent pour un fait donné ?
 5. **Vérification déontique forte** — porter cstl_verifier.py en Rust
 6. **Multi-judge** — validation indépendante des résultats empiriques
