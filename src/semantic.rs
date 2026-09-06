@@ -37,6 +37,48 @@ const OFFICIAL_OPERATORS: &[&str] = &[
     "BEFORE", "AFTER", "DURING",
 ];
 
+/// Performatifs FIPA-ACL (Foundation for Intelligent Physical Agents,
+/// Agent Communication Language) -- ajoutes le 2026-09-06, en reponse a une
+/// lacune reelle trouvee en verifiant le code: `INTENT_PAYLOAD [purpose=...]`
+/// existe depuis le debut comme champ d'ENVELOPPE (le type d'acte de
+/// communication), separe des `RELATION [type=...]` qui portent le CONTENU
+/// (COMMAND/ASK/STATE/PERFORM/RECOMMEND ci-dessus inclus) -- mais `purpose`
+/// n'a jamais ete qu'une chaine libre non structuree pour la communication
+/// ordinaire entre agents (seuls `agent_register`/`council_decision`/
+/// `detect_emergence` recoivent un traitement special dans handler.rs, tous
+/// des purposes de CONTROLE de protocole, pas des actes de communication
+/// agent-a-agent). Cette liste ferme cet ecart avec un vocabulaire reel,
+/// deja standardise dans la litterature multi-agents (Austin/Searle pour la
+/// theorie des actes de langage, FIPA pour la liste concrete), plutot que
+/// d'inventer une taxonomie ad hoc.
+///
+/// Volontairement PUREMENT ADDITIF: un payload dont `purpose` n'apparait pas
+/// ici continue de fonctionner exactement comme avant (aucune validation
+/// stricte de `purpose` n'existe ni n'est ajoutee ici) -- seul le fait de
+/// RECONNAITRE un performatif FIPA change quelque chose (voir
+/// `server/handler.rs`, bloc `PERFORMATIVE` ajoute a la reponse). Les
+/// operateurs d'actes de langage deja existants (COMMAND/ASK/STATE/PERFORM/
+/// RECOMMEND, ligne 33) restent inchanges et coexistent sans conflit: ils
+/// vivent au niveau RELATION (le contenu de l'acte), le performatif FIPA vit
+/// au niveau INTENT_PAYLOAD (le type d'acte lui-meme) -- les deux couches
+/// deja separees par le format wire depuis le debut du projet.
+pub const FIPA_PERFORMATIVES: &[&str] = &[
+    "REQUEST", "INFORM", "QUERY_IF", "QUERY_REF",
+    "PROPOSE", "ACCEPT_PROPOSAL", "REJECT_PROPOSAL", "CFP",
+    "AGREE", "REFUSE", "CANCEL",
+    "CONFIRM", "DISCONFIRM", "FAILURE", "NOT_UNDERSTOOD",
+    "SUBSCRIBE",
+];
+
+/// Vrai si `purpose` correspond (insensible a la casse) a un performatif
+/// FIPA reconnu -- utilise par `server/handler.rs` pour ajouter un bloc
+/// `PERFORMATIVE` informatif a la reponse, jamais pour rejeter quoi que ce
+/// soit (voir commentaire de `FIPA_PERFORMATIVES` ci-dessus).
+pub fn is_fipa_performative(purpose: &str) -> bool {
+    let upper = purpose.to_ascii_uppercase();
+    FIPA_PERFORMATIVES.contains(&upper.as_str())
+}
+
 // `pub` depuis le 2026-09-04: reutilisees par
 // execution_lab::check_deontic_consistency_with_history (Couche 8, audit
 // deontique HISTORIQUE) pour rester l'unique source de verite sur ce qui
@@ -589,6 +631,44 @@ impl<'a> SemanticValidator<'a> {
             }
         }
         errors
+    }
+}
+
+#[cfg(test)]
+mod fipa_tests {
+    use super::is_fipa_performative;
+
+    #[test]
+    fn test_known_performative_recognized() {
+        assert!(is_fipa_performative("PROPOSE"));
+        assert!(is_fipa_performative("REQUEST"));
+        assert!(is_fipa_performative("NOT_UNDERSTOOD"));
+    }
+
+    #[test]
+    fn test_recognition_is_case_insensitive() {
+        assert!(is_fipa_performative("propose"));
+        assert!(is_fipa_performative("Refuse"));
+    }
+
+    #[test]
+    fn test_existing_control_purposes_not_treated_as_fipa() {
+        // agent_register/council_decision/detect_emergence restent des
+        // purposes de CONTROLE de protocole, pas des performatifs FIPA --
+        // ce test documente qu'ils ne se recouvrent pas par accident.
+        assert!(!is_fipa_performative("agent_register"));
+        assert!(!is_fipa_performative("council_decision"));
+        assert!(!is_fipa_performative("detect_emergence"));
+    }
+
+    #[test]
+    fn test_arbitrary_free_text_purpose_not_recognized() {
+        // Purement additif: un purpose libre existant (ex. "test",
+        // "communication", "smoke_test_greeting") ne doit pas etre
+        // confondu avec un performatif -- comportement inchange pour eux.
+        assert!(!is_fipa_performative("test"));
+        assert!(!is_fipa_performative("communication"));
+        assert!(!is_fipa_performative(""));
     }
 }
 
