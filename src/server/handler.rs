@@ -951,6 +951,59 @@ pub async fn handle_connection(
                         String::new()
                     };
 
+                    // STEP 3-priority: INTENT_PAYLOAD.priority (CSTL_SPEC_v5_0.md
+                    // §6, ligne ~231 -- champ de grammaire officiel depuis la v5.0,
+                    // jamais implemente avant ce fix, cf. `grep -rn '"priority"' src/`
+                    // vide au 2026-09-06). Format deja rejete en amont si hors enum
+                    // (E311, validator.rs) -- ici on ne traite que les valeurs valides
+                    // ou l'absence du champ.
+                    //
+                    // Comportement cable, PORTEE ASSUMEE ET LIMITEE (a documenter
+                    // honnetement, pas juste dans ce commentaire -- voir README.md):
+                    //   - absent du payload -> AUCUNE ligne PRIORITY dans la reponse,
+                    //     RIEN d'autre ne change -- additif pur, zero regression sur
+                    //     le trafic existant (qui n'a jamais porte ce champ).
+                    //   - priority=critical -> SEULE valeur qui declenche un
+                    //     comportement reel: reutilise le meme canal d'escalade
+                    //     Telegram deja cable pour les alertes de gouvernance
+                    //     (STEP 3c-governance ci-dessus, meme politique best-effort/
+                    //     jamais bloquant, meme `tokio::spawn` fire-and-forget) --
+                    //     PAS un nouveau mecanisme d'infrastructure. Aucune file
+                    //     d'attente/reordonnancement de traitement n'existe dans ce
+                    //     serveur (une connexion = une boucle sequentielle, pas de
+                    //     scheduler multi-payload) donc "influencer l'ordre de
+                    //     traitement" n'etait PAS cablable sans construire cette
+                    //     infrastructure -- ecarte deliberement.
+                    //   - priority=high|normal|low -> AUCUNE escalade -- seule la
+                    //     ligne PRIORITY informative apparait (escalated=false).
+                    //     Rien ne distingue high de normal/low cote comportement:
+                    //     seul un sous-ensemble (1 valeur sur 4) du champ declenche
+                    //     un effet reel, le reste est purement declaratif pour
+                    //     l'instant -- limite assumee, pas cachee.
+                    let priority = payload.intent.get("priority").cloned();
+                    let priority_line = match priority.as_deref() {
+                        Some("critical") => {
+                            if let Some(telegram) = &telegram {
+                                let telegram = telegram.clone();
+                                let hash_for_priority = entry.hash.clone();
+                                let sender_for_priority = payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string());
+                                tokio::spawn(async move {
+                                    let message = format!(
+                                        "🔴 PRIORITY=CRITICAL: payload {} de '{}' escalade immediatement (INTENT_PAYLOAD.priority)",
+                                        hash_for_priority, sender_for_priority
+                                    );
+                                    if let Err(e) = telegram.send_message(&message).await {
+                                        eprintln!("[Telegram] ⚠️  escalade priority=critical echouee: {}", e);
+                                    }
+                                });
+                            }
+                            eprintln!("[Handler] 🔴 priority=critical -- escalade Telegram immediate declenchee (hash={})", entry.hash);
+                            "PRIORITY [value=critical, escalated=true, channel=telegram]\n".to_string()
+                        }
+                        Some(v) => format!("PRIORITY [value={}, escalated=false]\n", v),
+                        None => String::new(),
+                    };
+
                     // STEP 4: Try to route to agent — agent_registry est maintenant
                     // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
                     // du lock pour ne jamais tenir le MutexGuard pendant le
@@ -975,6 +1028,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -984,6 +1038,7 @@ pub async fn handle_connection(
                             temporal_cycle_line,
                             deontic_audit_line,
                             performative_line,
+                            priority_line,
                             semantic_warning_lines,
                             governance_line,
                             entry.hash,

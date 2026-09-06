@@ -122,6 +122,30 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
         }
     }
 
+    // INTENT_PAYLOAD.priority (CSTL_SPEC_v5_0.md §6, ligne ~231) -- champ
+    // optionnel, DECLARE dans la grammaire depuis la v5.0 mais jamais verifie
+    // ni exploite nulle part dans ce depot avant ce fix (trouvaille du
+    // 2026-09-06: `grep -rn '"priority"' src/` ne retournait rien). Validation
+    // de FORMAT seulement ici (l'absence du champ n'est PAS une erreur --
+    // valeur par defaut implicite "normal", cf. handler.rs STEP 3-priority) ;
+    // le comportement reel (escalade Telegram pour `critical`) est cable dans
+    // handler.rs, pas ici -- ce fichier ne fait que rejeter les valeurs hors
+    // enum. E311 (pas E306/E307/E308, deja pris/retires plus haut dans ce
+    // fichier -- E309/E310 pris pour public_key/signature juste au-dessus).
+    if let Some(priority) = payload.intent.get("priority") {
+        const VALID_PRIORITIES: [&str; 4] = ["critical", "high", "normal", "low"];
+        if !VALID_PRIORITIES.contains(&priority.as_str()) {
+            result.errors.push(ValidationError {
+                code: "E311".to_string(),
+                message: format!(
+                    "INTENT_PAYLOAD.priority doit etre l'une de: critical|high|normal|low (recu: {})",
+                    priority
+                ),
+            });
+            result.valid = false;
+        }
+    }
+
     // Validate deontic constraints (MUST/MUST_NOT)
     validate_deontic_constraints(payload, &mut result);
 
@@ -646,6 +670,49 @@ mod tests {
         ]);
         let warnings = check_coref_with_references(&payload);
         assert!(warnings.is_empty());
+    }
+
+    // ── INTENT_PAYLOAD.priority (E311, CSTL_SPEC_v5_0.md §6) ──
+
+    #[test]
+    fn test_priority_absent_valid_default_behavior_unchanged() {
+        // Regression: aucun champ priority -> aucune erreur, comportement
+        // identique a avant ce fix pour tout le trafic existant.
+        let payload = payload_with(vec![]);
+        assert!(!payload.intent.contains_key("priority"));
+        let result = validate_payload(&payload);
+        assert!(result.valid);
+        assert!(!result.errors.iter().any(|e| e.code == "E311"));
+    }
+
+    #[test]
+    fn test_priority_each_valid_enum_value_accepted() {
+        for v in ["critical", "high", "normal", "low"] {
+            let mut payload = payload_with(vec![]);
+            payload.intent.insert("priority".to_string(), v.to_string());
+            let result = validate_payload(&payload);
+            assert!(result.valid, "priority={} devrait etre valide: {:?}", v, result.errors);
+        }
+    }
+
+    #[test]
+    fn test_priority_invalid_value_rejected_e311() {
+        let mut payload = payload_with(vec![]);
+        payload.intent.insert("priority".to_string(), "urgent".to_string());
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E311"), "attendu E311: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_priority_case_sensitive_uppercase_rejected() {
+        // La grammaire (§6) liste des litteraux minuscules -- CRITICAL en
+        // majuscules n'est pas une valeur valide de l'enum.
+        let mut payload = payload_with(vec![]);
+        payload.intent.insert("priority".to_string(), "CRITICAL".to_string());
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E311"));
     }
 
     #[test]
