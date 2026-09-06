@@ -69,8 +69,29 @@ LIMITES HONNETES DE CETTE V1 :
     dans ce depot (`sdk/python/cstl_llm_agent.py`, Anthropic/Gemini) mais
     tourne comme un process Python separe, hors de ce dashboard -- ce
     dashboard ne le lance pas et ne s'y connecte pas.
-  - Hermes/Ollama et OpenClaw : non integres, confirme par recherche dans
-    src/ cette session -- aucune reference dans le code Rust.
+  - Hermes/Ollama et OpenClaw : toujours non integres cote serveur Rust
+    (confirme par recherche dans src/ -- aucune reference dans le code
+    Rust), mais CE dashboard sait desormais tenter une vraie connexion vers
+    chacun (voir /api/generate-relation et /api/openclaw-check ci-dessous) :
+      * /api/generate-relation (POST {"topic": "..."}) essaie dans l'ordre
+        Hermes/Ollama local (127.0.0.1:11434) -> Gemini -> Anthropic via
+        sdk/python/cstl_llm_agent.py::resolve_brain("auto") (code reutilise
+        tel quel, jamais duplique). Dans CE sandbox, aucun des trois n'est
+        disponible (Ollama absent, confirme par `which ollama` et
+        `curl http://localhost:11434/api/tags`; ni GEMINI_API_KEY ni
+        ANTHROPIC_API_KEY dans l'environnement) -- l'endpoint le rapporte
+        honnetement plutot que d'inventer une relation.
+      * /api/openclaw-check tente une connexion (WebSocket si le paquet
+        `websockets` est installe, sinon TCP brut) vers
+        ws://127.0.0.1:19001 -- AUCUN protocole applicatif OpenClaw n'est
+        parle (aucune documentation disponible pour l'ecrire), seulement un
+        test de connectivite generique. Dans ce sandbox, retourne toujours
+        "inaccessible" puisqu'OpenClaw tourne sur la machine macOS de
+        l'utilisateur, jamais ici -- resultat ATTENDU, pas une erreur.
+  - Graphify : /api/graphify-summary lit le VRAI fichier
+    graphify-out/graph.json (pas de "topology.json" dans ce depot) et
+    retourne noeuds/liens/communautes reels + comparaison honnete de
+    built_at_commit contre HEAD (perime si ce n'est pas un ancetre de HEAD).
   - Telegram et Obsidian : cables cote serveur Rust (voir
     src/telegram_council.rs, src/obsidian_escalation.rs) mais ce dashboard
     ne lit aucun etat de ces integrations -- affiche comme "cable cote
@@ -81,12 +102,30 @@ import json
 import os
 import socket
 import sqlite3
+import subprocess
+import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# sdk/python/cstl_llm_agent.py expose deja resolve_brain() (Hermes/Ollama ->
+# Gemini -> Anthropic, degradation propre a None si aucun n'est disponible)
+# -- reutilise tel quel ici, jamais duplique. Import a l'interieur d'un
+# try/except: ce module importe lui-meme cstl_client.py (stdlib pur, ok) et
+# tente d'importer `cryptography` en haut de fichier (deja gere en interne
+# par un try/except la-bas) -- donc cet import ne devrait jamais echouer
+# dans un environnement Python standard, mais si sdk/python/ est deplace ou
+# absent, ce dashboard degrade proprement plutot que de planter au demarrage.
+sys.path.insert(0, str(REPO_ROOT / "sdk" / "python"))
+try:
+    from cstl_llm_agent import resolve_brain  # noqa: E402
+    _LLM_AGENT_IMPORT_ERROR = None
+except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
+    resolve_brain = None
+    _LLM_AGENT_IMPORT_ERROR = str(e)
 
 DASHBOARD_PORT = int(os.environ.get("CSTL_DASHBOARD_PORT", "5099"))
 CSTL_SERVER_HOST = os.environ.get("CSTL_SERVER_HOST", "127.0.0.1")
@@ -233,6 +272,209 @@ def send_cstl_payload(payload_text):
         return {"ok": False, "sent": payload_text, "error": str(e), "round_trip_ms": elapsed_ms}
 
 
+def generate_relation_via_llm(topic):
+    """Essaie dans l'ordre Hermes/Ollama (local, gratuit) -> Gemini ->
+    Anthropic via resolve_brain("auto") de sdk/python/cstl_llm_agent.py --
+    AUCUNE logique de generation dupliquee ici, seulement l'appel et la mise
+    en forme honnete du resultat pour le compositeur du dashboard.
+
+    Retourne un dict JSON-serialisable, jamais une exception non geree:
+    {"ok": False, "brain": None, "message": "..."} si aucun brain n'est
+    disponible (le cas normal dans ce sandbox), ou
+    {"ok": True, "brain": "HermesAgentBrain", "model": "...",
+     "relation": {"type":..., "subject":..., "object":...}} en cas de
+    succes reel."""
+    if resolve_brain is None:
+        return {
+            "ok": False, "brain": None,
+            "message": ("import de sdk/python/cstl_llm_agent.py impossible "
+                        f"({_LLM_AGENT_IMPORT_ERROR}) -- generation LLM indisponible."),
+        }
+
+    topic = (topic or "").strip()
+    if not topic:
+        return {"ok": False, "brain": None, "message": "sujet vide -- rien a demander a un agent LLM."}
+
+    try:
+        brain = resolve_brain("auto")
+    except Exception as e:
+        return {"ok": False, "brain": None, "message": f"resolve_brain('auto') a leve une exception: {e}"}
+
+    if brain is None:
+        return {
+            "ok": False, "brain": None,
+            "message": ("aucun agent LLM disponible (ni Hermes local, ni cle "
+                        "Gemini/Anthropic) -- voir stderr du process dashboard "
+                        "pour le detail de chaque tentative (Hermes: serveur "
+                        "Ollama sur 127.0.0.1:11434 ? Gemini: GEMINI_API_KEY ? "
+                        "Anthropic: ANTHROPIC_API_KEY ?)."),
+        }
+
+    brain_name = type(brain).__name__
+    model = getattr(brain, "model", None)
+    try:
+        relation = brain.generate_relation(topic, None)
+    except Exception as e:
+        return {
+            "ok": False, "brain": brain_name, "model": model,
+            "message": f"{brain_name} disponible mais la generation a echoue reellement: {e}",
+        }
+
+    if not isinstance(relation, dict) or not all(k in relation for k in ("type", "subject", "object")):
+        return {
+            "ok": False, "brain": brain_name, "model": model,
+            "message": f"reponse du modele mal formee (attendu type/subject/object): {relation!r}",
+        }
+
+    return {"ok": True, "brain": brain_name, "model": model, "relation": relation}
+
+
+def read_graphify_summary():
+    """Lit le VRAI fichier graphify-out/graph.json s'il existe (le format
+    reellement produit par cet outil -- pas de fichier "topology.json"
+    trouve dans ce depot) et retourne un resume honnete: nombre de noeuds,
+    nombre de communautes distinctes, commit sur lequel le graphe a ete
+    construit. Aucun nombre invente: si le fichier est absent, le dit
+    explicitement ; si le commit d'origine (`built_at_commit`) n'est pas un
+    ancetre de HEAD, le signale comme possiblement perime plutot que de
+    pretendre que le graphe est a jour."""
+    graph_file = GRAPHIFY_OUT / "graph.json"
+    manifest_file = GRAPHIFY_OUT / "manifest.json"
+
+    if not graph_file.exists():
+        return {
+            "ok": False, "reason": "non_genere",
+            "detail": f"{graph_file} absent -- regenere avec `graphify update .`",
+        }
+
+    try:
+        raw = graph_file.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as e:
+        return {"ok": False, "reason": "lecture_impossible", "detail": str(e), "path": str(graph_file)}
+
+    nodes = data.get("nodes", [])
+    links = data.get("links", [])
+    communities = {n.get("community") for n in nodes if isinstance(n, dict) and "community" in n}
+    built_at_commit = data.get("built_at_commit")
+
+    result = {
+        "ok": True,
+        "path": str(graph_file),
+        "node_count": len(nodes),
+        "link_count": len(links),
+        "community_count": len(communities),
+        "built_at_commit": built_at_commit,
+        "generated_at": None,
+    }
+
+    # Date de generation: prise du mtime reel du fichier sur disque (le
+    # format graph.json lui-meme ne porte pas de champ de date explicite,
+    # verifie sur cette instance) -- jamais fabriquee.
+    try:
+        result["generated_at"] = int(graph_file.stat().st_mtime)
+    except OSError:
+        pass
+
+    # Perime ? Comparaison SIMPLE et honnete: built_at_commit est-il un
+    # ancetre de HEAD dans CE depot git ? Si `git` ou le repo sont
+    # indisponibles, on le dit plutot que de deviner.
+    result["head_commit"] = None
+    result["stale"] = None
+    result["stale_reason"] = None
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT),
+            capture_output=True, text=True, timeout=5,
+        )
+        if head.returncode == 0:
+            head_commit = head.stdout.strip()
+            result["head_commit"] = head_commit
+            if not built_at_commit:
+                result["stale"] = None
+                result["stale_reason"] = "graph.json ne porte pas de built_at_commit -- impossible de comparer."
+            elif built_at_commit == head_commit:
+                result["stale"] = False
+                result["stale_reason"] = "built_at_commit == HEAD exactement."
+            else:
+                anc = subprocess.run(
+                    ["git", "merge-base", "--is-ancestor", built_at_commit, "HEAD"],
+                    cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=5,
+                )
+                if anc.returncode == 0:
+                    result["stale"] = True
+                    result["stale_reason"] = ("built_at_commit est un ancetre de HEAD mais pas HEAD lui-meme -- "
+                                               "des commits sont arrives depuis la generation du graphe.")
+                else:
+                    result["stale"] = True
+                    result["stale_reason"] = (f"built_at_commit ({built_at_commit[:12]}...) n'est PAS un ancetre "
+                                               "de HEAD dans l'historique courant -- le graphe a ete construit sur "
+                                               "une autre branche/ligne d'historique, possiblement perime.")
+        else:
+            result["stale_reason"] = f"`git rev-parse HEAD` a echoue: {head.stderr.strip()}"
+    except (OSError, subprocess.SubprocessError) as e:
+        result["stale_reason"] = f"comparaison git impossible: {e}"
+
+    return result
+
+
+def check_openclaw_connection():
+    """Test de connectivite GENERIQUE vers ws://127.0.0.1:19001 -- PAS le
+    protocole applicatif d'OpenClaw (aucune documentation de ce protocole
+    n'est disponible pour cette tache, donc aucun format de message n'est
+    invente ici). Deux niveaux, selon ce qui est disponible:
+      1. Si le paquet `websockets` est installe: tente une vraie poignee de
+         main WebSocket (upgrade HTTP compris) -- plus proche de ce
+         qu'OpenClaw attend reellement s'il ecoute en WebSocket.
+      2. Sinon: simple connexion TCP brute sur le port -- suffisant pour
+         savoir si quelque chose ecoute la, pas pour parler le protocole.
+    Dans CE sandbox, OpenClaw tourne (s'il tourne) sur la machine macOS de
+    l'utilisateur, pas ici -- "inaccessible depuis ici" est donc le resultat
+    ATTENDU et correct, pas un signe de bug."""
+    host, port = "127.0.0.1", 19001
+    started = time.monotonic()
+
+    try:
+        import websockets.sync.client as ws_sync  # type: ignore
+        try:
+            conn = ws_sync.connect(f"ws://{host}:{port}/", open_timeout=2.0, close_timeout=1.0)
+            conn.close()
+            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+            return {
+                "reachable": True, "method": "websocket_handshake",
+                "host": host, "port": port, "latency_ms": elapsed_ms,
+                "detail": "poignee de main WebSocket reussie sur ce port.",
+            }
+        except Exception as e:
+            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+            return {
+                "reachable": False, "method": "websocket_handshake",
+                "host": host, "port": port, "latency_ms": elapsed_ms,
+                "detail": (f"echec de la poignee de main WebSocket ({e}) -- attendu dans ce sandbox, "
+                           "OpenClaw tourne sur la machine de l'utilisateur, pas ici."),
+            }
+    except ImportError:
+        pass
+
+    try:
+        with socket.create_connection((host, port), timeout=2.0):
+            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+            return {
+                "reachable": True, "method": "tcp_raw",
+                "host": host, "port": port, "latency_ms": elapsed_ms,
+                "detail": ("port TCP ouvert (paquet 'websockets' absent, test TCP brut seulement -- "
+                           "ne prouve pas qu'un serveur WebSocket ou OpenClaw ecoute reellement)."),
+            }
+    except OSError as e:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return {
+            "reachable": False, "method": "tcp_raw",
+            "host": host, "port": port, "latency_ms": elapsed_ms,
+            "detail": (f"connexion TCP echouee ({e}) -- attendu dans ce sandbox, OpenClaw tourne "
+                       "sur la machine de l'utilisateur, pas ici."),
+        }
+
+
 def check_other_systems():
     """Statuts honnetes des "autres systemes" -- jamais une case verte
     fabriquee. Chaque ligne dit precisement sur quoi son statut est base."""
@@ -250,28 +492,34 @@ def check_other_systems():
             "detail": f"{src_file} present dans src/" if wired else f"{src_file} absent",
         })
 
-    for name in ["Hermes", "Ollama", "OpenClaw"]:
-        systems.append({
-            "name": name,
-            "status": "non_integre",
-            "detail": "aucune reference trouvee dans src/ (grep effectue cette session)",
-        })
+    # Hermes/Ollama : toujours non-integre cote serveur Rust lui-meme (grep
+    # src/ ne trouve aucune reference), mais depuis cette session le
+    # dashboard SAIT parler a un serveur Ollama local via HermesAgentBrain
+    # (sdk/python/cstl_llm_agent.py) -- voir /api/generate-relation. Le
+    # statut ci-dessous reste honnete: pas d'integration Rust, endpoint
+    # dashboard present.
+    systems.append({
+        "name": "Hermes/Ollama",
+        "status": "non_integre",
+        "detail": ("aucune reference dans src/ (Rust) -- mais /api/generate-relation de CE dashboard "
+                   "sait parler a un serveur Ollama local (127.0.0.1:11434) via HermesAgentBrain "
+                   "s'il est installe et lance."),
+    })
 
-    # Graphify : lien statique reel si le dossier/fichier existe vraiment.
-    topology = GRAPHIFY_OUT / "topology.json"
-    if GRAPHIFY_OUT.is_dir() and any(GRAPHIFY_OUT.iterdir()):
-        systems.append({
-            "name": "Graphify",
-            "status": "dossier_present",
-            "detail": f"{GRAPHIFY_OUT} existe et contient des fichiers "
-                      f"({'topology.json trouve' if topology.exists() else 'topology.json absent'})",
-        })
-    else:
-        systems.append({
-            "name": "Graphify",
-            "status": "dossier_absent",
-            "detail": f"{GRAPHIFY_OUT} absent ou vide (regenerer avec `graphify update .`)",
-        })
+    # OpenClaw : voir /api/openclaw-check -- test de connectivite generique
+    # uniquement (aucun protocole applicatif documente disponible).
+    systems.append({
+        "name": "OpenClaw",
+        "status": "non_integre",
+        "detail": ("aucune reference dans src/ ; /api/openclaw-check de CE dashboard teste seulement "
+                   "l'ouverture du port ws://127.0.0.1:19001, sans parler le protocole applicatif "
+                   "(non documente) -- clique 'Tester la connexion OpenClaw' pour un resultat en direct."),
+    })
+
+    # Graphify : plus de ligne statique ici -- remplace par un resume REEL
+    # de graphify-out/graph.json, lu a la demande via /api/graphify-summary
+    # (voir read_graphify_summary()) et affiche par le bouton dedie du
+    # panneau "Autres systemes" cote index.html.
 
     # Claude Code : cette session elle-meme, honnete: pas d'etat verifiable
     # depuis un serveur externe, juste une mention.
@@ -310,6 +558,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(read_adn_state())
         elif parsed.path == "/api/other-systems":
             self._send_json(check_other_systems())
+        elif parsed.path == "/api/graphify-summary":
+            self._send_json(read_graphify_summary())
+        elif parsed.path == "/api/openclaw-check":
+            self._send_json(check_openclaw_connection())
         else:
             self.send_error(404, "Not found")
 
@@ -326,6 +578,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             payload_text = build_cstl_payload(fields)
             result = send_cstl_payload(payload_text)
             self._send_json(result)
+        elif parsed.path == "/api/generate-relation":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                fields = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
+                return
+            self._send_json(generate_relation_via_llm(fields.get("topic", "")))
         else:
             self.send_error(404, "Not found")
 

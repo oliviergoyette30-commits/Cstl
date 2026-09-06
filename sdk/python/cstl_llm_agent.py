@@ -65,6 +65,8 @@ import json
 import os
 import sys
 import unicodedata
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -375,10 +377,91 @@ class GeminiAgentBrain:
             raise ValueError(f"reponse du modele non-JSON: {text!r}")
 
 
+# ---------------------------------------------------------------------------
+# Cerveau Hermes/Ollama -- meme interface (generate_relation) et meme patron
+# from_env() que les deux brains ci-dessus, ajoute le 2026-09-06.
+#
+# Motivation: Hermes tourne LOCALEMENT via Ollama (aucune cle API, aucun
+# frais, aucune donnee envoyee a un tiers) -- prefere en premier dans
+# resolve_brain() precisement pour ca, si l'utilisateur l'a installe sur sa
+# machine. Parle l'API HTTP REST standard d'Ollama (POST /api/generate),
+# PAS le SDK Python d'un fournisseur -- Ollama n'en a pas besoin, seulement
+# `curl`/urllib suffit, donc aucune dependance supplementaire ici (stdlib
+# `urllib.request` uniquement, comme le reste de ce fichier evite les deps
+# non necessaires en dehors de cryptography/anthropic/google-genai).
+#
+# VERIFIE dans ce sandbox (2026-09-06), commandes executees telles quelles:
+#   `which ollama`              -> rien (code de sortie 1, binaire absent)
+#   `curl http://localhost:11434/api/tags` -> echec de connexion
+#     (curl exit 7 "Failed to connect to localhost port 11434:
+#     Connection refused") -- aucun serveur Ollama n'ecoute ici.
+# Consequence directe et voulue: HermesAgentBrain.from_env() retourne None
+# dans CE sandbox, exactement comme AnthropicAgentBrain/GeminiAgentBrain en
+# l'absence de leur dependance -- meme degradation propre, pas d'exception.
+# La verification AVEC un vrai serveur Ollama (et donc une vraie reponse de
+# hermes3) reste a faire par l'utilisateur sur sa machine (voir le README du
+# SDK) -- seul le parsing de la forme de reponse Ollama est verifie ici via
+# un mock HTTP (voir _structural_selftest et test_hermes_brain.py).
+# ---------------------------------------------------------------------------
+
+@dataclass
+class HermesAgentBrain:
+    host: str
+    port: int
+    model: str
+
+    @classmethod
+    def from_env(cls, model: str | None = None) -> Optional["HermesAgentBrain"]:
+        host = os.environ.get("CSTL_OLLAMA_HOST", "127.0.0.1")
+        port = int(os.environ.get("CSTL_OLLAMA_PORT", "11434"))
+        resolved_model = model or os.environ.get("CSTL_OLLAMA_MODEL", "hermes3")
+        tags_url = f"http://{host}:{port}/api/tags"
+        try:
+            with urllib.request.urlopen(tags_url, timeout=1.0):
+                pass
+        except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
+            print(
+                f"[HermesAgentBrain] serveur Ollama injoignable sur {tags_url} "
+                f"({e}) -- installe/lance Ollama (voir ollama.com) puis "
+                f"`ollama pull {resolved_model}`. Degradation: None.",
+                file=sys.stderr,
+            )
+            return None
+        return cls(host=host, port=port, model=resolved_model)
+
+    def generate_relation(self, topic: str, peer_message: str | None) -> dict:
+        """Meme contrat que AnthropicAgentBrain/GeminiAgentBrain.generate_relation:
+        un objet JSON {"type", "subject", "object"}. Appelle l'API HTTP REST
+        standard d'Ollama, POST /api/generate, avec stream=False pour recevoir
+        la reponse complete en un seul objet JSON (champ "response")."""
+        prompt = (
+            "Tu es un agent CSTL. Reponds UNIQUEMENT avec un objet JSON "
+            '{"type": "...", "subject": "...", "object": "..."} '
+            "representant une relation factuelle ou une prise de position "
+            f"sur le sujet suivant: {topic!r}."
+        )
+        if peer_message:
+            prompt += f" Le pair vient de dire: {peer_message!r}."
+        url = f"http://{self.host}:{self.port}/api/generate"
+        body = json.dumps({"model": self.model, "prompt": prompt, "stream": False}).encode("utf-8")
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60.0) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        text = payload.get("response", "")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            start, end = text.find("{"), text.rfind("}")
+            if start != -1 and end != -1:
+                return json.loads(text[start:end + 1])
+            raise ValueError(f"reponse du modele non-JSON: {text!r}")
+
+
 def resolve_brain(provider: str, model: str | None = None) -> Optional[object]:
-    """`provider` in {"anthropic", "gemini", "auto"}. "auto" essaie Gemini
-    en premier (palier gratuit reel, accessible sans frais a l'utilisateur)
-    puis retombe sur Anthropic -- ordre delibere, pas arbitraire.
+    """`provider` in {"hermes", "anthropic", "gemini", "auto"}. "auto" essaie
+    Hermes/Ollama en premier (local, gratuit, aucune donnee envoyee a un
+    tiers), puis Gemini (palier gratuit reel, cle requise), puis Anthropic
+    (API payante) -- ordre delibere, pas arbitraire.
 
     `model` surcharge le defaut de chaque backend quand fourni -- utile si
     le fournisseur retire encore un nom de modele (voir le commentaire
@@ -386,12 +469,16 @@ def resolve_brain(provider: str, model: str | None = None) -> Optional[object]:
     gemini-2.0-flash -> gemini-3.6-flash, decouvert via l'erreur 404 d'un
     vrai appel utilisateur) sans avoir a patcher ce fichier."""
     kwargs = {"model": model} if model else {}
+    if provider == "hermes":
+        return HermesAgentBrain.from_env(**kwargs)
     if provider == "anthropic":
         return AnthropicAgentBrain.from_env(**kwargs)
     if provider == "gemini":
         return GeminiAgentBrain.from_env(**kwargs)
     if provider == "auto":
-        return GeminiAgentBrain.from_env(**kwargs) or AnthropicAgentBrain.from_env(**kwargs)
+        return (HermesAgentBrain.from_env(**kwargs)
+                or GeminiAgentBrain.from_env(**kwargs)
+                or AnthropicAgentBrain.from_env(**kwargs))
     raise ValueError(f"provider inconnu: {provider!r}")
 
 
@@ -466,7 +553,7 @@ def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
 def _structural_selftest() -> int:
     failures = []
 
-    print("[1/4] cryptography disponible et generation de cle...")
+    print("[1/6] cryptography disponible et generation de cle...")
     if not _HAS_CRYPTOGRAPHY:
         failures.append("le paquet 'cryptography' est absent -- ne peut pas etre teste plus loin")
     else:
@@ -480,7 +567,7 @@ def _structural_selftest() -> int:
             else:
                 print(f"      OK (public_key stable: {pk1[:16]}...)")
 
-    print("[2/4] cstl_signing_bytes -- fixture croisee Rust/Python...")
+    print("[2/6] cstl_signing_bytes -- fixture croisee Rust/Python...")
     # Fixture IDENTIQUE a examples/print_signing_bytes_fixture.rs, verifiee
     # manuellement octet-par-octet dans cette session (2026-09-04).
     expected_hex = (
@@ -509,19 +596,56 @@ def _structural_selftest() -> int:
     else:
         print("      OK (identique octet-par-octet a signing_bytes() cote Rust)")
 
-    print("[3/4] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
+    print("[3/6] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
     brain = AnthropicAgentBrain.from_env()
     if brain is not None:
         print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
     else:
         print("      OK (None, comme attendu dans un environnement sans 'anthropic'/ANTHROPIC_API_KEY)")
 
-    print("[4/4] GeminiAgentBrain.from_env() degrade proprement sans paquet/cle...")
+    print("[4/6] GeminiAgentBrain.from_env() degrade proprement sans paquet/cle...")
     gemini_brain = GeminiAgentBrain.from_env()
     if gemini_brain is not None:
         print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
     else:
         print("      OK (None, comme attendu dans un environnement sans 'google-genai'/GEMINI_API_KEY)")
+
+    print("[5/6] HermesAgentBrain.from_env() degrade proprement sans serveur Ollama...")
+    hermes_brain = HermesAgentBrain.from_env()
+    if hermes_brain is not None:
+        print("      (un vrai serveur Ollama EST joignable ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
+    else:
+        print("      OK (None, comme attendu dans un environnement sans serveur Ollama sur 11434)")
+
+    print("[6/6] HermesAgentBrain.generate_relation() -- parsing d'une reponse Ollama simulee (mock HTTP, aucun reseau)...")
+    try:
+        import io
+        from unittest import mock
+
+        fake_ollama_body = json.dumps({
+            "model": "hermes3", "created_at": "2026-09-06T00:00:00Z",
+            "response": '{"type": "part_of", "subject": "montreal", "object": "quebec"}',
+            "done": True,
+        }).encode("utf-8")
+
+        class _FakeHttpResponse(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        brain_for_parsing_test = HermesAgentBrain(host="127.0.0.1", port=11434, model="hermes3")
+        with mock.patch("urllib.request.urlopen", return_value=_FakeHttpResponse(fake_ollama_body)) as mocked:
+            relation = brain_for_parsing_test.generate_relation("Montreal est-elle au Quebec?", None)
+        if relation != {"type": "part_of", "subject": "montreal", "object": "quebec"}:
+            failures.append(f"HermesAgentBrain.generate_relation a mal parse la reponse Ollama simulee: {relation!r}")
+        elif not mocked.called:
+            failures.append("HermesAgentBrain.generate_relation n'a pas appele urllib.request.urlopen (mock jamais invoque)")
+        else:
+            print("      OK (JSON extrait correctement du champ 'response' d'une reponse Ollama simulee)")
+    except Exception as e:  # pragma: no cover - le test lui-meme ne doit jamais planter le selftest
+        failures.append(f"test de parsing HermesAgentBrain a leve une exception: {e!r}")
 
     print()
     if failures:
@@ -543,9 +667,9 @@ def main() -> int:
     ap.add_argument("--turns", type=int, default=3)
     ap.add_argument("--peer-mode", choices=["stdin", "self"], default="self",
                      help="'stdin': un humain repond a chaque tour. 'self': le meme LLM alimente les deux cotes.")
-    ap.add_argument("--provider", choices=["anthropic", "gemini", "auto"], default="auto",
-                     help="Backend LLM. 'auto' (defaut) essaie Gemini en premier (palier gratuit reel) "
-                          "puis retombe sur Anthropic si Gemini est indisponible.")
+    ap.add_argument("--provider", choices=["hermes", "anthropic", "gemini", "auto"], default="auto",
+                     help="Backend LLM. 'auto' (defaut) essaie Hermes/Ollama en premier (local, "
+                          "gratuit), puis Gemini (palier gratuit reel), puis Anthropic (API payante).")
     ap.add_argument("--model", default=None,
                      help="Surcharge le nom de modele par defaut du backend choisi -- exige "
                           "--provider anthropic|gemini explicite (pas 'auto'). Utile si le "
