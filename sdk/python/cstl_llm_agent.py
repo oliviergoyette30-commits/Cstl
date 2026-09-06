@@ -146,7 +146,12 @@ def cstl_signing_bytes(version: str, mode: str, meta: dict, intent: dict,
 
     canon += "\nINTENT"
     for k in sorted(intent.keys()):
-        if k == "signature":
+        # "signature" (auto-signature avec la cle META.public_key
+        # revendiquee) et "rotation_signature" (preuve de possession de
+        # l'ANCIENNE cle lors d'un re-enregistrement, voir
+        # src/signing.rs::check_rotation_signature) sont tous deux exclus --
+        # confirme dans src/server/audit.rs::signing_bytes (2026-09-06).
+        if k in ("signature", "rotation_signature"):
             continue
         canon += "|" + _nfc(k) + "=" + _nfc(str(intent[k]))
 
@@ -495,6 +500,7 @@ def _structural_selftest() -> int:
     intent = {
         "purpose": "cross_lang_fixture", "sender": "llm_agent", "receiver": "server",
         "note": "a, b", "signature": "doitetreexclu",
+        "rotation_signature": "doitaussietreexclu",
     }
     relations = [{"type": "born_in", "subject": "café_test", "object": "Montréal"}]
     got = cstl_signing_bytes("v5.0.0", "A", meta, intent, relations).hex()
