@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>CSTL Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e6e9ef;
+    --muted: #8b93a3; --ok: #3ecf8e; --down: #e05252; --warn: #e0a940;
+    --accent: #5b8cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  header h1 { margin:0; font-size: 18px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 14px; display:flex; align-items:center; gap:8px; justify-content: space-between;}
+  .panel h2 .title { display:flex; align-items:center; gap:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: var(--muted); }
+  .dot.up { background: var(--ok); }
+  .dot.down { background: var(--down); }
+  button { background: var(--accent); color: white; border: none; border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  button:hover { opacity: 0.85; }
+  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  code, pre { font-family: "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: #0a0c10; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+  .field { margin-bottom: 10px; }
+  .field label { display:block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .field input { width: 100%; background: #0a0c10; border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .rel-row { display:flex; gap:6px; margin-bottom:6px; }
+  .rel-row input { flex: 1; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .stat-row { display:flex; gap: 16px; margin-bottom: 10px; }
+  .stat { flex:1; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px; text-align:center; }
+  .stat .n { font-size: 20px; font-weight: 600; }
+  .stat .l { font-size: 11px; color: var(--muted); }
+  .full { grid-column: 1 / -1; }
+  .badge { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .badge.wired { background: rgba(224,169,64,0.15); color: var(--warn); }
+  .badge.none { background: rgba(224,82,82,0.15); color: var(--down); }
+  .badge.present { background: rgba(62,207,142,0.15); color: var(--ok); }
+  .badge.neutral { background: rgba(139,147,163,0.15); color: var(--muted); }
+  .timestamp { font-size: 11px; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CSTL Dashboard</h1>
+  <p>Hub local pour l'OS CSTL agentic kernel -- rafraichissement manuel, rien n'est simule.</p>
+</header>
+<main>
+
+  <section class="panel">
+    <h2><span class="title"><span class="dot" id="status-dot"></span> Serveur CSTL (TCP 5050)</span>
+      <button onclick="refreshStatus()">Rafraichir</button></h2>
+    <div id="status-body" class="muted">Non verifie -- cliquez sur Rafraichir.</div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="title">ADN Store / Gouvernance</span>
+      <button onclick="refreshAdn()">Rafraichir</button></h2>
+    <div id="adn-body" class="muted">Non lu -- cliquez sur Rafraichir.</div>
+  </section>
+
+  <section class="panel full">
+    <h2><span class="title">Compositeur de payload CSTL</span></h2>
+    <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
+    <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
+    <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
+    <label class="muted">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
+    <div id="relations"></div>
+    <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
+    <div style="margin-top:12px;">
+      <button onclick="sendPayload()">Envoyer au serveur CSTL (127.0.0.1:5050)</button>
+    </div>
+    <p class="muted" style="margin-top:10px;">Payload envoye:</p>
+    <pre id="payload-preview">(genere a l'envoi)</pre>
+    <p class="muted">Reponse brute du serveur (telle quelle, non reformatee) :</p>
+    <pre id="response-raw">(aucun envoi encore effectue)</pre>
+    <div id="send-meta" class="timestamp"></div>
+  </section>
+
+  <section class="panel full">
+    <h2><span class="title">Autres systemes</span>
+      <button onclick="refreshOther()">Rafraichir</button></h2>
+    <table id="other-table">
+      <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+</main>
+
+<script>
+function addRelationRow(subject, predicate, object) {
+  const div = document.createElement('div');
+  div.className = 'rel-row';
+  div.innerHTML = `
+    <input placeholder="subject" value="${subject||''}">
+    <input placeholder="predicate (type)" value="${predicate||''}">
+    <input placeholder="object" value="${object||''}">
+    <button class="secondary" onclick="this.parentElement.remove()">x</button>`;
+  document.getElementById('relations').appendChild(div);
+}
+addRelationRow('paris', 'part_of', 'france');
+
+async function refreshStatus() {
+  const dot = document.getElementById('status-dot');
+  const body = document.getElementById('status-body');
+  body.textContent = 'Verification en cours...';
+  try {
+    const r = await fetch('/api/status');
+    const j = await r.json();
+    dot.className = 'dot ' + (j.up ? 'up' : 'down');
+    if (j.up) {
+      body.innerHTML = `<strong>UP</strong> -- connexion TCP reussie vers ${j.host}:${j.port} (${j.latency_ms} ms)`;
+    } else {
+      body.innerHTML = `<strong>DOWN</strong> -- connexion TCP echouee vers ${j.host}:${j.port}<br><span class="muted">${j.error}</span>`;
+    }
+    body.innerHTML += `<div class="timestamp">verifie a ${new Date(j.checked_at*1000).toLocaleTimeString()}</div>`;
+  } catch (e) {
+    dot.className = 'dot down';
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function refreshAdn() {
+  const body = document.getElementById('adn-body');
+  body.textContent = 'Lecture SQLite en cours...';
+  try {
+    const r = await fetch('/api/adn');
+    const j = await r.json();
+    if (!j.ok) {
+      body.innerHTML = `<span style="color:var(--down)">Lecture impossible</span> (${j.reason||'?'}) -- ${j.detail||j.path||''}`;
+      return;
+    }
+    let html = `<div class="stat-row">
+      <div class="stat"><div class="n">${j.stats.total}</div><div class="l">entrees adn_store</div></div>
+      <div class="stat"><div class="n">${j.stats.committed}</div><div class="l">committed</div></div>
+      <div class="stat"><div class="n">${j.stats.pending}</div><div class="l">pending</div></div>
+      <div class="stat"><div class="n">${j.audit_count}</div><div class="l">audit_trail</div></div>
+    </div>`;
+    html += '<p class="muted">Dernieres entrees adn_store (max 20) :</p>';
+    if (j.recent_entries.length === 0) {
+      html += '<p class="muted">(vide -- aucun payload encore stocke dans ' + j.path + ')</p>';
+    } else {
+      html += '<table><thead><tr><th>hash</th><th>sigma</th><th>committed</th><th>produced_by</th><th>created_at</th></tr></thead><tbody>';
+      for (const e of j.recent_entries) {
+        html += `<tr><td>${(e.hash||'').slice(0,24)}...</td><td>${e.sigma}</td><td>${e.committed}</td><td>${e.produced_by||''}</td><td>${new Date(e.created_at*1000).toLocaleString()}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    if (j.governance_events === null) {
+      html += '<p class="muted">table governance_events absente de ce fichier SQLite.</p>';
+    } else if (j.governance_events.length) {
+      html += '<p class="muted">Derniers evenements de gouvernance :</p><table><thead><tr><th>sender</th><th>ts</th><th>inconsistency</th><th>semantic_warning</th></tr></thead><tbody>';
+      for (const e of j.governance_events) {
+        html += `<tr><td>${e.sender}</td><td>${new Date(e.ts*1000).toLocaleString()}</td><td>${e.inconsistency}</td><td>${e.semantic_warning}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    } else {
+      html += '<p class="muted">aucun evenement de gouvernance enregistre.</p>';
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function sendPayload() {
+  const purpose = document.getElementById('f-purpose').value;
+  const sender = document.getElementById('f-sender').value;
+  const receiver = document.getElementById('f-receiver').value;
+  const relations = [...document.querySelectorAll('#relations .rel-row')].map(row => {
+    const [s,p,o] = row.querySelectorAll('input');
+    return {subject: s.value, predicate: p.value, object: o.value};
+  });
+  document.getElementById('response-raw').textContent = 'Envoi en cours...';
+  try {
+    const r = await fetch('/api/send', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({purpose, sender, receiver, relations})
+    });
+    const j = await r.json();
+    document.getElementById('payload-preview').textContent = j.sent || '(non genere)';
+    if (j.ok) {
+      document.getElementById('response-raw').textContent = j.raw_response || '(reponse vide)';
+      document.getElementById('send-meta').textContent =
+        `round-trip reel: ${j.round_trip_ms} ms, ${j.bytes_received} octets recus`;
+    } else {
+      document.getElementById('response-raw').textContent = '(echec de connexion)';
+      document.getElementById('send-meta').textContent = `Erreur: ${j.error} (apres ${j.round_trip_ms} ms)`;
+    }
+  } catch (e) {
+    document.getElementById('response-raw').textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function refreshOther() {
+  const tbody = document.querySelector('#other-table tbody');
+  tbody.innerHTML = '<tr><td colspan="3" class="muted">Verification...</td></tr>';
+  try {
+    const r = await fetch('/api/other-systems');
+    const list = await r.json();
+    const badgeClass = (status) => {
+      if (status === 'cable_cote_serveur_pas_visible_ici') return 'wired';
+      if (status === 'non_integre') return 'none';
+      if (status === 'dossier_present') return 'present';
+      if (status === 'dossier_absent') return 'none';
+      return 'neutral';
+    };
+    tbody.innerHTML = list.map(s =>
+      `<tr><td>${s.name}</td><td><span class="badge ${badgeClass(s.status)}">${s.status}</span></td><td class="muted">${s.detail}</td></tr>`
+    ).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="3" class="muted">Erreur: ${e}</td></tr>`;
+  }
+}
+
+// Un seul chargement automatique a l'ouverture de la page -- ensuite,
+// tout rafraichissement est manuel (bouton), comme demande.
+refreshStatus();
+refreshAdn();
+refreshOther();
+</script>
+</body>
+</html>

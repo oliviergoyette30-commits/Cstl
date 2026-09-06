@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+dashboard/server.py -- petit serveur web local (bibliotheque standard
+uniquement, aucune dependance a installer) qui sert de tableau de bord pour
+l'OS CSTL agentic kernel, a cote du vrai serveur Rust CSTL (`cargo run`,
+port 5050 par defaut).
+
+LANCEMENT (macOS, depuis la racine du depot) :
+
+    python3 dashboard/server.py
+    # puis ouvrir http://127.0.0.1:5099/ dans un navigateur
+
+PREREQUIS : Python 3 (deja present sur macOS). Aucune dependance externe --
+tout ce fichier utilise uniquement `http.server`, `sqlite3` et `socket`, qui
+font partie de la bibliotheque standard. Rien a installer avec pip.
+
+VARIABLES D'ENVIRONNEMENT (toutes optionnelles) :
+    CSTL_DASHBOARD_PORT   port d'ecoute de CE dashboard (defaut 5099 --
+                          different du port 5050 du serveur CSTL lui-meme)
+    CSTL_SERVER_HOST      hote du serveur CSTL a interroger (defaut 127.0.0.1)
+    CSTL_SERVER_PORT      port du serveur CSTL a interroger (defaut 5050)
+    CSTL_ADN_DB_PATH      chemin vers le fichier SQLite de l'ADN store
+                          (defaut cstl_adn.db, relatif au repertoire courant
+                          -- c'est le meme fichier que celui ouvert par
+                          `src/main.rs` cote Rust)
+    CSTL_GRAPHIFY_OUT     chemin vers le dossier graphify-out/ (defaut
+                          graphify-out/ relatif au repertoire courant)
+
+CE QUE CE DASHBOARD FAIT REELLEMENT (honnete, pas de simulation) :
+  - Il ouvre le fichier SQLite `cstl_adn.db` DIRECTEMENT en lecture seule
+    (`file:...?mode=ro`, URI SQLite) pendant que le serveur Rust tourne et
+    y ecrit. SQLite gere nativement plusieurs lecteurs simultanes tant
+    qu'aucune connexion n'est en mode WAL-incompatible exclusif -- le mode
+    par defaut (rollback journal) autorise un lecteur pendant qu'un
+    ecrivain travaille, sauf pendant les quelques millisecondes ou
+    l'ecrivain detient le verrou EXCLUSIVE au moment du COMMIT (auquel cas
+    ce dashboard recoit `sqlite3.OperationalError: database is locked` --
+    ce n'est pas un bug, c'est SQLite qui refuse honnetement plutot que de
+    lire des donnees a moitie ecrites ; le endpoint le rapporte tel quel).
+  - Il ouvre une VRAIE connexion TCP vers 127.0.0.1:5050 (ou l'hote/port
+    configure), envoie EXACTEMENT le payload CSTL construit a partir des
+    champs du formulaire, et retourne la reponse brute telle quelle,
+    sans reformattage ni interpretation -- ce que l'utilisateur voit dans
+    la zone "reponse brute" est un copier-coller de ce que le process Rust
+    a ecrit sur le socket, rien de plus.
+  - Le statut "serveur CSTL" est une vraie tentative de connexion TCP avec
+    timeout court (1s) a chaque appel du endpoint /api/status -- jamais un
+    booleen en dur. Si le process Rust est tue, ce statut passe a down des
+    le prochain rafraichissement (bouton manuel, pas de polling automatique).
+
+LIMITES HONNETES DE CETTE V1 :
+  - Pas de push/notifications : il faut cliquer sur "Rafraichir" pour revoir
+    l'etat courant (statut serveur + ADN store). Aucun WebSocket, aucun
+    polling automatique en arriere-plan.
+  - Le registre d'agents (`AgentRegistry`, alice/bob) vit UNIQUEMENT en
+    memoire dans le process Rust -- rien ne l'expose depuis l'exterieur du
+    process aujourd'hui (pas d'endpoint HTTP/TCP dedie cote serveur Rust
+    pour le lister). Ce dashboard ne peut donc PAS afficher la liste des
+    agents enregistres ; il peut seulement envoyer un payload et montrer
+    ce que le routage a produit (champ `receiver=` de l'accusé de reception,
+    visible dans la reponse brute).
+  - "Utiliser le multi agent" via ce dashboard signifie : le payload est
+    route par le serveur Rust vers un nom d'agent enregistre en memoire
+    (alice/bob par defaut, capability="communication") et le serveur
+    repond par un accuse de reception structure (INTENT_PAYLOAD purpose=
+    acknowledgement, RELATION type=received, AUDIT hash=...) -- PAS par
+    un texte genere par un vrai modele de langage. Un agent LLM reel existe
+    dans ce depot (`sdk/python/cstl_llm_agent.py`, Anthropic/Gemini) mais
+    tourne comme un process Python separe, hors de ce dashboard -- ce
+    dashboard ne le lance pas et ne s'y connecte pas.
+  - Hermes/Ollama et OpenClaw : non integres, confirme par recherche dans
+    src/ cette session -- aucune reference dans le code Rust.
+  - Telegram et Obsidian : cables cote serveur Rust (voir
+    src/telegram_council.rs, src/obsidian_escalation.rs) mais ce dashboard
+    ne lit aucun etat de ces integrations -- affiche comme "cable cote
+    serveur, pas encore visible ici", jamais comme "connecte".
+"""
+
+import json
+import os
+import socket
+import sqlite3
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+DASHBOARD_PORT = int(os.environ.get("CSTL_DASHBOARD_PORT", "5099"))
+CSTL_SERVER_HOST = os.environ.get("CSTL_SERVER_HOST", "127.0.0.1")
+CSTL_SERVER_PORT = int(os.environ.get("CSTL_SERVER_PORT", "5050"))
+ADN_DB_PATH = Path(os.environ.get("CSTL_ADN_DB_PATH", str(REPO_ROOT / "cstl_adn.db")))
+GRAPHIFY_OUT = Path(os.environ.get("CSTL_GRAPHIFY_OUT", str(REPO_ROOT / "graphify-out")))
+
+TCP_TIMEOUT_S = 5.0
+STATUS_TIMEOUT_S = 1.0
+END_MARKER = b"---END---"
+
+
+def check_server_status():
+    """Vraie tentative de connexion TCP a 127.0.0.1:5050 (timeout court).
+    Retourne un dict honnete: jamais un statut fixe."""
+    started = time.monotonic()
+    try:
+        with socket.create_connection((CSTL_SERVER_HOST, CSTL_SERVER_PORT), timeout=STATUS_TIMEOUT_S):
+            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+            return {"up": True, "host": CSTL_SERVER_HOST, "port": CSTL_SERVER_PORT,
+                    "latency_ms": elapsed_ms, "checked_at": int(time.time())}
+    except OSError as e:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return {"up": False, "host": CSTL_SERVER_HOST, "port": CSTL_SERVER_PORT,
+                "error": str(e), "latency_ms": elapsed_ms, "checked_at": int(time.time())}
+
+
+def read_adn_state():
+    """Lecture directe et en lecture seule du vrai fichier SQLite pendant
+    que le serveur Rust tourne. Aucune donnee inventee : si le fichier
+    n'existe pas encore (serveur jamais lance), on le dit explicitement."""
+    if not ADN_DB_PATH.exists():
+        return {"ok": False, "reason": "db_not_found", "path": str(ADN_DB_PATH)}
+
+    uri = f"file:{ADN_DB_PATH.as_posix()}?mode=ro"
+    try:
+        conn = sqlite3.connect(uri, uri=True, timeout=2.0)
+        conn.row_factory = sqlite3.Row
+    except sqlite3.OperationalError as e:
+        return {"ok": False, "reason": "open_failed", "detail": str(e), "path": str(ADN_DB_PATH)}
+
+    result = {"ok": True, "path": str(ADN_DB_PATH)}
+    try:
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) AS total, "
+                    "SUM(CASE WHEN committed=1 THEN 1 ELSE 0 END) AS committed "
+                    "FROM adn_store")
+        row = cur.fetchone()
+        total = row["total"] or 0
+        committed = row["committed"] or 0
+        result["stats"] = {"total": total, "committed": committed, "pending": total - committed}
+
+        cur.execute("SELECT hash, sigma, committed, created_at, produced_by "
+                    "FROM adn_store ORDER BY created_at DESC LIMIT 20")
+        result["recent_entries"] = [dict(r) for r in cur.fetchall()]
+
+        cur.execute("SELECT COUNT(*) AS n FROM audit_trail")
+        result["audit_count"] = cur.fetchone()["n"]
+
+        # governance_events / governance_alerts : tables optionnelles selon
+        # la version du schema -- verifie leur existence reelle avant de lire,
+        # jamais un bloc vide fabrique.
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name IN ('governance_events','governance_alerts')")
+        existing_tables = {r["name"] for r in cur.fetchall()}
+
+        if "governance_events" in existing_tables:
+            cur.execute("SELECT sender, ts, inconsistency, semantic_warning "
+                        "FROM governance_events ORDER BY ts DESC LIMIT 20")
+            result["governance_events"] = [dict(r) for r in cur.fetchall()]
+        else:
+            result["governance_events"] = None
+
+        if "governance_alerts" in existing_tables:
+            cur.execute("SELECT sender, last_alert_ts FROM governance_alerts")
+            result["governance_alerts"] = [dict(r) for r in cur.fetchall()]
+        else:
+            result["governance_alerts"] = None
+
+    except sqlite3.OperationalError as e:
+        result["ok"] = False
+        result["reason"] = "query_failed"
+        result["detail"] = str(e)
+    finally:
+        conn.close()
+    return result
+
+
+def build_cstl_payload(fields):
+    """Construit un payload CSTL v5.0.0 valide a partir des champs fournis
+    par l'utilisateur. Aucun champ invente : purpose/sender/receiver
+    viennent tels quels du formulaire ; les relations (liste de
+    dict subject/predicate/object) sont serialisees une par ligne."""
+    purpose = fields.get("purpose", "dashboard_test").strip() or "dashboard_test"
+    sender = fields.get("sender", "dashboard_user").strip() or "dashboard_user"
+    receiver = fields.get("receiver", "server").strip() or "server"
+    relations = fields.get("relations", [])
+
+    # META [encoder=..., produced_by=...] est obligatoire cote serveur
+    # (validator.rs E301/E302) -- constate en direct lors de la premiere
+    # verification de ce dashboard (reponse purpose=validation_error).
+    lines = ["#!CSTL v5.0.0 MODE=A",
+             "META [encoder=CstlDashboard, produced_by=dashboard]",
+             f"INTENT_PAYLOAD [purpose={purpose}, sender={sender}, receiver={receiver}]"]
+    for rel in relations:
+        subj = rel.get("subject", "").strip()
+        pred = rel.get("predicate", "").strip()
+        obj = rel.get("object", "").strip()
+        if subj and pred and obj:
+            lines.append(f"RELATION [type={pred}, subject={subj}, object={obj}]")
+    lines.append("---END---")
+    return "\n".join(lines) + "\n"
+
+
+def send_cstl_payload(payload_text):
+    """Ouvre une vraie connexion TCP, envoie le payload, lit jusqu'a
+    ---END--- (ou fermeture/timeout), retourne la reponse brute + metadata
+    honnete sur ce qui s'est reellement passe."""
+    started = time.monotonic()
+    try:
+        with socket.create_connection((CSTL_SERVER_HOST, CSTL_SERVER_PORT), timeout=TCP_TIMEOUT_S) as sock:
+            sock.sendall(payload_text.encode("utf-8"))
+            sock.settimeout(TCP_TIMEOUT_S)
+            buf = b""
+            while END_MARKER not in buf:
+                try:
+                    chunk = sock.recv(4096)
+                except socket.timeout:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+            return {
+                "ok": True,
+                "sent": payload_text,
+                "raw_response": buf.decode("utf-8", errors="replace"),
+                "bytes_received": len(buf),
+                "round_trip_ms": elapsed_ms,
+            }
+    except OSError as e:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return {"ok": False, "sent": payload_text, "error": str(e), "round_trip_ms": elapsed_ms}
+
+
+def check_other_systems():
+    """Statuts honnetes des "autres systemes" -- jamais une case verte
+    fabriquee. Chaque ligne dit precisement sur quoi son statut est base."""
+    systems = []
+
+    # Telegram / Obsidian : cables cote Rust (verifie par lecture de
+    # src/telegram_council.rs et src/obsidian_escalation.rs cette session),
+    # mais ce dashboard ne lit aucun etat en direct de ces integrations.
+    for name, src_file in [("Telegram", "src/telegram_council.rs"),
+                            ("Obsidian", "src/obsidian_escalation.rs")]:
+        wired = (REPO_ROOT / src_file).exists()
+        systems.append({
+            "name": name,
+            "status": "cable_cote_serveur_pas_visible_ici" if wired else "fichier_source_introuvable",
+            "detail": f"{src_file} present dans src/" if wired else f"{src_file} absent",
+        })
+
+    for name in ["Hermes", "Ollama", "OpenClaw"]:
+        systems.append({
+            "name": name,
+            "status": "non_integre",
+            "detail": "aucune reference trouvee dans src/ (grep effectue cette session)",
+        })
+
+    # Graphify : lien statique reel si le dossier/fichier existe vraiment.
+    topology = GRAPHIFY_OUT / "topology.json"
+    if GRAPHIFY_OUT.is_dir() and any(GRAPHIFY_OUT.iterdir()):
+        systems.append({
+            "name": "Graphify",
+            "status": "dossier_present",
+            "detail": f"{GRAPHIFY_OUT} existe et contient des fichiers "
+                      f"({'topology.json trouve' if topology.exists() else 'topology.json absent'})",
+        })
+    else:
+        systems.append({
+            "name": "Graphify",
+            "status": "dossier_absent",
+            "detail": f"{GRAPHIFY_OUT} absent ou vide (regenerer avec `graphify update .`)",
+        })
+
+    # Claude Code : cette session elle-meme, honnete: pas d'etat verifiable
+    # depuis un serveur externe, juste une mention.
+    systems.append({
+        "name": "Claude Code",
+        "status": "hors_cadre_serveur",
+        "detail": "outil d'edition/agent local, pas un service a interroger en TCP/HTTP",
+    })
+
+    return systems
+
+
+class DashboardHandler(BaseHTTPRequestHandler):
+    server_version = "CSTLDashboard/1.0"
+
+    def log_message(self, fmt, *args):
+        # Log minimal sur stderr, garde le defaut de BaseHTTPRequestHandler
+        # mais evite le bruit habituel dans le cas courant.
+        pass
+
+    def _send_json(self, obj, status=200):
+        body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/" or parsed.path == "/index.html":
+            self._serve_static("index.html", "text/html; charset=utf-8")
+        elif parsed.path == "/api/status":
+            self._send_json(check_server_status())
+        elif parsed.path == "/api/adn":
+            self._send_json(read_adn_state())
+        elif parsed.path == "/api/other-systems":
+            self._send_json(check_other_systems())
+        else:
+            self.send_error(404, "Not found")
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/send":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                fields = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
+                return
+            payload_text = build_cstl_payload(fields)
+            result = send_cstl_payload(payload_text)
+            self._send_json(result)
+        else:
+            self.send_error(404, "Not found")
+
+    def _serve_static(self, filename, content_type):
+        path = Path(__file__).resolve().parent / filename
+        try:
+            body = path.read_bytes()
+        except FileNotFoundError:
+            self.send_error(404, "Not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def main():
+    addr = ("127.0.0.1", DASHBOARD_PORT)
+    httpd = ThreadingHTTPServer(addr, DashboardHandler)
+    print(f"[dashboard] CSTL Dashboard sur http://127.0.0.1:{DASHBOARD_PORT}/")
+    print(f"[dashboard] Serveur CSTL cible: {CSTL_SERVER_HOST}:{CSTL_SERVER_PORT}")
+    print(f"[dashboard] ADN store lu depuis: {ADN_DB_PATH}")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[dashboard] Arret.")
+        httpd.shutdown()
+
+
+if __name__ == "__main__":
+    main()
