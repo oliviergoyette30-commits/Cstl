@@ -254,6 +254,35 @@ impl AdnStore {
             .optional()
     }
 
+    /// Retrouve UNE entree de la chaine d'audit (`audit_trail`) par son
+    /// `hash` -- ajoute le 2026-09-06 pour la negociation FIPA minimale
+    /// (voir `server/handler.rs`, bloc `NEGOTIATION`): un `REFUSE` qui
+    /// porte `in_reply_to=<hash>` a besoin de savoir QUEL `purpose` avait
+    /// le payload original (etait-ce bien un `PROPOSE`/`CFP`, ou autre
+    /// chose ?) sans avoir a re-parser tout le payload brut stocke dans
+    /// `adn_store` -- `audit_trail` porte deja `purpose` en colonne depuis
+    /// le debut (voir `save_audit_entry`), seule la lecture cible par hash
+    /// manquait. Aucune migration de schema: la table existe deja.
+    pub fn get_audit_entry(&self, hash: &str) -> Result<Option<AuditEntry>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT seq, hash, parent_hash, sender, receiver, purpose
+                 FROM audit_trail WHERE hash = ?1",
+                params![hash],
+                |row| {
+                    Ok(AuditEntry {
+                        hash: row.get(1)?,
+                        parent_hash: row.get(2)?,
+                        sender: row.get(3)?,
+                        receiver: row.get(4)?,
+                        purpose: row.get(5)?,
+                        seq: row.get(0)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
     /// Ancrage humain (RestrictedCouncil). Rien n'est ancré sans ce commit explicite —
     /// aucune logique de quorum n'appelle encore cette fonction automatiquement:
     /// le quorum 2/3 humain (RestrictedCouncil) n'est pas construit dans cette passe.
