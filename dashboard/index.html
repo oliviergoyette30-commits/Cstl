@@ -77,7 +77,17 @@
     <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
     <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
     <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
-    <label class="muted">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
+
+    <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
+      <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
+      <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
+      <div style="margin-top:8px;">
+        <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
+      </div>
+      <div id="llm-gen-status" class="muted" style="margin-top:8px;"></div>
+    </div>
+
+    <label class="muted" style="display:block; margin-top:14px;">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
     <div id="relations"></div>
     <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
     <div style="margin-top:12px;">
@@ -97,6 +107,12 @@
       <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
       <tbody></tbody>
     </table>
+    <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
+      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:19001)</button>
+    </div>
+    <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
+    <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
   </section>
 
 </main>
@@ -177,6 +193,27 @@ async function refreshAdn() {
   }
 }
 
+async function generateRelationViaLlm() {
+  const topic = document.getElementById('f-llm-topic').value;
+  const status = document.getElementById('llm-gen-status');
+  status.textContent = 'Tentative Hermes local -> Gemini -> Anthropic...';
+  try {
+    const r = await fetch('/api/generate-relation', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({topic})
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      status.innerHTML = `<span style="color:var(--down)">${j.message}</span>`;
+      return;
+    }
+    addRelationRow(j.relation.subject, j.relation.type, j.relation.object);
+    status.innerHTML = `<span style="color:var(--ok)">Relation generee par ${j.brain}${j.model ? ' ('+j.model+')' : ''} et ajoutee ci-dessous -- relis-la avant d'envoyer.</span>`;
+  } catch (e) {
+    status.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
 async function sendPayload() {
   const purpose = document.getElementById('f-purpose').value;
   const sender = document.getElementById('f-sender').value;
@@ -224,6 +261,47 @@ async function refreshOther() {
     ).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="3" class="muted">Erreur: ${e}</td></tr>`;
+  }
+}
+
+async function refreshGraphify() {
+  const body = document.getElementById('graphify-body');
+  body.textContent = 'Lecture de graphify-out/graph.json en cours...';
+  try {
+    const r = await fetch('/api/graphify-summary');
+    const j = await r.json();
+    if (!j.ok) {
+      body.innerHTML = `<span style="color:var(--down)">${j.reason}</span> -- ${j.detail||''}`;
+      return;
+    }
+    const staleBadge = j.stale === true ? '<span class="badge none">possiblement perime</span>'
+      : j.stale === false ? '<span class="badge present">a jour (== HEAD)</span>'
+      : '<span class="badge neutral">fraicheur non determinee</span>';
+    body.innerHTML = `
+      <div class="stat-row">
+        <div class="stat"><div class="n">${j.node_count}</div><div class="l">noeuds</div></div>
+        <div class="stat"><div class="n">${j.link_count}</div><div class="l">liens</div></div>
+        <div class="stat"><div class="n">${j.community_count}</div><div class="l">communautes</div></div>
+      </div>
+      <p class="muted">genere le ${j.generated_at ? new Date(j.generated_at*1000).toLocaleString() : '?'} (mtime du fichier) --
+        built_at_commit=${(j.built_at_commit||'?').slice(0,12)}..., HEAD=${(j.head_commit||'?').slice(0,12)}... ${staleBadge}</p>
+      <p class="muted">${j.stale_reason||''}</p>`;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function testOpenClaw() {
+  const body = document.getElementById('openclaw-body');
+  body.textContent = 'Tentative de connexion vers ws://127.0.0.1:19001...';
+  try {
+    const r = await fetch('/api/openclaw-check');
+    const j = await r.json();
+    const color = j.reachable ? 'var(--ok)' : 'var(--down)';
+    body.innerHTML = `<strong style="color:${color}">${j.reachable ? 'PORT ACCESSIBLE' : 'INACCESSIBLE DEPUIS ICI'}</strong>
+      (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
   }
 }
 
