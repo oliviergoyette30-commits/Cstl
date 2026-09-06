@@ -1,0 +1,60 @@
+From 7dfe623e393001ffa4e1ded0b0abc6ee5f52ba12 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sat, 5 Sep 2026 01:33:53 +0000
+Subject: [PATCH 1/5] docs(readme): retire le "Known issue" blocking_lock() --
+ introuvable, jamais existe
+
+Investigation du "Known issue: async reload hits a blocking_lock() conflict
+inside the tokio runtime" signale depuis longtemps dans le README (section
+Rust hash chain), jamais traite jusqu'ici.
+
+Resultat: aucun `.blocking_lock()` ni `std::sync::Mutex` bloquant n'existe
+dans src/, ni n'apparait nulle part dans `git log -p --all` sur les fichiers
+.rs de ce depot -- ce n'est pas un bug corrige entre-temps, c'est une ligne
+qui n'a jamais correspondu a du code reel. Les quatre verrous partages du
+serveur (agent_registry, chain, adn_store, governance) sont deja des
+tokio::sync::Mutex asynchrones (src/server/mod.rs), et le seed de la
+HashChain au demarrage (try_with_data_path -> adn_store.load_chain()) est
+un appel synchrone execute AVANT la construction des Arc<Mutex<..>>, donc
+sans prise de verrou possible.
+
+Pas de fix de code en consequence -- rien a corriger. La ligne README est
+retiree et remplacee par une note honnete de verification plutot que
+laissee comme dette non traitee ou "corrigee" artificiellement.
+
+Baseline verifiee inchangee: cargo build (0 warning), cargo test --lib
+(143 passed, 0 failed), cargo clippy --all-targets (0 warning).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ README.md | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/README.md b/README.md
+index fe7b0e4..bff9e50 100644
+--- a/README.md
++++ b/README.md
+@@ -165,8 +165,18 @@ file, a real coordination risk (not just cosmetic debt). Fully merged into `AdnS
+ lock). Deterministic, tamper-evident, tested (including
+ `test_parent_hash_excluded_from_hash`, `test_integrity_detects_break`,
+ `test_audit_persistence_survives_reopen_on_real_file_and_shares_adn_store_data`).
+-Known issue: async reload hits a `blocking_lock()` conflict inside the tokio runtime
+-— deferred refactor.
++**Verifie 2026-09-05 (audit du `blocking_lock()` ci-dessus, jamais traite jusqu'ici)**:
++recherche exhaustive dans `src/` et dans tout l'historique git (`git log -p --all`) --
++aucun appel `.blocking_lock()` ni `std::sync::Mutex` bloquant n'existe, ni n'a jamais
++existe, dans le code Rust de ce depot. Tous les verrous partages du serveur
++(`agent_registry`, `chain`, `adn_store`, `governance`) sont deja des
++`tokio::sync::Mutex` asynchrones (voir `src/server/mod.rs`), et le seed de la
++`HashChain` au demarrage (`try_with_data_path` -> `adn_store.load_chain()`) est un
++appel synchrone fait AVANT toute construction d'`Arc<Mutex<..>>` -- il ne prend donc
++aucun verrou et ne peut pas entrer en conflit avec le runtime tokio. La ligne
++"Known issue" ci-dessus decrivait un probleme qui ne correspond a aucun code reel
++de ce depot; elle est retiree plutot que "corrigee" pour ne pas inventer un fix a un
++bug qui n'existe pas.
+ 
+ ### Rust ADN store — `src/adn_store.rs` 🟡
+ 
+-- 
+2.43.0
+

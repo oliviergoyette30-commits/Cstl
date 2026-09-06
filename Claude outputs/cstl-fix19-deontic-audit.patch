@@ -1,0 +1,953 @@
+From 5b8f91efd6f5a5a4f2c1b77f741aba57b486c064 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Fri, 4 Sep 2026 15:33:20 +0000
+Subject: [PATCH] feat(deontic): construit le vrai audit deontique (Couche 8)
+
+En creusant "Deontic Modality Audit" (intitule sans code correspondant),
+trouvaille plus grosse que prevue: le seul check deontique appele sur
+le chemin TCP reel (server/validator.rs::validate_deontic_constraints)
+etait structurellement casse -- testait si UNE SEULE RELATION.type
+contenait a la fois les sous-chaines "MUST" et "MUST_NOT". Double bug:
+(1) le format wire n'encode jamais MUST/MUST_NOT dans `type` (predicat
+KB ou operateur SDL uniquement) -- le vrai moteur (semantic.rs::
+check_axiom_d, SDL Axiome D, E107) existait deja, teste, mais n'etait
+JAMAIS appele en direct (branche seulement pour check_operator_whitelist()
+depuis l'audit du 2026-09-03, jamais etendu a Axiome D); (2) faux positif
+systematique: "MUST_NOT".contains("MUST") est vrai en Rust, donc un
+RELATION[type=MUST_NOT,...] isole se faisait rejeter a tort.
+
+Construit en deux volets, sur demande explicite ("le vrai audit
+historique"):
+
+A. Intra-payload (bloquant, E107): RELATION gagne un champ optionnel
+   modality=MUST|MUST_NOT|REQUIRE|FORBID (format deja generique,
+   aucun changement de parseur). validate_deontic_constraints
+   construit de vraies AstRelation et appelle le vrai Axiome D
+   (semantic.rs::check_axiom_d, rendue pub).
+
+B. Historique (informatif, jamais de rejet -- design assume, meme
+   philosophie que check_consistency_with_history pour les faits: un
+   desaccord entre agents/moments n'est pas force une erreur de
+   protocole, contrairement a se contredire dans le meme souffle):
+   - adn_relations gagne une colonne modality (migration idempotente
+     dans AdnStore::open, ALTER TABLE ... ADD COLUMN avec l'erreur
+     "duplicate column name" explicitement ignoree -- testee en
+     direct contre un fichier simulant EXACTEMENT l'ancien schema de
+     production, donnees pre-existantes confirmees survivre).
+   - execution_lab::check_deontic_consistency_with_history (meme
+     patron que check_consistency_with_history, pas invente) verifie
+     les relations a modalite d'un payload NOUVEAU contre tout
+     l'historique -- une contradiction qui s'etale sur PLUSIEURS
+     payloads, invisible au check bloquant intra-payload, apparait
+     dans un nouveau bloc de reponse DEONTIC_AUDIT [consistent=false,
+     violations=N].
+
+Verifie en direct: 181/181 tests unitaires (dev+release, +9: 4 dans
+server/validator.rs, 6 dans execution_lab.rs, 3 dans adn_store.rs --
+dont le test de migration sur schema reel pre-existant),
+examples/deontic_audit_smoke_test.rs (4 scenarios sur une vraie
+connexion TCP, dev+release): MUST_NOT isole passe (regression du faux
+positif fermee), vraie contradiction intra-payload rejetee (E107),
+contradiction HISTORIQUE (2 payloads distincts) jamais rejetee mais
+signalee (DEONTIC_AUDIT), aucun conflit -> aucun bloc (pas de bruit).
+Les 3 autres smoke-tests existants toujours verts (regression).
+
+README.md / docs/ARCHITECTURE.md (Couche 8): documente honnetement,
+y compris la limite (seul le format modality= explicite est couvert,
+pas le format bloc (MUST)/(RULE) de validator_semantic.rs/ast.rs, qui
+reste un systeme de parsing separe jamais branche sur le chemin TCP).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ README.md                            |   2 +-
+ docs/ARCHITECTURE.md                 |  15 ++-
+ examples/deontic_audit_smoke_test.rs | 180 +++++++++++++++++++++++++++
+ src/adn_store.rs                     | 149 +++++++++++++++++++++-
+ src/execution_lab.rs                 | 178 ++++++++++++++++++++++++++
+ src/semantic.rs                      |  19 ++-
+ src/server/handler.rs                |  48 ++++++-
+ src/server/validator.rs              | 140 +++++++++++++++++++--
+ 8 files changed, 711 insertions(+), 20 deletions(-)
+ create mode 100644 examples/deontic_audit_smoke_test.rs
+
+diff --git a/README.md b/README.md
+index 3a567b6..c5cc8a7 100644
+--- a/README.md
++++ b/README.md
+@@ -53,7 +53,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live. **Fixed 2026-09-04**: the hash chain (`seq`/`parent_hash` continuity, `src/server/audit.rs::HashChain`) was, until this pass, *purely in-memory* — reset to empty on every server restart, even though `adn_store.rs` already persisted payload history with real `parent_hash` lineage. `AuditStore` (`src/server/audit_store.rs`) already implemented the fix but was dead code, called nowhere outside its own unit test, since it was written. Now wired: `CstlNativeServer::with_data_path` opens `AuditStore` against the same file as `adn_store` and seeds the chain from it at startup; `handler.rs` persists every entry. Verified with a real process kill + restart of the actual production binary (not just an in-process simulation): `[AuditStore] Loaded 2 entries from disk` on the second process, chain correctly continuing at `seq=2` instead of resetting to `seq=0/parent=root` (`examples/audit_persistence_smoke_test.rs`). **Second finding, same day, found live on the user's own machine while re-verifying the fix above**: `HashChain::append` computed `seq` as `self.entries.len()`, which silently assumed no gaps — but `AuditStore::save()` uses `INSERT OR IGNORE` (needed so a resent duplicate-content payload stays idempotent instead of erroring on the `UNIQUE(hash)` constraint), so a genuine duplicate resend leaves a gap in the persisted `seq` sequence (e.g. `seq=0` and `seq=2` on disk, no `seq=1`). After a real restart, `load_chain()` reloads exactly those (gapped) rows, `entries.len()` no longer matches the highest real `seq`, and the next `append()` recomputed a colliding `seq` — silently losing a brand-new, non-duplicate payload's persistence (confirmed live: a genuinely new payload was accepted with a normal-looking client response, `seq` colliding with an existing row, and never appeared in `audit_trail` after restart). Fixed: `seq` is now `self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — anchored to the highest real `seq`, not the entry count. Regression test added (`test_append_seq_survives_gap_from_deduplicated_reload`) simulating the exact gapped state observed on disk. Still not a single schema/single `Connection` — two SQLite connections into the same file, not yet merged |
+ | 6 | **Human interface** — Obsidian vault escalation (`src/obsidian_escalation.rs`), wired live; Graphify (`graphifyy` PyPI package, local venv) regenerated 2026-09-03 — 967 nodes, 1800 edges, 63 semantically labelled communities, built from commit `3326f917` | ✅ Both real: Obsidian verified end-to-end against a live vault (contradiction detected by `ExecutionLab` -> written to `CSTL_Restricted_Council.md`); Graphify structure + labels current as of commit `3326f917` — run `graphify update .` after further commits to resync |
+ | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request). **New 2026-09-04**: registration is now dynamic — `Arc<Mutex<AgentRegistry>>` + `purpose=agent_register` wire message (self-signed, upsert by name), verified live; a real LLM agent (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) registers and signs its own messages, verified live against the real Rust server (registration, unsigned-rejected, signed-accepted) — actual model-generated content is not verifiable in this sandbox (no `anthropic` package, no API key here) and is left for the user to confirm on their own machine |
+-| 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ Designed |
++| 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | 🟡 Built and wired live, not just "designed" (that badge understated what already ran in production for the hash chain, and overstated deontic modality — see below). Hash chain: real, persisted since 2026-09-04 (`HashChain`/`AuditStore`, see row 5). **Deontic modality — built 2026-09-04, same day**: the only live check (`server/validator.rs::validate_deontic_constraints`, before this fix) tested whether a single `RELATION.type` field contained both substrings `"MUST"` and `"MUST_NOT"` — broken twice over: the wire format never encodes MUST/MUST_NOT in `type` (KB predicate or SDL operator only), and `"MUST_NOT".contains("MUST")` is true in Rust, so a lone `MUST_NOT` relation was falsely rejected. The real engine (`semantic.rs::check_axiom_d`, SDL Axiom D, tested) existed but was never called live. Fixed in two parts: a `RELATION` now carries an optional `modality=MUST\|MUST_NOT\|REQUIRE\|FORBID` field, wired to the real Axiom D check (blocking, E107, intra-payload — a self-contradiction in the same message); and a new historical audit (`execution_lab::check_deontic_consistency_with_history`, same pattern as the existing factual `check_consistency_with_history`) checks modality-bearing relations against everything persisted by prior payloads — never rejecting (a disagreement across agents/time isn't a protocol error), surfaced as a `DEONTIC_AUDIT [consistent=false, violations=N]` response block. `adn_relations` gained a `modality` column via an idempotent migration, verified live against a file simulating the exact pre-existing production schema. Verified end-to-end on a real TCP connection, dev and release (`examples/deontic_audit_smoke_test.rs`, 4 scenarios) plus 9 new unit tests. |
+ | 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
+ 
+ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 9c72dbe..e74a6e6 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -247,9 +247,20 @@ Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérif
+ `src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur. Jusqu'au 2026-09-04, le registre était figé à la compilation (alice/bob codés en dur dans `main.rs`, `Arc` immuable) — aucune inscription dynamique possible, contrairement aux Agent Cards d'A2A. Corrigé: `AgentRegistry` est maintenant `Arc<Mutex<_>>`, et `purpose=agent_register` (nouveau message wire, `server/handler.rs`) permet à un agent de s'enregistrer/se réenregistrer (upsert par nom) via une auto-signature Ed25519 (réutilise la vérification de la Couche 2 ci-dessus) — vérifié en direct (mêmes 6 scénarios que la signature). Un agent LLM réel (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) s'enregistre et signe ses messages avec cette voie — vérifié en direct contre le serveur Rust réel (enregistrement, rejet du non-signé, acceptation du signé) ; la génération de contenu par un vrai modèle Claude reste à vérifier par l'utilisateur (aucun paquet `anthropic` ni clé API dans ce sandbox).
+ 
+ ### Couche 8: Provenance Audit / Cryptographic Guarantee
+-**État:** 🟡 Hash-chained audit trail câblée live ET persistée (2026-09-04) ; "Deontic Modality Audit" reste un intitulé sans code correspondant
++**État:** 🟡 Hash-chained audit trail câblée live ET persistée (2026-09-04) ; Deontic Modality Audit CONSTRUIT le même jour (deuxième passe)
+ 
+-Hash-Chained Audit Trail (`src/server/audit.rs::HashChain`, canonicalisation NFC+BTreeMap, SHA-256): calculée et vérifiée en direct sur chaque payload depuis plusieurs passes de cette session, et depuis le 2026-09-04 sa continuité (`seq`/`parent_hash`) survit aussi à un redémarrage réel du serveur (voir Couche 5 ci-dessus pour le détail de ce correctif — `AuditStore` était du code mort jusque-là). Le badge "✅ DESIGNÉ" d'avant cette passe sous-estimait déjà ce qui existait (le hachage/chaînage tournait en production depuis longtemps) tout en survolant une vraie régression (la non-persistance) que rien ne signalait — corrigé aux deux bouts. "Deontic Modality Audit" reste un intitulé sans implémentation trouvée dans ce dépôt (recherche exhaustive: aucune occurrence hors de cette ligne) — pas vérifié dans cette passe, à traiter séparément si le besoin est réel.
++Hash-Chained Audit Trail (`src/server/audit.rs::HashChain`, canonicalisation NFC+BTreeMap, SHA-256): calculée et vérifiée en direct sur chaque payload depuis plusieurs passes de cette session, et depuis le 2026-09-04 sa continuité (`seq`/`parent_hash`) survit aussi à un redémarrage réel du serveur (voir Couche 5 ci-dessus pour le détail de ce correctif — `AuditStore` était du code mort jusque-là). Le badge "✅ DESIGNÉ" d'avant cette passe sous-estimait déjà ce qui existait (le hachage/chaînage tournait en production depuis longtemps) tout en survolant une vraie régression (la non-persistance) que rien ne signalait — corrigé aux deux bouts.
++
++**Deontic Modality Audit — construit (2026-09-04, deuxième passe le même jour).** En creusant l'intitulé sans code correspondant (trouvaille initiale, session précédente), une deuxième trouvaille, plus grosse: le seul check déontique réellement appelé sur le chemin TCP (`server/validator.rs::validate_deontic_constraints`, avant ce fix) était structurellement cassé — il testait si le champ `type` d'UNE SEULE `RELATION` contenait à la fois les sous-chaînes `"MUST"` et `"MUST_NOT"`. Deux bugs, pas une lacune: (1) le format wire réel n'encode jamais MUST/MUST_NOT dans `type` (prédicat KB ou opérateur SDL uniquement) — le vrai moteur (`semantic.rs::check_axiom_d`, SDL Axiome D, E107) existait déjà, testé, mais n'était **jamais appelé** en direct (branché seulement pour `check_operator_whitelist()` depuis l'audit du 2026-09-03, jamais étendu à Axiome D depuis); (2) faux positif systématique: `"MUST_NOT".contains("MUST")` est vrai en Rust, donc n'importe quel `RELATION[type=MUST_NOT,...]` isolé, sans MUST ailleurs, se faisait rejeter à tort.
++
++Construit en deux volets, sur demande explicite ("construire le vrai audit historique"):
++
++- **Intra-payload (bloquant, E107)**: une `RELATION` porte désormais un champ optionnel `modality=MUST|MUST_NOT|REQUIRE|FORBID` — le format `RELATION[key=value,...]` étant déjà générique (`HashMap`), aucun changement de parseur. `validate_deontic_constraints` construit de vraies `AstRelation` (avec `.modality` peuplé) et appelle le vrai Axiome D (`semantic.rs::check_axiom_d`, rendue `pub`), rejetant une vraie contradiction MUST/MUST_NOT sur le même (subject, object) dans le MÊME payload — la même auto-contradiction qui, avant, produisait soit un faux positif (MUST_NOT isolé) soit rien du tout (aucune vraie détection).
++- **Historique (informatif, jamais de rejet — design assumé)**: `adn_relations` gagne une colonne `modality` (migration idempotente dans `AdnStore::open`, `ALTER TABLE ... ADD COLUMN` avec l'erreur `duplicate column name` explicitement ignorée — testée en direct contre un fichier simulant EXACTEMENT l'ancien schéma de production, données pré-existantes confirmées survivre à la migration). `execution_lab::check_deontic_consistency_with_history` (même patron que `check_consistency_with_history` déjà existant pour les faits, pas inventé) vérifie les relations à modalité d'un payload NOUVEAU contre tout l'historique persisté — une contradiction Axiome D qui s'étale sur PLUSIEURS payloads (potentiellement d'agents différents, à des moments différents), invisible au check bloquant intra-payload, apparaît dans un nouveau bloc de réponse `DEONTIC_AUDIT [consistent=false, violations=N]`. Jamais de rejet ici, contrairement à l'intra-payload: un désaccord entre agents ou une position qui évolue dans le temps n'est pas, en soi, une erreur de protocole — seule l'auto-contradiction dans un même souffle l'est.
++
++Vérifié en direct (`examples/deontic_audit_smoke_test.rs`, 4 scénarios sur une vraie connexion TCP, dev et release): un `MUST_NOT` isolé passe normalement (régression du faux positif fermée); une vraie contradiction dans le même payload est rejetée (E107); un `MUST_NOT` établi par un premier payload puis un `MUST` sur la même (subject, object) dans un second payload distinct est accepté (jamais rejeté) mais signalé par `DEONTIC_AUDIT`; l'absence de conflit ne produit aucun bloc `DEONTIC_AUDIT` (pas de bruit sur le trafic normal). 181 tests unitaires au total (dev+release, +9 depuis la trouvaille: 4 dans `server/validator.rs`, 6 dans `execution_lab.rs`, 3 dans `adn_store.rs` — dont le test de migration sur schéma réel pré-existant).
++
++Limite honnête, non traitée ici: l'audit historique ne couvre que les relations dont la `modality` est explicitement portée par le wire format — aucune inférence de modalité depuis un texte libre ou un autre vocabulaire (ex: le format bloc `(MUST)`/`(RULE)` de `validator_semantic.rs`/`ast.rs`, qui reste, lui, non branché sur le chemin TCP réel — un système de parsing entièrement différent, jamais utilisé par le serveur en production).
+ 
+ ### Couche 9: CASTLE (mode de compression)
+ **État:** 🟡 ARCHITECTURÉ, PAS DE CODE
+diff --git a/examples/deontic_audit_smoke_test.rs b/examples/deontic_audit_smoke_test.rs
+new file mode 100644
+index 0000000..09e0c6b
+--- /dev/null
++++ b/examples/deontic_audit_smoke_test.rs
+@@ -0,0 +1,180 @@
++/// examples/deontic_audit_smoke_test.rs -- verification live de l'audit
++/// deontique (Couche 8, 2026-09-04), en reponse a la trouvaille "Deontic
++/// Modality Audit" (intitule sans code correspondant dans
++/// docs/ARCHITECTURE.md avant ce fix).
++///
++/// Trouvaille (creusee en cherchant a construire l'audit): le seul check
++/// deontique reellement appele sur le chemin TCP (server/validator.rs::
++/// validate_deontic_constraints) verifiait si le champ `type` d'UNE SEULE
++/// RELATION contenait a la fois les sous-chaines "MUST" et "MUST_NOT" --
++/// double bug: (1) le format wire n'encode jamais MUST/MUST_NOT dans `type`
++/// (predicat KB ou operateur SDL uniquement), et (2) "MUST_NOT".contains
++/// ("MUST") est vrai en Rust, donc un simple RELATION[type=MUST_NOT,...]
++/// isole se faisait rejeter a tort. Le VRAI moteur (SDL Axiome D,
++/// semantic.rs::check_axiom_d, E107) existait deja, teste, mais n'etait
++/// JAMAIS appele en direct.
++///
++/// Corrige en deux volets:
++///   A. Intra-payload (bloquant, E107): une RELATION porte desormais un
++///      champ optionnel `modality=MUST|MUST_NOT|REQUIRE|FORBID` --
++///      validate_deontic_constraints construit de vraies AstRelation et
++///      appelle le vrai Axiome D.
++///   B. Historique (informatif, jamais de rejet): les relations avec
++///      modality sont persistees (adn_relations.modality, migration
++///      idempotente) et verifiees contre TOUT l'historique
++///      (execution_lab::check_deontic_consistency_with_history), sur le
++///      modele de check_consistency_with_history deja existant pour les
++///      faits -- une contradiction qui s'etale sur PLUSIEURS payloads
++///      (invisible au check bloquant intra-payload) apparait dans un
++///      nouveau bloc de reponse DEONTIC_AUDIT.
++///
++/// Scenarios verifies:
++/// 1. RELATION[modality=MUST_NOT] isolee -> traitee normalement (regression
++///    directe du faux positif corrige).
++/// 2. MUST et MUST_NOT sur le MEME (subject, object) dans le MEME payload
++///    -> rejete (E107, validation_error) -- vraie contradiction detectee.
++/// 3. MUST_NOT etabli par un PREMIER payload, MUST sur la MEME (subject,
++///    object) dans un DEUXIEME payload distinct -> accepte (jamais rejete,
++///    design assume) MAIS le bloc DEONTIC_AUDIT [consistent=false,
++///    violations=1] apparait dans la reponse -- la contradiction
++///    HISTORIQUE, invisible au check intra-payload, est bien detectee.
++/// 4. Meme modalite repetee (MUST puis MUST_NOT sur un objet DIFFERENT) ->
++///    aucun bloc DEONTIC_AUDIT (pas de faux positif sur l'historique).
++use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
++use cstl_parser::server::CstlNativeServer;
++use std::sync::Arc;
++use tokio::io::{AsyncReadExt, AsyncWriteExt};
++use tokio::net::TcpStream;
++use tokio::sync::Mutex;
++
++async fn send(port: u16, payload: &str) -> String {
++    let mut stream = TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
++    stream.write_all(payload.as_bytes()).await.expect("send");
++    let mut buf = Vec::new();
++    let mut chunk = [0u8; 4096];
++    loop {
++        let n = stream.read(&mut chunk).await.expect("read");
++        if n == 0 {
++            break;
++        }
++        buf.extend_from_slice(&chunk[..n]);
++        if buf.windows(9).any(|w| w == b"---END---") {
++            break;
++        }
++    }
++    String::from_utf8_lossy(&buf).to_string()
++}
++
++fn deontic_payload(sender: &str, subject: &str, object: &str, modalities: &[&str]) -> String {
++    let relations: String = modalities.iter().map(|m| {
++        format!("RELATION [type=PERFORM, subject={subject}, object={object}, modality={m}]\n")
++    }).collect();
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=deontic_audit_smoke, sender={sender}, receiver=server]\n\
++         {relations}\
++         ---END---\n"
++    )
++}
++
++fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
++    for line in response.lines() {
++        if line.starts_with(block) {
++            let inner = line.split_once('[')?.1.trim_end_matches(']').trim_end_matches("]\n");
++            for part in inner.split(',') {
++                let part = part.trim();
++                if let Some((k, v)) = part.split_once('=') {
++                    if k.trim() == key {
++                        return Some(v.trim().to_string());
++                    }
++                }
++            }
++        }
++    }
++    None
++}
++
++fn make_test_server(port: u16) -> CstlNativeServer {
++    let mut server = CstlNativeServer::with_data_path(port, ":memory:");
++    let mut registry = AgentRegistry::new();
++    registry.register(AgentCard {
++        name: "smoke_router".to_string(),
++        version: "5.0.0".to_string(),
++        capabilities: vec!["communication".to_string()],
++        trust_score: 0.9,
++        public_key: None,
++    });
++    server.agent_registry = Arc::new(Mutex::new(registry));
++    server
++}
++
++#[tokio::main]
++async fn main() {
++    let port: u16 = 15180;
++    let server = make_test_server(port);
++    tokio::spawn(async move {
++        server.start().await.expect("server start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    let mut failures = Vec::new();
++
++    // ---- Scenario 1: MUST_NOT isole -- regression du faux positif ----
++    println!("[1/4] RELATION[modality=MUST_NOT] isolee (doit passer normalement)...");
++    let resp1 = send(port, &deontic_payload("agent_1", "agent_x", "delete_prod_db", &["MUST_NOT"])).await;
++    let status1 = extract_field(&resp1, "META", "status");
++    println!("      status={:?}", status1);
++    if status1.as_deref() != Some("processed") {
++        failures.push(format!("scenario 1: MUST_NOT isole doit etre traite normalement, reponse: {}", resp1));
++    }
++
++    // ---- Scenario 2: MUST + MUST_NOT meme (subject,object), MEME payload ----
++    println!("[2/4] MUST et MUST_NOT sur le meme (subject,object), meme payload (doit etre rejete E107)...");
++    let resp2 = send(port, &deontic_payload("agent_2", "agent_y", "backup_db", &["MUST", "MUST_NOT"])).await;
++    let purpose2 = extract_field(&resp2, "INTENT_PAYLOAD", "purpose");
++    let has_e107 = resp2.contains("E107");
++    println!("      purpose={:?} E107_present={}", purpose2, has_e107);
++    if purpose2.as_deref() != Some("validation_error") || !has_e107 {
++        failures.push(format!("scenario 2: contradiction intra-payload doit etre rejetee avec E107, reponse: {}", resp2));
++    }
++
++    // ---- Scenario 3: MUST_NOT (payload A) puis MUST (payload B distinct) ----
++    println!("[3/4] MUST_NOT etabli par un payload, MUST sur le meme (subject,object) dans un AUTRE payload...");
++    let resp3a = send(port, &deontic_payload("agent_3a", "agent_z", "wipe_logs", &["MUST_NOT"])).await;
++    let status3a = extract_field(&resp3a, "META", "status");
++    if status3a.as_deref() != Some("processed") {
++        failures.push(format!("scenario 3a: le premier payload (MUST_NOT seul) doit passer, reponse: {}", resp3a));
++    }
++    let resp3b = send(port, &deontic_payload("agent_3b", "agent_z", "wipe_logs", &["MUST"])).await;
++    let status3b = extract_field(&resp3b, "META", "status");
++    let audit_consistent3b = extract_field(&resp3b, "DEONTIC_AUDIT", "consistent");
++    let audit_violations3b = extract_field(&resp3b, "DEONTIC_AUDIT", "violations");
++    println!("      status={:?} DEONTIC_AUDIT consistent={:?} violations={:?}", status3b, audit_consistent3b, audit_violations3b);
++    if status3b.as_deref() != Some("processed") {
++        failures.push(format!("scenario 3b: une contradiction HISTORIQUE ne doit jamais etre rejetee (design assume), reponse: {}", resp3b));
++    }
++    if audit_consistent3b.as_deref() != Some("false") || audit_violations3b.as_deref() != Some("1") {
++        failures.push(format!("scenario 3b: le bloc DEONTIC_AUDIT doit signaler 1 violation contre l'historique, reponse: {}", resp3b));
++    }
++
++    // ---- Scenario 4: aucun conflit -- pas de bloc DEONTIC_AUDIT ----
++    println!("[4/4] Nouvelle modalite sur un objet DIFFERENT (aucun conflit attendu)...");
++    let resp4 = send(port, &deontic_payload("agent_4", "agent_z", "rotate_keys", &["MUST"])).await;
++    let has_audit_block4 = resp4.contains("DEONTIC_AUDIT");
++    println!("      DEONTIC_AUDIT_present={}", has_audit_block4);
++    if has_audit_block4 {
++        failures.push(format!("scenario 4: aucun conflit reel -- le bloc DEONTIC_AUDIT ne doit pas apparaitre, reponse: {}", resp4));
++    }
++
++    println!();
++    if failures.is_empty() {
++        println!("✅ Tous les scenarios de l'audit deontique sont conformes.");
++    } else {
++        println!("❌ {} echec(s):", failures.len());
++        for f in &failures {
++            println!("   - {}", f);
++        }
++        std::process::exit(1);
++    }
++}
+diff --git a/src/adn_store.rs b/src/adn_store.rs
+index 30652d8..d9b3e59 100644
+--- a/src/adn_store.rs
++++ b/src/adn_store.rs
+@@ -133,6 +133,22 @@ impl AdnStore {
+             CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
+             CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);",
+         )?;
++        // Migration idempotente (2026-09-04, Couche 8: audit deontique
++        // historique): `adn_relations` existe deja sur les bases reelles de
++        // production (dont celle de l'utilisateur) SANS colonne `modality` --
++        // l'ajouter au CREATE TABLE ci-dessus ne suffirait pas (IF NOT EXISTS
++        // ne modifie jamais un schema deja present). ADD COLUMN echoue avec
++        // "duplicate column name" sur une base qui l'a deja (execution
++        // repetee de ce open(), ou base neuve creee apres ce fix -- possible
++        // seulement si une version future remet modality dans CREATE TABLE)
++        // -- cette erreur precise est ignoree ; toute AUTRE erreur est
++        // loggee, jamais avalee en silence.
++        if let Err(e) = conn.execute("ALTER TABLE adn_relations ADD COLUMN modality TEXT", []) {
++            let msg = e.to_string();
++            if !msg.contains("duplicate column name") {
++                eprintln!("[AdnStore] ⚠️  migration modality echouee (inattendu): {}", msg);
++            }
++        }
+         Ok(Self { conn })
+     }
+ 
+@@ -316,20 +332,52 @@ impl AdnStore {
+     /// `ExecutionLab::check_consistency_with_history` puisse les retrouver lors
+     /// d'une requete future. Appelee separement de `put()`: un payload sans
+     /// relations (purpose=council_decision, etc.) n'a rien a inserer ici.
++    /// Persiste aussi `modality` quand le champ est present sur la RELATION
++    /// (`modality=MUST|MUST_NOT|...`, Couche 8 -- audit deontique historique,
++    /// 2026-09-04) -- NULL sinon (l'immense majorite des relations
++    /// factuelles), colonne ajoutee par la migration idempotente dans open().
+     pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
+         for rel in relations {
+             if let (Some(subject), Some(predicate), Some(object)) =
+                 (rel.get("subject"), rel.get("type"), rel.get("object"))
+             {
+                 self.conn.execute(
+-                    "INSERT INTO adn_relations (hash, subject, predicate, object) VALUES (?1, ?2, ?3, ?4)",
+-                    params![hash, subject, predicate, object],
++                    "INSERT INTO adn_relations (hash, subject, predicate, object, modality) VALUES (?1, ?2, ?3, ?4, ?5)",
++                    params![hash, subject, predicate, object, rel.get("modality")],
+                 )?;
+             }
+         }
+         Ok(())
+     }
+ 
++    /// Toutes les relations deontiques (modality IS NOT NULL) jamais
++    /// persistees, tous hashes/agents confondus -- l'historique que
++    /// `execution_lab::check_deontic_consistency_with_history` (Couche 8)
++    /// utilise pour detecter une contradiction Axiome D (MUST/MUST_NOT sur
++    /// le meme (subject, object)) qui s'etale sur PLUSIEURS payloads/agents,
++    /// pas seulement a l'interieur d'un seul (deja couvert, bloquant, par
++    /// `server/validator.rs::validate_deontic_constraints`). Meme filtre SQL
++    /// que `relations_for_predicates` (charge seulement ce qui compte, pas
++    /// tout `adn_relations`).
++    pub fn deontic_relations_history(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
++        let mut stmt = self.conn.prepare(
++            "SELECT subject, predicate, object, modality FROM adn_relations WHERE modality IS NOT NULL",
++        )?;
++        let rows = stmt.query_map([], |row| {
++            let mut m = HashMap::new();
++            m.insert("subject".to_string(), row.get::<_, String>(0)?);
++            m.insert("type".to_string(), row.get::<_, String>(1)?);
++            m.insert("object".to_string(), row.get::<_, String>(2)?);
++            m.insert("modality".to_string(), row.get::<_, String>(3)?);
++            Ok(m)
++        })?;
++        let mut out = Vec::new();
++        for r in rows {
++            out.push(r?);
++        }
++        Ok(out)
++    }
++
+     /// Toutes les relations jamais stockees, tous hashes confondus -- l'historique
+     /// complet que la Couche 3b utilise pour detecter des contradictions/cycles
+     /// qui s'etalent sur plusieurs requetes, pas seulement dans un seul payload.
+@@ -711,4 +759,101 @@ mod tests {
+         assert!(all[0].position_changed_by.is_none());
+         assert!(all[0].delta_sigma.is_none());
+     }
++
++    // ── modality (Couche 8, audit deontique historique, 2026-09-04) ──
++
++    fn deontic_relation(subject: &str, object: &str, modality: &str) -> HashMap<String, String> {
++        let mut m = HashMap::new();
++        m.insert("subject".to_string(), subject.to_string());
++        m.insert("type".to_string(), "PERFORM".to_string());
++        m.insert("object".to_string(), object.to_string());
++        m.insert("modality".to_string(), modality.to_string());
++        m
++    }
++
++    #[test]
++    fn test_put_relations_persists_and_roundtrips_modality() {
++        let store = AdnStore::open(":memory:").unwrap();
++        store.put("h1", "payload", None, None, 0.75, None, None, None).unwrap();
++        store.put_relations("h1", &[deontic_relation("agent_x", "delete_prod_db", "MUST_NOT")]).unwrap();
++
++        let history = store.deontic_relations_history().unwrap();
++        assert_eq!(history.len(), 1);
++        assert_eq!(history[0].get("subject").map(String::as_str), Some("agent_x"));
++        assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST_NOT"));
++    }
++
++    #[test]
++    fn test_factual_relations_without_modality_excluded_from_deontic_history() {
++        let store = AdnStore::open(":memory:").unwrap();
++        store.put("h2", "payload", None, None, 0.75, None, None, None).unwrap();
++        let mut factual = HashMap::new();
++        factual.insert("subject".to_string(), "alice".to_string());
++        factual.insert("type".to_string(), "born_in".to_string());
++        factual.insert("object".to_string(), "quebec".to_string());
++        store.put_relations("h2", &[factual]).unwrap();
++
++        let history = store.deontic_relations_history().unwrap();
++        assert!(history.is_empty(), "une relation factuelle (sans modality) ne doit jamais apparaitre dans l'historique deontique");
++    }
++
++    #[test]
++    fn test_open_migrates_real_file_with_old_schema_missing_modality_column() {
++        // Simule EXACTEMENT l'etat d'une vraie base de production existante
++        // (dont celle de l'utilisateur): adn_relations deja cree, SANS
++        // colonne modality, AVANT ce fix -- via une Connection brute, pas
++        // AdnStore::open() (qui appliquerait deja la migration). Confirme
++        // que la migration idempotente dans open() gere ce cas reel sans
++        // paniquer ni perdre les donnees deja presentes.
++        let tmp_path = std::env::temp_dir().join(format!(
++            "cstl_adn_store_migration_test_{}_{}.db",
++            std::process::id(),
++            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
++        ));
++        let tmp_path_str = tmp_path.to_str().unwrap().to_string();
++        let _ = std::fs::remove_file(&tmp_path_str);
++
++        {
++            // Ancien schema, sans modality -- exactement ce que ce depot
++            // produisait avant ce fix.
++            let raw = Connection::open(&tmp_path_str).unwrap();
++            raw.execute_batch(
++                "CREATE TABLE adn_store (
++                    hash TEXT PRIMARY KEY, payload TEXT NOT NULL, encoder TEXT,
++                    produced_by TEXT, sigma REAL NOT NULL, parent_hash TEXT,
++                    conversation_id TEXT, turn INTEGER, committed INTEGER NOT NULL DEFAULT 0,
++                    committed_by TEXT, committed_at INTEGER, created_at INTEGER NOT NULL
++                );
++                CREATE TABLE adn_relations (
++                    id INTEGER PRIMARY KEY AUTOINCREMENT,
++                    hash TEXT NOT NULL REFERENCES adn_store(hash),
++                    subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL
++                );",
++            ).unwrap();
++            raw.execute(
++                "INSERT INTO adn_store (hash, payload, sigma, created_at) VALUES ('h_old', 'p', 0.5, 0)",
++                [],
++            ).unwrap();
++            raw.execute(
++                "INSERT INTO adn_relations (hash, subject, predicate, object) VALUES ('h_old', 'paris', 'part_of', 'france')",
++                [],
++            ).unwrap();
++        }
++
++        // Rouvre via AdnStore::open() -- ne doit PAS paniquer, et doit avoir
++        // migre la colonne modality (NULL pour la ligne pre-existante).
++        let store = AdnStore::open(&tmp_path_str).unwrap();
++        let old_entry = store.get("h_old").unwrap();
++        assert!(old_entry.is_some(), "les donnees pre-existantes doivent survivre a la migration");
++
++        // put_relations avec modality doit maintenant fonctionner sur ce
++        // meme fichier migre.
++        store.put("h_new", "p2", None, None, 0.5, None, None, None).unwrap();
++        store.put_relations("h_new", &[deontic_relation("agent_x", "delete_prod_db", "MUST")]).unwrap();
++        let history = store.deontic_relations_history().unwrap();
++        assert_eq!(history.len(), 1);
++        assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST"));
++
++        let _ = std::fs::remove_file(&tmp_path_str);
++    }
+ }
+diff --git a/src/execution_lab.rs b/src/execution_lab.rs
+index 7e9f833..169918a 100644
+--- a/src/execution_lab.rs
++++ b/src/execution_lab.rs
+@@ -291,6 +291,103 @@ pub fn check_consistency_with_history(
+     }
+ }
+ 
++/// Une violation de l'Axiome D SDL (¬(MUST p ∧ MUST_NOT p)) detectee entre
++/// l'historique persiste et un payload NOUVEAU.
++#[derive(Debug, Clone)]
++pub struct DeonticViolation {
++    pub subject: String,
++    pub object: String,
++    pub required_by: String, // le nom exact de la modalite obligatoire (MUST/REQUIRE)
++    pub forbidden_by: String, // le nom exact de la modalite interdite (MUST_NOT/FORBID)
++}
++
++#[derive(Debug, Clone, Default)]
++pub struct DeonticAuditReport {
++    pub consistent: bool,
++    pub violations: Vec<DeonticViolation>,
++}
++
++/// Couche 8 (2026-09-04) — audit deontique HISTORIQUE: verifie les
++/// relations portant une `modality` (MUST/MUST_NOT/REQUIRE/FORBID) d'un
++/// payload NOUVEAU contre TOUT ce qui a ete persiste par des payloads
++/// PRECEDENTS (potentiellement d'agents differents, a des moments
++/// differents) -- pas seulement a l'interieur d'un seul payload (deja
++/// couvert, et BLOQUANT, par `server/validator.rs::validate_deontic_
++/// constraints` via `semantic.rs::check_axiom_d`, appele en STEP 2 avant
++/// meme d'atteindre cette fonction).
++///
++/// Meme patron que `check_consistency_with_history` ci-dessus, pas
++/// invente ici: une "position etablie" par (subject, object) est
++/// construite depuis l'historique, mise a jour au fil du nouveau payload,
++/// et une violation n'est rapportee QUE si une relation du NOUVEAU payload
++/// contredit une position deja etablie -- deux entrees de l'historique qui
++/// se contredisaient deja entre elles ne sont jamais re-signalees (elles
++/// l'auraient ete au moment ou leur deuxieme moitie est arrivee).
++///
++/// Design assume, pas un oubli: contrairement au check intra-payload
++/// (bloquant, E107 -- une auto-contradiction dans UN MEME payload est
++/// presque toujours une erreur d'auteur), une contradiction a travers
++/// l'HISTOIRE reste INFORMATIVE ici (jamais de rejet), exactement comme
++/// `check_consistency_with_history` pour les faits: des agents differents,
++/// ou le meme agent a des moments differents, peuvent legitimement changer
++/// de position ou etre en desaccord -- ce n'est pas force une erreur de
++/// protocole, contrairement a se contredire dans le meme souffle.
++pub fn check_deontic_consistency_with_history(
++    new_relations: &[HashMap<String, String>],
++    history_relations: &[HashMap<String, String>],
++) -> DeonticAuditReport {
++    use crate::semantic::{FORBIDDEN_MODALITIES, REQUIRED_MODALITIES};
++
++    // (subject, object) -> modalite (le premier des deux camps rencontre,
++    // obligatoire OU interdit) etablie par l'historique, puis par ce
++    // payload au fur et a mesure.
++    let mut established: HashMap<(String, String), (bool, String)> = HashMap::new(); // bool: is_required
++
++    let classify = |m: &str| -> Option<bool> {
++        if REQUIRED_MODALITIES.contains(&m) { Some(true) }
++        else if FORBIDDEN_MODALITIES.contains(&m) { Some(false) }
++        else { None }
++    };
++
++    for rel in history_relations {
++        let (Some(subject), Some(object), Some(modality)) =
++            (rel.get("subject"), rel.get("object"), rel.get("modality"))
++        else { continue };
++        let Some(is_required) = classify(modality) else { continue };
++        established.entry((subject.clone(), object.clone())).or_insert((is_required, modality.clone()));
++    }
++
++    let mut violations = Vec::new();
++    for rel in new_relations {
++        let (Some(subject), Some(object), Some(modality)) =
++            (rel.get("subject"), rel.get("object"), rel.get("modality"))
++        else { continue };
++        let Some(is_required) = classify(modality) else { continue };
++        let key = (subject.clone(), object.clone());
++        match established.get(&key) {
++            Some((prev_is_required, prev_modality)) if *prev_is_required != is_required => {
++                let (required_by, forbidden_by) = if is_required {
++                    (modality.clone(), prev_modality.clone())
++                } else {
++                    (prev_modality.clone(), modality.clone())
++                };
++                violations.push(DeonticViolation {
++                    subject: subject.clone(),
++                    object: object.clone(),
++                    required_by,
++                    forbidden_by,
++                });
++            }
++            Some(_) => {}
++            None => {
++                established.insert(key, (is_required, modality.clone()));
++            }
++        }
++    }
++
++    DeonticAuditReport { consistent: violations.is_empty(), violations }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -436,4 +533,85 @@ mod tests {
+         assert!(report.consistent);
+         assert_eq!(report.cycles.len(), 0);
+     }
++
++    // ── check_deontic_consistency_with_history (Couche 8, 2026-09-04) ──
++
++    fn deontic_rel(subject: &str, object: &str, modality: &str) -> HashMap<String, String> {
++        let mut m = rel(subject, "PERFORM", object);
++        m.insert("modality".to_string(), modality.to_string());
++        m
++    }
++
++    #[test]
++    fn test_no_history_no_violation() {
++        let new_relations = vec![deontic_rel("agent_x", "backup_db", "MUST")];
++        let report = check_deontic_consistency_with_history(&new_relations, &[]);
++        assert!(report.consistent);
++        assert!(report.violations.is_empty());
++    }
++
++    #[test]
++    fn test_new_must_contradicts_established_history_must_not() {
++        // Un payload PASSE a etabli MUST_NOT(agent_x, delete_prod_db). Un
++        // NOUVEAU payload (potentiellement d'un autre agent, ou du meme
++        // agent plus tard) declare MUST sur la MEME (subject, object) --
++        // c'est exactement le cas que la verification intra-payload
++        // (Axiome D, bloquante) ne peut PAS voir, puisque les deux moities
++        // n'ont jamais partage un seul payload.
++        let history = vec![deontic_rel("agent_x", "delete_prod_db", "MUST_NOT")];
++        let new_relations = vec![deontic_rel("agent_x", "delete_prod_db", "MUST")];
++        let report = check_deontic_consistency_with_history(&new_relations, &history);
++        assert!(!report.consistent);
++        assert_eq!(report.violations.len(), 1);
++        assert_eq!(report.violations[0].subject, "agent_x");
++        assert_eq!(report.violations[0].object, "delete_prod_db");
++        assert_eq!(report.violations[0].required_by, "MUST");
++        assert_eq!(report.violations[0].forbidden_by, "MUST_NOT");
++    }
++
++    #[test]
++    fn test_same_modality_repeated_is_not_a_violation() {
++        // Deux payloads (l'historique et le nouveau) qui declarent la MEME
++        // modalite sur la meme (subject, object) -- une repetition n'est
++        // pas une contradiction.
++        let history = vec![deontic_rel("agent_x", "backup_db", "MUST")];
++        let new_relations = vec![deontic_rel("agent_x", "backup_db", "MUST")];
++        let report = check_deontic_consistency_with_history(&new_relations, &history);
++        assert!(report.consistent);
++    }
++
++    #[test]
++    fn test_different_objects_no_violation() {
++        let history = vec![deontic_rel("agent_x", "backup_db", "MUST")];
++        let new_relations = vec![deontic_rel("agent_x", "delete_prod_db", "MUST_NOT")];
++        let report = check_deontic_consistency_with_history(&new_relations, &history);
++        assert!(report.consistent);
++    }
++
++    #[test]
++    fn test_preexisting_history_contradiction_not_reported_again() {
++        // Meme logique de dedup que check_consistency_with_history: si
++        // l'HISTOIRE contenait deja une contradiction (les deux moities
++        // sont deja persistees), un nouveau payload SANS RAPPORT ne doit
++        // pas la re-signaler a chaque fois -- ce serait du bruit repete,
++        // pas de l'information nouvelle (elle a deja ete rapportee quand
++        // sa 2e moitie est arrivee, a l'epoque).
++        let history = vec![
++            deontic_rel("agent_x", "delete_prod_db", "MUST"),
++            deontic_rel("agent_x", "delete_prod_db", "MUST_NOT"),
++        ];
++        let new_relations = vec![deontic_rel("agent_y", "other_action", "MUST")];
++        let report = check_deontic_consistency_with_history(&new_relations, &history);
++        assert!(report.consistent, "une contradiction deja presente dans l'historique ne doit pas etre re-signalee: {:?}", report.violations);
++    }
++
++    #[test]
++    fn test_forbid_and_require_synonyms_also_detected() {
++        // FORBID/REQUIRE sont les synonymes de MUST_NOT/MUST (memes listes
++        // que semantic.rs::check_axiom_d, reutilisees ici -- pas dupliquees).
++        let history = vec![deontic_rel("agent_x", "delete_prod_db", "FORBID")];
++        let new_relations = vec![deontic_rel("agent_x", "delete_prod_db", "REQUIRE")];
++        let report = check_deontic_consistency_with_history(&new_relations, &history);
++        assert!(!report.consistent);
++    }
+ }
+diff --git a/src/semantic.rs b/src/semantic.rs
+index bd419c4..88777e8 100644
+--- a/src/semantic.rs
++++ b/src/semantic.rs
+@@ -36,8 +36,14 @@ const OFFICIAL_OPERATORS: &[&str] = &[
+ // unique partagee entre les deux modules, corrige la desync MUTUAL de
+ // l'audit multi-angle (2026-09-03). Voir le commentaire au-dessus de
+ // validator_semantic::OFFICIAL_OPERATORS pour le detail.
+-const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
+-const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
++// `pub` depuis le 2026-09-04: reutilisees par
++// execution_lab::check_deontic_consistency_with_history (Couche 8, audit
++// deontique HISTORIQUE) pour rester l'unique source de verite sur ce qui
++// compte comme "obligatoire" vs "interdit" -- plutot que dupliquer ces deux
++// listes et risquer qu'elles divergent de l'Axiome D intra-payload
++// (check_axiom_d ci-dessous).
++pub const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
++pub const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
+ const PERFORMED_OPERATORS:  &[&str] = &["PERFORM", "ARR", "ARR.CREATE", "ARR.PRODUCE"];
+ const VALID_TAU: &[&str] = &["p", "n", "f", "p_past", "n_present", "f_future"];
+ 
+@@ -175,7 +181,14 @@ impl<'a> SemanticValidator<'a> {
+     }
+ 
+     /// E107 — Axiome D de SDL : ¬(MUST p ∧ MUST_NOT p)
+-    fn check_axiom_d(&self) -> Vec<SemanticError> {
++    ///
++    /// `pub` depuis le 2026-09-04 (meme raison que `check_operator_whitelist`
++    /// ci-dessus): branchee sur le pipeline TCP reel
++    /// (`server/validator.rs::validate_deontic_constraints`), qui remplace
++    /// un check casse (comparaison de sous-chaines sur un seul champ
++    /// `RELATION.type`, jamais capable de detecter une vraie contradiction
++    /// deontique et generant meme des faux positifs sur `MUST_NOT` isole).
++    pub fn check_axiom_d(&self) -> Vec<SemanticError> {
+         let mut errors = Vec::new();
+         let constraints: Vec<&Relation> = self.constraints().collect();
+         for c1 in &constraints {
+diff --git a/src/server/handler.rs b/src/server/handler.rs
+index 138b1d2..375a0f7 100644
+--- a/src/server/handler.rs
++++ b/src/server/handler.rs
+@@ -581,6 +581,39 @@ pub async fn handle_connection(
+                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
+                     );
+ 
++                    // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
++                    // — meme principe que STEP 3c ci-dessus (charger seulement ce dont
++                    // on se sert), mais pour les relations portant `modality`. Verifie
++                    // les MUST/MUST_NOT du payload courant contre TOUT ce qui a ete
++                    // persiste par des payloads PRECEDENTS (potentiellement d'autres
++                    // agents) — une contradiction Axiome D qui s'etale sur plusieurs
++                    // requetes, invisible a la verification intra-payload bloquante
++                    // (server/validator.rs::validate_deontic_constraints, STEP 2).
++                    // INFORMATIF SEULEMENT, comme la coherence factuelle ci-dessus:
++                    // jamais de rejet, une contradiction a travers l'historique peut
++                    // etre un vrai desaccord entre agents/moments, pas une erreur de
++                    // protocole (contrairement a se contredire dans le meme souffle).
++                    let deontic_history = {
++                        let store = adn_store.lock().await;
++                        store.deontic_relations_history().unwrap_or_else(|e| {
++                            eprintln!("[Handler] ⚠️  adn_store.deontic_relations_history failed: {}", e);
++                            Vec::new()
++                        })
++                    };
++                    let deontic_audit = execution_lab::check_deontic_consistency_with_history(&payload.relations, &deontic_history);
++                    if !deontic_audit.consistent {
++                        eprintln!(
++                            "[Handler] ⚖️  Deontic audit: {} violation(s) Axiome D detectee(s) contre l'historique",
++                            deontic_audit.violations.len()
++                        );
++                        for v in &deontic_audit.violations {
++                            eprintln!(
++                                "[Handler]    -> ({}) {} {} vs ({}) {} {}",
++                                v.required_by, v.subject, v.object, v.forbidden_by, v.subject, v.object
++                            );
++                        }
++                    }
++
+                     // Resume lisible du dilemme pour la notification Telegram — sans
+                     // ca, "committer" est un clic aveugle, pas une decision informee.
+                     let mut telegram_details = verification_lines.clone();
+@@ -727,7 +760,18 @@ pub async fn handle_connection(
+                         "CONSISTENCY [consistent={}, contradictions={}, cycles={}, sigma={}]\n",
+                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
+                     );
+-                    
++                    // Absent quand aucune RELATION de ce payload ne porte de `modality`
++                    // ET que l'audit contre l'historique est propre -- pas de bruit sur
++                    // le trafic factuel normal (l'immense majorite des payloads).
++                    let deontic_audit_line = if deontic_audit.violations.is_empty() {
++                        String::new()
++                    } else {
++                        format!(
++                            "DEONTIC_AUDIT [consistent=false, violations={}]\n",
++                            deontic_audit.violations.len()
++                        )
++                    };
++
+                     // STEP 4: Try to route to agent — agent_registry est maintenant
+                     // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
+                     // du lock pour ne jamais tenir le MutexGuard pendant le
+@@ -749,12 +793,14 @@ pub async fn handle_connection(
+                             {}\
+                             {}\
+                             {}\
++                            {}\
+                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
+                             ---END---\n",
+                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
+                             purpose,
+                             verification_lines,
+                             consistency_line,
++                            deontic_audit_line,
+                             semantic_warning_lines,
+                             governance_line,
+                             entry.hash,
+diff --git a/src/server/validator.rs b/src/server/validator.rs
+index bef7111..7ae6c65 100644
+--- a/src/server/validator.rs
++++ b/src/server/validator.rs
+@@ -191,18 +191,58 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
+         .collect()
+ }
+ 
++/// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
++/// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
++/// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE
++/// RELATION contenait a la fois les sous-chaines "MUST" et "MUST_NOT" -- un
++/// double bug, pas juste une lacune:
++///   1. Le format wire reel n'encode jamais MUST/MUST_NOT dans `type` --
++///      `type` porte soit un predicat KB (born_in, part_of...) soit un
++///      operateur SDL (EQUALS, CONTRADICTS...). Le VRAI moteur de
++///      contradiction deontique (SDL Axiome D, `semantic.rs::SemanticValidator
++///      ::check_axiom_d`, E107) existait deja, teste, mais n'etait JAMAIS
++///      appele sur le chemin TCP reel -- seul `check_operator_whitelist()`
++///      l'etait (audit multi-angle du 2026-09-03, decouvert a l'epoque pour
++///      le desync MUTUAL, jamais etendu a Axiome D depuis).
++///   2. Faux positif systematique: `"MUST_NOT".contains("MUST")` est vrai en
++///      Rust (MUST est une sous-chaine de MUST_NOT) -- N'IMPORTE QUELLE
++///      RELATION[type=MUST_NOT, ...] isolee, sans aucun MUST ailleurs,
++///      declenchait ce rejet a tort.
++///
++/// Corrige: la modalite deontique se declare desormais via un champ
++/// OPTIONNEL `modality=MUST|MUST_NOT|REQUIRE|FORBID` sur une RELATION
++/// (`RELATION [type=<operateur>, subject=..., object=..., modality=MUST]`)
++/// -- le format `RELATION[key=value,...]` etant deja generique (HashMap),
++/// aucun changement de parseur necessaire. Cette fonction construit de
++/// vraies `AstRelation` (avec `.modality` peuple) et appelle le vrai moteur
++/// SDL Axiome D deja ecrit et teste (`semantic.rs`) au lieu de reinventer
++/// une verification de substring.
+ fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationResult) {
+-    // Check for conflicting MUST constraints
+-    for relation in &payload.relations {
+-        if let Some(rel_type) = relation.get("type") {
+-            if rel_type.contains("MUST") && rel_type.contains("MUST_NOT") {
+-                result.errors.push(ValidationError {
+-                    code: "E308".to_string(),
+-                    message: "Conflicting MUST and MUST_NOT in same relation".to_string(),
+-                });
+-                result.valid = false;
+-            }
+-        }
++    let relations: Vec<AstRelation> = payload.relations.iter()
++        .map(|r| AstRelation {
++            subject: r.get("subject").cloned().unwrap_or_default(),
++            operator: r.get("type").cloned().unwrap_or_default(),
++            object: r.get("object").cloned().unwrap_or_default(),
++            attrs: Vec::new(),
++            modality: r.get("modality").cloned(),
++            line: 0,
++        })
++        .collect();
++
++    if relations.iter().all(|r| r.modality.is_none()) {
++        // Chemin rapide: aucune RELATION de ce payload ne porte de modalite
++        // -- pas la peine de construire le SemanticValidator pour rien
++        // (evite aussi de fabriquer des AstRelation avec operator="" pour
++        // les payloads sans aucune RELATION, comme les council_decision).
++        return;
++    }
++
++    for err in SemanticValidator::new(&relations, &[]).check_axiom_d() {
++        result.errors.push(ValidationError {
++            code: err.code, // "E107"
++            message: err.message,
++        });
++        result.valid = false;
+     }
+ }
+ 
+@@ -346,4 +386,82 @@ mod tests {
+         assert!(warnings.iter().any(|w| w.contains("MUTUAL") && w.contains("W601")),
+                 "MUTUAL devrait warner W601 via l'adaptateur reel: {:?}", warnings);
+     }
++
++    // ── validate_deontic_constraints (branchement Axiome D sur le pipeline
++    // reel, 2026-09-04) -- remplace l'ancien check casse (substring sur un
++    // seul champ RELATION.type, jamais capable de detecter une vraie
++    // contradiction ET generant un faux positif sur MUST_NOT isole).
++
++    fn payload_with(relations: Vec<HashMap<String, String>>) -> CstlPayload {
++        CstlPayload {
++            version: "v5.0.0".into(), mode: "A".into(),
++            meta: {
++                let mut m = HashMap::new();
++                m.insert("encoder".to_string(), "Agent".to_string());
++                m.insert("produced_by".to_string(), "Claude".to_string());
++                m
++            },
++            intent: {
++                let mut i = HashMap::new();
++                i.insert("purpose".to_string(), "test".to_string());
++                i.insert("sender".to_string(), "alice".to_string());
++                i.insert("receiver".to_string(), "bob".to_string());
++                i
++            },
++            relations,
++            raw: String::new(),
++        }
++    }
++
++    #[test]
++    fn test_lone_must_not_no_longer_false_positive() {
++        // Regression directe du bug corrige: "MUST_NOT".contains("MUST") est
++        // vrai en Rust -- avant ce fix, cette SEULE relation (aucun MUST
++        // ailleurs) declenchait a tort E308. Doit desormais passer.
++        let payload = payload_with(vec![
++            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST_NOT")]),
++        ]);
++        let result = validate_payload(&payload);
++        assert!(result.valid, "un MUST_NOT isole ne doit plus etre un faux positif: {:?}", result.errors);
++        assert!(!result.errors.iter().any(|e| e.code == "E308"), "E308 (ancien check casse) ne doit plus jamais apparaitre");
++    }
++
++    #[test]
++    fn test_real_deontic_contradiction_detected_e107() {
++        // Vraie contradiction: meme (subject, object) declare a la fois
++        // obligatoire (MUST) et interdit (MUST_NOT) -- doit etre rejete
++        // via le vrai moteur SDL Axiome D (E107), pas l'ancien substring check.
++        let payload = payload_with(vec![
++            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST")]),
++            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST_NOT")]),
++        ]);
++        let result = validate_payload(&payload);
++        assert!(!result.valid, "une vraie contradiction MUST/MUST_NOT doit etre rejetee");
++        assert!(result.errors.iter().any(|e| e.code == "E107"), "attendu E107 (Axiome D): {:?}", result.errors);
++    }
++
++    #[test]
++    fn test_relations_without_modality_unaffected() {
++        // Chemin rapide: aucune modalite -> aucun cout, aucune interference
++        // avec la validation factuelle normale (regression sur tout le
++        // trafic existant, qui ne porte jamais de champ modality).
++        let payload = payload_with(vec![
++            relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
++        ]);
++        let result = validate_payload(&payload);
++        assert!(result.valid);
++        assert!(result.errors.is_empty());
++    }
++
++    #[test]
++    fn test_must_and_must_not_different_objects_no_contradiction() {
++        // MUST sur UN objet et MUST_NOT sur un objet DIFFERENT pour le meme
++        // sujet: pas une contradiction (deux obligations distinctes).
++        let payload = payload_with(vec![
++            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "backup_db"), ("modality", "MUST")]),
++            relation(&[("subject", "agent_x"), ("type", "PERFORM"), ("object", "delete_prod_db"), ("modality", "MUST_NOT")]),
++        ]);
++        let result = validate_payload(&payload);
++        assert!(result.valid, "objets differents ne doivent pas etre traites comme contradictoires: {:?}", result.errors);
++    }
+ }
+-- 
+2.43.0
+

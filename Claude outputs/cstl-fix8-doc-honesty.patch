@@ -1,0 +1,127 @@
+From 55484a40d2bb5436fd191fdcffba0d1336f5db31 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:41:22 +0000
+Subject: [PATCH] docs: corriger 3 fausses affirmations (Layer 2, Graphify,
+ badge de tests)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Trois trouvailles d'honnetete-documentation de l'audit multi-angle
+(2026-09-03), verifiees puis corrigees:
+
+1. README.md Layer 2 ("Governance / Resilience — circuit breaker, 2/3
+   quorum, operator drift prevention | ✅ Tested (4/4 modes)") et son
+   miroir docs/ARCHITECTURE.md Couche 2 (memes termes, "✅ TESTÉ - 4/4
+   modes"): AUCUN circuit breaker, AUCUNE logique de quorum, AUCUNE
+   detection de drift d'operateur n'existe nulle part dans ce depot --
+   verifie par grep exhaustif sur src/ ("circuit_breaker"/"CircuitBreaker"/
+   "circuit breaker": 0 resultat; "drift": 0 resultat). Le reste du meme
+   README (lignes 51, 120, 193, 244) et de ARCHITECTURE.md (Couche 3b)
+   documente deja honnetement que RestrictedCouncil est a quorum=1, pas
+   2/3 -- cette ligne Layer 2 etait la seule affirmation non corrigee
+   du depot, restee a un statut jamais atteint. Corrigee dans les deux
+   fichiers vers 🔴 Not built / NON CONSTRUITE, avec le detail de ce qui
+   existe reellement (RestrictedCouncil, quorum=1).
+
+2. docs/ARCHITECTURE.md Couche 6 disait encore "Graphify: inactif — pas
+   installe sur la machine de dev" alors que README.md documentait deja
+   (depuis plus tot cette session) l'installation reelle et la
+   regeneration du graphe (967 noeuds, 1800 aretes, 63 communautes,
+   commit 3326f917). Les deux documents se contredisaient frontalement
+   sur le meme fait verifiable. ARCHITECTURE.md dit lui-meme en en-tete
+   que README.md est la source de verite en cas de divergence -- corrige
+   pour refleter cette regle et la realite documentee par README.md.
+
+3. Badge de tests README.md: affichait "86 passing" et pointait vers
+   `src/tests.rs` -- qui n'est meme PAS declare comme module dans lib.rs
+   (aucun `mod tests;`), donc jamais compile ni execute par `cargo test`.
+   Chiffre errone ET source pointee inexistante-en-pratique. Corrige vers
+   le vrai compte actuel (123 passing, `cargo test --lib` verifie a
+   l'instant), lien retire (les tests reels sont repartis en
+   `#[cfg(test)] mod tests` dans chaque module, pas dans un seul fichier
+   canonique -- un lien vers un seul fichier serait de toute facon
+   trompeur). Meme correction dans la phrase de synthese plus bas dans
+   README.md.
+
+Le probleme sous-jacent de la trouvaille #3 (src/tests.rs + src/ast.rs
+forment un parser parallele orphelin, jamais branche, deja signale hors
+scope dans le commit du fix de securite plus tot cette session) reste
+non resolu -- ce commit corrige seulement l'affirmation trompeuse sur le
+nombre de tests, pas l'orphelinat du fichier lui-meme.
+
+Verification: cargo build + cargo test --lib -- 123 passed, 0 failed,
+0 regression (changements purement documentaires, aucun fichier .rs
+touche).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ README.md            |  6 +++---
+ docs/ARCHITECTURE.md | 11 ++++++++---
+ 2 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/README.md b/README.md
+index c6da680..5db64e1 100644
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,7 @@
+ > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
+ 
+ [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+-[![Tests](https://img.shields.io/badge/tests-86%20passing-brightgreen.svg)](src/tests.rs)
++![Tests](https://img.shields.io/badge/tests-123%20passing-brightgreen.svg)
+ 
+ ---
+ 
+@@ -46,7 +46,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | # | Layer | Status |
+ |---|---|---|
+ | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
+-| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | ✅ Tested (4/4 modes) |
++| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | 🔴 Not built — no circuit breaker, quorum, or drift-detection code exists anywhere in this repo (verified by exhaustive grep, 2026-09-03). This row's "✅ Tested (4/4 modes)" was never true. The closest built primitive is `RestrictedCouncil` (Layer 3b below): quorum=1, not 2/3, no circuit breaker or drift detection |
+ | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+ | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — reduced scope: single authorized member (quorum=1), not the 2/3 multi-person quorum described below |
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+@@ -230,7 +230,7 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
+ cargo test
+ ```
+ 
+-86 tests passing, 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
++123 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
+ 
+ ---
+ 
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 4b690e0..2455fc2 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -40,9 +40,14 @@ serveur séparé ci-dessous serait une régression de cette réécriture.
+ CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
+ 
+ ### Couche 2: Gouvernance / Résilience
+-**État:** ✅ TESTÉ - 4/4 modes
++**État:** 🔴 NON CONSTRUITE — audit multi-angle du 2026-09-03
+ 
+-Circuit Breaker avec quorum 2/3, dynamic whitelist, 3 modes défaillance, operator drift prevention.
++Aucun circuit breaker, aucune logique de quorum, aucune détection de drift
++d'opérateur n'existe nulle part dans ce dépôt (vérifié par grep exhaustif).
++Le "✅ TESTÉ - 4/4 modes" affiché ici auparavant n'a jamais été vrai. Le
++primitif le plus proche réellement construit est `RestrictedCouncil`
++(Couche 3b ci-dessous) : quorum=1, pas 2/3, sans circuit breaker ni
++détection de drift.
+ 
+ ### Couche 3a: Vérification Faits Publics
+ **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
+@@ -67,7 +72,7 @@ Laplace Smoothed Scoring per-agent, per-domain accuracy.
+ ### Couche 6: Interface Humaine
+ **État:** 🟡 PARTIEL
+ 
+-Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: inactif — l'outil n'est pas installé sur la machine de dev (vérifié le 2026-09-03), les données de graphe existantes (2026-08-26) décrivent l'ancien codebase Python et ne peuvent pas être régénérées sans installer l'outil d'abord.
++Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel désormais — corrige une contradiction avec README.md détectée par l'audit multi-angle du 2026-09-03 (ce document disait encore "inactif, pas installé" alors que README.md documentait déjà l'installation et la régénération). L'outil (`graphifyy`, PyPI, venv local) a été installé et le graphe régénéré le 2026-09-03 : 967 nœuds, 1800 arêtes, 63 communautés étiquetées sémantiquement, construit depuis le commit `3326f917`. Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé.
+ 
+ ### Couche 7: Agent Discovery & Routing (CSTL Natif)
+ **État:** ✅ CONSTRUITE ET CÂBLÉE LIVE
+-- 
+2.43.0
+

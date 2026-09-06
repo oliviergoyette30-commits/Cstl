@@ -1,0 +1,85 @@
+From c5599329383f748f3ff860831bcf1789a162ef38 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Fri, 4 Sep 2026 17:02:21 +0000
+Subject: [PATCH] docs(graphify): regenere le graphe -- perime depuis le
+ 2026-09-03
+
+Item #1 de la liste des choses a faire (post-fix23). `graphify update .`
+relance contre le HEAD actuel (f73daa6b): 793 noeuds, 1646 aretes, 46
+communautes -- contre 967/1800/63 lors de la derniere regeneration
+(commit 3326f917, 2026-09-03).
+
+Precision honnete: cette regeneration a tourne en mode AST seulement
+(aucune cle LLM/API disponible dans ce sandbox) -- les noms de
+communautes sont des hubs structurels (fichiers/symboles les plus
+connectes), PAS les etiquettes semantiques generees par LLM de la
+regeneration du 2026-09-03. Les chiffres bruts (noeuds/aretes/
+communautes) different donc en partie a cause du vrai code ajoute
+depuis (fix16-fix23), en partie a cause de cette difference de
+methode -- documente dans README.md/ARCHITECTURE.md avec la commande
+a relancer (`graphify extract . --mode deep`) pour retrouver un
+etiquetage semantique.
+
+graphify-out/ ajoute au .gitignore: artefact reconstructible a la
+demande (876 Ko de JSON + 738 Ko de HTML), jamais commite meme lors de
+la regeneration precedente -- rendu explicite plutot qu'implicite.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ .gitignore           | 5 +++++
+ README.md            | 4 ++--
+ docs/ARCHITECTURE.md | 2 +-
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index 24c1525..4bfee93 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -8,3 +8,8 @@ __pycache__/
+ .graphify-venv/
+ .venv-graphify/
+ .venv/
++
++# Sortie regeneree par `graphify update .` (graph.json/html + cache) --
++# artefact local reconstructible a la demande, pas versionne (voir README.md
++# Couche 6 / docs/ARCHITECTURE.md pour la commande et les chiffres actuels).
++graphify-out/
+diff --git a/README.md b/README.md
+index c5cc8a7..a2b1b2f 100644
+--- a/README.md
++++ b/README.md
+@@ -51,7 +51,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — 2/3 quorum arithmetic and multi-voter tallying now implemented and tested (`quorum_size()`, `AdnStore::cast_commit_vote`, Layer 2 above), but the production config still registers a single authorized member, so quorum=1 in practice today |
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+ | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live. **Fixed 2026-09-04**: the hash chain (`seq`/`parent_hash` continuity, `src/server/audit.rs::HashChain`) was, until this pass, *purely in-memory* — reset to empty on every server restart, even though `adn_store.rs` already persisted payload history with real `parent_hash` lineage. `AuditStore` (`src/server/audit_store.rs`) already implemented the fix but was dead code, called nowhere outside its own unit test, since it was written. Now wired: `CstlNativeServer::with_data_path` opens `AuditStore` against the same file as `adn_store` and seeds the chain from it at startup; `handler.rs` persists every entry. Verified with a real process kill + restart of the actual production binary (not just an in-process simulation): `[AuditStore] Loaded 2 entries from disk` on the second process, chain correctly continuing at `seq=2` instead of resetting to `seq=0/parent=root` (`examples/audit_persistence_smoke_test.rs`). **Second finding, same day, found live on the user's own machine while re-verifying the fix above**: `HashChain::append` computed `seq` as `self.entries.len()`, which silently assumed no gaps — but `AuditStore::save()` uses `INSERT OR IGNORE` (needed so a resent duplicate-content payload stays idempotent instead of erroring on the `UNIQUE(hash)` constraint), so a genuine duplicate resend leaves a gap in the persisted `seq` sequence (e.g. `seq=0` and `seq=2` on disk, no `seq=1`). After a real restart, `load_chain()` reloads exactly those (gapped) rows, `entries.len()` no longer matches the highest real `seq`, and the next `append()` recomputed a colliding `seq` — silently losing a brand-new, non-duplicate payload's persistence (confirmed live: a genuinely new payload was accepted with a normal-looking client response, `seq` colliding with an existing row, and never appeared in `audit_trail` after restart). Fixed: `seq` is now `self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — anchored to the highest real `seq`, not the entry count. Regression test added (`test_append_seq_survives_gap_from_deduplicated_reload`) simulating the exact gapped state observed on disk. Still not a single schema/single `Connection` — two SQLite connections into the same file, not yet merged |
+-| 6 | **Human interface** — Obsidian vault escalation (`src/obsidian_escalation.rs`), wired live; Graphify (`graphifyy` PyPI package, local venv) regenerated 2026-09-03 — 967 nodes, 1800 edges, 63 semantically labelled communities, built from commit `3326f917` | ✅ Both real: Obsidian verified end-to-end against a live vault (contradiction detected by `ExecutionLab` -> written to `CSTL_Restricted_Council.md`); Graphify structure + labels current as of commit `3326f917` — run `graphify update .` after further commits to resync |
++| 6 | **Human interface** — Obsidian vault escalation (`src/obsidian_escalation.rs`), wired live; Graphify (`graphifyy` PyPI package) regenerated 2026-09-04 — 793 nodes, 1646 edges, 46 communities, built from commit `f73daa6b` | ✅ Both real: Obsidian verified end-to-end against a live vault (contradiction detected by `ExecutionLab` -> written to `CSTL_Restricted_Council.md`); Graphify structure current as of commit `f73daa6b` — this run used `graphify update .` (AST re-extraction only, no LLM/API key available), so community names are structural hub labels, not the LLM-generated semantic labels from the 2026-09-03 run (967 nodes/1800 edges/63 semantically-labelled communities) — run `graphify extract . --mode deep` with an LLM key configured to restore semantic labelling; either way, re-run `graphify update .` after further commits to resync |
+ | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request). **New 2026-09-04**: registration is now dynamic — `Arc<Mutex<AgentRegistry>>` + `purpose=agent_register` wire message (self-signed, upsert by name), verified live; a real LLM agent (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) registers and signs its own messages, verified live against the real Rust server (registration, unsigned-rejected, signed-accepted) — actual model-generated content is not verifiable in this sandbox (no `anthropic` package, no API key here) and is left for the user to confirm on their own machine |
+ | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | 🟡 Built and wired live, not just "designed" (that badge understated what already ran in production for the hash chain, and overstated deontic modality — see below). Hash chain: real, persisted since 2026-09-04 (`HashChain`/`AuditStore`, see row 5). **Deontic modality — built 2026-09-04, same day**: the only live check (`server/validator.rs::validate_deontic_constraints`, before this fix) tested whether a single `RELATION.type` field contained both substrings `"MUST"` and `"MUST_NOT"` — broken twice over: the wire format never encodes MUST/MUST_NOT in `type` (KB predicate or SDL operator only), and `"MUST_NOT".contains("MUST")` is true in Rust, so a lone `MUST_NOT` relation was falsely rejected. The real engine (`semantic.rs::check_axiom_d`, SDL Axiom D, tested) existed but was never called live. Fixed in two parts: a `RELATION` now carries an optional `modality=MUST\|MUST_NOT\|REQUIRE\|FORBID` field, wired to the real Axiom D check (blocking, E107, intra-payload — a self-contradiction in the same message); and a new historical audit (`execution_lab::check_deontic_consistency_with_history`, same pattern as the existing factual `check_consistency_with_history`) checks modality-bearing relations against everything persisted by prior payloads — never rejecting (a disagreement across agents/time isn't a protocol error), surfaced as a `DEONTIC_AUDIT [consistent=false, violations=N]` response block. `adn_relations` gained a `modality` column via an idempotent migration, verified live against a file simulating the exact pre-existing production schema. Verified end-to-end on a real TCP connection, dev and release (`examples/deontic_audit_smoke_test.rs`, 4 scenarios) plus 9 new unit tests. |
+ | 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
+@@ -241,7 +241,7 @@ cargo test --lib
+ - Open-weight LLMs (Llama, Mistral, Qwen): partially validated only.
+ - Standard-mode compression advantage largely disappears after gzip.
+ - CASTLE mode: architecture only, no implementation, no benchmark.
+-- Layer 3b: `ExecutionLab` and `RestrictedCouncil` are both wired live, and a commit has actually happened end-to-end (via a Telegram button). `RestrictedCouncil`'s 2/3 quorum arithmetic (`quorum_size()`) and multi-voter tallying (`AdnStore::cast_commit_vote`) are now implemented and tested, but the production config still registers a single authorized member, so quorum=1 in practice — see Layer 2 for the new governance module this quorum logic is part of. Layer 6: Obsidian escalation half is real, wired live, and verified end-to-end against a live vault; Graphify half is also real now — installed (`graphifyy` PyPI, local venv) and regenerated 2026-09-03 against the current codebase (967 nodes, 1800 edges, 63 semantically labelled communities, built from commit `3326f917`); will go stale again after further commits until `graphify update .` is re-run. Layer 7 (agent discovery/routing) is built and wired live.
++- Layer 3b: `ExecutionLab` and `RestrictedCouncil` are both wired live, and a commit has actually happened end-to-end (via a Telegram button). `RestrictedCouncil`'s 2/3 quorum arithmetic (`quorum_size()`) and multi-voter tallying (`AdnStore::cast_commit_vote`) are now implemented and tested, and since 2026-09-04 that quorum is also cryptographically enforced (signature + registry key match), configurable to more than one member via `CSTL_COUNCIL_MEMBERS` — production still runs with a single authorized member by default, so quorum=1 in practice unless configured otherwise — see Layer 2 for the new governance module this quorum logic is part of. Layer 6: Obsidian escalation half is real, wired live, and verified end-to-end against a live vault; Graphify half is also real — installed (`graphifyy` PyPI) and re-run 2026-09-04 against the current codebase (793 nodes, 1646 edges, 46 communities, built from commit `f73daa6b`) via `graphify update .` (AST-only, no LLM key available in that environment — community names are structural hubs, not the LLM-generated semantic labels from the earlier 2026-09-03 run); will go stale again after further commits until `graphify update .` is re-run. Layer 7 (agent discovery/routing) is built and wired live.
+ - Human council resolution rate: never measured under production conditions.
+ - Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
+ - `emergence_proofs` table: real, tested CRUD (`AdnStore::put_emergence_proof`/`get_emergence_proofs`), now reachable live via `purpose=detect_emergence` on `INTENT_PAYLOAD` (`src/emergence.rs`, a Rust port of the Python `RevisionOrchestrator` that existed nowhere in this repo before). Design matches how the project's own multi-LLM sessions actually happened (`CSTL_v4_9_1_REFERENCE_DEMO`: a human relays the same question to several LLMs and forwards their responses) — no API keys, no automated cross-vendor calling; the server only compares payloads its agents already submitted. Decision matching is a naive textual comparison (trim + lowercase), not semantic. Still zero production data — nobody has run a real tripartite session through this path yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index e74a6e6..d73c7fe 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -239,7 +239,7 @@ désormais `seq=3` au prochain append, jamais `seq=2`).
+ ### Couche 6: Interface Humaine
+ **État:** 🟡 PARTIEL
+ 
+-Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel désormais — corrige une contradiction avec README.md détectée par l'audit multi-angle du 2026-09-03 (ce document disait encore "inactif, pas installé" alors que README.md documentait déjà l'installation et la régénération). L'outil (`graphifyy`, PyPI, venv local) a été installé et le graphe régénéré le 2026-09-03 : 967 nœuds, 1800 arêtes, 63 communautés étiquetées sémantiquement, construit depuis le commit `3326f917`. Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé.
++Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel — l'outil (`graphifyy`, PyPI) a été installé et le graphe régénéré le 2026-09-04 (item #1 de la liste des choses à faire, il était périmé depuis le commit `3326f917` du 2026-09-03) : 793 nœuds, 1646 arêtes, 46 communautés, construit depuis le commit `f73daa6b`, via `graphify update .` (ré-extraction AST seulement -- aucune clé LLM/API disponible dans cet environnement, donc les noms de communautés sont des hubs structurels, pas les étiquettes sémantiques générées par LLM de la régénération du 2026-09-03). Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé -- pour retrouver un étiquetage sémantique par LLM, `graphify extract . --mode deep` avec une clé configurée.
+ 
+ ### Couche 7: Agent Discovery & Routing (CSTL Natif)
+ **État:** ✅ CONSTRUITE ET CÂBLÉE LIVE — enregistrement désormais dynamique (2026-09-04)
+-- 
+2.43.0
+

@@ -1,0 +1,1939 @@
+From cc258d62809bfca80a38c6250e8ef7d87d530ed8 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Fri, 4 Sep 2026 00:20:58 +0000
+Subject: [PATCH] feat(signing+registration+llm-agent): Ed25519 par message,
+ enregistrement dynamique, agent LLM reel
+
+Trois lacunes fermees, identifiees par la revue de marche (OWASP Top 10
+for Agentic Applications 2026, comparaison MCP/A2A/ACP/ANP) et validees
+par l'utilisateur ("on fix tout"). Chacune verifiee en direct (build +
+tests + smoke-test TCP reel), pas seulement structurellement -- sauf la
+feature C, honnetement limitee par ce sandbox (voir plus bas).
+
+A -- Signature Ed25519 (src/signing.rs, nouveau)
+  Optionnelle globalement, obligatoire seulement pour un expediteur deja
+  enregistre avec une public_key -- decision deliberee pour ne pas casser
+  les 148 tests/smoke-tests legacy non signes. META.public_key (hex 64c)
+  + INTENT_PAYLOAD.signature (hex 128c). server/audit.rs::signing_bytes
+  duplique (pas refactor) la canonicalisation de canonical_hash, exclut
+  INTENT.signature en plus de META.PARENT_HASH, inclut public_key. STEP
+  2a dans handler.rs rejette purpose=signature_rejected si invalide --
+  sauf purpose=agent_register, qui gere son propre rejet (trouvaille du
+  smoke test live: sans cette exemption, les branches de rejet dediees
+  du bloc agent_register etaient inatteignables). validator.rs: E309/E310
+  format-only (E306/E307 deja pris par les RELATION per-index -- collision
+  qu'aurait introduite le plan initial tel quel).
+
+B -- Enregistrement dynamique d'agents (agent_discovery.rs, handler.rs)
+  AgentRegistry devient Arc<Mutex<_>> (etait Arc immuable), register()
+  devient un upsert par nom. Nouveau purpose=agent_register: bootstrap
+  sans PKI/CA (l'auto-signature prouve la possession de la cle, pas une
+  identite pre-existante), limite v1 assumee: pas de verification
+  d'autorisation de rotation contre l'ancienne cle.
+
+C -- Agent LLM reel (sdk/python/cstl_llm_agent.py, nouveau)
+  Ed25519 via `cryptography`, cstl_signing_bytes = port Python de
+  signing_bytes, verifie IDENTIQUE octet-par-octet a l'implementation
+  Rust sur une fixture croisee (examples/print_signing_bytes_fixture.rs).
+  register_agent()/send_signed_relation() verifies en DIRECT contre un
+  vrai serveur Rust (cargo run --release): agent_register_ack, rejet du
+  non-signe, acceptation du signe. AnthropicAgentBrain.from_env() degrade
+  proprement (None) -- confirme dans CE sandbox (ni paquet `anthropic`
+  ni ANTHROPIC_API_KEY disponibles ici). Limite honnete: une vraie
+  reponse generee par un modele n'a PAS pu etre verifiee ici -- reste a
+  l'utilisateur, instructions dans sdk/README.md.
+
+Verification: 163/163 tests (cargo test --lib), build release complet
+(bin + examples), 2 smoke-tests TCP live en dev ET release
+(governance_smoke_test regression OK, signing_registration_smoke_test
+6/6 scenarios: legacy non signe accepte, agent_register signe accepte,
+agent_register non signe rejete, non-signe-apres-enregistrement rejete,
+signe-apres-enregistrement accepte, signature corrompue rejetee).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ Cargo.lock                                  | 172 ++++++++
+ Cargo.toml                                  |  21 +
+ README.md                                   |   4 +-
+ docs/ARCHITECTURE.md                        |  23 +-
+ examples/governance_smoke_test.rs           |   3 +-
+ examples/print_signing_bytes_fixture.rs     |  23 ++
+ examples/signing_registration_smoke_test.rs | 228 +++++++++++
+ sdk/README.md                               |  61 ++-
+ sdk/python/cstl_llm_agent.py                | 425 ++++++++++++++++++++
+ src/agent_discovery.rs                      |  58 ++-
+ src/lib.rs                                  |   1 +
+ src/main.rs                                 |   7 +-
+ src/server/audit.rs                         |  95 +++++
+ src/server/handler.rs                       | 115 +++++-
+ src/server/listener.rs                      |   2 +-
+ src/server/mod.rs                           |   8 +-
+ src/server/validator.rs                     |  25 ++
+ src/signing.rs                              | 209 ++++++++++
+ 18 files changed, 1463 insertions(+), 17 deletions(-)
+ create mode 100644 examples/print_signing_bytes_fixture.rs
+ create mode 100644 examples/signing_registration_smoke_test.rs
+ create mode 100644 sdk/python/cstl_llm_agent.py
+ create mode 100644 src/signing.rs
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 7ec9454..78d3d56 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -26,6 +26,12 @@ version = "0.22.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+ 
++[[package]]
++name = "base64ct"
++version = "1.8.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
++
+ [[package]]
+ name = "bitflags"
+ version = "2.13.1"
+@@ -69,6 +75,12 @@ version = "1.0.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+ 
++[[package]]
++name = "const-oid"
++version = "0.9.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
++
+ [[package]]
+ name = "core-foundation"
+ version = "0.9.4"
+@@ -118,6 +130,9 @@ dependencies = [
+ name = "cstl_parser"
+ version = "5.0.0"
+ dependencies = [
++ "ed25519-dalek",
++ "hex",
++ "rand",
+  "reqwest",
+  "rusqlite",
+  "serde",
+@@ -127,6 +142,43 @@ dependencies = [
+  "unicode-normalization",
+ ]
+ 
++[[package]]
++name = "curve25519-dalek"
++version = "4.1.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "97fb8b7c4503de7d6ae7b42ab72a5a59857b4c937ec27a3d4539dba95b5ab2be"
++dependencies = [
++ "cfg-if",
++ "cpufeatures",
++ "curve25519-dalek-derive",
++ "digest",
++ "fiat-crypto",
++ "rustc_version",
++ "subtle",
++ "zeroize",
++]
++
++[[package]]
++name = "curve25519-dalek-derive"
++version = "0.1.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
++[[package]]
++name = "der"
++version = "0.7.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
++dependencies = [
++ "const-oid",
++ "zeroize",
++]
++
+ [[package]]
+ name = "digest"
+ version = "0.10.7"
+@@ -148,6 +200,31 @@ dependencies = [
+  "syn 3.0.4",
+ ]
+ 
++[[package]]
++name = "ed25519"
++version = "2.2.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
++dependencies = [
++ "pkcs8",
++ "signature",
++]
++
++[[package]]
++name = "ed25519-dalek"
++version = "2.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
++dependencies = [
++ "curve25519-dalek",
++ "ed25519",
++ "rand_core",
++ "serde",
++ "sha2",
++ "subtle",
++ "zeroize",
++]
++
+ [[package]]
+ name = "encoding_rs"
+ version = "0.8.35"
+@@ -191,6 +268,12 @@ version = "2.5.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+ 
++[[package]]
++name = "fiat-crypto"
++version = "0.2.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
++
+ [[package]]
+ name = "find-msvc-tools"
+ version = "0.1.11"
+@@ -341,6 +424,12 @@ dependencies = [
+  "hashbrown 0.14.5",
+ ]
+ 
++[[package]]
++name = "hex"
++version = "0.4.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
++
+ [[package]]
+ name = "http"
+ version = "1.5.0"
+@@ -762,6 +851,16 @@ version = "0.2.17"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+ 
++[[package]]
++name = "pkcs8"
++version = "0.10.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
++dependencies = [
++ "der",
++ "spki",
++]
++
+ [[package]]
+ name = "pkg-config"
+ version = "0.3.34"
+@@ -777,6 +876,15 @@ dependencies = [
+  "zerovec",
+ ]
+ 
++[[package]]
++name = "ppv-lite86"
++version = "0.2.21"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
++dependencies = [
++ "zerocopy",
++]
++
+ [[package]]
+ name = "proc-macro2"
+ version = "1.0.107"
+@@ -801,6 +909,36 @@ version = "6.0.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+ 
++[[package]]
++name = "rand"
++version = "0.8.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
++dependencies = [
++ "libc",
++ "rand_chacha",
++ "rand_core",
++]
++
++[[package]]
++name = "rand_chacha"
++version = "0.3.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
++dependencies = [
++ "ppv-lite86",
++ "rand_core",
++]
++
++[[package]]
++name = "rand_core"
++version = "0.6.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
++dependencies = [
++ "getrandom 0.2.17",
++]
++
+ [[package]]
+ name = "redox_syscall"
+ version = "0.5.18"
+@@ -878,6 +1016,15 @@ dependencies = [
+  "smallvec",
+ ]
+ 
++[[package]]
++name = "rustc_version"
++version = "0.4.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
++dependencies = [
++ "semver",
++]
++
+ [[package]]
+ name = "rustix"
+ version = "1.1.4"
+@@ -974,6 +1121,12 @@ dependencies = [
+  "libc",
+ ]
+ 
++[[package]]
++name = "semver"
++version = "1.0.28"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
++
+ [[package]]
+ name = "serde"
+ version = "1.0.229"
+@@ -1056,6 +1209,15 @@ dependencies = [
+  "libc",
+ ]
+ 
++[[package]]
++name = "signature"
++version = "2.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
++dependencies = [
++ "rand_core",
++]
++
+ [[package]]
+ name = "slab"
+ version = "0.4.12"
+@@ -1078,6 +1240,16 @@ dependencies = [
+  "windows-sys 0.61.2",
+ ]
+ 
++[[package]]
++name = "spki"
++version = "0.7.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
++dependencies = [
++ "base64ct",
++ "der",
++]
++
+ [[package]]
+ name = "stable_deref_trait"
+ version = "1.2.1"
+diff --git a/Cargo.toml b/Cargo.toml
+index 6e6dfe0..f74e2b0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -23,6 +23,11 @@ path = "src/lib.rs"
+ # (NFC). Corrige le 2026-09-03.
+ 
+ [dev-dependencies]
++# Requis par les tests de src/signing.rs (SigningKey::generate(&mut csprng))
++# -- ed25519-dalek 2.x exige un CryptoRngCore, rand 0.8's OsRng l'implemente.
++# dev-dependency seulement: aucun code de production n'en depend, seulement
++# les tests qui generent des paires de cles ephemeres.
++rand = "0.8"
+ 
+ [profile.release]
+ opt-level = 3
+@@ -60,3 +65,19 @@ version = "1"
+ 
+ [dependencies.unicode-normalization]
+ version = "0.1"
++
++[dependencies.ed25519-dalek]
++# Premiere dependance crypto de ce projet en dehors du hachage (sha2) --
++# signature de messages par agent (Couche 2/securite, 2026-09-04), ferme
++# OWASP ASI03/ASI07 (identite/integrite inter-agents non authentifiees).
++# Feature "rand_core" necessaire pour SigningKey::generate(&mut csprng)
++# utilise dans les tests de src/signing.rs -- pas activee par defaut.
++version = "2"
++features = ["rand_core"]
++
++[dependencies.hex]
++# Le hex hand-roule via `{:x}` (server/audit.rs) marche seulement sur le
++# GenericArray retourne par sha2 -- pas sur les octets bruts [u8;N] des
++# cles/signatures Ed25519. Petite dependance dediee plutot que refaire un
++# encodeur hex a la main.
++version = "0.4"
+diff --git a/README.md b/README.md
+index e792a33..c2e3cd4 100644
+--- a/README.md
++++ b/README.md
+@@ -46,13 +46,13 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | # | Layer | Status |
+ |---|---|---|
+ | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
+-| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | 🟡 Partial, observation-only (`src/governance.rs`, wired live 2026-09-03): a per-sender rolling-window circuit breaker (repeated `ExecutionLab` inconsistency events) and an operator-drift ratio (repeated `SEMANTIC_WARNING`) are computed on every payload and exposed in a new `GOVERNANCE [...]` response block, escalating harder via Telegram when tripped — but neither ever rejects a payload, by explicit design decision, matching the only real blocking path in this server (security/parse/validation). `RestrictedCouncil::quorum_size()` now implements real ceil(2/3·n) quorum arithmetic and `AdnStore::cast_commit_vote` tallies distinct voters per hash — exercised end-to-end with a 2-member council (`examples/governance_smoke_test.rs`). Still missing: the production config (`main.rs`) registers only one member ("Olivier"), so quorum=1 in practice today; breaker/drift state is in-memory only (lost on restart); this row's old "✅ Tested (4/4 modes)" badge was never true before this pass |
++| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention, Ed25519 identity | 🟡 Partial, observation-only (`src/governance.rs`, wired live 2026-09-03): a per-sender rolling-window circuit breaker (repeated `ExecutionLab` inconsistency events) and an operator-drift ratio (repeated `SEMANTIC_WARNING`) are computed on every payload and exposed in a new `GOVERNANCE [...]` response block, escalating harder via Telegram when tripped — but neither ever rejects a payload, by explicit design decision, matching the only real blocking path in this server (security/parse/validation). `RestrictedCouncil::quorum_size()` now implements real ceil(2/3·n) quorum arithmetic and `AdnStore::cast_commit_vote` tallies distinct voters per hash — exercised end-to-end with a 2-member council (`examples/governance_smoke_test.rs`). Still missing: the production config (`main.rs`) registers only one member ("Olivier"), so quorum=1 in practice today; breaker/drift state is in-memory only (lost on restart). **New 2026-09-04** (`src/signing.rs`): Ed25519 message signing, closing part of OWASP ASI03/ASI07 (identity & inter-agent communication were previously unauthenticated plain-text strings) — optional globally, mandatory only for a sender already registered with a `public_key`, no PKI/CA (self-signature proves key possession, not prior identity); verified live end-to-end on a real TCP connection, dev and release builds (`examples/signing_registration_smoke_test.rs`, 6 scenarios) |
+ | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+ | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — 2/3 quorum arithmetic and multi-voter tallying now implemented and tested (`quorum_size()`, `AdnStore::cast_commit_vote`, Layer 2 above), but the production config still registers a single authorized member, so quorum=1 in practice today |
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+ | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live; not yet unified with the hash chain into one store |
+ | 6 | **Human interface** — Obsidian vault escalation (`src/obsidian_escalation.rs`), wired live; Graphify (`graphifyy` PyPI package, local venv) regenerated 2026-09-03 — 967 nodes, 1800 edges, 63 semantically labelled communities, built from commit `3326f917` | ✅ Both real: Obsidian verified end-to-end against a live vault (contradiction detected by `ExecutionLab` -> written to `CSTL_Restricted_Council.md`); Graphify structure + labels current as of commit `3326f917` — run `graphify update .` after further commits to resync |
+-| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request) |
++| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request). **New 2026-09-04**: registration is now dynamic — `Arc<Mutex<AgentRegistry>>` + `purpose=agent_register` wire message (self-signed, upsert by name), verified live; a real LLM agent (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) registers and signs its own messages, verified live against the real Rust server (registration, unsigned-rejected, signed-accepted) — actual model-generated content is not verifiable in this sandbox (no `anthropic` package, no API key here) and is left for the user to confirm on their own machine |
+ | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ Designed |
+ | 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
+ 
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index f867638..6ecc161 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -59,6 +59,25 @@ donc quorum=1 en pratique aujourd'hui ; l'état du breaker/drift est en
+ mémoire uniquement, perdu au redémarrage. Le "✅ TESTÉ - 4/4 modes" affiché
+ ici avant le 2026-09-03 n'a jamais été vrai.
+ 
++**Identité/authentification (2026-09-04, `src/signing.rs`):** signature
++Ed25519 par message, câblée live et vérifiée en direct
++(`examples/signing_registration_smoke_test.rs`, 6 scénarios sur une vraie
++connexion TCP + dev/release). Ferme partiellement OWASP ASI03 (Identity &
++Privilege Abuse) et ASI07 (Insecure Inter-Agent Communication) — avant ce
++travail, `sender`/`receiver` étaient de simples chaînes de texte sans
++AUCUNE vérification cryptographique. Portée v1 assumée, pas une découverte
++après coup: la signature est **optionnelle globalement, obligatoire
++seulement pour un expéditeur déjà enregistré avec une `public_key`**
++(`META.public_key`, `INTENT_PAYLOAD.signature`, STEP 2a de
++`server/handler.rs`) — sinon les 148 tests et smoke-tests legacy non
++signés casseraient tous pour fermer un risque qui ne concerne, dans les
++faits, que les identités déjà établies. Pas de PKI/CA: une auto-signature
++prouve seulement la possession de la clé privée, pas une identité
++pré-existante (modèle de confiance mono-opérateur, cohérent avec
++`RestrictedCouncil`). Limite documentée: aucune vérification
++d'autorisation de rotation contre l'ANCIENNE clé lors d'un
++réenregistrement.
++
+ ### Couche 3a: Vérification Faits Publics
+ **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
+ 
+@@ -85,9 +104,9 @@ Laplace Smoothed Scoring per-agent, per-domain accuracy.
+ Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel désormais — corrige une contradiction avec README.md détectée par l'audit multi-angle du 2026-09-03 (ce document disait encore "inactif, pas installé" alors que README.md documentait déjà l'installation et la régénération). L'outil (`graphifyy`, PyPI, venv local) a été installé et le graphe régénéré le 2026-09-03 : 967 nœuds, 1800 arêtes, 63 communautés étiquetées sémantiquement, construit depuis le commit `3326f917`. Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé.
+ 
+ ### Couche 7: Agent Discovery & Routing (CSTL Natif)
+-**État:** ✅ CONSTRUITE ET CÂBLÉE LIVE
++**État:** ✅ CONSTRUITE ET CÂBLÉE LIVE — enregistrement désormais dynamique (2026-09-04)
+ 
+-`src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur.
++`src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur. Jusqu'au 2026-09-04, le registre était figé à la compilation (alice/bob codés en dur dans `main.rs`, `Arc` immuable) — aucune inscription dynamique possible, contrairement aux Agent Cards d'A2A. Corrigé: `AgentRegistry` est maintenant `Arc<Mutex<_>>`, et `purpose=agent_register` (nouveau message wire, `server/handler.rs`) permet à un agent de s'enregistrer/se réenregistrer (upsert par nom) via une auto-signature Ed25519 (réutilise la vérification de la Couche 2 ci-dessus) — vérifié en direct (mêmes 6 scénarios que la signature). Un agent LLM réel (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) s'enregistre et signe ses messages avec cette voie — vérifié en direct contre le serveur Rust réel (enregistrement, rejet du non-signé, acceptation du signé) ; la génération de contenu par un vrai modèle Claude reste à vérifier par l'utilisateur (aucun paquet `anthropic` ni clé API dans ce sandbox).
+ 
+ ### Couche 8: Provenance Audit / Cryptographic Guarantee
+ **État:** ✅ DESIGNÉ
+diff --git a/examples/governance_smoke_test.rs b/examples/governance_smoke_test.rs
+index c806fb3..cd443a8 100644
+--- a/examples/governance_smoke_test.rs
++++ b/examples/governance_smoke_test.rs
+@@ -88,8 +88,9 @@ fn make_test_server(port: u16, council: RestrictedCouncil) -> CstlNativeServer {
+         version: "5.0.0".to_string(),
+         capabilities: vec!["communication".to_string()],
+         trust_score: 0.9,
++        public_key: None,
+     });
+-    server.agent_registry = Arc::new(registry);
++    server.agent_registry = Arc::new(Mutex::new(registry));
+     server.adn_store = Arc::new(Mutex::new(AdnStore::open(":memory:").expect("in-memory adn_store")));
+     server.restricted_council = Arc::new(council);
+     server
+diff --git a/examples/print_signing_bytes_fixture.rs b/examples/print_signing_bytes_fixture.rs
+new file mode 100644
+index 0000000..34c72af
+--- /dev/null
++++ b/examples/print_signing_bytes_fixture.rs
+@@ -0,0 +1,23 @@
++/// examples/print_signing_bytes_fixture.rs -- imprime signing_bytes() en hex
++/// pour un payload FIXE, afin de le comparer octet par octet au port Python
++/// (sdk/python/cstl_llm_agent.py::cstl_signing_bytes). Seule partie de la
++/// feature C reellement verifiable dans ce sandbox (pas de paquet
++/// `anthropic` ni de cle API disponibles ici) -- toute derive entre les
++/// deux implementations casserait silencieusement toutes les signatures
++/// produites cote Python.
++use cstl_parser::server::audit::signing_bytes;
++use cstl_parser::server::parser::parse_payload;
++
++fn main() {
++    // Inclut deliberement: un accent (café, teste la normalisation NFC),
++    // une valeur avec virgule/quotee (teste le parsing top-level), une
++    // RELATION, et PARENT_HASH + signature (doivent etre EXCLUS du hash).
++    let raw = "#!CSTL v5.0.0 MODE=A\n\
++        META [encoder=LlmAgent, produced_by=café_agent, public_key=aabbccdd, PARENT_HASH=sha256:doitetreexclu]\n\
++        INTENT_PAYLOAD [purpose=cross_lang_fixture, sender=llm_agent, receiver=server, note=\"a, b\", signature=doitetreexclu]\n\
++        RELATION [type=born_in, subject=café_test, object=Montréal]\n\
++        ---END---\n";
++    let payload = parse_payload(raw).expect("fixture doit parser");
++    let bytes = signing_bytes(&payload);
++    println!("{}", hex::encode(&bytes));
++}
+diff --git a/examples/signing_registration_smoke_test.rs b/examples/signing_registration_smoke_test.rs
+new file mode 100644
+index 0000000..8c6ff72
+--- /dev/null
++++ b/examples/signing_registration_smoke_test.rs
+@@ -0,0 +1,228 @@
++/// examples/signing_registration_smoke_test.rs -- verification live de la
++/// signature Ed25519 (feature A) et de l'enregistrement dynamique d'agents
++/// (feature B, purpose=agent_register), sur une vraie connexion TCP en
++/// process (meme convention que governance_smoke_test.rs / kb_verify_smoke_test.rs).
++///
++/// Scenarios verifies:
++/// 1. Payload NON signe d'un expediteur NON enregistre -> toujours accepte
++///    (regression: le legacy alice/bob-like doit continuer a marcher).
++/// 2. agent_register avec une vraie paire de cles Ed25519 + auto-signature
++///    valide -> agent_register_ack, l'agent apparait ensuite dans le registre.
++/// 3. agent_register SANS signature -> agent_register_rejected,
++///    reason=self_signature_required.
++/// 4. Payload NON signe d'un expediteur MAINTENANT enregistre (avec
++///    public_key) -> signature_rejected, reason=missing_signature_for_registered_agent.
++/// 5. Meme payload, correctement signe -> flux normal (status=processed).
++/// 6. Signature corrompue (un caractere hex change) -> signature_rejected,
++///    reason=signature_invalid.
++use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
++use cstl_parser::adn_store::AdnStore;
++use cstl_parser::restricted_council::RestrictedCouncil;
++use cstl_parser::server::audit::signing_bytes;
++use cstl_parser::server::parser::parse_payload;
++use cstl_parser::server::CstlNativeServer;
++use ed25519_dalek::{Signer, SigningKey};
++use rand::rngs::OsRng;
++use std::sync::Arc;
++use tokio::io::{AsyncReadExt, AsyncWriteExt};
++use tokio::net::TcpStream;
++use tokio::sync::Mutex;
++
++async fn send(port: u16, payload: &str) -> String {
++    let mut stream = TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
++    stream.write_all(payload.as_bytes()).await.expect("send");
++    let mut buf = Vec::new();
++    let mut chunk = [0u8; 4096];
++    loop {
++        let n = stream.read(&mut chunk).await.expect("read");
++        if n == 0 {
++            break;
++        }
++        buf.extend_from_slice(&chunk[..n]);
++        if buf.windows(9).any(|w| w == b"---END---") {
++            break;
++        }
++    }
++    String::from_utf8_lossy(&buf).to_string()
++}
++
++fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
++    for line in response.lines() {
++        if line.starts_with(block) {
++            let inner = line.split_once('[')?.1.trim_end_matches(']').trim_end_matches("]\n");
++            for part in inner.split(',') {
++                let part = part.trim();
++                if let Some((k, v)) = part.split_once('=') {
++                    if k.trim() == key {
++                        return Some(v.trim().to_string());
++                    }
++                }
++            }
++        }
++    }
++    None
++}
++
++fn make_test_server(port: u16) -> CstlNativeServer {
++    let mut server = CstlNativeServer::new(port);
++    let mut registry = AgentRegistry::new();
++    // Agent bootstrap "communication" legacy (public_key: None) -- necessaire
++    // pour que STEP 4 (routage) trouve une destination, independamment de
++    // l'expediteur/signature du message lui-meme (route() choisit parmi TOUT
++    // le registre, pas seulement l'expediteur en cours).
++    registry.register(AgentCard {
++        name: "smoke_router".to_string(),
++        version: "5.0.0".to_string(),
++        capabilities: vec!["communication".to_string()],
++        trust_score: 0.9,
++        public_key: None,
++    });
++    server.agent_registry = Arc::new(Mutex::new(registry));
++    server.adn_store = Arc::new(Mutex::new(AdnStore::open(":memory:").expect("in-memory adn_store")));
++    server.restricted_council = Arc::new(RestrictedCouncil::single_member("Olivier"));
++    server
++}
++
++fn born_in_payload(sender: &str, subject: &str, city: &str, extra_meta: &str, extra_intent: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest{extra_meta}]\n\
++         INTENT_PAYLOAD [purpose=signing_smoke, sender={sender}, receiver=server{extra_intent}]\n\
++         RELATION [type=born_in, subject={subject}, object={city}]\n\
++         ---END---\n"
++    )
++}
++
++/// Calcule signing_bytes() sur le MEME texte de payload que celui qui sera
++/// parse et envoye -- reproduit exactement ce qu'un vrai client ferait
++/// (parser son propre brouillon, signer, injecter la signature).
++fn sign_payload(sk: &SigningKey, sender: &str, subject: &str, city: &str, pubkey_hex: &str) -> (String, String) {
++    let unsigned_extra_meta = format!(", public_key={}", pubkey_hex);
++    let unsigned = born_in_payload(sender, subject, city, &unsigned_extra_meta, "");
++    let parsed = parse_payload(&unsigned).expect("le brouillon non signe doit parser");
++    let sig = sk.sign(&signing_bytes(&parsed));
++    let sig_hex = hex::encode(sig.to_bytes());
++    let signed = born_in_payload(sender, subject, city, &unsigned_extra_meta, &format!(", signature={}", sig_hex));
++    (signed, sig_hex)
++}
++
++fn agent_register_payload(name: &str, pubkey_hex: &str, sig_hex: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=agent_register, sender={name}, receiver=server, name={name}, capabilities=communication, signature={sig_hex}]\n\
++         ---END---\n"
++    )
++}
++
++#[tokio::main]
++async fn main() {
++    let port: u16 = 15160;
++    let server = make_test_server(port);
++    tokio::spawn(async move {
++        server.start().await.expect("server start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    let mut failures = Vec::new();
++
++    // ---- Scenario 1: payload non signe, expediteur non enregistre (regression) ----
++    println!("[1/6] Payload non signe, expediteur inconnu (regression legacy)...");
++    let resp1 = send(port, &born_in_payload("legacy_agent", "signing_smoke_subject_1", "Varsovie", "", "")).await;
++    let status1 = extract_field(&resp1, "META", "status");
++    println!("      status={:?}", status1);
++    if status1.as_deref() != Some("processed") {
++        failures.push("scenario 1: un payload non signe d'un expediteur non enregistre doit toujours passer");
++    }
++
++    // Prepare une vraie paire de cles Ed25519.
++    let mut csprng = OsRng;
++    let signing_key = SigningKey::generate(&mut csprng);
++    let pubkey_hex = hex::encode(signing_key.verifying_key().to_bytes());
++    let agent_name = "signed_agent";
++
++    // ---- Scenario 3: agent_register SANS signature -> rejete ----
++    println!("[3/6] agent_register sans signature (avant le scenario 2 volontairement: prouve qu'AUCUN enregistrement n'a lieu sans signature)...");
++    let unsigned_register = format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=agent_register, sender={agent_name}, receiver=server, name={agent_name}, capabilities=communication]\n\
++         ---END---\n"
++    );
++    // Note: public_key present sans signature = SignatureCheck::Invalid("incomplete_signature_fields"),
++    // PAS NotPresent (qui exigerait l'ABSENCE des deux champs -- impossible ici
++    // puisque le bloc agent_register exige deja public_key avant meme de
++    // regarder sig_check) -- donc la branche emise ici est
++    // agent_register_rejected/reason=signature_invalid, pas self_signature_required.
++    let resp3 = send(port, &unsigned_register).await;
++    let purpose3 = extract_field(&resp3, "INTENT_PAYLOAD", "purpose");
++    let reason3 = extract_field(&resp3, "INTENT_PAYLOAD", "reason");
++    println!("      purpose={:?} reason={:?}", purpose3, reason3);
++    if purpose3.as_deref() != Some("agent_register_rejected") || reason3.as_deref() != Some("signature_invalid") {
++        failures.push("scenario 3: agent_register sans signature doit etre rejete (agent_register_rejected/signature_invalid)");
++    }
++
++    // ---- Scenario 2: agent_register avec auto-signature valide -> ack ----
++    println!("[2/6] agent_register avec auto-signature Ed25519 valide...");
++    let register_unsigned_parsed = parse_payload(&format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=agent_register, sender={agent_name}, receiver=server, name={agent_name}, capabilities=communication]\n\
++         ---END---\n"
++    )).expect("brouillon agent_register doit parser");
++    let register_sig = signing_key.sign(&signing_bytes(&register_unsigned_parsed));
++    let register_sig_hex = hex::encode(register_sig.to_bytes());
++    let resp2 = send(port, &agent_register_payload(agent_name, &pubkey_hex, &register_sig_hex)).await;
++    let purpose2 = extract_field(&resp2, "INTENT_PAYLOAD", "purpose");
++    println!("      purpose={:?}", purpose2);
++    if purpose2.as_deref() != Some("agent_register_ack") {
++        failures.push("scenario 2: agent_register avec signature valide doit etre accepte (agent_register_ack)");
++    }
++
++    // ---- Scenario 4: payload non signe d'un expediteur MAINTENANT enregistre -> rejete ----
++    println!("[4/6] Payload non signe du meme expediteur, maintenant enregistre avec public_key...");
++    let resp4 = send(port, &born_in_payload(agent_name, "signing_smoke_subject_4", "Berlin", "", "")).await;
++    let purpose4 = extract_field(&resp4, "INTENT_PAYLOAD", "purpose");
++    let reason4 = extract_field(&resp4, "INTENT_PAYLOAD", "reason");
++    println!("      purpose={:?} reason={:?}", purpose4, reason4);
++    if purpose4.as_deref() != Some("signature_rejected") || reason4.as_deref() != Some("missing_signature_for_registered_agent") {
++        failures.push("scenario 4: payload non signe d'un expediteur enregistre avec public_key doit etre rejete");
++    }
++
++    // ---- Scenario 5: meme payload, correctement signe -> flux normal ----
++    println!("[5/6] Meme payload, correctement signe...");
++    let (signed5, _sig5) = sign_payload(&signing_key, agent_name, "signing_smoke_subject_5", "Rome", &pubkey_hex);
++    let resp5 = send(port, &signed5).await;
++    let status5 = extract_field(&resp5, "META", "status");
++    let has_audit5 = resp5.contains("AUDIT [hash=");
++    println!("      status={:?} audit_present={}", status5, has_audit5);
++    if status5.as_deref() != Some("processed") || !has_audit5 {
++        failures.push("scenario 5: payload correctement signe doit etre traite normalement");
++    }
++
++    // ---- Scenario 6: signature corrompue -> rejete ----
++    println!("[6/6] Signature corrompue (un caractere modifie)...");
++    let (mut signed6, sig6) = sign_payload(&signing_key, agent_name, "signing_smoke_subject_6", "Madrid", &pubkey_hex);
++    let corrupted_char = if sig6.starts_with('a') { 'b' } else { 'a' };
++    let corrupted_sig = format!("{}{}", corrupted_char, &sig6[1..]);
++    signed6 = signed6.replace(&sig6, &corrupted_sig);
++    let resp6 = send(port, &signed6).await;
++    let purpose6 = extract_field(&resp6, "INTENT_PAYLOAD", "purpose");
++    let reason6 = extract_field(&resp6, "INTENT_PAYLOAD", "reason");
++    println!("      purpose={:?} reason={:?}", purpose6, reason6);
++    if purpose6.as_deref() != Some("signature_rejected") || reason6.as_deref() != Some("signature_invalid") {
++        failures.push("scenario 6: signature corrompue doit etre rejetee (signature_invalid)");
++    }
++
++    println!();
++    if failures.is_empty() {
++        println!("✅ Tous les scenarios signature/enregistrement sont conformes.");
++    } else {
++        println!("❌ {} echec(s):", failures.len());
++        for f in &failures {
++            println!("   - {}", f);
++        }
++        std::process::exit(1);
++    }
++}
++
+diff --git a/sdk/README.md b/sdk/README.md
+index fd38505..c83185e 100644
+--- a/sdk/README.md
++++ b/sdk/README.md
+@@ -10,6 +10,11 @@ externe.
+   CSTL wire-format v5.0.0, parse la reponse du serveur.
+ - `python/cstl_orchestrator.py` -- CLI qui utilise `CstlClient` pour faire
+   dialoguer deux parties (humain ou LLM) via le serveur, tour par tour.
++- `python/cstl_llm_agent.py` -- **2026-09-04**: agent LLM reel (Ed25519 via
++  `cryptography`, enregistrement dynamique via `purpose=agent_register`,
++  messages signes). Voir sa section dediee plus bas -- ce fichier a une
++  dependance externe (`cryptography`, `anthropic` optionnel) contrairement
++  au reste de ce SDK.
+ 
+ ## Ce que ce SDK fait reellement
+ 
+@@ -58,8 +63,14 @@ externe.
+   declencher une notification Telegram/Obsidian a destination d'un
+   humain). Ce SDK n'ajoute aucune logique de classification au-dela de
+   ces champs reels.
+-- **Aucune decouverte dynamique d'agents.** Le registre est fige a la
+-  compilation.
++- **`cstl_client.py`/`cstl_orchestrator.py` eux-memes n'enregistrent
++  aucun agent dynamiquement** -- ils parlent au registre statique
++  (alice/bob codes en dur dans `main.rs`). L'enregistrement dynamique
++  existe depuis le 2026-09-04 (`purpose=agent_register` cote serveur,
++  `src/agent_discovery.rs::AgentRegistry` maintenant mutable) mais
++  seulement `cstl_llm_agent.py` (ci-dessous) l'utilise dans ce SDK --
++  parce qu'il exige une auto-signature Ed25519 et une dependance externe
++  (`cryptography`) que le reste de ce SDK n'a delibrement pas.
+ - **Aucune configuration reseau cote serveur.** Port, adresse d'ecoute,
+   chemin de la base SQLite et membre du RestrictedCouncil sont des
+   constantes compile-time dans `src/main.rs`; le SDK ne fait
+@@ -90,3 +101,49 @@ python3 sdk/python/cstl_orchestrator.py --script agentA.txt agentB.txt
+ `agentA.txt`/`agentB.txt`: un message par ligne, envoyes en alternance
+ comme `agent_a`/`agent_b`, chaines via `parent_hash` (meme logique que
+ `send2.sh`/`send3.sh` a la racine du depot).
++
++## `cstl_llm_agent.py` -- agent LLM reel signe (2026-09-04)
++
++Dependances: `pip install cryptography` (obligatoire, signature Ed25519)
++et `pip install anthropic` (optionnel -- sans lui, degradation propre,
++voir plus bas).
++
++Ce qui est **verifie en direct dans le sandbox de developpement** (donc
++deja confirme fonctionnel, pas seulement structurellement):
++- `cstl_signing_bytes()` (le port Python de
++  `src/server/audit.rs::signing_bytes`) produit un hash BYTE-FOR-BYTE
++  identique a l'implementation Rust sur une fixture croisee
++  (`examples/print_signing_bytes_fixture.rs` cote Rust, meme fixture
++  codee en dur dans `_structural_selftest()` cote Python).
++- `register_agent()` et `send_signed_relation()` fonctionnent contre un
++  **vrai serveur Rust demarre** (`cargo run --release`): enregistrement
++  dynamique accepte (`agent_register_ack`), un message non signe du meme
++  expediteur maintenant enregistre est rejete
++  (`missing_signature_for_registered_agent`), le meme message
++  correctement signe est accepte (`status=processed`).
++- `AnthropicAgentBrain.from_env()` degrade proprement (`None`) dans cet
++  environnement precis (ni paquet `anthropic`, ni `ANTHROPIC_API_KEY`).
++
++Ce qui **n'a pas pu etre verifie ici** et reste a confirmer par
++l'utilisateur sur sa propre machine: une vraie reponse generee par un
++modele Claude, dans une conversation reelle avec le serveur CSTL.
++
++```bash
++pip install anthropic
++export ANTHROPIC_API_KEY=sk-...
++cargo run --release &                                    # serveur CSTL, port 5050
++python3 sdk/python/cstl_llm_agent.py --peer-mode stdin --turns 4
++```
++
++Confirmer que: (1) `[LlmAgent] agent_register -> purpose='agent_register_ack'`
++apparait, (2) chaque tour affiche une `relation` generee par le modele
++(pas une erreur JSON) et `status='processed'`, (3) taper une reponse au
++prompt `[Pair humain]` relance bien un tour suivant.
++
++Auto-test structurel seul (aucun reseau, verifie ce qui EST verifiable
++sans `anthropic`/cle -- c'est celui execute dans le sandbox de
++developpement):
++
++```bash
++python3 sdk/python/cstl_llm_agent.py --structural-selftest
++```
+diff --git a/sdk/python/cstl_llm_agent.py b/sdk/python/cstl_llm_agent.py
+new file mode 100644
+index 0000000..36382df
+--- /dev/null
++++ b/sdk/python/cstl_llm_agent.py
+@@ -0,0 +1,425 @@
++#!/usr/bin/env python3
++"""
++cstl_llm_agent.py -- agent LLM reel branche sur le serveur CSTL v5.0.0 par
++TCP, via cstl_client.py (feature C, 2026-09-04). Stdlib + `cryptography`
++(Ed25519) + `anthropic` (optionnel, degradation propre si absent).
++
++Ce que ce fichier ferme concretement: avant lui, CSTL n'avait jamais eu
++qu'un seul "agent" reel -- l'utilisateur humain, tapant des payloads a la
++main ou via des smoke-tests scriptes. Ici, un LLM genere lui-meme le
++contenu semantique d'un message CSTL (purpose, relations), le fait signer
++en Ed25519 (src/signing.rs cote serveur), s'enregistre dynamiquement
++(purpose=agent_register), puis dialogue avec le serveur exactement comme
++n'importe quel autre client cstl_client.py.
++
++Point le plus a risque de tout ce module, isole et VERIFIE en direct dans
++cette session (voir examples/print_signing_bytes_fixture.rs, meme fixture
++hash-comparee octet par octet cote Rust et cote Python): cstl_signing_bytes
++ci-dessous doit reproduire EXACTEMENT la canonicalisation de
++src/server/audit.rs::signing_bytes -- toute derive casserait
++silencieusement toute signature produite par cet agent.
++
++Limite honnete assumee (documentee dans le plan avant l'implementation,
++PAS une decouverte apres coup): le serveur est strictement requete/reponse
++par connexion TCP -- deux processus d'agents independants ne peuvent PAS
++recevoir de messages non sollicites l'un de l'autre via le serveur.
++run_llm_relay() reprend donc la forme de cstl_orchestrator.py::run_relay:
++un seul processus Python, tours alternes, un cote genere par le LLM,
++l'autre par stdin (ou un second AnthropicAgentBrain si --peer-mode llm).
++
++Ce qui N'A PAS ete verifie en direct dans ce sandbox (ni paquet
++`anthropic`, ni ANTHROPIC_API_KEY disponibles ici -- confirme par
++`pip show anthropic` et `echo $ANTHROPIC_API_KEY`, tous deux vides):
++une vraie reponse generee par un modele Claude. AnthropicAgentBrain.from_env()
++est concu pour degrader proprement (retourne None) dans exactement cet
++etat -- verifie ci-dessous, dans ce sandbox, que c'est bien ce qui se
++passe. La verification AVEC un vrai modele reste a faire par l'utilisateur
++sur sa propre machine (instructions en bas de ce fichier).
++
++Usage (une fois un vrai modele disponible, sur la machine de l'utilisateur):
++    pip install anthropic
++    export ANTHROPIC_API_KEY=sk-...
++    cargo run --release &                          # serveur CSTL, port 5050
++    python3 sdk/python/cstl_llm_agent.py --peer-mode stdin --turns 4
++
++Auto-test structurel (fonctionne sans `anthropic` ni cle -- c'est ce qui
++EST verifiable ici):
++    python3 sdk/python/cstl_llm_agent.py --structural-selftest
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import os
++import sys
++import unicodedata
++from dataclasses import dataclass
++from pathlib import Path
++from typing import Optional
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from cstl_client import CstlClient, CstlResponse  # noqa: E402
++
++try:
++    from cryptography.hazmat.primitives.asymmetric import ed25519
++    from cryptography.hazmat.primitives import serialization
++    _HAS_CRYPTOGRAPHY = True
++except ImportError:
++    _HAS_CRYPTOGRAPHY = False
++
++
++DEFAULT_KEYFILE = Path.home() / ".cstl" / "llm_agent_ed25519.key"
++
++
++# ---------------------------------------------------------------------------
++# Cles Ed25519 -- persistees en clair sur disque (portee v1, meme niveau de
++# confiance que le reste du projet: mono-operateur, pas de coffre-fort de
++# cles). Un fichier different par agent (parametre --keyfile) permet de
++# faire tourner plusieurs identites LLM en parallele.
++# ---------------------------------------------------------------------------
++
++def load_or_create_keypair(keyfile: Path) -> tuple["ed25519.Ed25519PrivateKey", str]:
++    """Retourne (cle_privee, cle_publique_hex). Cree et persiste une
++    nouvelle paire si `keyfile` n'existe pas encore -- sinon la recharge
++    telle quelle (meme identite d'un lancement a l'autre)."""
++    if not _HAS_CRYPTOGRAPHY:
++        raise RuntimeError(
++            "Le paquet 'cryptography' est requis pour signer les messages "
++            "(pip install cryptography). Sans lui, cet agent ne peut pas "
++            "s'enregistrer aupres du serveur CSTL (agent_register exige "
++            "une auto-signature Ed25519)."
++        )
++    keyfile.parent.mkdir(parents=True, exist_ok=True)
++    if keyfile.exists():
++        raw = keyfile.read_bytes()
++        sk = ed25519.Ed25519PrivateKey.from_private_bytes(raw)
++    else:
++        sk = ed25519.Ed25519PrivateKey.generate()
++        raw = sk.private_bytes(
++            encoding=serialization.Encoding.Raw,
++            format=serialization.PrivateFormat.Raw,
++            encryption_algorithm=serialization.NoEncryption(),
++        )
++        keyfile.write_bytes(raw)
++        keyfile.chmod(0o600)
++    pk = sk.public_key()
++    pk_bytes = pk.public_bytes(
++        encoding=serialization.Encoding.Raw,
++        format=serialization.PublicFormat.Raw,
++    )
++    return sk, pk_bytes.hex()
++
++
++# ---------------------------------------------------------------------------
++# Port Python de src/server/audit.rs::signing_bytes -- DOIT rester en sync
++# octet-par-octet avec l'implementation Rust. Voir
++# examples/print_signing_bytes_fixture.rs pour la fixture de reference
++# utilisee pour verifier ca dans cette session (hash identique confirme le
++# 2026-09-04).
++# ---------------------------------------------------------------------------
++
++def _nfc(s: str) -> str:
++    return unicodedata.normalize("NFC", s)
++
++
++def cstl_signing_bytes(version: str, mode: str, meta: dict, intent: dict,
++                        relations: list[dict]) -> bytes:
++    canon = "VERSION|" + _nfc(version) + "\nMODE|" + _nfc(mode)
++
++    canon += "\nMETA"
++    for k in sorted(meta.keys()):
++        if k == "PARENT_HASH":
++            continue
++        canon += "|" + _nfc(k) + "=" + _nfc(str(meta[k]))
++
++    canon += "\nINTENT"
++    for k in sorted(intent.keys()):
++        if k == "signature":
++            continue
++        canon += "|" + _nfc(k) + "=" + _nfc(str(intent[k]))
++
++    rel_strings = []
++    for r in relations:
++        kv = sorted(r.items())
++        rel_strings.append(",".join(f"{_nfc(k)}={_nfc(str(v))}" for k, v in kv))
++    rel_strings.sort()
++
++    canon += "\nRELATIONS"
++    for r in rel_strings:
++        canon += "|" + r
++
++    return canon.encode("utf-8")
++
++
++def sign_intent(sk: "ed25519.Ed25519PrivateKey", pubkey_hex: str, *,
++                 version: str, mode: str, meta: dict, intent: dict,
++                 relations: list[dict]) -> str:
++    """Signe (meta+public_key, intent SANS signature, relations) et
++    retourne la signature en hex (128 caracteres). meta doit deja
++    contenir public_key -- signing_bytes l'inclut deliberement (voir
++    commentaire de src/server/audit.rs::signing_bytes: lie la signature a
++    la cle revendiquee)."""
++    assert meta.get("public_key") == pubkey_hex, "meta['public_key'] doit etre fixe AVANT de signer"
++    msg = cstl_signing_bytes(version, mode, meta, intent, relations)
++    sig = sk.sign(msg)
++    return sig.hex()
++
++
++# ---------------------------------------------------------------------------
++# Enregistrement dynamique (purpose=agent_register, feature B-2 cote Rust)
++# ---------------------------------------------------------------------------
++
++def register_agent(client: CstlClient, sk: "ed25519.Ed25519PrivateKey",
++                    pubkey_hex: str, name: str,
++                    capabilities: list[str] | None = None,
++                    trust_score: float | None = None) -> CstlResponse:
++    capabilities = capabilities or ["communication"]
++    meta = {"encoder": "LlmAgent", "produced_by": name, "public_key": pubkey_hex}
++    intent = {
++        "purpose": "agent_register",
++        "sender": name,
++        "receiver": "server",
++        "name": name,
++        # ';' et non ',' -- le SDK auto-quote une valeur contenant une
++        # virgule (cstl_client.py::_quote_if_needed), ce qui casserait le
++        # split cote handler.rs (capabilities.split(';')). Voir le plan
++        # (section B-2) pour cette decision.
++        "capabilities": ";".join(capabilities),
++    }
++    if trust_score is not None:
++        intent["trust_score"] = str(trust_score)
++
++    sig_hex = sign_intent(sk, pubkey_hex, version="v5.0.0", mode="A",
++                           meta=meta, intent=intent, relations=[])
++    intent["signature"] = sig_hex
++
++    payload = client.build_payload(
++        encoder=meta["encoder"], produced_by=meta["produced_by"],
++        purpose="agent_register", sender=name, receiver="server",
++        extra_meta={"public_key": pubkey_hex},
++        extra_intent={k: v for k, v in intent.items()
++                      if k not in ("purpose", "sender", "receiver")},
++    )
++    return client.send_raw(payload)
++
++
++def send_signed_relation(client: CstlClient, sk: "ed25519.Ed25519PrivateKey",
++                          pubkey_hex: str, *, name: str, receiver: str,
++                          purpose: str, relations: list[dict],
++                          extra_intent: dict | None = None) -> CstlResponse:
++    """Equivalent signe de CstlClient.send_relation -- une fois l'agent
++    enregistre avec une public_key, le serveur EXIGE une signature valide
++    sur chaque message de cet expediteur (src/signing.rs, STEP 2a de
++    handler.rs)."""
++    meta = {"encoder": "LlmAgent", "produced_by": name, "public_key": pubkey_hex}
++    intent = {"purpose": purpose, "sender": name, "receiver": receiver}
++    if extra_intent:
++        intent.update(extra_intent)
++
++    sig_hex = sign_intent(sk, pubkey_hex, version="v5.0.0", mode="A",
++                           meta=meta, intent=intent, relations=relations)
++    intent["signature"] = sig_hex
++
++    payload = client.build_payload(
++        encoder=meta["encoder"], produced_by=meta["produced_by"], purpose=purpose,
++        sender=name, receiver=receiver, relations=relations,
++        extra_meta={"public_key": pubkey_hex},
++        extra_intent={k: v for k, v in intent.items()
++                      if k not in ("purpose", "sender", "receiver")},
++    )
++    return client.send_raw(payload)
++
++
++# ---------------------------------------------------------------------------
++# Cerveau LLM -- degradation propre si `anthropic` ou la cle sont absents,
++# meme patron que TelegramNotifier::from_env() (src/telegram_council.rs).
++# ---------------------------------------------------------------------------
++
++@dataclass
++class AnthropicAgentBrain:
++    client: object
++    model: str
++
++    @classmethod
++    def from_env(cls, model: str = "claude-sonnet-4-5") -> Optional["AnthropicAgentBrain"]:
++        try:
++            import anthropic  # type: ignore
++        except ImportError:
++            print("[AnthropicAgentBrain] paquet 'anthropic' absent -- pip install anthropic. Degradation: None.", file=sys.stderr)
++            return None
++        api_key = os.environ.get("ANTHROPIC_API_KEY")
++        if not api_key:
++            print("[AnthropicAgentBrain] ANTHROPIC_API_KEY absent de l'environnement. Degradation: None.", file=sys.stderr)
++            return None
++        client = anthropic.Anthropic(api_key=api_key)
++        return cls(client=client, model=model)
++
++    def generate_relation(self, topic: str, peer_message: str | None) -> dict:
++        """Demande au modele UNE relation CSTL (type/subject/object) sur
++        `topic`, en tenant compte du dernier message du pair le cas
++        echeant. Le modele repond en JSON strict pour rester
++        deterministe a parser -- pas de negociation de format en texte
++        libre."""
++        prompt = (
++            "Tu es un agent CSTL. Reponds UNIQUEMENT avec un objet JSON "
++            '{"type": "...", "subject": "...", "object": "..."} '
++            "representant une relation factuelle ou une prise de position "
++            f"sur le sujet suivant: {topic!r}."
++        )
++        if peer_message:
++            prompt += f" Le pair vient de dire: {peer_message!r}."
++        response = self.client.messages.create(
++            model=self.model,
++            max_tokens=256,
++            messages=[{"role": "user", "content": prompt}],
++        )
++        text = "".join(block.text for block in response.content if hasattr(block, "text"))
++        try:
++            return json.loads(text)
++        except json.JSONDecodeError:
++            start, end = text.find("{"), text.rfind("}")
++            if start != -1 and end != -1:
++                return json.loads(text[start:end + 1])
++            raise ValueError(f"reponse du modele non-JSON: {text!r}")
++
++
++# ---------------------------------------------------------------------------
++# Relais tours-alternes (mirroir de cstl_orchestrator.py::run_relay)
++# ---------------------------------------------------------------------------
++
++def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
++                   topic: str, turns: int, peer_mode: str) -> int:
++    sk, pubkey_hex = load_or_create_keypair(keyfile)
++    client = CstlClient(host=host, port=port, timeout=15.0)
++
++    print(f"[LlmAgent] identite: {agent_name} (public_key={pubkey_hex[:16]}...)")
++    reg = register_agent(client, sk, pubkey_hex, agent_name)
++    print(f"[LlmAgent] agent_register -> purpose={reg.purpose!r} fields={reg.fields}")
++    if reg.purpose != "agent_register_ack":
++        print("[LlmAgent] ECHEC: enregistrement refuse, arret.", file=sys.stderr)
++        return 1
++
++    brain = AnthropicAgentBrain.from_env()
++    if brain is None:
++        print(
++            "[LlmAgent] Aucun modele disponible (paquet 'anthropic' ou "
++            "ANTHROPIC_API_KEY manquant) -- l'enregistrement et la "
++            "signature sont verifies, mais aucun tour de dialogue reel ne "
++            "peut avoir lieu ici. Voir le README du SDK pour verifier "
++            "cette partie sur une machine avec un vrai modele.",
++            file=sys.stderr,
++        )
++        return 2
++
++    peer_message: str | None = None
++    for turn in range(1, turns + 1):
++        print(f"\n[LlmAgent] --- tour {turn}/{turns} ---")
++        relation = brain.generate_relation(topic, peer_message)
++        resp = send_signed_relation(
++            client, sk, pubkey_hex, name=agent_name, receiver="server",
++            purpose="llm_relay_turn", relations=[relation],
++        )
++        print(f"[LlmAgent] envoye: {relation} -> status={resp.status!r} audit_hash={resp.audit_hash!r}")
++
++        if peer_mode == "stdin":
++            peer_message = input("[Pair humain] Reponse (vide pour arreter): ").strip() or None
++            if peer_message is None:
++                break
++        else:
++            peer_message = json.dumps(relation, ensure_ascii=False)
++
++    client.close()
++    return 0
++
++
++# ---------------------------------------------------------------------------
++# Auto-test structurel -- la seule verification possible dans un sandbox
++# sans 'anthropic' ni cle API. Ne se connecte a AUCUN serveur reseau.
++# ---------------------------------------------------------------------------
++
++def _structural_selftest() -> int:
++    failures = []
++
++    print("[1/3] cryptography disponible et generation de cle...")
++    if not _HAS_CRYPTOGRAPHY:
++        failures.append("le paquet 'cryptography' est absent -- ne peut pas etre teste plus loin")
++    else:
++        import tempfile
++        with tempfile.TemporaryDirectory() as tmp:
++            keyfile = Path(tmp) / "test.key"
++            sk1, pk1 = load_or_create_keypair(keyfile)
++            sk2, pk2 = load_or_create_keypair(keyfile)  # doit recharger la MEME cle
++            if pk1 != pk2:
++                failures.append("load_or_create_keypair ne recharge pas la meme identite au 2e appel")
++            else:
++                print(f"      OK (public_key stable: {pk1[:16]}...)")
++
++    print("[2/3] cstl_signing_bytes -- fixture croisee Rust/Python...")
++    # Fixture IDENTIQUE a examples/print_signing_bytes_fixture.rs, verifiee
++    # manuellement octet-par-octet dans cette session (2026-09-04).
++    expected_hex = (
++        "56455253494f4e7c76352e302e300a4d4f44457c410a4d4554417c656e636f"
++        "6465723d4c6c6d4167656e747c70726f64756365645f62793d636166c3a95f"
++        "6167656e747c7075626c69635f6b65793d61616262636364640a494e54454e"
++        "547c6e6f74653d612c20627c707572706f73653d63726f73735f6c616e675f"
++        "666978747572657c72656365697665723d7365727665727c73656e6465723d"
++        "6c6c6d5f6167656e740a52454c4154494f4e537c6f626a6563743d4d6f6e74"
++        "72c3a9616c2c7375626a6563743d636166c3a95f746573742c747970653d62"
++        "6f726e5f696e"
++    ).replace("\n", "")
++    meta = {
++        "encoder": "LlmAgent", "produced_by": "café_agent",
++        "public_key": "aabbccdd", "PARENT_HASH": "sha256:doitetreexclu",
++    }
++    intent = {
++        "purpose": "cross_lang_fixture", "sender": "llm_agent", "receiver": "server",
++        "note": "a, b", "signature": "doitetreexclu",
++    }
++    relations = [{"type": "born_in", "subject": "café_test", "object": "Montréal"}]
++    got = cstl_signing_bytes("v5.0.0", "A", meta, intent, relations).hex()
++    if got != expected_hex:
++        failures.append(f"cstl_signing_bytes DIVERGE du fixture Rust de reference:\n  got={got}\n  exp={expected_hex}")
++    else:
++        print("      OK (identique octet-par-octet a signing_bytes() cote Rust)")
++
++    print("[3/3] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
++    brain = AnthropicAgentBrain.from_env()
++    if brain is not None:
++        print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
++    else:
++        print("      OK (None, comme attendu dans un environnement sans 'anthropic'/ANTHROPIC_API_KEY)")
++
++    print()
++    if failures:
++        print(f"❌ {len(failures)} echec(s):")
++        for f in failures:
++            print(f"   - {f}")
++        return 1
++    print("✅ Auto-test structurel reussi (aucune verification reseau/LLM reelle -- voir le README).")
++    return 0
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    ap.add_argument("--host", default="127.0.0.1")
++    ap.add_argument("--port", type=int, default=5050)
++    ap.add_argument("--keyfile", type=Path, default=DEFAULT_KEYFILE)
++    ap.add_argument("--name", default="llm_agent")
++    ap.add_argument("--topic", default="Est-ce que Montreal est au Canada?")
++    ap.add_argument("--turns", type=int, default=3)
++    ap.add_argument("--peer-mode", choices=["stdin", "self"], default="self",
++                     help="'stdin': un humain repond a chaque tour. 'self': le meme LLM alimente les deux cotes.")
++    ap.add_argument("--structural-selftest", action="store_true",
++                     help="Verifie signing_bytes/keypair/degradation sans toucher au reseau.")
++    args = ap.parse_args()
++
++    if args.structural_selftest:
++        return _structural_selftest()
++
++    return run_llm_relay(args.host, args.port, args.keyfile, args.name,
++                          args.topic, args.turns, args.peer_mode)
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/src/agent_discovery.rs b/src/agent_discovery.rs
+index 64c5f96..c7255a9 100644
+--- a/src/agent_discovery.rs
++++ b/src/agent_discovery.rs
+@@ -5,6 +5,12 @@ pub struct AgentCard {
+     pub version: String,
+     pub capabilities: Vec<String>,
+     pub trust_score: f64,
++    /// Cle publique Ed25519 (hex, 64 caracteres) de cet agent -- `None` pour
++    /// un agent legacy non signe (ex: alice/bob enregistres en dur dans
++    /// main.rs). Voir src/signing.rs: quand cette cle est presente, une
++    /// signature valide devient obligatoire sur chaque message de cet
++    /// expediteur (Couche 2/securite, 2026-09-03).
++    pub public_key: Option<String>,
+ }
+ 
+ pub struct AgentRegistry {
+@@ -16,8 +22,20 @@ impl AgentRegistry {
+         AgentRegistry { agents: vec![] }
+     }
+ 
++    /// Upsert par nom: un agent qui se reenregistre (ex: rotation de cle)
++    /// remplace son entree existante plutot que d'en creer une seconde.
++    /// Necessaire des que l'enregistrement devient dynamique (purpose=
++    /// agent_register) -- avec l'ancien `push` inconditionnel, des doublons
++    /// auraient rendu `route()` (max par trust_score) incoherent.
++    /// Limite v1 assumee: aucune verification que le REENREGISTREMENT est
++    /// autorise par le detenteur de l'ANCIENNE cle -- seule la possession
++    /// de la NOUVELLE cle est prouvee (voir handler.rs, bloc agent_register).
+     pub fn register(&mut self, card: AgentCard) {
+-        self.agents.push(card);
++        if let Some(existing) = self.agents.iter_mut().find(|a| a.name == card.name) {
++            *existing = card;
++        } else {
++            self.agents.push(card);
++        }
+     }
+ 
+     pub fn discover(&self, capability: &str) -> Vec<&AgentCard> {
+@@ -46,6 +64,7 @@ mod tests {
+             version: "5.0.0".to_string(),
+             capabilities: vec!["fact_checking".to_string()],
+             trust_score: 0.92,
++            public_key: None,
+         });
+ 
+         let discovered = registry.discover("fact_checking");
+@@ -54,4 +73,41 @@ mod tests {
+         let best = registry.route("fact_checking");
+         assert_eq!(best.unwrap().name, "alice");
+     }
++
++    #[test]
++    fn test_register_is_upsert_by_name_not_duplicate() {
++        let mut registry = AgentRegistry::new();
++        registry.register(AgentCard {
++            name: "carol".to_string(),
++            version: "1.0.0".to_string(),
++            capabilities: vec!["communication".to_string()],
++            trust_score: 0.5,
++            public_key: Some("aaaa".to_string()),
++        });
++        registry.register(AgentCard {
++            name: "carol".to_string(),
++            version: "1.1.0".to_string(),
++            capabilities: vec!["communication".to_string()],
++            trust_score: 0.6,
++            public_key: Some("bbbb".to_string()),
++        });
++        assert_eq!(registry.agents.len(), 1, "un reenregistrement ne doit pas dupliquer l'entree");
++        let entry = registry.agents.iter().find(|a| a.name == "carol").unwrap();
++        assert_eq!(entry.public_key.as_deref(), Some("bbbb"), "la derniere version doit gagner (rotation de cle)");
++        assert_eq!(entry.trust_score, 0.6);
++    }
++
++    #[test]
++    fn test_register_distinct_names_coexist() {
++        let mut registry = AgentRegistry::new();
++        registry.register(AgentCard {
++            name: "dave".to_string(), version: "1.0.0".to_string(),
++            capabilities: vec![], trust_score: 0.5, public_key: None,
++        });
++        registry.register(AgentCard {
++            name: "erin".to_string(), version: "1.0.0".to_string(),
++            capabilities: vec![], trust_score: 0.5, public_key: None,
++        });
++        assert_eq!(registry.agents.len(), 2);
++    }
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index d16bfb0..3c44669 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -17,3 +17,4 @@ pub mod telegram_council;
+ pub mod obsidian_escalation;
+ pub mod emergence;
+ pub mod governance;
++pub mod signing;
+diff --git a/src/main.rs b/src/main.rs
+index 44d9356..27791d6 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -4,6 +4,7 @@
+ use cstl_parser::server::CstlNativeServer;
+ use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
+ use std::sync::Arc;
++use tokio::sync::Mutex;
+ 
+ #[tokio::main]
+ async fn main() -> Result<(), Box<dyn std::error::Error>> {
+@@ -18,6 +19,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
+         version: "5.0.0".to_string(),
+         capabilities: vec!["communication".to_string(), "arbitration".to_string()],
+         trust_score: 0.95,
++        // Legacy, non signe -- ces deux agents bootstrap n'ont jamais eu de
++        // cle: aucune signature n'est exigee pour eux (voir src/signing.rs).
++        public_key: None,
+     });
+ 
+     registry.register(AgentCard {
+@@ -25,13 +29,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
+         version: "5.0.0".to_string(),
+         capabilities: vec!["communication".to_string(), "fact_checking".to_string()],
+         trust_score: 0.85,
++        public_key: None,
+     });
+ 
+     eprintln!("✅ Registered agents: alice, bob");
+ 
+     // Create server with registry
+     let mut server = CstlNativeServer::new(5050);
+-    server.agent_registry = Arc::new(registry);
++    server.agent_registry = Arc::new(Mutex::new(registry));
+ 
+     eprintln!("📡 Starting server on port 5050...");
+     eprintln!("💬 Ready to receive CSTL payloads\n");
+diff --git a/src/server/audit.rs b/src/server/audit.rs
+index 0663c5e..3db32b9 100644
+--- a/src/server/audit.rs
++++ b/src/server/audit.rs
+@@ -113,6 +113,70 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
+     format!("sha256:{:x}", hasher.finalize())
+ }
+ 
++/// Octets a signer/verifier pour un payload (src/signing.rs, Couche 2/
++/// securite, 2026-09-04). Duplique DELIBEREMENT la logique de
++/// canonicalisation de `canonical_hash` ci-dessus plutot que de la
++/// refactorer -- eviter tout risque sur le hash de production deja
++/// verifie en direct cette session. Differences volontaires par rapport
++/// au hash d'audit: exclut `INTENT.signature` (un message ne peut pas se
++/// signer lui-meme) EN PLUS de `META.PARENT_HASH` deja exclu ; inclut
++/// `META.public_key` (lie la signature a la cle revendiquee -- sans ca,
++/// un attaquant pourrait rejouer une signature valide sous une autre cle).
++pub fn signing_bytes(payload: &CstlPayload) -> Vec<u8> {
++    let mut canon = String::new();
++
++    canon.push_str("VERSION|");
++    canon.push_str(&nfc(&payload.version));
++    canon.push_str("\nMODE|");
++    canon.push_str(&nfc(&payload.mode));
++
++    let meta: BTreeMap<_, _> = payload.meta.iter().collect();
++    canon.push_str("\nMETA");
++    for (k, v) in meta {
++        if k == "PARENT_HASH" {
++            continue;
++        }
++        canon.push('|');
++        canon.push_str(&nfc(k));
++        canon.push('=');
++        canon.push_str(&nfc(v));
++    }
++
++    let intent: BTreeMap<_, _> = payload.intent.iter().collect();
++    canon.push_str("\nINTENT");
++    for (k, v) in intent {
++        if k == "signature" {
++            continue;
++        }
++        canon.push('|');
++        canon.push_str(&nfc(k));
++        canon.push('=');
++        canon.push_str(&nfc(v));
++    }
++
++    let mut rel_strings: Vec<String> = payload
++        .relations
++        .iter()
++        .map(|r| {
++            let sorted: BTreeMap<_, _> = r.iter().collect();
++            sorted
++                .iter()
++                .map(|(k, v)| format!("{}={}", nfc(k), nfc(v)))
++                .collect::<Vec<_>>()
++                .join(",")
++        })
++        .collect();
++    rel_strings.sort();
++
++    canon.push_str("\nRELATIONS");
++    for r in rel_strings {
++        canon.push('|');
++        canon.push_str(&r);
++    }
++
++    canon.into_bytes()
++}
++
+ impl HashChain {
+     pub fn new() -> Self {
+         HashChain { entries: Vec::new() }
+@@ -257,6 +321,37 @@ mod tests {
+         assert!(chain.verify_integrity().is_ok());
+     }
+ 
++    #[test]
++    fn test_signing_bytes_deterministic() {
++        let a = mk("alice", "query");
++        let b = mk("alice", "query");
++        assert_eq!(signing_bytes(&a), signing_bytes(&b));
++    }
++
++    #[test]
++    fn test_signing_bytes_excludes_own_signature_field() {
++        let a = mk("alice", "query");
++        let mut b = mk("alice", "query");
++        b.intent.insert("signature".to_string(), "deadbeef".repeat(16));
++        assert_eq!(signing_bytes(&a), signing_bytes(&b), "un message ne peut pas se signer lui-meme");
++    }
++
++    #[test]
++    fn test_signing_bytes_excludes_parent_hash_like_canonical_hash() {
++        let a = mk("alice", "query");
++        let mut b = mk("alice", "query");
++        b.meta.insert("PARENT_HASH".to_string(), "sha256:deadbeef".to_string());
++        assert_eq!(signing_bytes(&a), signing_bytes(&b));
++    }
++
++    #[test]
++    fn test_signing_bytes_includes_public_key() {
++        let a = mk("alice", "query");
++        let mut b = mk("alice", "query");
++        b.meta.insert("public_key".to_string(), "aa".repeat(32));
++        assert_ne!(signing_bytes(&a), signing_bytes(&b), "la cle publique doit etre liee a la signature");
++    }
++
+     #[test]
+     fn test_integrity_detects_break() {
+         let mut chain = HashChain::new();
+diff --git a/src/server/handler.rs b/src/server/handler.rs
+index a515f19..e48760c 100644
+--- a/src/server/handler.rs
++++ b/src/server/handler.rs
+@@ -22,6 +22,8 @@ use crate::obsidian_escalation::ObsidianEscalation;
+ use crate::emergence;
+ use crate::security;
+ use crate::governance::GovernanceTracker;
++use crate::agent_discovery::AgentCard;
++use crate::signing::{self, SignatureCheck};
+ use super::audit::HashChain;
+ use super::parser;
+ use super::validator;
+@@ -44,7 +46,7 @@ fn find_message_end(buf: &[u8]) -> Option<usize> {
+ 
+ pub async fn handle_connection(
+     mut socket: TcpStream,
+-    registry: Arc<AgentRegistry>,
++    registry: Arc<Mutex<AgentRegistry>>,
+     chain: Arc<Mutex<HashChain>>,
+     kb_verifier: Arc<KbVerifier>,
+     adn_store: Arc<Mutex<AdnStore>>,
+@@ -158,6 +160,48 @@ pub async fn handle_connection(
+                         }
+                     }
+ 
++                    // STEP 2a: Verification de signature Ed25519 (Couche 2/securite,
++                    // src/signing.rs) — optionnelle globalement, obligatoire seulement
++                    // pour un expediteur DEJA enregistre avec une public_key. On rejette
++                    // ici (bloquant, meme categorie que securite/parse/validation) plutot
++                    // que de laisser passer avec un simple avertissement: une signature
++                    // invalide est une tentative d'usurpation, pas un signal consultatif.
++                    let sig_check = signing::check_signature(&payload);
++                    let sig_sender = payload.intent.get("sender").cloned().unwrap_or_default();
++                    let is_agent_register = payload.intent.get("purpose").map(String::as_str) == Some("agent_register");
++                    let signature_required = {
++                        let reg = registry.lock().await;
++                        reg.agents.iter().any(|a| a.name == sig_sender && a.public_key.is_some())
++                    };
++                    // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
++                    // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
++                    // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
++                    // d'enregistrement (self_signature_required, etc.) -- sans cette
++                    // exemption, un agent_register sans signature ou avec une signature
++                    // incomplete serait TOUJOURS intercepte ici avec le message generique
++                    // "signature_invalid"/"incomplete_signature_fields", rendant les
++                    // branches dediees du bloc agent_register inatteignables en pratique
++                    // (trouvaille du smoke test live, pas anticipee dans le plan initial).
++                    let sig_rejection: Option<&'static str> = if is_agent_register {
++                        None
++                    } else {
++                        match &sig_check {
++                            SignatureCheck::Invalid(_) => Some("signature_invalid"),
++                            SignatureCheck::NotPresent if signature_required => Some("missing_signature_for_registered_agent"),
++                            _ => None,
++                        }
++                    };
++                    if let Some(reason) = sig_rejection {
++                        eprintln!("[Handler] 🔐 Signature rejetee pour '{}': {}", sig_sender, reason);
++                        let detail = if let SignatureCheck::Invalid(d) = &sig_check { d.clone() } else { reason.to_string() };
++                        let response = format!(
++                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=signature_rejected, reason={}, detail={}]\n---END---\n",
++                            reason, detail
++                        );
++                        socket.write_all(response.as_bytes()).await?;
++                        continue;
++                    }
++
+                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
+                     // — purpose=council_decision est traite a part: ce n'est pas un
+                     // nouveau fait a verifier/stocker, c'est une action sur une entree
+@@ -299,6 +343,60 @@ pub async fn handle_connection(
+                         continue;
+                     }
+ 
++                    // B-2: purpose=agent_register (Couche 7, enregistrement dynamique)
++                    // — reutilise sig_check deja calcule en STEP 2a (pas de double
++                    // verification). Bootstrap assume: la signature prouve seulement
++                    // "je possede cette cle privee", pas "je suis deja connu" -- pas de
++                    // PKI/CA, cohérent avec le modele de confiance mono-operateur deja
++                    // en place (RestrictedCouncil). Limite v1 documentee: aucune
++                    // verification d'autorisation de rotation contre l'ANCIENNE cle.
++                    if payload.intent.get("purpose").map(String::as_str) == Some("agent_register") {
++                        let name = payload.intent.get("name").cloned().unwrap_or_default();
++                        let public_key = payload.meta.get("public_key").cloned();
++                        let capabilities: Vec<String> = payload.intent.get("capabilities")
++                            .map(|c| c.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
++                            .unwrap_or_default();
++                        let trust_score: f64 = payload.intent.get("trust_score")
++                            .and_then(|s| s.parse().ok())
++                            .unwrap_or(0.5);
++
++                        let response = if name.is_empty() || public_key.is_none() {
++                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=missing_name_or_public_key]\n---END---\n".to_string()
++                        } else {
++                            match &sig_check {
++                                SignatureCheck::Valid => {
++                                    let card = AgentCard {
++                                        name: name.clone(),
++                                        version: payload.meta.get("encoder").cloned().unwrap_or_else(|| "unknown".to_string()),
++                                        capabilities,
++                                        trust_score,
++                                        public_key: public_key.clone(),
++                                    };
++                                    registry.lock().await.register(card);
++                                    eprintln!("[Handler] 🪪 agent_register: '{}' enregistre/mis a jour (trust_score={})", name, trust_score);
++                                    format!(
++                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=agent_register_ack, name={}]\n---END---\n",
++                                        name
++                                    )
++                                }
++                                SignatureCheck::Invalid(detail) => {
++                                    eprintln!("[Handler] 🔐 agent_register rejete pour '{}': signature invalide ({})", name, detail);
++                                    format!(
++                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=signature_invalid, detail={}]\n---END---\n",
++                                        detail
++                                    )
++                                }
++                                SignatureCheck::NotPresent => {
++                                    eprintln!("[Handler] 🔐 agent_register rejete pour '{}': signature absente (auto-signature obligatoire)", name);
++                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=self_signature_required]\n---END---\n".to_string()
++                                }
++                            }
++                        };
++
++                        socket.write_all(response.as_bytes()).await?;
++                        continue;
++                    }
++
+                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
+                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
+                     let entry = { chain.lock().await.append(&payload) };
+@@ -550,10 +648,17 @@ pub async fn handle_connection(
+                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(), sigma
+                     );
+                     
+-                    // STEP 4: Try to route to agent
+-                    if let Some(agent) = registry.route("communication") {
+-                        eprintln!("[Handler] ✅ Found agent: {}", agent.name);
+-                        
++                    // STEP 4: Try to route to agent — agent_registry est maintenant
++                    // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
++                    // du lock pour ne jamais tenir le MutexGuard pendant le
++                    // write_all().await qui suit.
++                    let routed_agent_name = {
++                        let reg = registry.lock().await;
++                        reg.route("communication").map(|a| a.name.clone())
++                    };
++                    if let Some(agent_name) = routed_agent_name {
++                        eprintln!("[Handler] ✅ Found agent: {}", agent_name);
++
+                         // STEP 5: Build response
+                         let response = format!(
+                             "#!CSTL v5.0.0 MODE=A\n\
+diff --git a/src/server/listener.rs b/src/server/listener.rs
+index 95e91d4..fcef3df 100644
+--- a/src/server/listener.rs
++++ b/src/server/listener.rs
+@@ -19,7 +19,7 @@ pub async fn create_listener(addr: &str) -> Result<TcpListener, Box<dyn std::err
+ 
+ pub async fn accept_connections(
+     listener: TcpListener,
+-    agent_registry: Arc<AgentRegistry>,
++    agent_registry: Arc<Mutex<AgentRegistry>>,
+     chain: Arc<Mutex<HashChain>>,
+     kb_verifier: Arc<KbVerifier>,
+     adn_store: Arc<Mutex<AdnStore>>,
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index b4d9217..c7638e9 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -24,7 +24,11 @@ use crate::governance::GovernanceTracker;
+ 
+ pub struct CstlNativeServer {
+     pub port: u16,
+-    pub agent_registry: Arc<AgentRegistry>,
++    /// Mutable derriere un verrou depuis l'ajout de purpose=agent_register
++    /// (2026-09-04) -- avant ca, le registre etait fige a la compilation
++    /// (alice/bob en dur dans main.rs), aucun agent ne pouvait s'inscrire
++    /// au runtime.
++    pub agent_registry: Arc<Mutex<AgentRegistry>>,
+     pub chain: Arc<Mutex<audit::HashChain>>,
+     pub kb_verifier: Arc<KbVerifier>,
+     pub adn_store: Arc<Mutex<AdnStore>>,
+@@ -41,7 +45,7 @@ impl CstlNativeServer {
+     pub fn new(port: u16) -> Self {
+         CstlNativeServer {
+             port,
+-            agent_registry: Arc::new(AgentRegistry::new()),
++            agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
+             chain: Arc::new(Mutex::new(audit::HashChain::new())),
+             kb_verifier: Arc::new(KbVerifier::new()),
+             adn_store: Arc::new(Mutex::new(AdnStore::open("cstl_adn.db").expect("failed to open cstl_adn.db"))),
+diff --git a/src/server/validator.rs b/src/server/validator.rs
+index e1e9c05..bef7111 100644
+--- a/src/server/validator.rs
++++ b/src/server/validator.rs
+@@ -97,6 +97,31 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
+         }
+     }
+ 
++    // Signature Ed25519 (Couche 2/securite, src/signing.rs) -- ici, verification
++    // de FORMAT seulement (longueur hex attendue), jamais d'erreur sur absence
++    // (l'optionnalite globale/obligation-si-deja-enregistre vit dans handler.rs,
++    // STEP 2a, pas ici). E309/E310 plutot que E306/E307 deja pris par les
++    // RELATION per-index ci-dessus -- collision qui aurait ete introduite si le
++    // plan initial (E306/E307) avait ete suivi tel quel.
++    if let Some(pk) = payload.meta.get("public_key") {
++        if pk.len() != 64 || !pk.chars().all(|c| c.is_ascii_hexdigit()) {
++            result.errors.push(ValidationError {
++                code: "E309".to_string(),
++                message: "META.public_key doit etre 64 caracteres hexadecimaux (32 octets)".to_string(),
++            });
++            result.valid = false;
++        }
++    }
++    if let Some(sig) = payload.intent.get("signature") {
++        if sig.len() != 128 || !sig.chars().all(|c| c.is_ascii_hexdigit()) {
++            result.errors.push(ValidationError {
++                code: "E310".to_string(),
++                message: "INTENT_PAYLOAD.signature doit etre 128 caracteres hexadecimaux (64 octets)".to_string(),
++            });
++            result.valid = false;
++        }
++    }
++
+     // Validate deontic constraints (MUST/MUST_NOT)
+     validate_deontic_constraints(payload, &mut result);
+ 
+diff --git a/src/signing.rs b/src/signing.rs
+new file mode 100644
+index 0000000..40a559c
+--- /dev/null
++++ b/src/signing.rs
+@@ -0,0 +1,209 @@
++//! src/signing.rs — signature Ed25519 des messages (Couche 2/sécurité, v1,
++//! 2026-09-04).
++//!
++//! Avant ce module, `sender`/`receiver` dans le wire format CSTL étaient de
++//! simples chaînes de texte sans AUCUNE vérification cryptographique —
++//! n'importe qui pouvait se prétendre n'importe quel agent sur le TCP en
++//! clair. Ça ferme exactement ce que le marché nomme en premier (OWASP Top
++//! 10 for Agentic Applications 2026: ASI03 Identity & Privilege Abuse,
++//! ASI07 Insecure Inter-Agent Communication), sans réinventer OAuth (trop
++//! lourd pour ce format texte déterministe) — une signature Ed25519 par
++//! message, vérifiée contre la clé que le message lui-même revendique dans
++//! `META.public_key`, suffit à empêcher qu'un tiers forge un message au nom
++//! d'une identité déjà connue.
++//!
++//! Portée v1, décision explicite: **optionnelle globalement, obligatoire
++//! seulement pour un expéditeur déjà enregistré dans l'`AgentRegistry` avec
++//! une `public_key`**. Sinon les payloads non signés existants (les 148
++//! tests, les smoke-tests, alice/bob legacy) casseraient tous pour fermer un
++//! risque qui ne concerne, dans les faits, que les identités déjà établies.
++//!
++//! Champs de wire format:
++//! - `META.public_key=<hex, 64 caractères>` — clé publique Ed25519 (32 octets)
++//! - `INTENT_PAYLOAD.signature=<hex, 128 caractères>` — signature (64 octets)
++//!
++//! Ce qui est signé: `super::server::audit::signing_bytes(payload)` — une
++//! canonicalisation dupliquée (délibérément, pas un refactor) de
++//! `canonical_hash`, qui exclut le champ `signature` lui-même (un message ne
++//! peut pas se signer) et `PARENT_HASH`, et inclut `public_key` (lie la
++//! signature à la clé revendiquée).
++
++use ed25519_dalek::{Signature, Verifier, VerifyingKey};
++use crate::server::parser::CstlPayload;
++use crate::server::audit::signing_bytes;
++
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum SignatureCheck {
++    /// Ni `META.public_key` ni `INTENT_PAYLOAD.signature` ne sont présents.
++    NotPresent,
++    Valid,
++    Invalid(String),
++}
++
++fn decode_hex_fixed<const N: usize>(hex_str: &str) -> Result<[u8; N], &'static str> {
++    let bytes = hex::decode(hex_str).map_err(|_| "invalid_hex")?;
++    bytes.try_into().map_err(|_| "bad_length")
++}
++
++/// Vérifie la signature d'un payload. Ne regarde JAMAIS le registre
++/// d'agents — la correction cryptographique ne dépend que du message
++/// lui-même ; c'est à l'appelant (handler.rs) de décider, séparément, si
++/// une signature était OBLIGATOIRE pour cet expéditeur.
++pub fn check_signature(payload: &CstlPayload) -> SignatureCheck {
++    let public_key_hex = payload.meta.get("public_key");
++    let signature_hex = payload.intent.get("signature");
++
++    let (public_key_hex, signature_hex) = match (public_key_hex, signature_hex) {
++        (Some(pk), Some(sig)) => (pk, sig),
++        (None, None) => return SignatureCheck::NotPresent,
++        _ => {
++            // Un seul des deux champs présent: ni "absent" (on ne peut pas
++            // vérifier sans les deux) ni silencieusement ignoré -- signalé
++            // comme invalide plutôt que traité comme NotPresent, pour ne
++            // pas laisser passer un message qui ESSAIE de se signer mais
++            // oublie un champ.
++            return SignatureCheck::Invalid("incomplete_signature_fields".to_string());
++        }
++    };
++
++    let public_key_bytes: [u8; 32] = match decode_hex_fixed(public_key_hex) {
++        Ok(b) => b,
++        Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),
++        Err(_) => return SignatureCheck::Invalid("bad_public_key_length".to_string()),
++    };
++    let signature_bytes: [u8; 64] = match decode_hex_fixed(signature_hex) {
++        Ok(b) => b,
++        Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),
++        Err(_) => return SignatureCheck::Invalid("bad_signature_length".to_string()),
++    };
++
++    let verifying_key = match VerifyingKey::from_bytes(&public_key_bytes) {
++        Ok(k) => k,
++        Err(_) => return SignatureCheck::Invalid("bad_public_key_length".to_string()),
++    };
++    let signature = Signature::from_bytes(&signature_bytes);
++
++    let message = signing_bytes(payload);
++    match verifying_key.verify(&message, &signature) {
++        Ok(()) => SignatureCheck::Valid,
++        Err(_) => SignatureCheck::Invalid("verification_failed".to_string()),
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use ed25519_dalek::{Signer, SigningKey};
++    use std::collections::HashMap;
++
++    fn mk_payload(extra_meta: &[(&str, &str)], extra_intent: &[(&str, &str)]) -> CstlPayload {
++        let mut meta = HashMap::new();
++        meta.insert("encoder".to_string(), "Agent".to_string());
++        meta.insert("produced_by".to_string(), "Test".to_string());
++        for (k, v) in extra_meta {
++            meta.insert(k.to_string(), v.to_string());
++        }
++        let mut intent = HashMap::new();
++        intent.insert("purpose".to_string(), "test".to_string());
++        intent.insert("sender".to_string(), "signer_agent".to_string());
++        intent.insert("receiver".to_string(), "server".to_string());
++        for (k, v) in extra_intent {
++            intent.insert(k.to_string(), v.to_string());
++        }
++        CstlPayload {
++            version: "v5.0.0".to_string(),
++            mode: "A".to_string(),
++            meta,
++            intent,
++            relations: vec![],
++            raw: String::new(),
++        }
++    }
++
++    fn signed_payload(signing_key: &SigningKey, pubkey_hex: &str) -> CstlPayload {
++        // On construit d'abord le payload SANS signature pour calculer
++        // signing_bytes, puis on l'ajoute -- signing_bytes exclut le champ
++        // signature de toute facon, mais ca refletela sequence reelle
++        // (le client ne connait pas la signature avant de l'avoir calculee).
++        let unsigned = mk_payload(&[("public_key", pubkey_hex)], &[]);
++        let signature = signing_key.sign(&signing_bytes(&unsigned));
++        mk_payload(&[("public_key", pubkey_hex)], &[("signature", &hex::encode(signature.to_bytes()))])
++    }
++
++    #[test]
++    fn test_no_signature_fields_is_not_present() {
++        let payload = mk_payload(&[], &[]);
++        assert_eq!(check_signature(&payload), SignatureCheck::NotPresent);
++    }
++
++    #[test]
++    fn test_only_public_key_no_signature_is_invalid() {
++        let payload = mk_payload(&[("public_key", &"aa".repeat(32))], &[]);
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("incomplete_signature_fields".to_string()));
++    }
++
++    #[test]
++    fn test_only_signature_no_public_key_is_invalid() {
++        let payload = mk_payload(&[], &[("signature", &"aa".repeat(64))]);
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("incomplete_signature_fields".to_string()));
++    }
++
++    #[test]
++    fn test_valid_signature_verifies() {
++        let mut csprng = rand_core_shim();
++        let signing_key = SigningKey::generate(&mut csprng);
++        let pubkey_hex = hex::encode(signing_key.verifying_key().to_bytes());
++        let payload = signed_payload(&signing_key, &pubkey_hex);
++        assert_eq!(check_signature(&payload), SignatureCheck::Valid);
++    }
++
++    #[test]
++    fn test_tampered_payload_fails_verification() {
++        let mut csprng = rand_core_shim();
++        let signing_key = SigningKey::generate(&mut csprng);
++        let pubkey_hex = hex::encode(signing_key.verifying_key().to_bytes());
++        let mut payload = signed_payload(&signing_key, &pubkey_hex);
++        payload.intent.insert("purpose".to_string(), "tampered".to_string());
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("verification_failed".to_string()));
++    }
++
++    #[test]
++    fn test_signature_from_wrong_key_fails() {
++        let mut csprng = rand_core_shim();
++        let real_key = SigningKey::generate(&mut csprng);
++        let other_key = SigningKey::generate(&mut csprng);
++        let claimed_pubkey_hex = hex::encode(real_key.verifying_key().to_bytes());
++        // Signe avec other_key mais revendique la cle publique de real_key.
++        let unsigned = mk_payload(&[("public_key", &claimed_pubkey_hex)], &[]);
++        let bad_signature = other_key.sign(&signing_bytes(&unsigned));
++        let payload = mk_payload(
++            &[("public_key", &claimed_pubkey_hex)],
++            &[("signature", &hex::encode(bad_signature.to_bytes()))],
++        );
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("verification_failed".to_string()));
++    }
++
++    #[test]
++    fn test_invalid_hex_public_key() {
++        let payload = mk_payload(&[("public_key", "not_hex_zzz")], &[("signature", &"aa".repeat(64))]);
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("invalid_hex".to_string()));
++    }
++
++    #[test]
++    fn test_wrong_length_public_key() {
++        let payload = mk_payload(&[("public_key", "aabb")], &[("signature", &"aa".repeat(64))]);
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("bad_public_key_length".to_string()));
++    }
++
++    #[test]
++    fn test_wrong_length_signature() {
++        let payload = mk_payload(&[("public_key", &"aa".repeat(32))], &[("signature", "aabb")]);
++        assert_eq!(check_signature(&payload), SignatureCheck::Invalid("bad_signature_length".to_string()));
++    }
++
++    // ed25519-dalek 2.x attend un rand_core::CryptoRngCore -- rand 0.8's
++    // OsRng l'implemente directement, pas besoin d'une dependance de plus.
++    fn rand_core_shim() -> rand::rngs::OsRng {
++        rand::rngs::OsRng
++    }
++}
+-- 
+2.43.0
+

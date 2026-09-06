@@ -1,0 +1,1654 @@
+From 15f085e0b4c5aaca1ab4f1c690abdf86bb7026b7 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:51:39 +0000
+Subject: [PATCH 1/6] fix(canonical): appliquer la normalisation NFC ratifiee
+ mais jamais codee
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Trouvaille majeure de l'audit multi-angle (2026-09-03): la regle NFC est
+ratifiee tripartite depuis la Session #5 (voir l'en-tete de ce fichier,
+inchange depuis) mais n'a jamais ete reellement codee dans canonical_form().
+Consequence: deux representations Unicode canoniquement equivalentes du
+meme texte (ex: "é" precompose U+00E9 vs "e" U+0065 + accent combinant
+U+0301) produisaient deux hash SHA-256 differents pour un contenu
+semantiquement identique -- cassant la garantie d'immutabilite/deduplication
+du hash canonique que ce meme fichier pretend fournir.
+
+Fix: canonical_form() applique maintenant unicode_normalization::nfc()
+comme toute premiere etape, avant tout le reste du traitement existant
+(fin de ligne, espaces, tri des champs META).
+
+Note de re-application (2026-09-03, plus tard le meme jour): ce fix avait
+deja ete pousse une premiere fois via patch, mais une verification de
+l'etat reel d'origin/master a revele qu'il n'avait en fait jamais ete
+applique (le patch s'est perdu quelque part entre l'envoi et git am cote
+utilisateur) -- ce commit le refait proprement sur l'etat actuel du depot.
+
+Verification:
+- cargo build: compile sans erreur, nouvelle dependance unicode-normalization
+  0.1 resolue et verrouillee (Cargo.lock mis a jour).
+- cargo test --lib: 128 passed, 0 failed (126 avant ce commit + 2 nouveaux
+  tests: test_nfc_composed_and_decomposed_produce_same_hash -- "café"
+  precompose vs decompose produisent le meme hash apres NFC -- et
+  test_nfc_normalization_applied_to_canonical_form, verification directe
+  de la normalisation sur canonical_form()).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ Cargo.lock       | 25 +++++++++++++++++++++++++
+ Cargo.toml       |  3 +++
+ src/canonical.rs | 34 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 62 insertions(+)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 6867852..7ec9454 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -124,6 +124,7 @@ dependencies = [
+  "serde_json",
+  "sha2",
+  "tokio",
++ "unicode-normalization",
+ ]
+ 
+ [[package]]
+@@ -1175,6 +1176,21 @@ dependencies = [
+  "zerovec",
+ ]
+ 
++[[package]]
++name = "tinyvec"
++version = "1.12.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bb4ebadaa0af04fab11ae01eb5f9fdb5f9c5b875506e210e71c07873528baa7f"
++dependencies = [
++ "tinyvec_macros",
++]
++
++[[package]]
++name = "tinyvec_macros"
++version = "0.1.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
++
+ [[package]]
+ name = "tokio"
+ version = "1.53.1"
+@@ -1319,6 +1335,15 @@ version = "1.0.24"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+ 
++[[package]]
++name = "unicode-normalization"
++version = "0.1.25"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
++dependencies = [
++ "tinyvec",
++]
++
+ [[package]]
+ name = "untrusted"
+ version = "0.9.0"
+diff --git a/Cargo.toml b/Cargo.toml
+index 0d036f3..4493124 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -47,3 +47,6 @@ features = ["derive"]
+ 
+ [dependencies.serde_json]
+ version = "1"
++
++[dependencies.unicode-normalization]
++version = "0.1"
+diff --git a/src/canonical.rs b/src/canonical.rs
+index 6a2222e..c58faf8 100644
+--- a/src/canonical.rs
++++ b/src/canonical.rs
+@@ -4,7 +4,17 @@
+ 
+ 
+ /// Produce the normative canonical text form of a CSTL payload.
++///
++/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03):
++/// la regle NFC etait ratifiee tripartite (voir en-tete de ce fichier,
++/// ligne 2, depuis Session #5) mais jamais reellement codee -- deux
++/// representations Unicode canoniquement equivalentes du meme texte
++/// (ex: "é" precompose U+00E9 vs "e" + accent combinant U+0301) produisaient
++/// des hash SHA-256 differents pour un contenu semantiquement identique,
++/// cassant la garantie d'immutabilite/deduplication du hash canonique.
+ pub fn canonical_form(text: &str) -> String {
++    use unicode_normalization::UnicodeNormalization;
++    let text: String = text.nfc().collect();
+     let mut lines: Vec<String> = text
+         .replace("\r\n", "\n")
+         .replace("\r", "\n")
+@@ -186,3 +196,27 @@ fn sha256(data: &[u8]) -> [u8; 32] {
+ fn hex(bytes: &[u8]) -> String {
+     bytes.iter().map(|b| format!("{:02x}", b)).collect()
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_nfc_composed_and_decomposed_produce_same_hash() {
++        // "café" precompose (e-acute U+00E9) vs decompose (e U+0065 + accent
++        // combinant U+0301) -- meme texte visuellement et semantiquement,
++        // representations Unicode differentes. Avant ce fix: deux hash
++        // differents pour un contenu identique.
++        let composed = "META [name=caf\u{00E9}]";
++        let decomposed = "META [name=cafe\u{0301}]";
++        assert_ne!(composed, decomposed, "les deux representations doivent differer en bytes bruts");
++        assert_eq!(canonical_hash(composed), canonical_hash(decomposed));
++    }
++
++    #[test]
++    fn test_nfc_normalization_applied_to_canonical_form() {
++        let decomposed = "e\u{0301}";
++        let normalized = canonical_form(decomposed);
++        assert_eq!(normalized, "\u{00E9}");
++    }
++}
+-- 
+2.43.0
+
+
+From 66029ef09535aba5a35f945afdec57771f54ce94 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:52:52 +0000
+Subject: [PATCH 2/6] fix(emergence): retirer la troncature a 80 caracteres de
+ extract_decision
+
+Trouvaille majeure de l'audit multi-angle (2026-09-03): la forme bloc de
+extract_decision() tronquait la valeur a 80 caracteres AVANT toute
+comparaison dans decisions_differ() (Session #7, port fidele de
+l'original Python -- meme comportement, meme bug). Deux decisions
+genuinement differentes partageant un prefixe identique de 80+ caracteres
+etaient jugees IDENTIQUES par detect_revisions() -- une vraie revision de
+position d'un agent pouvait passer totalement inapercue, cassant la
+promesse centrale du module (detecter automatiquement qu'un agent a
+change d'avis apres avoir vu ses pairs).
+
+Fix: la troncature .chars().take(80) est retiree. Rien dans le format
+CSTL ne borne la longueur d'une decision, et decisions_differ() ne fait
+qu'une comparaison textuelle interne (trim + lowercase), jamais un
+affichage necessitant une limite.
+
+Note de re-application (2026-09-03, plus tard le meme jour): ce fix avait
+deja ete pousse une premiere fois via patch mais une verification de
+l'etat reel d'origin/master a revele qu'il n'avait jamais ete applique --
+ce commit le refait proprement sur l'etat actuel du depot (meme situation
+que le fix NFC du commit precedent).
+
+Verification:
+- cargo build + cargo test --lib emergence: 10/10 passed, dont 2 nouveaux
+  tests -- test_extract_decision_block_style_not_truncated_past_80_chars
+  (valeur de 84 caracteres preservee integralement) et
+  test_detect_revisions_catches_a_change_hidden_past_80_chars (reproduit
+  exactement le bug d'origine: deux decisions partageant 80 caracteres
+  identiques puis divergeant sur les 4 derniers -- AAAA vs BBBB -- sont
+  maintenant correctement detectees comme une revision).
+- cargo test --lib (suite complete): 130 passed, 0 failed, 0 regression.
+- Live TCP (serveur reel sur :5050, cstl_adn.db propre): stocke une
+  decision SOLO "X*80+AAAA" et une decision TRIO "X*80+BBBB" (tag=
+  distinct dans INTENT_PAYLOAD pour forcer des hash audit differents --
+  voir la note sur audit::canonical_hash dans une trouvaille separee),
+  puis purpose=detect_emergence comparant les deux hash reels stockes:
+  reponse EMERGENCE_REPORT [agent=Agent_X, revised=true, ...],
+  revisions_detected=1 -- confirme le fix de bout en bout sur le vrai
+  pipeline, pas seulement en test unitaire.
+- Arret propre confirme.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/emergence.rs | 41 ++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 38 insertions(+), 3 deletions(-)
+
+diff --git a/src/emergence.rs b/src/emergence.rs
+index 212c807..0c2b963 100644
+--- a/src/emergence.rs
++++ b/src/emergence.rs
+@@ -34,8 +34,16 @@ pub struct RevisionReport {
+ 
+ /// Extrait la "decision" d'un payload CSTL brut. Port fidele des deux styles
+ /// que reconnaissait la version Python: "DECISION: <valeur>" jusqu'a la fin de
+-/// ligne ou un `[`, ou un bloc "DECISION [ ... ]" (tronque a 80 caracteres,
+-/// comme l'original).
++/// ligne ou un `[`, ou un bloc "DECISION [ ... ]".
++///
++/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03): la
++/// forme bloc tronquait auparavant a 80 caracteres AVANT la comparaison dans
++/// decisions_differ() -- deux decisions genuinement differentes partageant
++/// un prefixe de 80+ caracteres identiques etaient jugees IDENTIQUES,
++/// manquant silencieusement une vraie revision de position. La troncature
++/// n'a plus lieu d'etre: rien dans le format ne borne la longueur d'une
++/// decision, et decisions_differ() ne fait qu'une comparaison textuelle,
++/// pas d'affichage necessitant une limite.
+ fn extract_decision(payload: &str) -> Option<String> {
+     if let Some(idx) = payload.find("DECISION:") {
+         let rest = &payload[idx + "DECISION:".len()..];
+@@ -49,7 +57,7 @@ fn extract_decision(payload: &str) -> Option<String> {
+         let rest = payload[idx + "DECISION".len()..].trim_start();
+         if let Some(rest) = rest.strip_prefix('[') {
+             if let Some(end) = rest.find(']') {
+-                let value: String = rest[..end].trim().chars().take(80).collect();
++                let value = rest[..end].trim().to_string();
+                 if !value.is_empty() {
+                     return Some(value);
+                 }
+@@ -172,6 +180,33 @@ mod tests {
+         assert_eq!(extract_decision("META [x=y]\n---END---"), None);
+     }
+ 
++    #[test]
++    fn test_extract_decision_block_style_not_truncated_past_80_chars() {
++        let long_value = format!("{}AAAA", "X".repeat(80));
++        let payload = format!("META [x=y]\nDECISION [{}]\n---END---", long_value);
++        assert_eq!(extract_decision(&payload).as_deref(), Some(long_value.as_str()));
++    }
++
++    #[test]
++    fn test_detect_revisions_catches_a_change_hidden_past_80_chars() {
++        // Avant ce fix: deux decisions partageant les 80 premiers caracteres
++        // mais differant apres (AAAA vs BBBB) etaient tronquees a 80 chars
++        // AVANT comparaison -> jugees identiques -> revision manquee.
++        let store = AdnStore::open(":memory:").unwrap();
++        let shared_prefix = "X".repeat(80);
++        let solo_decision = format!("DECISION [{}AAAA]", shared_prefix);
++        let trio_decision = format!("DECISION [{}BBBB]", shared_prefix);
++        store.put("solo_x", &solo_decision, None, None, 0.80, None, None, None).unwrap();
++        store.put("trio_x", &trio_decision, None, None, 0.90, None, None, None).unwrap();
++
++        let mut solo_hashes = HashMap::new();
++        solo_hashes.insert("Agent_X".to_string(), "solo_x".to_string());
++
++        let reports = detect_revisions(&store, "trio_x", &solo_hashes, "Q_long").unwrap();
++        assert_eq!(reports.len(), 1);
++        assert!(reports[0].revised, "la revision cachee apres 80 caracteres doit etre detectee");
++    }
++
+     #[test]
+     fn test_parse_solo_hashes_roundtrip() {
+         let parsed = parse_solo_hashes("Agent_CLAUDE:sha256:abc123;Agent_GPT:sha256:def456");
+-- 
+2.43.0
+
+
+From 8beb83a05a13a2b6d278a25333dad2307e4b61f9 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:53:37 +0000
+Subject: [PATCH 3/6] fix(kb_verify): is_chainable derive de
+ execution_lab::CHAINABLE_PREDICATES
+
+Trouvaille majeure de l'audit multi-angle (2026-09-03): la notion de
+"predicat chainable sur plusieurs sauts" etait encodee independamment
+a deux endroits, dans deux espaces de cles differents, sans aucune
+reference croisee:
+
+  - kb_verify.rs::is_chainable(property_id)  -- matches!(property_id, "P131" | "P361")
+  - execution_lab.rs::CHAINABLE_PREDICATES   -- ["part_of", "located_in"]
+
+Un ajout dans l'une sans l'autre desynchronisait silencieusement la
+verification KB (Couche 3a, contre Wikidata) et le calcul de coherence
+interne (ExecutionLab) -- aucune erreur de compilation, aucun test
+existant ne l'aurait attrape.
+
+Fix: is_chainable() derive maintenant directement de
+execution_lab::CHAINABLE_PREDICATES via predicate_to_property. Une
+seule source de verite (le const CHAINABLE_PREDICATES cote
+execution_lab), plus de liste dupliquee a maintenir a la main cote
+kb_verify.
+
+Note de re-application (2026-09-03, plus tard le meme jour): ce fix
+avait deja ete pousse une premiere fois via patch mais une verification
+de l'etat reel d'origin/master a revele qu'il n'avait jamais ete
+applique -- ce commit le refait proprement sur l'etat actuel du depot
+(meme situation que les fix NFC et emergence des deux commits
+precedents -- trois patches perdus quelque part entre l'envoi et git am
+cote utilisateur).
+
+Verification:
+- cargo build: compile sans erreur (CHAINABLE_PREDICATES est pub const
+  cote execution_lab).
+- cargo test --lib kb_verify: 3/3 passed, dont le nouveau
+  test_chainable_predicates_stay_in_sync_with_execution_lab -- boucle sur
+  CHAINABLE_PREDICATES et verifie mecaniquement que chaque predicat s'y
+  trouvant se mappe vers un ID Wikidata que is_chainable accepte -- le
+  garde-fou anti-regression exact que l'audit demandait.
+- cargo test --lib (suite complete): 131 passed, 0 failed, 0 regression.
+- Verification live via Wikidata NON effectuee: le sandbox cloud de
+  cette session a toujours son egress bloque vers www.wikidata.org
+  (reconfirme a l'instant: curl -> "CONNECT tunnel failed, response
+  403"). La logique modifiee (is_chainable) ne fait elle-meme aucun
+  appel reseau -- le test unitaire ci-dessus la couvre entierement.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/kb_verify.rs | 43 ++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/src/kb_verify.rs b/src/kb_verify.rs
+index f057047..5b23475 100644
+--- a/src/kb_verify.rs
++++ b/src/kb_verify.rs
+@@ -33,8 +33,21 @@ fn predicate_to_property(predicate: &str) -> Option<&'static str> {
+ 
+ /// Propriétés pour lesquelles une chaîne transitive à plusieurs sauts a un
+ /// sens sémantique réel (hiérarchies d'imbrication géographique/administrative).
++///
++/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03):
++/// cette fonction encodait independamment (`matches!(property_id, "P131" |
++/// "P361")`) la MEME notion que `execution_lab::CHAINABLE_PREDICATES`
++/// (`["part_of", "located_in"]`), dans un espace de cles different (ID
++/// Wikidata ici, nom de predicat CSTL la-bas), sans aucune reference
++/// croisee. Un ajout dans l'une sans l'autre desynchronisait silencieusement
++/// la verification KB (Couche 3a) et le calcul de coherence interne
++/// (ExecutionLab). Desormais derivee directement de
++/// execution_lab::CHAINABLE_PREDICATES via predicate_to_property -- une
++/// seule source de verite, plus de liste dupliquee a maintenir a la main.
+ fn is_chainable(property_id: &str) -> bool {
+-    matches!(property_id, "P131" | "P361")
++    crate::execution_lab::CHAINABLE_PREDICATES
++        .iter()
++        .any(|predicate| predicate_to_property(predicate) == Some(property_id))
+ }
+ 
+ #[derive(Debug, Serialize)]
+@@ -351,4 +364,32 @@ mod tests {
+         assert!(is_chainable("P361"));
+         assert!(!is_chainable("P19"));
+     }
++
++    /// Garde-fou anti-desync (audit multi-angle 2026-09-03, finding majeure):
++    /// verifie mecaniquement que TOUT predicat CSTL liste dans
++    /// `execution_lab::CHAINABLE_PREDICATES` se mappe, via `predicate_to_property`,
++    /// vers un ID Wikidata que `is_chainable` accepte. Si quelqu'un ajoute un
++    /// predicat a l'un sans penser a l'autre, ce test casse immediatement --
++    /// au lieu d'une desynchronisation silencieuse entre Couche 3a (kb_verify)
++    /// et ExecutionLab.
++    #[test]
++    fn test_chainable_predicates_stay_in_sync_with_execution_lab() {
++        for &predicate in crate::execution_lab::CHAINABLE_PREDICATES {
++            let property = predicate_to_property(predicate).unwrap_or_else(|| {
++                panic!(
++                    "predicat '{}' present dans execution_lab::CHAINABLE_PREDICATES \
++                     mais absent de la table predicate_to_property de kb_verify.rs",
++                    predicate
++                )
++            });
++            assert!(
++                is_chainable(property),
++                "predicat '{}' (-> {}) est dans execution_lab::CHAINABLE_PREDICATES \
++                 mais is_chainable('{}') retourne false -- desync",
++                predicate,
++                property,
++                property
++            );
++        }
++    }
+ }
+-- 
+2.43.0
+
+
+From c6598a4fe47dfb8ed6ff2d9d27e078729eda4995 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:54:50 +0000
+Subject: [PATCH 4/6] chore: supprimer src/tests.rs -- parser parallele
+ orphelin jamais compile
+
+Decouverte en creusant le fix du badge de tests README (qui pointait
+vers ce fichier), pas dans les 16 findings originaux de l'audit multi-angle
+du 2026-09-03: src/tests.rs (796 lignes, 76 #[test]) n'etait jamais
+declare comme module dans lib.rs (aucun `mod tests;`) -- jamais compile,
+jamais execute par `cargo test`, quel que soit ce que le badge du README
+en disait. Tous ses tests appellent `crate::parse()`, une fonction qui
+n'a JAMAIS existe nulle part dans ce depot (verifie par grep exhaustif).
+
+Ces 796 lignes de tests supposaient un parser+tokenizer complet,
+distinct de server/parser.rs, produisant un ast::CstlDocument riche
+(hashbang, meta_fields, blocks, relations, is_valid, errors, warnings,
+parse_time_us, token_count) avec des methodes comme blocks_named(),
+relations_by_op(), etc. Ce parser n'a jamais ete ecrit -- seul le type
+de donnees (CstlDocument, dans ast.rs) existait, sans aucune fonction
+pour le produire.
+
+Decision (utilisateur, "corrige tout"): plutot que d'implementer de
+toutes pieces le parser+tokenizer manquant (nouvelle fonctionnalite
+substantielle, pas un simple fix -- risque reel de dupliquer, avec un
+modele de donnees different, ce que server/parser.rs fait deja pour le
+vrai trafic TCP), les deux morceaux orphelins sont retires:
+
+- src/tests.rs: supprime entierement.
+- src/ast.rs: CstlDocument (struct + impl, seul consommateur etait
+  tests.rs) retire. Field/Block/Relation restent -- reellement utilises
+  par semantic.rs et validator_semantic.rs, branches sur le pipeline TCP
+  reel depuis un commit precedent de la meme session.
+- CSTL_SPEC_v5_0.md: la reference a `test_canonical_hash_roundtrip_*
+  dans src/tests.rs` (section 15, vecteurs #3/#4 d'equivalence NFC) etait
+  DOUBLEMENT fausse -- le fichier n'etait pas compile ET cette fonction
+  precise n'existait meme pas dans tests.rs. Redirigee vers les vrais
+  tests d'equivalence NFC ajoutes dans src/canonical.rs plus tot dans
+  cette session (test_nfc_composed_and_decomposed_produce_same_hash,
+  test_nfc_normalization_applied_to_canonical_form).
+
+Verification: cargo build (aucun warning d'item inutilise -- confirme
+que CstlDocument etait bien mort) + cargo test --lib -- 131 passed,
+0 failed, 0 regression (le compte est identique avant/apres puisque ces
+76 tests n'etaient jamais comptes par cargo, meme quand le fichier
+existait).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ CSTL_SPEC_v5_0.md |   8 +-
+ src/ast.rs        |  57 ++--
+ src/tests.rs      | 796 ----------------------------------------------
+ 3 files changed, 25 insertions(+), 836 deletions(-)
+ delete mode 100644 src/tests.rs
+
+diff --git a/CSTL_SPEC_v5_0.md b/CSTL_SPEC_v5_0.md
+index 7c3c1b4..e9ac699 100644
+--- a/CSTL_SPEC_v5_0.md
++++ b/CSTL_SPEC_v5_0.md
+@@ -531,7 +531,13 @@ canonical_hash(input_a) == canonical_hash(input_b)
+   sha256:56e0ae1a0c4ebd6cae999b4d9af0ac517071b673615a3e6c059f0a61e5232bea
+ ```
+ 
+-Vecteurs #3 et #4 : voir `test_canonical_hash_roundtrip_*` dans `src/tests.rs`.
++Vecteurs #3 et #4 (equivalence NFC du hash canonique) : voir
++`test_nfc_composed_and_decomposed_produce_same_hash` et
++`test_nfc_normalization_applied_to_canonical_form` dans `src/canonical.rs`
++(corrige le 2026-09-03 -- cette section referencait auparavant
++`test_canonical_hash_roundtrip_*` dans `src/tests.rs`, un fichier jamais
++compile ni execute et qui ne contenait meme pas cette fonction; voir
++`src/ast.rs` pour le detail de la suppression).
+ 
+ ---
+ 
+diff --git a/src/ast.rs b/src/ast.rs
+index 3d03762..27023ae 100644
+--- a/src/ast.rs
++++ b/src/ast.rs
+@@ -1,5 +1,22 @@
+ //! CSTL v5.0.0 — AST node types
+-use std::collections::HashMap;
++//!
++//! Field/Block/Relation sont reellement utilises par semantic.rs et
++//! validator_semantic.rs (branches sur le pipeline TCP reel depuis l'audit
++//! multi-angle du 2026-09-03, voir server/validator.rs::check_sdl_operator_whitelist).
++//!
++//! CstlDocument (le type produit par une fonction `crate::parse()` qui
++//! n'a jamais existe) a ete retire le meme jour: son seul et unique
++//! consommateur etait src/tests.rs, un fichier de 796 lignes de tests
++//! jamais declare comme module dans lib.rs (aucun `mod tests;`), donc
++//! jamais compile ni execute par `cargo test` -- decouvert en corrigeant
++//! le badge de tests du README (qui pointait dessus en affichant un
++//! chiffre errone). Plutot que d'ecrire de toutes pieces le parser +
++//! tokenizer complet que ces 796 lignes de tests supposaient (feature
++//! entiere jamais implementee, pas juste un bug a corriger -- risque
++//! eleve de dupliquer, avec un modele de donnees different, le travail
++//! que fait deja server/parser.rs), les deux fichiers ont ete supprimes
++//! pour que le depot ne pretende plus tester quelque chose qui n'existe
++//! pas.
+ 
+ #[derive(Debug, Clone)]
+ pub struct Field {
+@@ -27,41 +44,3 @@ pub struct Relation {
+     pub line:     usize,
+ }
+ 
+-#[derive(Debug)]
+-pub struct CstlDocument {
+-    pub hashbang:      Option<String>,
+-    pub meta_fields:   HashMap<String, String>,
+-    pub blocks:        Vec<Block>,
+-    pub relations:     Vec<Relation>,
+-    pub is_valid:      bool,
+-    pub errors:        Vec<String>,
+-    pub warnings:      Vec<String>,
+-    pub parse_time_us: u64,
+-    pub token_count:   usize,
+-}
+-
+-impl CstlDocument {
+-    pub fn meta(&self, key: &str) -> Option<&str> {
+-        self.meta_fields.get(key).map(|s| s.as_str())
+-    }
+-    pub fn encoder(&self) -> Option<&str> { self.meta("encoder") }
+-    pub fn produced_by(&self) -> Option<&str> { self.meta("produced_by") }
+-    pub fn blocks_named(&self, prefix: &str) -> Vec<&Block> {
+-        self.blocks.iter()
+-            .filter(|b| b.name == prefix
+-                || b.name.starts_with(&format!("{}_", prefix))
+-                || b.name.starts_with(&format!("{}:", prefix)))
+-            .collect()
+-    }
+-    pub fn relations_by_op(&self, op: &str) -> Vec<&Relation> {
+-        self.relations.iter().filter(|r| r.operator == op).collect()
+-    }
+-    pub fn relations_by_subject(&self, subj: &str) -> Vec<&Relation> {
+-        self.relations.iter().filter(|r| r.subject == subj).collect()
+-    }
+-    pub fn relation_sigma(rel: &Relation) -> Option<f64> {
+-        rel.attrs.iter()
+-            .find(|f| f.name == "sigma" || f.name == "σ")
+-            .and_then(|f| f.value.parse().ok())
+-    }
+-}
+diff --git a/src/tests.rs b/src/tests.rs
+deleted file mode 100644
+index c979f9e..0000000
+--- a/src/tests.rs
++++ /dev/null
+@@ -1,796 +0,0 @@
+-//! CSTL v5.0.0 — Rust parser tests
+-//! 92 existing tests (v4.9.3 baseline) + v5.0 new operator tests
+-
+-#[cfg(test)]
+-mod tests {
+-    use crate::parse;
+-    use crate::canonical::canonical_hash;
+-
+-    const BASE: &str = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-
+-    // ── Basic parsing ─────────────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_base_valid() {
+-        let doc = parse(BASE);
+-        assert!(doc.is_valid, "errors: {:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_meta_fields_extracted() {
+-        let doc = parse(BASE);
+-        assert_eq!(doc.meta("encoder"), Some("Agent_TEST"));
+-        assert_eq!(doc.meta("sigma"), Some("0.88"));
+-        assert_eq!(doc.meta("NO_PROSE"), Some("true"));
+-    }
+-
+-    #[test]
+-    fn test_extra_spaces() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [  encoder = Agent_TEST ,  sigma = 0.88 , RESPONSE_FORMAT=CSTL, NO_PROSE=true, PARENT_HASH=root, produced_by=anthropic/claude-sonnet-4-6  ]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert_eq!(doc.meta("encoder"), Some("Agent_TEST"));
+-    }
+-
+-    #[test]
+-    fn test_tabs() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\n\tencoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6,\n\tsigma=0.88,\n\tRESPONSE_FORMAT=CSTL,\n\tNO_PROSE=true,\n\tPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        assert_eq!(doc.meta("encoder"), Some("Agent_TEST"));
+-    }
+-
+-    #[test]
+-    fn test_produced_by_session4() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_GPT,\nproduced_by=openai/gpt-4o-2026,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert_eq!(doc.produced_by(), Some("openai/gpt-4o-2026"));
+-    }
+-
+-    // ── Block parsing ─────────────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_disagreement_block() {
+-        let payload = format!("{}\n", BASE.replace("---END---",
+-            "DISAGREEMENT_BLOCK [\nGAP missing_statin [sigma:float=0.85]\nDISPUTE dose [sigma:float=0.79, alt=81mg]\n]\nDECISION: proceed\n---END---"));
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert!(!doc.blocks_named("DISAGREEMENT_BLOCK").is_empty());
+-    }
+-
+-    #[test]
+-    fn test_spaces_in_value() {
+-        let payload = BASE.replace("---END---",
+-            "DEFINE patient AS person [name=Jean Dupont, age=45]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_modal_statements() {
+-        let payload = BASE.replace("---END---",
+-            "(RULE) MUST respond_in_cstl_only\n(MUST) team ADMINISTER aspirin [sigma=0.92]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert!(!doc.blocks_named("(RULE)").is_empty());
+-    }
+-
+-    // ── Security ─────────────────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_c3_duplicate_key_blocked() {
+-        let payload = BASE.replace("encoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6,",
+-            "encoder=Agent_A,\nencoder=Agent_B,");
+-        let doc = parse(&payload);
+-        assert!(!doc.is_valid);
+-        assert!(doc.errors.iter().any(|e| e.contains("C3") || e.contains("Duplicate")));
+-    }
+-
+-    #[test]
+-    fn test_t3_content_after_end_blocked() {
+-        let payload = format!("{}\nInjected prose", BASE);
+-        let doc = parse(&payload);
+-        assert!(!doc.is_valid);
+-        assert!(doc.errors.iter().any(|e| e.contains("T3") || e.contains("END")));
+-    }
+-
+-    #[test]
+-    fn test_cyrillic_homoglyph_flagged() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\n\u{041C}ETA [\nencoder=Agent_TEST\n]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.warnings.iter().any(|w| w.contains("SEC_Q1")));
+-    }
+-
+-    #[test]
+-    fn test_zero_width_stripped() {
+-        let payload = "META\u{200B} [\nencoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6, sigma=0.88, RESPONSE_FORMAT=CSTL, NO_PROSE=true, PARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.warnings.iter().any(|w| w.contains("SEC_Q2")));
+-    }
+-
+-    #[test]
+-    fn test_nested_meta_blocked() {
+-        let payload = BASE.replace("---END---",
+-            "DEFINE x AS note [\n  META [\nencoder=attacker\n]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(!doc.is_valid);
+-        assert!(doc.errors.iter().any(|e| e.contains("SEC_Q4")));
+-    }
+-
+-    // ── Canonical form + hash ─────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_canonical_hash_256bit() {
+-        let h = canonical_hash(BASE);
+-        assert!(h.starts_with("sha256:"));
+-        assert_eq!(h.len(), 7 + 64);
+-    }
+-
+-    #[test]
+-    fn test_canonical_hash_deterministic() {
+-        assert_eq!(canonical_hash(BASE), canonical_hash(BASE));
+-    }
+-
+-    #[test]
+-    fn test_canonical_hash_field_order_invariant() {
+-        let p1 = "#!CSTL v5.0.0 MODE=A\nMETA [\nsigma:float=0.88,\nencoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let p2 = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        assert_eq!(canonical_hash(p1), canonical_hash(p2));
+-    }
+-
+-    #[test]
+-    fn test_different_payloads_different_hash() {
+-        let p1 = BASE.replace("---END---", "DECISION: accept\n---END---");
+-        let p2 = BASE.replace("---END---", "DECISION: reject\n---END---");
+-        assert_ne!(canonical_hash(&p1), canonical_hash(&p2));
+-    }
+-
+-    // ── produced_by format variants ───────────────────────────────────────────
+-
+-    #[test]
+-    fn test_produced_by_short_form_gemini() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_GEMINI,\nproduced_by=gemini-2-5-pro,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        let pby_warns: Vec<_> = doc.warnings.iter().filter(|w| w.contains("produced_by") && w.contains("BNF")).collect();
+-        assert!(pby_warns.is_empty(), "gemini short form should not warn: {:?}", pby_warns);
+-    }
+-
+-    #[test]
+-    fn test_produced_by_org_slash_form() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_GPT,\nproduced_by=openai/gpt-4o-2026,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        let pby_warns: Vec<_> = doc.warnings.iter().filter(|w| w.contains("BNF")).collect();
+-        assert!(pby_warns.is_empty(), "org/model-version should not warn: {:?}", pby_warns);
+-    }
+-
+-    #[test]
+-    fn test_produced_by_proxy_chain() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=Agent_GPT,\nproduced_by=proxy/azure -> openai/gpt-4o-2026,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.warnings.iter().any(|w| w.contains("PROXY")));
+-    }
+-
+-    #[test]
+-    fn test_produced_by_identity_mismatch_warn() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=ChatGPT_GPT5_5,\nproduced_by=openai/gpt-4o-2026,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.warnings.iter().any(|w| w.contains("IDENTITY_MISMATCH")));
+-    }
+-
+-    #[test]
+-    fn test_produced_by_absent_model_name_encoder() {
+-        let payload = "#!CSTL v5.0.0 MODE=A\nMETA [\nencoder=ChatGPT_GPT5_5,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.warnings.iter().any(|w| w.contains("PATCH_T4") || w.contains("produced_by absent")));
+-    }
+-
+-    // ── Block variants ────────────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_evaluation_blocks() {
+-        let payload = BASE.replace("---END---",
+-            "EVALUATION_Q1_bytecode_id [\nposition=accept_0x4D,\nrationale=fits_range,\nsigma:float=0.95\n]\nEVALUATION_Q2_mandatory [\nposition=accept_option_B,\nsigma:float=0.90\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert!(!doc.blocks_named("EVALUATION_Q1").is_empty());
+-        assert!(!doc.blocks_named("EVALUATION_Q2").is_empty());
+-    }
+-
+-    #[test]
+-    fn test_decision_colon_form() {
+-        let payload = BASE.replace("---END---", "DECISION: ratify_with_patchset [sigma:float=0.96]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid);
+-        assert!(!doc.blocks_named("DECISION").is_empty());
+-    }
+-
+-    #[test]
+-    fn test_strength_with_parens_not_brackets() {
+-        let payload = BASE.replace("---END---",
+-            "DISAGREEMENT_BLOCK [\nSTRENGTH explicit_typing (sigma:float=0.98)\nDISPUTE operator_freeze (sigma:float=0.89, alternative=core_only)\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_empty_payload_invalid() {
+-        let doc = parse("");
+-        assert!(!doc.is_valid);
+-    }
+-
+-    #[test]
+-    fn test_parse_time_sub_millisecond() {
+-        let doc = parse(BASE);
+-        assert!(doc.parse_time_us < 5000, "parse took {}µs", doc.parse_time_us);
+-    }
+-
+-    // ── Performance ───────────────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_large_payload_performance() {
+-        let mut payload = BASE.replace("---END---", "");
+-        for i in 0..50 {
+-            payload.push_str(&format!(
+-                "EVALUATION_Q{} [\nposition=accept,\nrationale=rationale_{},\nsigma:float=0.9{}\n]\n",
+-                i, i, i % 10
+-            ));
+-        }
+-        payload.push_str("---END---");
+-        let start = std::time::Instant::now();
+-        let doc = parse(&payload);
+-        let elapsed = start.elapsed();
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert!(elapsed.as_millis() < 50);
+-    }
+-
+-    #[test]
+-    fn test_sha256_correctness() {
+-        let h1 = canonical_hash("test");
+-        let h2 = canonical_hash("test");
+-        assert_eq!(h1, h2);
+-        assert_eq!(&h1[..7], "sha256:");
+-        assert_eq!(h1.len(), 71);
+-    }
+-
+-    // ── v5.0 NEW: Logical propagation — ENTAILS ───────────────────────────────
+-
+-    #[test]
+-    fn test_entails_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(fix_p3) ENTAILS propagation_logique_native [sigma=0.90, tau=f_future, id=r007]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_entails_in_constraints() {
+-        let payload = BASE.replace("---END---",
+-            "CONSTRAINTS [\n(MUST) hypothesis ENTAILS conclusion [sigma=0.85]\n]\n---END---");
+-        let doc = parse(&payload);
+-        // No E-level errors about ENTAILS being unknown
+-        let entails_errors: Vec<_> = doc.errors.iter()
+-            .filter(|e| e.contains("ENTAILS") && e.contains("unknown")).collect();
+-        assert!(entails_errors.is_empty(), "ENTAILS should be recognized: {:?}", entails_errors);
+-    }
+-
+-    #[test]
+-    fn test_entails_transitivity_warning() {
+-        // A ENTAILS B, B ENTAILS C — W603 for missing A ENTAILS C
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) ENTAILS B [sigma=0.9]\n(B) ENTAILS C [sigma=0.9]\n]\n---END---");
+-        let doc = parse(&payload);
+-        // W603 may or may not fire depending on extraction — at minimum no crash
+-        let _ = &doc.warnings;
+-    }
+-
+-    #[test]
+-    fn test_entails_transitive_complete_no_warn() {
+-        // A ENTAILS B, B ENTAILS C, A ENTAILS C — complete, no W603
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) ENTAILS B [sigma=0.9]\n(B) ENTAILS C [sigma=0.9]\n(A) ENTAILS C [sigma=0.9]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        let w603: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W603")).collect();
+-        assert!(w603.is_empty(), "Complete transitive chain should not warn W603: {:?}", w603);
+-    }
+-
+-    // ── v5.0 NEW: CONTRADICTS ─────────────────────────────────────────────────
+-
+-    #[test]
+-    fn test_contradicts_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(hypothesis_A) CONTRADICTS hypothesis_B [sigma=0.88, tau=n_present]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_contradicts_symmetry_warning() {
+-        // Both A CONTRADICTS B and B CONTRADICTS A declared — W602
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) CONTRADICTS B [sigma=0.9]\n(B) CONTRADICTS A [sigma=0.9]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let w602: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W602")).collect();
+-        assert!(!w602.is_empty(), "Redundant CONTRADICTS pair should warn W602: {:?}", doc.warnings);
+-    }
+-
+-    #[test]
+-    fn test_contradicts_one_direction_no_warn() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(claim_A) CONTRADICTS claim_B [sigma=0.92]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let w602: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W602")).collect();
+-        assert!(w602.is_empty(), "Single direction CONTRADICTS should not warn W602: {:?}", w602);
+-    }
+-
+-    // ── v5.0 NEW: Epistemic operators ────────────────────────────────────────
+-
+-    #[test]
+-    fn test_believes_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent_A) BELIEVES hypothesis_valid [sigma=0.75, tau=n_present]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_knows_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent_A) KNOWS patient_weight_82kg [sigma=0.98, tau=n_present]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_assumes_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(model) ASSUMES prior_distribution_normal [sigma=0.60]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_doubts_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(reviewer) DOUBTS compression_claim [sigma=0.30]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_knows_low_sigma_warns() {
+-        // KNOWS with sigma < 0.8 should emit W604
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent) KNOWS uncertain_value [sigma=0.5]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let w604: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W604")).collect();
+-        assert!(!w604.is_empty(), "KNOWS sigma=0.5 should warn W604: {:?}", doc.warnings);
+-    }
+-
+-    #[test]
+-    fn test_doubts_high_sigma_warns() {
+-        // DOUBTS with sigma > 0.5 should emit W605
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent) DOUBTS claim_X [sigma=0.8]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let w605: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W605")).collect();
+-        assert!(!w605.is_empty(), "DOUBTS sigma=0.8 should warn W605: {:?}", doc.warnings);
+-    }
+-
+-    #[test]
+-    fn test_believes_vs_knows_distinct() {
+-        // BELIEVES and KNOWS in same payload — both recognized, semantically distinct
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent_A) BELIEVES claim_X [sigma=0.65]\n(agent_A) KNOWS fact_Y [sigma=0.97]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        // No W604 on KNOWS (sigma=0.97 >= 0.8)
+-        let w604: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W604")).collect();
+-        assert!(w604.is_empty(), "KNOWS sigma=0.97 should not warn: {:?}", w604);
+-    }
+-
+-    // ── v5.0 NEW: Temporal Allen subset ──────────────────────────────────────
+-
+-    #[test]
+-    fn test_before_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(step_1) BEFORE step_2 [sigma=0.95]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_after_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(step_3) AFTER step_2 [sigma=0.95]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_during_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(monitoring) DURING clinical_trial [sigma=0.90]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_temporal_contradiction_before_and_after_same_pair() {
+-        // A BEFORE B and A AFTER B — E701 temporal contradiction
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(step_A) BEFORE step_B [sigma=0.9]\n(step_A) AFTER step_B [sigma=0.9]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let e701: Vec<_> = doc.errors.iter().filter(|e| e.contains("E701")).collect();
+-        assert!(!e701.is_empty(), "BEFORE + AFTER same pair should emit E701: {:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_temporal_workflow_valid() {
+-        // Multi-step workflow with BEFORE/AFTER/DURING
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(ingestion) BEFORE processing [sigma=1.0]\n(processing) BEFORE output [sigma=1.0]\n(monitoring) DURING processing [sigma=0.90]\n(validation) AFTER output [sigma=0.95]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let e701: Vec<_> = doc.errors.iter().filter(|e| e.contains("E701")).collect();
+-        assert!(e701.is_empty(), "Valid workflow should not emit E701: {:?}", e701);
+-    }
+-
+-    // ── v5.0 NEW: Relational operators (MUTUAL replacements) ──────────────────
+-
+-    #[test]
+-    fn test_equals_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(concept_A) EQUALS concept_B [sigma=0.95, id=r001]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_possesses_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(patient) POSSESSES medical_record [sigma=0.99]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_resembles_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(format_A) RESEMBLES format_B [sigma=0.72]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_co_locates_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent_A) CO_LOCATES agent_B [sigma=0.85, context=datacenter_eu]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_opposes_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(claim_compression) OPPOSES claim_fidelity [sigma=0.70]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_compares_operator_recognized() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(CSTL) COMPARES JSON_LD [sigma=0.88, axis=token_efficiency]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_all_six_relational_operators_in_one_payload() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) EQUALS B [sigma=0.95]\n(C) POSSESSES D [sigma=0.90]\n(E) RESEMBLES F [sigma=0.75]\n(G) CO_LOCATES H [sigma=0.85]\n(I) OPPOSES J [sigma=0.70]\n(K) COMPARES L [sigma=0.80]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-
+-    // ── v5.0 NEW: MUTUAL deprecated — W601 ───────────────────────────────────
+-
+-    #[test]
+-    fn test_mutual_deprecated_emits_w601() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) MUTUAL B [sigma=0.80]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let w601: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W601")).collect();
+-        assert!(!w601.is_empty(), "MUTUAL should emit W601 deprecation warning: {:?}", doc.warnings);
+-    }
+-
+-    #[test]
+-    fn test_mutual_deprecated_still_parses() {
+-        // MUTUAL is deprecated but not a hard error — payload still valid
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(concept_A) MUTUAL concept_B [sigma=0.80]\n]\n---END---");
+-        let doc = parse(&payload);
+-        // Should not fail with errors (backward compat)
+-        assert!(doc.errors.is_empty(), "MUTUAL should not cause errors (only W601 warning): {:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_mutual_migration_hint_in_warning() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(x) MUTUAL y [sigma=0.70]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let w601: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W601")).collect();
+-        assert!(!w601.is_empty());
+-        // Warning should contain migration hint
+-        assert!(w601[0].contains("EQUALS") || w601[0].contains("Migration"), 
+-                "W601 should contain migration hint: {}", w601[0]);
+-    }
+-
+-    // ── v5.0 NEW: Mixed operator payload (real-world simulation) ─────────────
+-
+-    #[test]
+-    fn test_v5_full_scientific_payload() {
+-        // Simulates a multi-agent scientific review payload using all v5 operators
+-        let payload = BASE.replace("---END---", r#"
+-DEFINE hypothesis AS concept [id=h001, content=cstl_improves_fidelity, sigma=0.85]
+-DEFINE baseline AS concept [id=b001, content=json_ld_baseline]
+-DEFINE agent_reviewer AS agent [id=a001, role=scientific_reviewer]
+-DEFINE finding_A AS concept [id=f001, content=fidelity_100pct_measured]
+-DEFINE finding_B AS concept [id=f002, content=n_too_small_for_confirmation]
+-
+-RELATIONS [
+-(hypothesis) ENTAILS finding_A [sigma=0.80, tau=f_future, id=r001]
+-(finding_A) CONTRADICTS naive_null_hypothesis [sigma=0.90, id=r002]
+-(finding_B) OPPOSES publication_claim [sigma=0.85, id=r003]
+-(agent_reviewer) KNOWS finding_A [sigma=0.97, id=r004]
+-(agent_reviewer) DOUBTS hypothesis [sigma=0.35, id=r005]
+-(agent_reviewer) BELIEVES additional_validation_required [sigma=0.92, id=r006]
+-(baseline_setup) BEFORE experiment_run [sigma=1.0, id=r007]
+-(experiment_run) BEFORE analysis [sigma=1.0, id=r008]
+-(monitoring) DURING experiment_run [sigma=0.90, id=r009]
+-(hypothesis) RESEMBLES prior_work_AMR [sigma=0.60, id=r010]
+-(CSTL) COMPARES JSON_LD [sigma=0.88, axis=token_cost, id=r011]
+-]
+----END---"#);
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "Full v5 payload should be valid: {:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_v5_payload_entails_and_temporal_combined() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(data_collection) BEFORE analysis [sigma=1.0]\n(analysis) ENTAILS results [sigma=0.90]\n(results) BEFORE publication [sigma=0.95]\n(peer_review) DURING publication [sigma=0.85]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        let e701: Vec<_> = doc.errors.iter().filter(|e| e.contains("E701")).collect();
+-        assert!(e701.is_empty());
+-    }
+-
+-    #[test]
+-    fn test_v5_epistemic_chain() {
+-        // Agent chain: A KNOWS X → A BELIEVES Y based on X
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent_A) KNOWS measured_value [sigma=0.98]\n(agent_A) BELIEVES derived_claim [sigma=0.72]\n(agent_A) ASSUMES boundary_condition [sigma=0.55]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        // No W604 on KNOWS (0.98 >= 0.8)
+-        let w604: Vec<_> = doc.warnings.iter().filter(|w| w.contains("W604")).collect();
+-        assert!(w604.is_empty());
+-    }
+-
+-    // ── Backward compatibility: v4.9.3 payloads still parse ──────────────────
+-
+-    #[test]
+-    fn test_v493_payload_still_valid_under_v5() {
+-        // v4.9.3 payload format should parse without errors
+-        let payload = "#!CSTL v4.9.3 MODE=A\nMETA [\nencoder=Agent_CLAUDE,\nproduced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.97,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\nDECISION: test_backward_compat [sigma=0.95]\n---END---";
+-        let doc = parse(payload);
+-        assert!(doc.is_valid, "v4.9.3 payload should parse under v5: {:?}", doc.errors);
+-    }
+-
+-    #[test]
+-    fn test_v493_with_mutual_gets_w601_but_no_error() {
+-        let payload = "#!CSTL v4.9.3 MODE=A\nMETA [\nencoder=Agent_TEST,
+-produced_by=anthropic/claude-sonnet-4-6,\nsigma:float=0.88,\nRESPONSE_FORMAT:enum=CSTL,\nNO_PROSE:bool=true,\nPARENT_HASH=root\n]\nRELATIONS [\n(x) MUTUAL y [sigma=0.75]\n]\n---END---";
+-        let doc = parse(payload);
+-        // W601 warning yes, hard error no
+-        assert!(doc.errors.is_empty(), "MUTUAL in v4.9.3 should warn not error: {:?}", doc.errors);
+-        assert!(doc.warnings.iter().any(|w| w.contains("W601")));
+-
+-    }
+-
+-    // ═══════════════════════════════════════════════════════════════════════
+-    // AST STRUCTUREL — tests que les relations sont dans doc.relations
+-    // Ces tests prouvent que le parser extrait réellement les relations
+-    // (pas juste le text-based validator)
+-    // ═══════════════════════════════════════════════════════════════════════
+-
+-    #[test]
+-    fn test_relation_extracted_into_ast() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(hypothesis) ENTAILS finding [sigma=0.85, tau=f_future]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert_eq!(doc.relations.len(), 1, "Should have 1 relation in AST");
+-        let rel = &doc.relations[0];
+-        assert_eq!(rel.subject,  "hypothesis");
+-        assert_eq!(rel.operator, "ENTAILS");
+-        assert_eq!(rel.object,   "finding");
+-        assert!(rel.modality.is_none());
+-    }
+-
+-    #[test]
+-    fn test_relation_attrs_extracted() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) KNOWS B [sigma=0.97, tau=n_present, id=r001]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 1);
+-        let rel = &doc.relations[0];
+-        assert_eq!(rel.operator, "KNOWS");
+-        // sigma attr extracted
+-        let sigma = rel.attrs.iter().find(|f| f.name == "sigma");
+-        assert!(sigma.is_some(), "sigma attr should be in AST");
+-        assert_eq!(sigma.unwrap().value, "0.97");
+-        // id attr extracted
+-        let id = rel.attrs.iter().find(|f| f.name == "id");
+-        assert!(id.is_some());
+-        assert_eq!(id.unwrap().value, "r001");
+-    }
+-
+-    #[test]
+-    fn test_multiple_relations_extracted() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) ENTAILS B [sigma=0.9]\n(B) CONTRADICTS C [sigma=0.8]\n(agent) KNOWS D [sigma=0.97]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 3, "Should extract 3 relations: {:?}",
+-            doc.relations.iter().map(|r| &r.operator).collect::<Vec<_>>());
+-        assert_eq!(doc.relations[0].operator, "ENTAILS");
+-        assert_eq!(doc.relations[1].operator, "CONTRADICTS");
+-        assert_eq!(doc.relations[2].operator, "KNOWS");
+-    }
+-
+-    #[test]
+-    fn test_relations_by_op_query() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) ENTAILS B [sigma=0.9]\n(B) ENTAILS C [sigma=0.8]\n(X) KNOWS Y [sigma=0.95]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let entails = doc.relations_by_op("ENTAILS");
+-        assert_eq!(entails.len(), 2);
+-        let knows = doc.relations_by_op("KNOWS");
+-        assert_eq!(knows.len(), 1);
+-        let before = doc.relations_by_op("BEFORE");
+-        assert_eq!(before.len(), 0);
+-    }
+-
+-    #[test]
+-    fn test_relations_by_subject_query() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(agent_A) KNOWS fact1 [sigma=0.97]\n(agent_A) BELIEVES claim1 [sigma=0.70]\n(agent_B) KNOWS fact2 [sigma=0.95]\n]\n---END---");
+-        let doc = parse(&payload);
+-        let agent_a_rels = doc.relations_by_subject("agent_A");
+-        assert_eq!(agent_a_rels.len(), 2);
+-        let agent_b_rels = doc.relations_by_subject("agent_B");
+-        assert_eq!(agent_b_rels.len(), 1);
+-    }
+-
+-    #[test]
+-    fn test_relation_sigma_helper() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) DOUBTS B [sigma=0.30]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 1);
+-        let sigma = crate::ast::CstlDocument::relation_sigma(&doc.relations[0]);
+-        assert!(sigma.is_some());
+-        assert!((sigma.unwrap() - 0.30).abs() < 0.001);
+-    }
+-
+-    #[test]
+-    fn test_temporal_relations_extracted() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(step_1) BEFORE step_2 [sigma=1.0]\n(monitor) DURING step_2 [sigma=0.90]\n(step_3) AFTER step_2 [sigma=0.95]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 3);
+-        assert_eq!(doc.relations_by_op("BEFORE").len(), 1);
+-        assert_eq!(doc.relations_by_op("DURING").len(), 1);
+-        assert_eq!(doc.relations_by_op("AFTER").len(), 1);
+-    }
+-
+-    #[test]
+-    fn test_relational_operators_extracted() {
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(A) EQUALS B [sigma=0.95]\n(C) POSSESSES D [sigma=0.99]\n(E) RESEMBLES F [sigma=0.72]\n(G) CO_LOCATES H [sigma=0.85]\n(I) OPPOSES J [sigma=0.70]\n(K) COMPARES L [sigma=0.80]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 6, "All 6 relational operators should parse");
+-        let ops: Vec<&str> = doc.relations.iter().map(|r| r.operator.as_str()).collect();
+-        assert!(ops.contains(&"EQUALS"));
+-        assert!(ops.contains(&"POSSESSES"));
+-        assert!(ops.contains(&"RESEMBLES"));
+-        assert!(ops.contains(&"CO_LOCATES"));
+-        assert!(ops.contains(&"OPPOSES"));
+-        assert!(ops.contains(&"COMPARES"));
+-    }
+-
+-    #[test]
+-    fn test_modal_relation_with_modality_extracted() {
+-        // (MUST) agent KNOWS fact [sigma=0.97]
+-        let payload = BASE.replace("---END---",
+-            "RELATIONS [\n(MUST) agent KNOWS fact [sigma=0.97]\n]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 1);
+-        let rel = &doc.relations[0];
+-        assert_eq!(rel.operator, "KNOWS");
+-        assert_eq!(rel.subject,  "agent");
+-        assert_eq!(rel.object,   "fact");
+-        assert_eq!(rel.modality, Some("MUST".to_string()));
+-    }
+-
+-    #[test]
+-    fn test_toplevel_relation_outside_block() {
+-        // Relations can appear outside RELATIONS [...] block
+-        let payload = BASE.replace("---END---",
+-            "(hypothesis) ENTAILS conclusion [sigma=0.85]\n---END---");
+-        let doc = parse(&payload);
+-        assert_eq!(doc.relations.len(), 1);
+-        assert_eq!(doc.relations[0].operator, "ENTAILS");
+-    }
+-
+-    #[test]
+-    fn test_full_v5_payload_ast_complete() {
+-        let payload = BASE.replace("---END---", r#"
+-RELATIONS [
+-(hypothesis) ENTAILS finding [sigma=0.85, tau=f_future, id=r001]
+-(finding) CONTRADICTS null_hypothesis [sigma=0.90, id=r002]
+-(agent) KNOWS measured_value [sigma=0.97, id=r003]
+-(agent) BELIEVES derived_claim [sigma=0.72, id=r004]
+-(step_1) BEFORE step_2 [sigma=1.0, id=r005]
+-(monitor) DURING step_2 [sigma=0.90, id=r006]
+-(CSTL) COMPARES JSON_LD [sigma=0.88, id=r007]
+-]
+----END---"#);
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        assert_eq!(doc.relations.len(), 7, "All 7 relations should be in AST");
+-
+-        // Verify each relation is queryable
+-        assert_eq!(doc.relations_by_op("ENTAILS").len(), 1);
+-        assert_eq!(doc.relations_by_op("CONTRADICTS").len(), 1);
+-        assert_eq!(doc.relations_by_op("KNOWS").len(), 1);
+-        assert_eq!(doc.relations_by_op("BELIEVES").len(), 1);
+-        assert_eq!(doc.relations_by_op("BEFORE").len(), 1);
+-        assert_eq!(doc.relations_by_op("DURING").len(), 1);
+-        assert_eq!(doc.relations_by_op("COMPARES").len(), 1);
+-
+-        // Verify sigma extraction on a specific relation
+-        let entails = &doc.relations_by_op("ENTAILS")[0];
+-        let sigma = crate::ast::CstlDocument::relation_sigma(entails);
+-        assert!((sigma.unwrap() - 0.85).abs() < 0.001);
+-    }
+-
+-    #[test]
+-    fn test_backtrack_safe_non_relation_paren() {
+-        // (RULE) MUST respond_in_cstl_only — modal statement, NOT a relation
+-        let payload = BASE.replace("---END---",
+-            "(RULE) MUST respond_in_cstl_only\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-        // Should NOT be in relations (no operator)
+-        assert_eq!(doc.relations.len(), 0);
+-        // Should be a modal block
+-        assert!(!doc.blocks_named("(RULE)").is_empty());
+-    }
+-
+-    #[test]
+-    fn test_parse_field_backtrack_safe() {
+-        // A field followed by a non-= token should backtrack cleanly
+-        let payload = BASE.replace("---END---",
+-            "DEFINE patient AS human [name=Jean, age=45]\n---END---");
+-        let doc = parse(&payload);
+-        assert!(doc.is_valid, "{:?}", doc.errors);
+-    }
+-}
+-- 
+2.43.0
+
+
+From 42236ba7af38695f6ae44abeaab8ce01f57d192a Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:56:42 +0000
+Subject: [PATCH 5/6] fix(audit): appliquer NFC au VRAI hash de production
+ (server/audit.rs)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Decouverte en verifiant l'effet reel du fix NFC de src/canonical.rs
+(commit precedent de cette session, "corrige tout"): src/canonical.rs
+tout entier -- canonical_form(), canonical_hash(), y compris le fix NFC
+qu'on venait d'y appliquer -- n'est appele NULLE PART dans ce depot
+(verifie par grep exhaustif). Le hash REELLEMENT utilise par le serveur
+TCP en production, cle primaire de adn_store, chainon de HashChain, est
+une fonction DIFFERENTE portant le meme nom: server/audit.rs::canonical_hash(),
+qui hashe un CstlPayload deja parse (VERSION/MODE/META/INTENT/RELATIONS
+tries via BTreeMap) plutot que du texte brut. Corriger canonical.rs
+n'avait donc AUCUN effet sur le bug reel: deux payloads dont un champ
+contient la meme valeur visible dans deux representations Unicode
+differentes (ex: "café" precompose U+00E9 vs decompose e+U+0301)
+produisaient toujours deux hash d'audit differents pour un contenu
+semantiquement identique -- exactement le probleme que le fix NFC de
+canonical.rs pretendait resoudre, sans jamais toucher le code qui tourne
+reellement.
+
+Fix: server/audit.rs::canonical_hash() applique maintenant NFC (via la
+meme dependance unicode-normalization deja ajoutee pour canonical.rs) a
+chaque cle et valeur de META/INTENT/RELATIONS et a VERSION/MODE, avant de
+les concatener dans le buffer hashe. Nouvelle fonction locale nfc()
+(wrapper d'une ligne) pour eviter de repeter `s.nfc().collect()` a chaque
+site d'appel.
+
+Les deux implementations (canonical.rs et server/audit.rs) restent
+distinctes -- domaines de donnees differents (texte brut CSTL documente
+comme normatif par CSTL_SPEC_v5_0.md section 15, vs CstlPayload deja
+parse et structure), pas interchangeables sans reecriture. Ce commit ne
+fusionne pas les deux; il documente honnetement (commentaire en tete de
+server/audit.rs) laquelle est reellement utilisee en production, pour
+qu'un prochain fix NFC-like ne retombe pas dans le meme piege.
+
+Verification:
+- cargo build: compile sans erreur.
+- cargo test --lib server::audit: 7/7 passed, dont le nouveau
+  test_nfc_equivalent_field_values_produce_same_audit_hash (deux valeurs
+  INTENT differant seulement par leur representation Unicode produisent
+  le meme canonical_hash()).
+- cargo test --lib (suite complete): 132 passed, 0 failed, 0 regression.
+- Live TCP (serveur reel sur :5050, cstl_adn.db propre): deux payloads
+  envoyes separement avec INTENT_PAYLOAD note=café (l'un precompose,
+  l'autre decompose, verifie distincts en Python avant envoi) -> les DEUX
+  reponses AUDIT portent exactement le meme hash
+  (sha256:710c49a66c95e56b6241f2ad2e554e1633ff67d12c873308087f3653e3429927)
+  -- confirme sur le vrai HashChain de production, pas seulement en test
+  unitaire. Avant ce fix, ces deux hash auraient differe.
+- Arret propre confirme.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/server/audit.rs | 64 +++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 56 insertions(+), 8 deletions(-)
+
+diff --git a/src/server/audit.rs b/src/server/audit.rs
+index 9c1844e..0663c5e 100644
+--- a/src/server/audit.rs
++++ b/src/server/audit.rs
+@@ -4,11 +4,39 @@
+ /// jamais par un LLM. Un LLM ne peut pas produire de SHA-256 reel.
+ /// PARENT_HASH=root ou unverified_no_hash_tool_available cote agent,
+ /// remplace ici par le vrai hash calcule.
++///
++/// Note honnete (audit multi-angle, 2026-09-03 -- decouverte en creusant
++/// le fix NFC de src/canonical.rs): CE canonical_hash() ci-dessous, et non
++/// canonical::canonical_hash(), est celui reellement utilise par le
++/// serveur TCP en production (via HashChain::append, appele depuis
++/// server/handler.rs pour chaque payload recu -- c'est la cle primaire de
++/// adn_store). src/canonical.rs implemente un algorithme DIFFERENT
++/// (canonicalisation de texte brut, documente comme normatif dans
++/// CSTL_SPEC_v5_0.md section 15) mais n'est appele NULLE PART dans ce
++/// depot -- corriger canonical.rs (fait plus tot dans cette session, ajout
++/// de la normalisation NFC) n'avait donc AUCUN effet sur le hash reel
++/// produit par le serveur qui tourne. Les deux fonctions partagent le nom
++/// canonical_hash et l'intention (determinisme, immutabilite) mais
++/// operent sur des donnees differentes (texte brut CSTL vs CstlPayload
++/// deja parse) et ne sont PAS interchangeables -- corriger celle-ci ne
++/// dispense pas de garder canonical.rs a jour si un jour un appelant
++/// reel apparait pour elle.
+ 
+ use sha2::{Digest, Sha256};
+ use std::collections::BTreeMap;
++use unicode_normalization::UnicodeNormalization;
+ use super::parser::CstlPayload;
+ 
++/// Applique NFC avant de pousser une chaine dans le buffer canonique.
++/// Corrige la meme trouvaille NFC que src/canonical.rs (ratifiee
++/// tripartite depuis la Session #5, jamais appliquee ici): deux
++/// representations Unicode canoniquement equivalentes d'une valeur de
++/// champ (ex: "café" precompose vs decompose) produisaient auparavant
++/// deux hash d'audit differents pour un payload semantiquement identique.
++fn nfc(s: &str) -> String {
++    s.nfc().collect()
++}
++
+ #[derive(Debug, Clone)]
+ pub struct AuditEntry {
+     pub hash: String,
+@@ -28,11 +56,15 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
+     let mut canon = String::new();
+ 
+     canon.push_str("VERSION|");
+-    canon.push_str(&payload.version);
++    canon.push_str(&nfc(&payload.version));
+     canon.push_str("\nMODE|");
+-    canon.push_str(&payload.mode);
++    canon.push_str(&nfc(&payload.mode));
+ 
+-    // BTreeMap => tri lexicographique garanti
++    // BTreeMap => tri lexicographique garanti. Trie sur les cles BRUTES
++    // (non normalisees) -- deux cles NFC-equivalentes mais bytes-differentes
++    // seraient de toute facon deux entrees HashMap distinctes en amont, la
++    // normalisation ici ne change donc pas l'ORDRE de tri, seulement les
++    // bytes hashes pour chaque valeur (et chaque cle, par coherence).
+     let meta: BTreeMap<_, _> = payload.meta.iter().collect();
+     canon.push_str("\nMETA");
+     for (k, v) in meta {
+@@ -41,18 +73,18 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
+             continue;
+         }
+         canon.push('|');
+-        canon.push_str(k);
++        canon.push_str(&nfc(k));
+         canon.push('=');
+-        canon.push_str(v);
++        canon.push_str(&nfc(v));
+     }
+ 
+     let intent: BTreeMap<_, _> = payload.intent.iter().collect();
+     canon.push_str("\nINTENT");
+     for (k, v) in intent {
+         canon.push('|');
+-        canon.push_str(k);
++        canon.push_str(&nfc(k));
+         canon.push('=');
+-        canon.push_str(v);
++        canon.push_str(&nfc(v));
+     }
+ 
+     // Relations: chaque bloc trie en interne, puis les blocs tries entre eux
+@@ -63,7 +95,7 @@ pub fn canonical_hash(payload: &CstlPayload) -> String {
+             let sorted: BTreeMap<_, _> = r.iter().collect();
+             sorted
+                 .iter()
+-                .map(|(k, v)| format!("{}={}", k, v))
++                .map(|(k, v)| format!("{}={}", nfc(k), nfc(v)))
+                 .collect::<Vec<_>>()
+                 .join(",")
+         })
+@@ -175,6 +207,22 @@ mod tests {
+         }
+     }
+ 
++    /// Corrige la meme trouvaille NFC que src/canonical.rs, mais cette fois
++    /// sur le HASH REELLEMENT UTILISE EN PRODUCTION (via HashChain::append,
++    /// la cle primaire de adn_store). Deux payloads dont un champ INTENT
++    /// contient la meme valeur visible mais dans deux representations
++    /// Unicode differentes (café precompose vs decompose) doivent produire
++    /// EXACTEMENT le meme hash d'audit.
++    #[test]
++    fn test_nfc_equivalent_field_values_produce_same_audit_hash() {
++        let mut a = mk("alice", "query");
++        let mut b = mk("alice", "query");
++        a.intent.insert("note".to_string(), "caf\u{00E9}".to_string());
++        b.intent.insert("note".to_string(), "cafe\u{0301}".to_string());
++        assert_ne!(a.intent.get("note"), b.intent.get("note"), "bytes bruts differents avant normalisation");
++        assert_eq!(canonical_hash(&a), canonical_hash(&b));
++    }
++
+     #[test]
+     fn test_hash_is_deterministic() {
+         let a = mk("alice", "query");
+-- 
+2.43.0
+
+
+From ca554809e2d7de7c4937b1301b8a85a78abbca05 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:57:23 +0000
+Subject: [PATCH 6/6] docs: corriger 3 fausses affirmations (Layer 2, Graphify,
+ badge de tests)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Trois trouvailles d'honnetete-documentation de l'audit multi-angle
+(2026-09-03), verifiees puis corrigees:
+
+1. README.md Layer 2 ("Governance / Resilience — circuit breaker, 2/3
+   quorum, operator drift prevention | ✅ Tested (4/4 modes)") et son
+   miroir docs/ARCHITECTURE.md Couche 2: AUCUN circuit breaker, AUCUNE
+   logique de quorum, AUCUNE detection de drift d'operateur n'existe
+   nulle part dans ce depot (grep exhaustif sur src/: 0 resultat pour
+   "circuit_breaker"/"CircuitBreaker"/"circuit breaker" et pour "drift").
+   Corrigee dans les deux fichiers vers 🔴 Not built / NON CONSTRUITE,
+   avec le detail de ce qui existe reellement (RestrictedCouncil,
+   quorum=1).
+
+2. docs/ARCHITECTURE.md Couche 6 disait encore "Graphify: inactif — pas
+   installe" alors que README.md documentait deja l'installation reelle
+   et la regeneration du graphe (967 noeuds, 1800 aretes, 63 communautes,
+   commit 3326f917). Contradiction frontale entre les deux documents sur
+   le meme fait verifiable. Corrigee pour refleter la realite documentee
+   par README.md.
+
+3. Badge de tests README.md: affichait "86 passing" et pointait vers
+   `src/tests.rs` -- qui vient d'etre supprime ce meme jour (parser
+   orphelin jamais compile, voir commit precedent). Corrige vers le vrai
+   compte actuel (132 passing, `cargo test --lib` verifie a l'instant),
+   lien retire.
+
+Note de re-application (2026-09-03, plus tard le meme jour): ce fix avait
+deja ete pousse une premiere fois via patch, mais une verification de
+l'etat reel d'origin/master a revele qu'il n'avait jamais ete applique
+(meme situation que les fixes NFC/emergence/kb_verify de cette meme
+session de rattrapage) -- ce commit le refait sur l'etat actuel du depot,
+avec le compte de tests final (132, apres tous les fixes de cette session
+y compris la suppression de tests.rs et le fix NFC du hash d'audit reel).
+
+Verification: cargo build + cargo test --lib -- 132 passed, 0 failed,
+0 regression (changements purement documentaires, aucun fichier .rs
+touche).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ README.md            |  6 +++---
+ docs/ARCHITECTURE.md | 11 ++++++++---
+ 2 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/README.md b/README.md
+index c6da680..e41adb8 100644
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,7 @@
+ > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
+ 
+ [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+-[![Tests](https://img.shields.io/badge/tests-86%20passing-brightgreen.svg)](src/tests.rs)
++![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen.svg)
+ 
+ ---
+ 
+@@ -46,7 +46,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | # | Layer | Status |
+ |---|---|---|
+ | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
+-| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | ✅ Tested (4/4 modes) |
++| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention | 🔴 Not built — no circuit breaker, quorum, or drift-detection code exists anywhere in this repo (verified by exhaustive grep, 2026-09-03). This row's "✅ Tested (4/4 modes)" was never true. The closest built primitive is `RestrictedCouncil` (Layer 3b below): quorum=1, not 2/3, no circuit breaker or drift detection |
+ | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+ | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — reduced scope: single authorized member (quorum=1), not the 2/3 multi-person quorum described below |
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+@@ -230,7 +230,7 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
+ cargo test
+ ```
+ 
+-86 tests passing, 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
++132 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
+ 
+ ---
+ 
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 4b690e0..2455fc2 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -40,9 +40,14 @@ serveur séparé ci-dessous serait une régression de cette réécriture.
+ CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
+ 
+ ### Couche 2: Gouvernance / Résilience
+-**État:** ✅ TESTÉ - 4/4 modes
++**État:** 🔴 NON CONSTRUITE — audit multi-angle du 2026-09-03
+ 
+-Circuit Breaker avec quorum 2/3, dynamic whitelist, 3 modes défaillance, operator drift prevention.
++Aucun circuit breaker, aucune logique de quorum, aucune détection de drift
++d'opérateur n'existe nulle part dans ce dépôt (vérifié par grep exhaustif).
++Le "✅ TESTÉ - 4/4 modes" affiché ici auparavant n'a jamais été vrai. Le
++primitif le plus proche réellement construit est `RestrictedCouncil`
++(Couche 3b ci-dessous) : quorum=1, pas 2/3, sans circuit breaker ni
++détection de drift.
+ 
+ ### Couche 3a: Vérification Faits Publics
+ **État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
+@@ -67,7 +72,7 @@ Laplace Smoothed Scoring per-agent, per-domain accuracy.
+ ### Couche 6: Interface Humaine
+ **État:** 🟡 PARTIEL
+ 
+-Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: inactif — l'outil n'est pas installé sur la machine de dev (vérifié le 2026-09-03), les données de graphe existantes (2026-08-26) décrivent l'ancien codebase Python et ne peuvent pas être régénérées sans installer l'outil d'abord.
++Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel désormais — corrige une contradiction avec README.md détectée par l'audit multi-angle du 2026-09-03 (ce document disait encore "inactif, pas installé" alors que README.md documentait déjà l'installation et la régénération). L'outil (`graphifyy`, PyPI, venv local) a été installé et le graphe régénéré le 2026-09-03 : 967 nœuds, 1800 arêtes, 63 communautés étiquetées sémantiquement, construit depuis le commit `3326f917`. Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé.
+ 
+ ### Couche 7: Agent Discovery & Routing (CSTL Natif)
+ **État:** ✅ CONSTRUITE ET CÂBLÉE LIVE
+-- 
+2.43.0
+

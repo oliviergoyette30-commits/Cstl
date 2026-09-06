@@ -1,0 +1,153 @@
+From 45ea7f1424660c63574e6853e46c59910de45575 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:46:01 +0000
+Subject: [PATCH] perf(handler): verification KB parallelisee + bornee
+
+Derniere trouvaille mineure de l'audit multi-angle (2026-09-03): la boucle
+de verification factuelle (Couche 3a, kb_verify::KbVerifier) attendait
+chaque appel SPARQL sortant vers Wikidata SEQUENTIELLEMENT (.await un par
+un, dans une boucle for). Un payload avec N relations bloquait la
+connexion pendant N fois la latence reseau vers Wikidata -- et aucune
+borne n'existait sur N: un payload avec des centaines de RELATION pouvait
+a la fois degrader la latence de sa propre reponse ET, plus grave,
+transformer le serveur en amplificateur de requetes sortantes vers un
+tiers (deni de service par proxy).
+
+Fix:
+- Les verifications sont maintenant lancees en parallele via
+  tokio::task::JoinSet (deja disponible via la dependance tokio "full"
+  existante dans Cargo.toml -- pas de nouvelle dependance necessaire).
+  KbVerifier est deja partage en Arc<KbVerifier> par le pipeline; son
+  seul champ est un reqwest::Client, Send+Sync+Clone -- rien n'empechait
+  ce parallelisme, il n'etait simplement pas exploite.
+- MAX_RELATIONS_TO_VERIFY (50) borne le nombre de relations effectivement
+  verifiees par payload -- au-dela, un warning est loggue et seules les
+  50 premieres sont verifiees (pas de rejet: un payload avec beaucoup de
+  RELATION reste traite, juste avec une verification KB partielle).
+- L'ordre de completion des taches paralleles n'est PAS l'ordre du
+  payload (latence reseau independante par relation) -- chaque resultat
+  est tague de son index d'origine et retrie avant de construire la
+  reponse, pour une sortie deterministe et stable d'un run a l'autre,
+  peu importe quelle requete Wikidata revient en premier.
+
+Verification:
+- cargo build: compile sans erreur.
+- cargo test --lib: 127 passed, 0 failed, 0 regression (logique inline
+  dans la boucle async de handle_connection -- pas testable unitairement
+  sans serveur reel ; couverte par la verification live ci-dessous).
+- Live TCP (serveur reel sur :5050, cstl_adn.db propre): payload avec 4
+  RELATION distinctes (part_of/located_in/born_in/capital_of) -> les 4
+  lignes VERIFICATION reviennent dans l'ordre EXACT du payload (aaa/bbb/
+  ccc/ddd), confirmant que le retri par index fonctionne malgre
+  l'execution parallele reelle des 4 appels kb_verifier.verify_relation().
+- Arret propre confirme.
+
+Ceci cloture les 16 findings confirmes de l'audit multi-angle du
+2026-09-03 (3 critiques + 6 majeures + ce commit termine les 6 mineures +
+la trouvaille positive/info n'appelait aucune action). Reste hors scope,
+signale mais non traite par choix explicite ou faute de mandat: le
+parser parallele orphelin src/tests.rs + src/ast.rs (jamais branche,
+jamais compile -- mod tests; absent de lib.rs), et la duplication
+canonical_hash entre src/canonical.rs et src/server/audit.rs (decouverte
+incidemment pendant le fix emergence.rs de cette session, jamais
+formellement ajoutee a l'audit).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/server/handler.rs | 74 +++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 60 insertions(+), 14 deletions(-)
+
+diff --git a/src/server/handler.rs b/src/server/handler.rs
+index 9854c0f..8093068 100644
+--- a/src/server/handler.rs
++++ b/src/server/handler.rs
+@@ -283,25 +283,71 @@ pub async fn handle_connection(
+                     // du payload, on interroge Wikidata via kb_verify::KbVerifier.
+                     // Le module cesse ici d'etre un exemple isole et devient une
+                     // capacite reelle du serveur en cours d'execution.
+-                    let mut verification_lines = String::new();
+-                    for relation in &payload.relations {
+-                        let subject = relation.get("subject").cloned();
+-                        let object = relation.get("object").cloned();
+-                        let predicate = relation.get("type").cloned();
+-                        if let (Some(subject), Some(predicate), Some(object)) = (subject, predicate, object) {
++                    //
++                    // Trouvaille mineure de l'audit multi-angle (2026-09-03): cette
++                    // boucle attendait chaque appel SPARQL sortant SEQUENTIELLEMENT
++                    // (.await un par un) -- un payload avec N relations bloquait la
++                    // connexion (et retenait potentiellement des locks pris plus loin
++                    // dans le pipeline) pendant N fois la latence reseau vers Wikidata,
++                    // sans aucune borne sur N. Fix: les verifications sont lancees en
++                    // parallele (tokio::task::JoinSet, deja disponible via la dependance
++                    // tokio "full" existante -- pas de nouvelle dependance necessaire),
++                    // et on borne explicitement le nombre de relations verifiees par
++                    // payload (MAX_RELATIONS_TO_VERIFY) pour eviter qu'un payload avec
++                    // des centaines de RELATION ne devienne un vecteur de déni de
++                    // service par amplification de requetes sortantes.
++                    const MAX_RELATIONS_TO_VERIFY: usize = 50;
++                    let relations_to_verify: Vec<(usize, String, String, String)> = payload.relations.iter()
++                        .enumerate()
++                        .filter_map(|(idx, relation)| {
++                            let subject = relation.get("subject").cloned()?;
++                            let predicate = relation.get("type").cloned()?;
++                            let object = relation.get("object").cloned()?;
++                            Some((idx, subject, predicate, object))
++                        })
++                        .take(MAX_RELATIONS_TO_VERIFY)
++                        .collect();
++                    if payload.relations.len() > MAX_RELATIONS_TO_VERIFY {
++                        eprintln!(
++                            "[Handler] ⚠️  {} relations dans le payload, verification KB bornee aux {} premieres",
++                            payload.relations.len(), MAX_RELATIONS_TO_VERIFY
++                        );
++                    }
++
++                    let mut verify_tasks = tokio::task::JoinSet::new();
++                    for (idx, subject, predicate, object) in relations_to_verify {
++                        let kb_verifier = kb_verifier.clone();
++                        verify_tasks.spawn(async move {
+                             eprintln!("[Handler] 🔎 Verifying relation: {} {} {}", subject, predicate, object);
+                             let result = kb_verifier.verify_relation(&subject, &predicate, &object, "fr", 4, 40).await;
+                             eprintln!("[Handler]    -> {} ({})", result.verified, result.reason);
+-                            verification_lines.push_str(&format!(
+-                                "VERIFICATION [subject={}, predicate={}, object={}, verified={}, source={}]\n",
+-                                subject,
+-                                predicate,
+-                                object,
+-                                result.verified,
+-                                result.source_url.unwrap_or_else(|| "none".to_string())
+-                            ));
++                            (idx, subject, predicate, object, result)
++                        });
++                    }
++
++                    let mut verification_results = Vec::new();
++                    while let Some(joined) = verify_tasks.join_next().await {
++                        match joined {
++                            Ok(tuple) => verification_results.push(tuple),
++                            Err(e) => eprintln!("[Handler] ⚠️  tache de verification KB annulee/paniquee: {}", e),
+                         }
+                     }
++                    // Ordre de completion des taches paralleles != ordre du payload --
++                    // on retrie par index d'origine pour une reponse deterministe,
++                    // stable d'un run a l'autre independamment de la latence reseau.
++                    verification_results.sort_by_key(|(idx, ..)| *idx);
++
++                    let mut verification_lines = String::new();
++                    for (_idx, subject, predicate, object, result) in verification_results {
++                        verification_lines.push_str(&format!(
++                            "VERIFICATION [subject={}, predicate={}, object={}, verified={}, source={}]\n",
++                            subject,
++                            predicate,
++                            object,
++                            result.verified,
++                            result.source_url.unwrap_or_else(|| "none".to_string())
++                        ));
++                    }
+ 
+                     // STEP 3c: Coherence interne (ExecutionLab, couche 3b partielle) —
+                     // verifie les relations DE CE PAYLOAD contre TOUT l'historique de
+-- 
+2.43.0
+
