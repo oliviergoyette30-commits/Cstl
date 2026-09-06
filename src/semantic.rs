@@ -79,6 +79,49 @@ pub fn is_fipa_performative(purpose: &str) -> bool {
     FIPA_PERFORMATIVES.contains(&upper.as_str())
 }
 
+/// Negociation FIPA minimale (2026-09-06) -- ajoutee en reponse a une
+/// lacune reelle constatee APRES `FIPA_PERFORMATIVES` ci-dessus: le
+/// mecanisme etait "dormant", le serveur RECONNAISSAIT un performatif
+/// (bloc `PERFORMATIVE`) mais ne reagissait jamais differemment selon son
+/// type -- un `PROPOSE` et un `REFUSE` recevaient le meme traitement de
+/// fond, aucune boucle PROPOSE -> REFUSE n'etait fermee. Choix de portee,
+/// assumes et volontairement PETITS (voir aussi `server/handler.rs`, bloc
+/// `NEGOTIATION`, et README.md section Layer 7) :
+///
+/// 1. PAS de moteur de negociation automatique: le serveur ne GENERE
+///    jamais de contre-proposition lui-meme -- ca reste le role de
+///    l'agent/LLM client, qui a besoin du contexte exact de ce qui a ete
+///    refuse pour la construire. Ce module se contente de retrouver et
+///    d'exposer ce contexte de facon verifiable (contre l'ADN store reel,
+///    pas une supposition).
+/// 2. Seuls les performatifs qui CLOTURENT une proposition anterieure
+///    recoivent un statut ici: `REFUSE`/`REJECT_PROPOSAL` (statut
+///    "refused", la boucle qui manquait completement) et
+///    `ACCEPT_PROPOSAL` (statut "accepted", ajoute par symetrie -- meme
+///    besoin de retrouver QUELLE proposition a ete acceptee). `PROPOSE`
+///    et `CFP` n'ouvrent rien ici (ce sont eux la proposition), `AGREE`
+///    est un accord sur une ACTION demandee (semantique FIPA distincte
+///    d'ACCEPT_PROPOSAL) et reste hors de ce mecanisme minimal.
+/// 3. La correlation utilise un nouveau champ de wire format additif,
+///    `INTENT_PAYLOAD.in_reply_to=<hash>` (le hash `sha256:...` retourne
+///    dans le bloc `AUDIT` de la reponse au `PROPOSE`/`CFP` original) --
+///    PAS la colonne `conversation_id` deja presente dans le schema
+///    `adn_store` (jamais peuplee depuis aucun payload, voir
+///    `server/handler.rs` ou `put()` la recoit toujours a `None`):
+///    `conversation_id` designerait un FIL entier, alors qu'une reponse
+///    FIPA refere toujours a UN message precis -- overloader le champ
+///    existant aurait ete plus simple a court terme mais aurait cache
+///    cette distinction. `in_reply_to` est un champ d'ENVELOPPE comme
+///    `purpose`/`sender`/`receiver`, donc deja lisible sans aucun
+///    changement de parser (`payload.intent` est une HashMap generique).
+pub fn negotiation_status_for(purpose: &str) -> Option<&'static str> {
+    match purpose.to_ascii_uppercase().as_str() {
+        "REFUSE" | "REJECT_PROPOSAL" => Some("refused"),
+        "ACCEPT_PROPOSAL" => Some("accepted"),
+        _ => None,
+    }
+}
+
 // `pub` depuis le 2026-09-04: reutilisees par
 // execution_lab::check_deontic_consistency_with_history (Couche 8, audit
 // deontique HISTORIQUE) pour rester l'unique source de verite sur ce qui
@@ -669,6 +712,47 @@ mod fipa_tests {
         assert!(!is_fipa_performative("test"));
         assert!(!is_fipa_performative("communication"));
         assert!(!is_fipa_performative(""));
+    }
+}
+
+#[cfg(test)]
+mod negotiation_tests {
+    use super::negotiation_status_for;
+
+    #[test]
+    fn test_refuse_and_reject_proposal_are_refused_status() {
+        assert_eq!(negotiation_status_for("REFUSE"), Some("refused"));
+        assert_eq!(negotiation_status_for("REJECT_PROPOSAL"), Some("refused"));
+    }
+
+    #[test]
+    fn test_accept_proposal_is_accepted_status() {
+        assert_eq!(negotiation_status_for("ACCEPT_PROPOSAL"), Some("accepted"));
+    }
+
+    #[test]
+    fn test_case_insensitive() {
+        assert_eq!(negotiation_status_for("refuse"), Some("refused"));
+        assert_eq!(negotiation_status_for("Accept_Proposal"), Some("accepted"));
+    }
+
+    #[test]
+    fn test_propose_and_cfp_do_not_open_negotiation_status() {
+        // PROPOSE/CFP sont l'OUVERTURE d'une proposition, pas sa cloture --
+        // aucun statut ici, meme s'ils restent des performatifs FIPA valides
+        // (is_fipa_performative reste vrai pour eux).
+        assert_eq!(negotiation_status_for("PROPOSE"), None);
+        assert_eq!(negotiation_status_for("CFP"), None);
+    }
+
+    #[test]
+    fn test_agree_and_other_performatives_out_of_scope() {
+        // AGREE porte sur une ACTION demandee (semantique FIPA distincte
+        // d'ACCEPT_PROPOSAL) -- deliberement hors de ce mecanisme minimal.
+        assert_eq!(negotiation_status_for("AGREE"), None);
+        assert_eq!(negotiation_status_for("INFORM"), None);
+        assert_eq!(negotiation_status_for("agent_register"), None);
+        assert_eq!(negotiation_status_for(""), None);
     }
 }
 

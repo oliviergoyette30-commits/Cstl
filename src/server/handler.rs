@@ -24,7 +24,7 @@ use crate::security;
 use crate::governance::GovernanceTracker;
 use crate::agent_discovery::AgentCard;
 use crate::signing::{self, SignatureCheck};
-use crate::semantic::is_fipa_performative;
+use crate::semantic::{is_fipa_performative, negotiation_status_for};
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -951,6 +951,63 @@ pub async fn handle_connection(
                         String::new()
                     };
 
+                    // Bloc NEGOTIATION (2026-09-06, negociation FIPA minimale) --
+                    // transforme le mecanisme PERFORMATIVE ci-dessus de "dormant"
+                    // (annotation seule, meme traitement pour PROPOSE et REFUSE) en
+                    // "utile et verifiable": ferme la boucle "on sait QUOI a ete
+                    // refuse/accepte", qui n'existait pas du tout avant ce commit. Voir
+                    // le commentaire complet de `semantic::negotiation_status_for` pour
+                    // toute la justification et les limites de portee assumees --
+                    // resume ici: le serveur ne GENERE jamais de contre-proposition, il
+                    // se contente de retrouver le `purpose` du payload original
+                    // reference par `INTENT_PAYLOAD.in_reply_to=<hash>` (nouveau champ
+                    // additif, deja lisible sans changement de parser puisque `intent`
+                    // est une HashMap generique) dans `audit_trail` (adn_store), pour
+                    // que l'agent/LLM client puisse construire sa contre-proposition
+                    // avec le contexte exact de ce qui a ete refuse. Absent quand
+                    // `purpose` n'est ni REFUSE/REJECT_PROPOSAL ni ACCEPT_PROPOSAL --
+                    // meme style d'absence conditionnelle que les autres blocs.
+                    let negotiation_line = if let Some(status) = negotiation_status_for(&purpose) {
+                        match payload.intent.get("in_reply_to") {
+                            Some(in_reply_to) => {
+                                match adn_store.lock().await.get_audit_entry(in_reply_to) {
+                                    Ok(Some(original)) => {
+                                        let original_purpose_upper = original.purpose.to_ascii_uppercase();
+                                        // counter_eligible=true seulement si (a) c'est bien
+                                        // un refus (pas un accord, qui ne se contre-propose
+                                        // pas) ET (b) ce qui a ete refuse etait reellement
+                                        // une proposition (PROPOSE/CFP) -- un REFUSE qui
+                                        // reference par erreur un payload d'un autre type
+                                        // n'ouvre pas droit a une contre-proposition.
+                                        let is_a_proposal = matches!(original_purpose_upper.as_str(), "PROPOSE" | "CFP");
+                                        let counter_eligible = status == "refused" && is_a_proposal;
+                                        format!(
+                                            "NEGOTIATION [status={}, original_proposal={}, original_purpose={}, counter_eligible={}]\n",
+                                            status, in_reply_to, original_purpose_upper, counter_eligible
+                                        )
+                                    }
+                                    Ok(None) => format!(
+                                        "NEGOTIATION [status={}, original_proposal={}, counter_eligible=false, reason=original_not_found]\n",
+                                        status, in_reply_to
+                                    ),
+                                    Err(e) => {
+                                        eprintln!("[Handler] ⚠️  NEGOTIATION: lookup audit_trail echoue pour in_reply_to={}: {}", in_reply_to, e);
+                                        format!(
+                                            "NEGOTIATION [status={}, original_proposal={}, counter_eligible=false, reason=lookup_error]\n",
+                                            status, in_reply_to
+                                        )
+                                    }
+                                }
+                            }
+                            None => format!(
+                                "NEGOTIATION [status={}, original_proposal=none, counter_eligible=false, reason=missing_in_reply_to]\n",
+                                status
+                            ),
+                        }
+                    } else {
+                        String::new()
+                    };
+
                     // STEP 3-priority: INTENT_PAYLOAD.priority (CSTL_SPEC_v5_0.md
                     // §6, ligne ~231 -- champ de grammaire officiel depuis la v5.0,
                     // jamais implemente avant ce fix, cf. `grep -rn '"priority"' src/`
@@ -1029,6 +1086,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1038,6 +1096,7 @@ pub async fn handle_connection(
                             temporal_cycle_line,
                             deontic_audit_line,
                             performative_line,
+                            negotiation_line,
                             priority_line,
                             semantic_warning_lines,
                             governance_line,
