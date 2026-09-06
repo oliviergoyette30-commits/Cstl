@@ -13,3 +13,4 @@ __pycache__/
 # artefact local reconstructible a la demande, pas versionne (voir README.md
 # Couche 6 / docs/ARCHITECTURE.md pour la commande et les chiffres actuels).
 graphify-out/
+Claude outputs/
