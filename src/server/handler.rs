@@ -24,6 +24,7 @@ use crate::security;
 use crate::governance::GovernanceTracker;
 use crate::agent_discovery::AgentCard;
 use crate::signing::{self, SignatureCheck};
+use crate::semantic::is_fipa_performative;
 use super::audit::HashChain;
 use super::parser;
 use super::validator;
@@ -933,6 +934,23 @@ pub async fn handle_connection(
                         )
                     };
 
+                    // Bloc PERFORMATIVE (2026-09-06, FIPA-ACL): purement informatif,
+                    // absent quand `purpose` n'est pas un performatif FIPA reconnu --
+                    // meme style d'absence conditionnelle que les blocs ci-dessus, pour
+                    // ne pas ajouter de bruit sur le trafic qui n'utilise pas ce
+                    // vocabulaire. Ne change RIEN a l'acceptation/au routage du
+                    // payload -- voir le commentaire de `is_fipa_performative` dans
+                    // semantic.rs pour la justification complete de cet ajout.
+                    let performative_line = if is_fipa_performative(&purpose) {
+                        format!(
+                            "PERFORMATIVE [type={}, recognized=true, relations_attached={}]\n",
+                            purpose.to_ascii_uppercase(),
+                            payload.relations.len()
+                        )
+                    } else {
+                        String::new()
+                    };
+
                     // STEP 4: Try to route to agent — agent_registry est maintenant
                     // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
                     // du lock pour ne jamais tenir le MutexGuard pendant le
@@ -956,6 +974,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -964,6 +983,7 @@ pub async fn handle_connection(
                             consistency_line,
                             temporal_cycle_line,
                             deontic_audit_line,
+                            performative_line,
                             semantic_warning_lines,
                             governance_line,
                             entry.hash,
