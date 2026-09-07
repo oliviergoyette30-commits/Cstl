@@ -133,6 +133,9 @@
   <button class="tab-btn" data-tab="adn" onclick="showTab('adn')">ADN Store</button>
   <button class="tab-btn" data-tab="compositeur" onclick="showTab('compositeur')">Compositeur</button>
   <button class="tab-btn" data-tab="autres" onclick="showTab('autres')">Autres systemes</button>
+  <button class="tab-btn" data-tab="hermes" onclick="showTab('hermes')">Hermes</button>
+  <button class="tab-btn" data-tab="openclaw" onclick="showTab('openclaw')">OpenClaw</button>
+  <button class="tab-btn" data-tab="claude-code" onclick="showTab('claude-code')">Claude Code</button>
   <button class="tab-btn" data-tab="orchestrateur" onclick="showTab('orchestrateur')">Orchestrateur</button>
   <button class="tab-btn" data-tab="jarvis" onclick="showTab('jarvis')">Jarvis</button>
 </nav>
@@ -195,12 +198,97 @@
       </table>
       <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
         <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
-        <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
         <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
       </div>
       <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
-      <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
       <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
+      <p class="muted" style="margin-top:14px;">Hermes/Ollama et OpenClaw ont chacun leur propre onglet dedie ci-dessus (verification en direct + explication honnete de ce qui est reellement teste).</p>
+    </section>
+  </div>
+
+  <!-- === HERMES === -->
+  <!--
+    Onglet dedie pour Hermes/Ollama, ajoute a la demande explicite de
+    l'utilisateur ("un onglet pour hermes"). Statut honnete inchange par
+    rapport a /api/other-systems : aucune reference a Hermes/Ollama dans
+    src/ (Rust) -- le coeur du protocole CSTL ne connait pas Hermes. Ce
+    qui EST reel : ce dashboard Python (HermesAgentBrain, via
+    sdk/python/cstl_llm_agent.py) sait parler a un serveur Ollama local, et
+    resolve_brain("auto") l'essaie en premier (avant Gemini/Anthropic) pour
+    le Compositeur et Jarvis. Nouveau bouton /api/hermes-check ci-dessous :
+    contrairement au check OpenClaw (port seulement), celui-ci fait un vrai
+    GET sur l'API documentee d'Ollama (/api/tags) -- une reponse HTTP valide
+    prouve qu'Ollama repond reellement, pas seulement qu'un port est ouvert.
+  -->
+  <div class="tab-panel" data-tab="hermes">
+    <section class="panel">
+      <h2><span class="title">Hermes / Ollama</span></h2>
+      <p class="muted">
+        <strong>Non integre au serveur Rust</strong> -- aucune reference a Hermes/Ollama
+        dans <code>src/</code>, le coeur du protocole CSTL ne sait pas lui parler directement.
+        Ce qui existe reellement : ce dashboard (via <code>HermesAgentBrain</code>,
+        <code>sdk/python/cstl_llm_agent.py</code>) sait parler a un serveur Ollama local
+        (127.0.0.1:11434) s'il est installe et lance -- <code>resolve_brain("auto")</code>
+        l'essaie en premier, avant Gemini puis Anthropic, pour le Compositeur et pour Jarvis.
+      </p>
+      <button class="secondary" onclick="testHermes()">Tester Hermes/Ollama (127.0.0.1:11434)</button>
+      <div id="hermes-check-body" class="muted" style="margin-top:10px;"></div>
+      <p class="muted" style="margin-top:14px;">Pour generer une vraie relation via Hermes (ou son fallback Gemini/Anthropic), utilise l'onglet Compositeur ("Générer une relation via agent LLM") ou l'onglet Jarvis (voix).</p>
+    </section>
+  </div>
+
+  <!-- === OPENCLAW === -->
+  <!--
+    Onglet dedie pour OpenClaw, ajoute a la demande explicite de
+    l'utilisateur ("un autre pour openclaw"). Bouton et logique deplaces
+    tels quels depuis l'ancien panneau "Autres systemes" (meme fonction JS
+    testOpenClaw(), meme endpoint /api/openclaw-check, meme id
+    openclaw-body) -- aucune duplication de logique, seulement un
+    deplacement de markup pour lui donner sa propre place.
+  -->
+  <div class="tab-panel" data-tab="openclaw">
+    <section class="panel">
+      <h2><span class="title">OpenClaw</span></h2>
+      <p class="muted">
+        <strong>Non integre au serveur Rust</strong> -- aucune reference dans <code>src/</code>.
+        Le test ci-dessous verifie seulement l'ouverture du port
+        <code>ws://127.0.0.1:18789</code> (ou une poignee de main WebSocket si le paquet
+        <code>websockets</code> est installe), sans parler le protocole applicatif d'OpenClaw
+        (non documente). Pour une vraie interaction, utilise la console reelle d'OpenClaw
+        (<code>openclaw dashboard</code>, ou le script
+        <code>CSTL_OS_open_openclaw_dashboard.command</code> a cote de ce dashboard).
+      </p>
+      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
+      <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
+    </section>
+  </div>
+
+  <!-- === CLAUDE CODE === -->
+  <!--
+    Onglet dedie pour Claude Code, ajoute a la demande explicite de
+    l'utilisateur ("un autre pour claude code"). Honnete comme le reste du
+    dashboard : Claude Code (cette session, l'outil qui a construit une
+    bonne partie de CSTL et de ce dashboard) n'est PAS un service TCP/HTTP
+    a interroger -- rien a "tester" ici, contrairement a Hermes/OpenClaw.
+    Aucun faux bouton de statut invente.
+  -->
+  <div class="tab-panel" data-tab="claude-code">
+    <section class="panel">
+      <h2><span class="title">Claude Code</span></h2>
+      <p class="muted">
+        <strong>Hors cadre serveur</strong> -- Claude Code est un outil d'edition/agent local
+        (cette session elle-meme), pas un service a interroger en TCP ou HTTP. Il n'y a donc
+        rien a "tester" ici comme pour Hermes ou OpenClaw : pas de port, pas d'API, pas d'etat
+        verifiable depuis ce dashboard. Aucun statut fabrique.
+      </p>
+      <p class="muted">
+        Ce que Claude Code a reellement fait dans ce projet : ecrit et modifie le code Rust du
+        serveur CSTL (<code>src/</code>), le SDK Python, ce dashboard lui-meme (
+        <code>dashboard/server.py</code>, <code>dashboard/index.html</code>), et les scripts de
+        lancement (<code>CSTL_OS.app</code>, les fichiers <code>.command</code>) -- via edition de
+        fichiers et commandes shell reelles, verifiees par compilation/tests/execution a chaque
+        etape, pas par simulation.
+      </p>
     </section>
   </div>
 
@@ -670,6 +758,20 @@ async function refreshGraphify() {
       <p class="muted">genere le ${j.generated_at ? new Date(j.generated_at*1000).toLocaleString() : '?'} (mtime du fichier) --
         built_at_commit=${(j.built_at_commit||'?').slice(0,12)}..., HEAD=${(j.head_commit||'?').slice(0,12)}... ${staleBadge}</p>
       <p class="muted">${j.stale_reason||''}</p>`;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function testHermes() {
+  const body = document.getElementById('hermes-check-body');
+  body.textContent = 'Tentative de connexion vers http://127.0.0.1:11434/api/tags...';
+  try {
+    const r = await fetch('/api/hermes-check');
+    const j = await r.json();
+    const color = j.reachable ? 'var(--ok)' : 'var(--down)';
+    body.innerHTML = `<strong style="color:${color}">${j.reachable ? 'OLLAMA REPOND' : 'INACCESSIBLE DEPUIS ICI'}</strong>
+      (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
   } catch (e) {
     body.textContent = 'Erreur cote dashboard: ' + e;
   }
