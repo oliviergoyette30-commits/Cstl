@@ -7,15 +7,24 @@
 #   1. localise le depot (voir REPO_ROOT ci-dessous -- CONTRAINTE : ce
 #      fichier doit rester a l'interieur de <depot>/dashboard/CSTL_OS.app/,
 #      sinon deplace REPO_ROOT en consequence)
-#   2. demarre le serveur Rust CSTL (cargo run --release) s'il ne tourne
+#   2. demarre Ollama (port 11434) s'il n'est pas deja lance -- MEILLEUR
+#      EFFORT, non bloquant : si ni la commande `ollama` ni /Applications/
+#      Ollama.app ne sont trouves, ce pas est saute et note dans les logs,
+#      le reste continue quand meme (Hermes est optionnel, pas un
+#      prerequis dur du serveur CSTL lui-meme)
+#   3. demarre le service OpenClaw (port 19001) s'il n'est pas deja lance,
+#      via `openclaw daemon start` -- MEILLEUR EFFORT, non bloquant, meme
+#      logique que Ollama : OpenClaw est un systeme externe optionnel, pas
+#      un prerequis dur
+#   4. demarre le serveur Rust CSTL (cargo run --release) s'il ne tourne
 #      pas deja sur le port 5050
-#   3. demarre le dashboard Python (dashboard/server.py) s'il ne tourne pas
+#   5. demarre le dashboard Python (dashboard/server.py) s'il ne tourne pas
 #      deja sur le port 5099
-#   4. ouvre http://127.0.0.1:5099/ dans le navigateur par defaut
-#   5. affiche une notification macOS de statut (demarrage / pret / erreur)
+#   6. ouvre http://127.0.0.1:5099/ dans le navigateur par defaut
+#   7. affiche une notification macOS de statut (demarrage / pret / erreur)
 #      puisqu'une .app lancee depuis le Finder n'a pas de terminal visible
-#      pour afficher des logs -- les vraies sorties des deux process sont
-#      quand meme ecrites dans dashboard/logs/ pour diagnostic reel.
+#      pour afficher des logs -- les vraies sorties de tous les process
+#      sont quand meme ecrites dans dashboard/logs/ pour diagnostic reel.
 #
 # Ce script ne construit AUCUN "kernel" au sens OS -- il orchestre juste le
 # demarrage de deux process deja existants et verifies dans ce depot (le
@@ -81,6 +90,50 @@ wait_for_port() {
 }
 
 notify "CSTL OS" "Demarrage en cours..."
+
+# --- 0a. Ollama / Hermes local (port 11434) ---------------------------------
+# Ajoute le 07/09/2026 a la demande de l'utilisateur ("automatiser
+# l'ouverture d'Ollama/OpenClaw en meme temps que CSTL"). MEILLEUR EFFORT
+# assume et documente : Ollama et OpenClaw sont des systemes EXTERNES au
+# serveur CSTL, pas des dependances de src/ (voir dashboard/index.html,
+# section "Autres systemes", qui le dit deja explicitement). Si l'un des
+# deux est absent/mal installe, ce script ne doit PAS empecher le serveur
+# CSTL et le dashboard de demarrer -- d'ou "|| true" et pas de `exit 1`
+# ici, contrairement aux etapes 1 et 2 (Rust/dashboard) qui restent
+# critiques.
+OLLAMA_PORT=11434
+OLLAMA_LOG="$LOG_DIR/ollama.log"
+if port_is_open "$OLLAMA_PORT"; then
+    echo "[$(date)] Port $OLLAMA_PORT deja occupe -- Ollama suppose deja lance." >> "$OLLAMA_LOG"
+elif command -v ollama >/dev/null 2>&1; then
+    echo "[$(date)] Lancement: ollama serve" >> "$OLLAMA_LOG"
+    ( nohup ollama serve >> "$OLLAMA_LOG" 2>&1 & )
+    wait_for_port "$OLLAMA_PORT" "Ollama" 30 || echo "[$(date)] Ollama pas pret apres 30s -- non bloquant, on continue." >> "$OLLAMA_LOG"
+elif [ -d "/Applications/Ollama.app" ]; then
+    echo "[$(date)] Lancement: open -a Ollama" >> "$OLLAMA_LOG"
+    open -a Ollama >> "$OLLAMA_LOG" 2>&1 || true
+    wait_for_port "$OLLAMA_PORT" "Ollama" 30 || echo "[$(date)] Ollama pas pret apres 30s -- non bloquant, on continue." >> "$OLLAMA_LOG"
+else
+    echo "[$(date)] Ollama introuvable (ni commande 'ollama' ni /Applications/Ollama.app) -- Hermes local indisponible, non bloquant." >> "$OLLAMA_LOG"
+fi
+
+# --- 0b. OpenClaw (gateway, port 19001) -------------------------------------
+# Meme logique "meilleur effort" que ci-dessus. Utilise `openclaw daemon
+# start` (deja un service gere par OpenClaw lui-meme, voir `openclaw daemon
+# --help`) plutot que de lancer un process brut ici -- si le service n'a
+# jamais ete installe (`openclaw daemon install`), `start` peut echouer ;
+# c'est attrape et journalise, jamais fatal pour CSTL_OS.
+OPENCLAW_PORT=19001
+OPENCLAW_LOG="$LOG_DIR/openclaw.log"
+if port_is_open "$OPENCLAW_PORT"; then
+    echo "[$(date)] Port $OPENCLAW_PORT deja occupe -- OpenClaw suppose deja lance." >> "$OPENCLAW_LOG"
+elif command -v openclaw >/dev/null 2>&1; then
+    echo "[$(date)] Lancement: openclaw daemon start" >> "$OPENCLAW_LOG"
+    ( openclaw daemon start >> "$OPENCLAW_LOG" 2>&1 & )
+    wait_for_port "$OPENCLAW_PORT" "OpenClaw" 30 || echo "[$(date)] OpenClaw pas pret apres 30s (peut-etre jamais installe: 'openclaw daemon install') -- non bloquant, on continue." >> "$OPENCLAW_LOG"
+else
+    echo "[$(date)] commande 'openclaw' introuvable dans PATH -- non demarre, non bloquant." >> "$OPENCLAW_LOG"
+fi
 
 # --- 1. Serveur Rust CSTL (port 5050) --------------------------------------
 if port_is_open "$CSTL_SERVER_PORT"; then
