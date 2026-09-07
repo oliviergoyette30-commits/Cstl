@@ -34,6 +34,17 @@
 
 set -u
 
+# --- PATH -------------------------------------------------------------------
+# BUG TROUVE ET CORRIGE LE 07/09/2026 : une .app lancee depuis le Finder
+# n'herite PAS de ~/.zshrc / ~/.bashrc (pas de shell de login), donc les
+# commandes installees via npm global (ex: `openclaw`, qui vit dans
+# ~/.npm-global/bin/ sur cette machine, confirme via le mount device_bash)
+# sont introuvables ici meme si elles marchent dans un vrai Terminal. Constate
+# en direct : "commande 'openclaw' introuvable dans PATH" au demarrage alors
+# que `openclaw` fonctionne normalement en Terminal. Ajoute explicitement,
+# sans ecraser le PATH deja present (Homebrew etc. restent prioritaires).
+export PATH="$HOME/.npm-global/bin:$PATH"
+
 # --- Localisation du depot : CSTL_OS.app/Contents/MacOS/CSTL_OS ------------
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 APP_MACOS_DIR="$(dirname "$SCRIPT_PATH")"
