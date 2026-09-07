@@ -83,7 +83,7 @@ LIMITES HONNETES DE CETTE V1 :
         honnetement plutot que d'inventer une relation.
       * /api/openclaw-check tente une connexion (WebSocket si le paquet
         `websockets` est installe, sinon TCP brut) vers
-        ws://127.0.0.1:19001 -- AUCUN protocole applicatif OpenClaw n'est
+        ws://127.0.0.1:18789 -- AUCUN protocole applicatif OpenClaw n'est
         parle (aucune documentation disponible pour l'ecrire), seulement un
         test de connectivite generique. Dans ce sandbox, retourne toujours
         "inaccessible" puisqu'OpenClaw tourne sur la machine macOS de
@@ -847,7 +847,7 @@ def read_graphify_summary():
 
 
 def check_openclaw_connection():
-    """Test de connectivite GENERIQUE vers ws://127.0.0.1:19001 -- PAS le
+    """Test de connectivite GENERIQUE vers ws://127.0.0.1:18789 -- PAS le
     protocole applicatif d'OpenClaw (aucune documentation de ce protocole
     n'est disponible pour cette tache, donc aucun format de message n'est
     invente ici). Deux niveaux, selon ce qui est disponible:
@@ -865,7 +865,7 @@ def check_openclaw_connection():
     simplement qu'aucun service n'ecoute sur ce port sur CETTE machine (ex:
     OpenClaw pas installe ou pas demarre) -- plus de pretention sur "ou" ca
     tourne."""
-    host, port = "127.0.0.1", 19001
+    host, port = "127.0.0.1", 18789
     started = time.monotonic()
 
     try:
@@ -885,7 +885,7 @@ def check_openclaw_connection():
                 "reachable": False, "method": "websocket_handshake",
                 "host": host, "port": port, "latency_ms": elapsed_ms,
                 "detail": (f"echec de la poignee de main WebSocket ({e}) -- rien n'ecoute (ou ne "
-                           "repond en WebSocket) sur 127.0.0.1:19001 sur cette machine."),
+                           "repond en WebSocket) sur 127.0.0.1:18789 sur cette machine."),
             }
     except ImportError:
         pass
@@ -904,7 +904,7 @@ def check_openclaw_connection():
         return {
             "reachable": False, "method": "tcp_raw",
             "host": host, "port": port, "latency_ms": elapsed_ms,
-            "detail": (f"connexion TCP echouee ({e}) -- rien n'ecoute sur 127.0.0.1:19001 sur cette "
+            "detail": (f"connexion TCP echouee ({e}) -- rien n'ecoute sur 127.0.0.1:18789 sur cette "
                        "machine (OpenClaw pas installe dans le PATH ou pas demarre)."),
         }
 
@@ -951,7 +951,7 @@ def check_other_systems():
         "name": "OpenClaw",
         "status": "non_integre",
         "detail": ("aucune reference dans src/ ; /api/openclaw-check de CE dashboard teste seulement "
-                   "l'ouverture du port ws://127.0.0.1:19001, sans parler le protocole applicatif "
+                   "l'ouverture du port ws://127.0.0.1:18789, sans parler le protocole applicatif "
                    "(non documente) -- clique 'Tester la connexion OpenClaw' pour un resultat en direct."),
     })
 

@@ -12,7 +12,7 @@
 #      Ollama.app ne sont trouves, ce pas est saute et note dans les logs,
 #      le reste continue quand meme (Hermes est optionnel, pas un
 #      prerequis dur du serveur CSTL lui-meme)
-#   3. demarre le service OpenClaw (port 19001) s'il n'est pas deja lance,
+#   3. demarre le service OpenClaw (port 18789) s'il n'est pas deja lance,
 #      via `openclaw daemon start` -- MEILLEUR EFFORT, non bloquant, meme
 #      logique que Ollama : OpenClaw est un systeme externe optionnel, pas
 #      un prerequis dur
@@ -139,13 +139,13 @@ else
     echo "[$(date)] Ollama introuvable (ni commande 'ollama' ni /Applications/Ollama.app) -- Hermes local indisponible, non bloquant." >> "$OLLAMA_LOG"
 fi
 
-# --- 0b. OpenClaw (gateway, port 19001) -------------------------------------
+# --- 0b. OpenClaw (gateway, port 18789) -------------------------------------
 # Meme logique "meilleur effort" que ci-dessus. Utilise `openclaw daemon
 # start` (deja un service gere par OpenClaw lui-meme, voir `openclaw daemon
 # --help`) plutot que de lancer un process brut ici -- si le service n'a
 # jamais ete installe (`openclaw daemon install`), `start` peut echouer ;
 # c'est attrape et journalise, jamais fatal pour CSTL_OS.
-OPENCLAW_PORT=19001
+OPENCLAW_PORT=18789
 OPENCLAW_LOG="$LOG_DIR/openclaw.log"
 if port_is_open "$OPENCLAW_PORT"; then
     echo "[$(date)] Port $OPENCLAW_PORT deja occupe -- OpenClaw suppose deja lance." >> "$OPENCLAW_LOG"
