@@ -14,3 +14,4 @@ __pycache__/
 # Couche 6 / docs/ARCHITECTURE.md pour la commande et les chiffres actuels).
 graphify-out/
 Claude outputs/
+dashboard/logs/
