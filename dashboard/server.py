@@ -1410,7 +1410,7 @@ def get_terminal_info():
         "available": True,
         "host": "127.0.0.1",
         "port": PTY_BRIDGE_PORT,
-        "tools": ["hermes", "openclaw", "claude-code"],
+        "tools": ["hermes", "openclaw", "openclaw-logs", "claude-code"],
         "note": ("chaque connexion WebSocket lance son PROPRE process reel -- "
                  "deux onglets ouverts en meme temps sur le meme outil sont deux "
                  "vrais process independants."),
