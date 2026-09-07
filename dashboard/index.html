@@ -325,8 +325,25 @@
 
       <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
         <p class="muted">
-          <strong>Terminal reel</strong> -- lance <code>openclaw chat</code> dans un vrai
-          pseudo-terminal sur cette machine, relaye en direct ici. Pas une simulation.
+          <strong>Activite du Gateway en direct (lecture seule)</strong> -- <code>openclaw logs
+          --follow</code>, un vrai tail RPC du log de la Gateway (documente dans
+          docs/logging.md d'OpenClaw). Fonctionne QUAND la Gateway tourne (aucun conflit de
+          port), aucune frappe n'est envoyee a ce process -- tu regardes, tu n'interagis pas.
+          Ajoute a la demande explicite : "une copy de openclaw qu'on ne peut pas interagir
+          avec mais qu'on voit ce qui se passe".
+        </p>
+        <div id="term-openclaw-logs-controls"></div>
+      </div>
+
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+        <p class="muted">
+          <strong>Terminal reel (interactif)</strong> -- lance <code>openclaw chat</code> dans un
+          vrai pseudo-terminal sur cette machine, relaye en direct ici. Pas une simulation.
+          <strong>Conflit de port</strong> : `openclaw chat` reprend le meme port que la vraie
+          Gateway (18789) -- si la Gateway tourne deja (cas normal, demarree par CSTL_OS), ce
+          terminal se termine immediatement (EOF). Arrete la Gateway d'abord
+          (<code>openclaw gateway stop</code> dans ton propre Terminal) si tu veux une vraie
+          session interactive ici plutot que le mode lecture seule ci-dessus.
         </p>
         <div id="term-openclaw-controls"></div>
       </div>
@@ -1062,13 +1079,20 @@ function base64ToUint8Array(b64) {
   return arr;
 }
 
+// Outils dont le terminal est lecture seule -- aucune frappe n'est jamais
+// envoyee au process reel, meme si l'utilisateur clique dedans et tape.
+// Applique dans connectTerminal() en ne cablant pas term.onData du tout
+// (pas juste une etiquette visuelle).
+const READONLY_TOOLS = new Set(['openclaw-logs']);
+
 function mountTerminal(tool) {
   const controls = document.getElementById(`term-${tool}-controls`);
   if (!controls) return;
+  const readOnly = READONLY_TOOLS.has(tool);
   controls.innerHTML = `
     <div id="term-${tool}-status" class="term-status">Non connecte.</div>
-    <button class="secondary" id="term-${tool}-connect" onclick="connectTerminal('${tool}')">Connecter</button>
-    <button class="secondary" id="term-${tool}-disconnect" onclick="disconnectTerminal('${tool}')" disabled>Deconnecter</button>
+    <button class="secondary" id="term-${tool}-connect" onclick="connectTerminal('${tool}')">${readOnly ? 'Regarder' : 'Connecter'}</button>
+    <button class="secondary" id="term-${tool}-disconnect" onclick="disconnectTerminal('${tool}')" disabled>${readOnly ? 'Arreter de regarder' : 'Deconnecter'}</button>
     <div id="term-${tool}-box" class="term-box"></div>`;
   TERMINALS[tool] = { term: null, fitAddon: null, ws: null, connected: false };
 }
@@ -1136,11 +1160,13 @@ async function connectTerminal(tool) {
     }
   };
 
-  state.term.onData((data) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'stdin', data: utf8ToBase64(data) }));
-    }
-  });
+  if (!READONLY_TOOLS.has(tool)) {
+    state.term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stdin', data: utf8ToBase64(data) }));
+      }
+    });
+  }
   const sendResize = () => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'resize', cols: state.term.cols, rows: state.term.rows }));
@@ -1159,7 +1185,7 @@ function disconnectTerminal(tool) {
   state.connected = false;
 }
 
-['hermes', 'openclaw', 'claude-code'].forEach(mountTerminal);
+['hermes', 'openclaw', 'openclaw-logs', 'claude-code'].forEach(mountTerminal);
 
 // Un seul chargement automatique a l'ouverture de la page -- ensuite,
 // tout rafraichissement est manuel (bouton), comme demande. Les trois

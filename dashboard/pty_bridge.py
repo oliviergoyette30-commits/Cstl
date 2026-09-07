@@ -103,6 +103,24 @@ def build_command(tool, repo_root):
             return None, None, "commande 'openclaw' introuvable (PATH ou ~/.npm-global/bin)."
         return [bin_path, "chat"], str(repo_root), None
 
+    if tool == "openclaw-logs":
+        # Lecture seule, ajoute le 07/09/2026 a la demande explicite de
+        # l'utilisateur : "une copy de openclaw qu'on ne peut pas interagir
+        # avec mais qu'on voit ce qui se passe dans openclaw". `openclaw
+        # chat` (le tool "openclaw" ci-dessus) est le runtime LOCAL embarque
+        # (alias de `openclaw tui --local`) -- il essaie de reprendre le
+        # meme port que la vraie Gateway et echoue si elle tourne deja.
+        # `openclaw logs --follow` est different : documente
+        # (docs/logging.md) comme un tail RPC du log de la Gateway --
+        # fonctionne PRECISEMENT quand la Gateway tourne, ne bind aucun
+        # port, ne peut rien modifier cote Gateway. Aucun forward de stdin
+        # n'est cable cote frontend pour cet outil (voir index.html) --
+        # lecture seule appliquee au niveau UI, pas seulement documentee.
+        bin_path = _resolve_binary("openclaw", ["~/.npm-global/bin/openclaw"])
+        if not bin_path:
+            return None, None, "commande 'openclaw' introuvable (PATH ou ~/.npm-global/bin)."
+        return [bin_path, "logs", "--follow"], str(repo_root), None
+
     if tool == "hermes":
         bin_path = _resolve_binary("ollama", [
             "/usr/local/bin/ollama", "/opt/homebrew/bin/ollama",
