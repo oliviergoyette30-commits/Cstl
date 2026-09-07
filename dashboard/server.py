@@ -856,9 +856,15 @@ def check_openclaw_connection():
          qu'OpenClaw attend reellement s'il ecoute en WebSocket.
       2. Sinon: simple connexion TCP brute sur le port -- suffisant pour
          savoir si quelque chose ecoute la, pas pour parler le protocole.
-    Dans CE sandbox, OpenClaw tourne (s'il tourne) sur la machine macOS de
-    l'utilisateur, pas ici -- "inaccessible depuis ici" est donc le resultat
-    ATTENDU et correct, pas un signe de bug."""
+    CORRECTIF 07/09/2026 : les messages "detail" plus bas affirmaient a tort
+    "attendu dans ce sandbox, OpenClaw tourne sur la machine de l'utilisateur,
+    pas ici" -- vrai UNIQUEMENT quand ce script tournait dans le sandbox de
+    developpement Claude. Ce code tourne desormais reellement sur la machine
+    macOS de l'utilisateur (ce serveur EST "ici"), donc cette phrase mentait
+    sur le contexte reel d'execution a chaque appel. Un echec ici signifie
+    simplement qu'aucun service n'ecoute sur ce port sur CETTE machine (ex:
+    OpenClaw pas installe ou pas demarre) -- plus de pretention sur "ou" ca
+    tourne."""
     host, port = "127.0.0.1", 19001
     started = time.monotonic()
 
@@ -878,8 +884,8 @@ def check_openclaw_connection():
             return {
                 "reachable": False, "method": "websocket_handshake",
                 "host": host, "port": port, "latency_ms": elapsed_ms,
-                "detail": (f"echec de la poignee de main WebSocket ({e}) -- attendu dans ce sandbox, "
-                           "OpenClaw tourne sur la machine de l'utilisateur, pas ici."),
+                "detail": (f"echec de la poignee de main WebSocket ({e}) -- rien n'ecoute (ou ne "
+                           "repond en WebSocket) sur 127.0.0.1:19001 sur cette machine."),
             }
     except ImportError:
         pass
@@ -898,8 +904,8 @@ def check_openclaw_connection():
         return {
             "reachable": False, "method": "tcp_raw",
             "host": host, "port": port, "latency_ms": elapsed_ms,
-            "detail": (f"connexion TCP echouee ({e}) -- attendu dans ce sandbox, OpenClaw tourne "
-                       "sur la machine de l'utilisateur, pas ici."),
+            "detail": (f"connexion TCP echouee ({e}) -- rien n'ecoute sur 127.0.0.1:19001 sur cette "
+                       "machine (OpenClaw pas installe dans le PATH ou pas demarre)."),
         }
 
 
