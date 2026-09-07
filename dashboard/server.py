@@ -200,7 +200,15 @@ GRAPHIFY_OUT = Path(os.environ.get("CSTL_GRAPHIFY_OUT", str(REPO_ROOT / "graphif
 ORCHESTRATOR_KEYFILE = Path(os.environ.get("CSTL_ORCHESTRATOR_KEYFILE",
                                             str(Path.home() / ".cstl" / "dashboard_orchestrator_ed25519.key")))
 
-TCP_TIMEOUT_S = 5.0
+# 5.0s original -- trop court : un payload a plusieurs RELATION declenche
+# une tentative kb_verify (Wikidata) par relation cote serveur, ce qui peut
+# a lui seul depasser 5s. Teste en direct le 07/09/2026 : un payload a 2
+# relations a bien ete traite par le serveur (round-trip reel ~5-6s selon
+# la latence Wikidata) mais le client abandonnait avant la reponse. Meme
+# une seule relation a pris 8026ms en pratique sur la machine de
+# l'utilisateur (latence reseau vers Wikidata) -- confirme via le dashboard
+# reel apres correctif.
+TCP_TIMEOUT_S = 30.0
 STATUS_TIMEOUT_S = 1.0
 END_MARKER = b"---END---"
 
