@@ -414,7 +414,16 @@ class HermesAgentBrain:
     def from_env(cls, model: str | None = None) -> Optional["HermesAgentBrain"]:
         host = os.environ.get("CSTL_OLLAMA_HOST", "127.0.0.1")
         port = int(os.environ.get("CSTL_OLLAMA_PORT", "11434"))
-        resolved_model = model or os.environ.get("CSTL_OLLAMA_MODEL", "hermes3")
+        # Defaut "hermes3:8b" (pas juste "hermes3") -- confirme le 2026-09-07
+        # sur la machine de l'utilisateur : `ollama list` liste le modele
+        # sous le tag exact "hermes3:8b" (`ollama pull hermes3` l'a installe
+        # sous ce nom), et Ollama exige une correspondance exacte nom:tag --
+        # "hermes3" seul (sans tag) ne resout PAS automatiquement vers
+        # "hermes3:8b". Verifie en direct : `curl http://localhost:11434/api/generate
+        # -d '{"model":"hermes3:8b","prompt":"...","stream":false}'` a repondu
+        # un vrai texte genere ; le meme appel avec "model":"hermes3" echouerait
+        # si aucun tag "latest" n'existe pour ce modele sur cette machine.
+        resolved_model = model or os.environ.get("CSTL_OLLAMA_MODEL", "hermes3:8b")
         tags_url = f"http://{host}:{port}/api/tags"
         try:
             with urllib.request.urlopen(tags_url, timeout=1.0):
