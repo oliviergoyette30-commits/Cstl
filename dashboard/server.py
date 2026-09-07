@@ -200,7 +200,12 @@ GRAPHIFY_OUT = Path(os.environ.get("CSTL_GRAPHIFY_OUT", str(REPO_ROOT / "graphif
 ORCHESTRATOR_KEYFILE = Path(os.environ.get("CSTL_ORCHESTRATOR_KEYFILE",
                                             str(Path.home() / ".cstl" / "dashboard_orchestrator_ed25519.key")))
 
-TCP_TIMEOUT_S = 5.0
+# 5.0s original -- trop court : un payload a plusieurs RELATION declenche
+# une tentative kb_verify (Wikidata) par relation cote serveur, ce qui peut
+# a lui seul depasser 5s. Teste en direct le 07/09/2026 : un payload a 2
+# relations a bien ete traite par le serveur (round-trip reel ~5-6s selon
+# la latence Wikidata) mais le client abandonnait avant la reponse.
+TCP_TIMEOUT_S = 30.0
 STATUS_TIMEOUT_S = 1.0
 END_MARKER = b"---END---"
 
@@ -848,9 +853,15 @@ def check_openclaw_connection():
          qu'OpenClaw attend reellement s'il ecoute en WebSocket.
       2. Sinon: simple connexion TCP brute sur le port -- suffisant pour
          savoir si quelque chose ecoute la, pas pour parler le protocole.
-    Dans CE sandbox, OpenClaw tourne (s'il tourne) sur la machine macOS de
-    l'utilisateur, pas ici -- "inaccessible depuis ici" est donc le resultat
-    ATTENDU et correct, pas un signe de bug."""
+    CORRECTIF 07/09/2026 : les messages "detail" plus bas affirmaient a tort
+    "attendu dans ce sandbox, OpenClaw tourne sur la machine de l'utilisateur,
+    pas ici" -- vrai UNIQUEMENT quand ce script tournait dans le sandbox de
+    developpement Claude. Ce code tourne desormais reellement sur la machine
+    macOS de l'utilisateur (ce serveur EST "ici"), donc cette phrase mentait
+    sur le contexte reel d'execution a chaque appel. Un echec ici signifie
+    simplement qu'aucun service n'ecoute sur ce port sur CETTE machine (ex:
+    OpenClaw pas installe ou pas demarre) -- plus de pretention sur "ou" ca
+    tourne."""
     host, port = "127.0.0.1", 19001
     started = time.monotonic()
 
@@ -870,8 +881,8 @@ def check_openclaw_connection():
             return {
                 "reachable": False, "method": "websocket_handshake",
                 "host": host, "port": port, "latency_ms": elapsed_ms,
-                "detail": (f"echec de la poignee de main WebSocket ({e}) -- attendu dans ce sandbox, "
-                           "OpenClaw tourne sur la machine de l'utilisateur, pas ici."),
+                "detail": (f"echec de la poignee de main WebSocket ({e}) -- rien n'ecoute (ou ne "
+                           "repond en WebSocket) sur 127.0.0.1:19001 sur cette machine."),
             }
     except ImportError:
         pass
@@ -890,8 +901,8 @@ def check_openclaw_connection():
         return {
             "reachable": False, "method": "tcp_raw",
             "host": host, "port": port, "latency_ms": elapsed_ms,
-            "detail": (f"connexion TCP echouee ({e}) -- attendu dans ce sandbox, OpenClaw tourne "
-                       "sur la machine de l'utilisateur, pas ici."),
+            "detail": (f"connexion TCP echouee ({e}) -- rien n'ecoute sur 127.0.0.1:19001 sur cette "
+                       "machine (OpenClaw pas installe dans le PATH ou pas demarre)."),
         }
 
 
