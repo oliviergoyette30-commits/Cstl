@@ -42,8 +42,19 @@ set -u
 # sont introuvables ici meme si elles marchent dans un vrai Terminal. Constate
 # en direct : "commande 'openclaw' introuvable dans PATH" au demarrage alors
 # que `openclaw` fonctionne normalement en Terminal. Ajoute explicitement,
-# sans ecraser le PATH deja present (Homebrew etc. restent prioritaires).
-export PATH="$HOME/.npm-global/bin:$PATH"
+# sans ecraser le PATH deja present.
+#
+# SUITE DU CORRECTIF (meme jour, meme cause) : une fois `openclaw` trouvable,
+# son lancement a quand meme echoue en direct avec "env: node: No such file
+# or directory" -- openclaw.mjs a un shebang `#!/usr/bin/env node`, et `node`
+# lui-meme est absent du PATH d'une .app Finder pour la meme raison (installe
+# via Homebrew ou nvm, dont le chemin vient normalement de ~/.zshrc). Impossible
+# de confirmer le chemin EXACT de `node` sur cette machine depuis ce sandbox
+# (le home complet n'est pas monte, seuls des sous-dossiers specifiques le
+# sont) -- ajoute donc les emplacements Homebrew standards (Apple Silicon et
+# Intel) en best-effort ; sans effet si `node` vit ailleurs (ex: nvm), auquel
+# cas ce pas reste non bloquant comme documente plus haut.
+export PATH="$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # --- Localisation du depot : CSTL_OS.app/Contents/MacOS/CSTL_OS ------------
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
