@@ -10,10 +10,23 @@
      (dashboard/pty_bridge.py) via WebSocket. Charge par CDN : cette page est
      servie localement par dashboard/server.py sur la machine de l'utilisateur,
      pas soumise a la restriction CDN de l'outil Artifact. Ajoute 07/09/2026
-     pour "terminal complet interactif pour chaque outil". -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/css/xterm.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/lib/xterm.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.min.js"></script>
+     pour "terminal complet interactif pour chaque outil".
+     BUG TROUVE ET CORRIGE LE 07/09/2026 : les URLs cdnjs 5.3.0/lib/*.min.js
+     initiales renvoyaient un vrai 404 (verifie en direct dans Chrome sur la
+     machine de l'utilisateur -- Terminal/FitAddon restaient "undefined",
+     le clic sur "Connecter" restait bloque sur "Verification du pont
+     terminal..." sans jamais avancer). cdnjs n'a plus de sous-dossier /lib/
+     ni de build .min.js pour xterm recent -- verifie via cdnjs.com/libraries/xterm
+     que le fichier reel s'appelle xterm.js (pas .min) directement sous le
+     dossier de version, seule 6.0.0 (stable la plus recente) confirmee
+     presente. xterm-addon-fit n'existe carrement pas sur cdnjs (404 sur
+     cdnjs.com/libraries/xterm-addon-fit) -- charge depuis jsdelivr
+     (@xterm/addon-fit, autorise par la liste blanche CDN) a la place.
+     Les deux URLs ci-dessous verifiees en direct (fetch 200, window.Terminal
+     et window.FitAddon.FitAddon bien definis) avant ce commit. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <style>
   /* === CSTL / aspect futuriste (demande 07/09/2026) ===
      Meme structure HTML, memes IDs/classes utilisees par le JS -- seule la
