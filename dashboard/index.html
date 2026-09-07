@@ -109,7 +109,7 @@
     </table>
     <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
       <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
-      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:19001)</button>
+      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
       <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
     </div>
     <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
@@ -577,7 +577,7 @@ async function refreshGraphify() {
 
 async function testOpenClaw() {
   const body = document.getElementById('openclaw-body');
-  body.textContent = 'Tentative de connexion vers ws://127.0.0.1:19001...';
+  body.textContent = 'Tentative de connexion vers ws://127.0.0.1:18789...';
   try {
     const r = await fetch('/api/openclaw-check');
     const j = await r.json();
