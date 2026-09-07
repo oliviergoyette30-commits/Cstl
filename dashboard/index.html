@@ -15,9 +15,18 @@
   header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
   header h1 { margin:0; font-size: 18px; }
   header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  nav.tabs { display:flex; gap:2px; padding: 0 24px; border-bottom: 1px solid var(--border);
+    overflow-x: auto; background: var(--panel); }
+  nav.tabs button.tab-btn { background:transparent; border:none; color: var(--muted);
+    padding: 12px 16px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent;
+    border-radius: 0; white-space: nowrap; }
+  nav.tabs button.tab-btn:hover { opacity:1; color: var(--text); }
+  nav.tabs button.tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 20px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+    max-width: 900px; }
   .panel h2 { margin: 0 0 12px; font-size: 14px; display:flex; align-items:center; gap:8px; justify-content: space-between;}
   .panel h2 .title { display:flex; align-items:center; gap:8px; }
   .dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: var(--muted); }
@@ -44,7 +53,6 @@
   .stat { flex:1; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px; text-align:center; }
   .stat .n { font-size: 20px; font-weight: 600; }
   .stat .l { font-size: 11px; color: var(--muted); }
-  .full { grid-column: 1 / -1; }
   .badge { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
   .badge.wired { background: rgba(224,169,64,0.15); color: var(--warn); }
   .badge.none { background: rgba(224,82,82,0.15); color: var(--down); }
@@ -58,64 +66,85 @@
   <h1>CSTL Dashboard</h1>
   <p>Hub local pour l'OS CSTL agentic kernel -- rafraichissement manuel, rien n'est simule.</p>
 </header>
+
+<!-- Un onglet par composant (demande 07/09/2026) -- meme HTML/JS qu'avant,
+     juste reorganise en panneaux caches/affiches un a la fois plutot qu'un
+     scroll continu. Aucun endpoint ni logique n'a change. -->
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="status" onclick="showTab('status')">Serveur CSTL</button>
+  <button class="tab-btn" data-tab="adn" onclick="showTab('adn')">ADN Store</button>
+  <button class="tab-btn" data-tab="compositeur" onclick="showTab('compositeur')">Compositeur</button>
+  <button class="tab-btn" data-tab="autres" onclick="showTab('autres')">Autres systemes</button>
+  <button class="tab-btn" data-tab="orchestrateur" onclick="showTab('orchestrateur')">Orchestrateur</button>
+  <button class="tab-btn" data-tab="jarvis" onclick="showTab('jarvis')">Jarvis</button>
+</nav>
+
 <main>
 
-  <section class="panel">
-    <h2><span class="title"><span class="dot" id="status-dot"></span> Serveur CSTL (TCP 5050)</span>
-      <button onclick="refreshStatus()">Rafraichir</button></h2>
-    <div id="status-body" class="muted">Non verifie -- cliquez sur Rafraichir.</div>
-  </section>
+  <div class="tab-panel active" data-tab="status">
+    <section class="panel">
+      <h2><span class="title"><span class="dot" id="status-dot"></span> Serveur CSTL (TCP 5050)</span>
+        <button onclick="refreshStatus()">Rafraichir</button></h2>
+      <div id="status-body" class="muted">Non verifie -- cliquez sur Rafraichir.</div>
+    </section>
+  </div>
 
-  <section class="panel">
-    <h2><span class="title">ADN Store / Gouvernance</span>
-      <button onclick="refreshAdn()">Rafraichir</button></h2>
-    <div id="adn-body" class="muted">Non lu -- cliquez sur Rafraichir.</div>
-  </section>
+  <div class="tab-panel" data-tab="adn">
+    <section class="panel">
+      <h2><span class="title">ADN Store / Gouvernance</span>
+        <button onclick="refreshAdn()">Rafraichir</button></h2>
+      <div id="adn-body" class="muted">Non lu -- cliquez sur Rafraichir.</div>
+    </section>
+  </div>
 
-  <section class="panel full">
-    <h2><span class="title">Compositeur de payload CSTL</span></h2>
-    <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
-    <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
-    <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
+  <div class="tab-panel" data-tab="compositeur">
+    <section class="panel">
+      <h2><span class="title">Compositeur de payload CSTL</span></h2>
+      <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
+      <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
+      <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
 
-    <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
-      <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
-      <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
-      <div style="margin-top:8px;">
-        <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
+      <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
+        <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
+        <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
+        <div style="margin-top:8px;">
+          <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
+        </div>
+        <div id="llm-gen-status" class="muted" style="margin-top:8px;"></div>
       </div>
-      <div id="llm-gen-status" class="muted" style="margin-top:8px;"></div>
-    </div>
 
-    <label class="muted" style="display:block; margin-top:14px;">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
-    <div id="relations"></div>
-    <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
-    <div style="margin-top:12px;">
-      <button onclick="sendPayload()">Envoyer au serveur CSTL (127.0.0.1:5050)</button>
-    </div>
-    <p class="muted" style="margin-top:10px;">Payload envoye:</p>
-    <pre id="payload-preview">(genere a l'envoi)</pre>
-    <p class="muted">Reponse brute du serveur (telle quelle, non reformatee) :</p>
-    <pre id="response-raw">(aucun envoi encore effectue)</pre>
-    <div id="send-meta" class="timestamp"></div>
-  </section>
+      <label class="muted" style="display:block; margin-top:14px;">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
+      <div id="relations"></div>
+      <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
+      <div style="margin-top:12px;">
+        <button onclick="sendPayload()">Envoyer au serveur CSTL (127.0.0.1:5050)</button>
+      </div>
+      <p class="muted" style="margin-top:10px;">Payload envoye:</p>
+      <pre id="payload-preview">(genere a l'envoi)</pre>
+      <p class="muted">Reponse brute du serveur (telle quelle, non reformatee) :</p>
+      <pre id="response-raw">(aucun envoi encore effectue)</pre>
+      <div id="send-meta" class="timestamp"></div>
+    </section>
+  </div>
 
-  <section class="panel full">
-    <h2><span class="title">Autres systemes</span>
-      <button onclick="refreshOther()">Rafraichir</button></h2>
-    <table id="other-table">
-      <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
-      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
-      <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
-    </div>
-    <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
-    <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
-    <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
-  </section>
+  <div class="tab-panel" data-tab="autres">
+    <section class="panel">
+      <h2><span class="title">Autres systemes</span>
+        <button onclick="refreshOther()">Rafraichir</button></h2>
+      <table id="other-table">
+        <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
+        <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
+        <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
+      </div>
+      <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
+      <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
+      <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
+    </section>
+  </div>
 
   <!-- === ORCHESTRATEUR === -->
   <!--
@@ -133,21 +162,23 @@
     envois TCP reels, capture de trace) fonctionne independamment de la
     disponibilite d'un vrai modele.
   -->
-  <section class="panel full">
-    <h2><span class="title">Orchestrateur -- relais LLM multi-tours</span></h2>
-    <p class="muted">
-      Lance un VRAI relais de N tours contre le serveur CSTL (127.0.0.1:5050) :
-      a chaque tour, un agent LLM reel (Hermes local &gt; Gemini &gt; Anthropic,
-      via resolve_brain("auto")) genere une relation, elle est signee Ed25519
-      et envoyee au serveur, la vraie reponse est capturee. Si aucun agent LLM
-      n'est disponible, l'endpoint le dit honnetement -- rien n'est simule.
-    </p>
-    <div class="field" style="max-width:160px;"><label>Nombre de tours</label><input id="orch-turns" type="number" min="1" max="20" value="4"></div>
-    <div class="field"><label>Sujet du relais</label><input id="orch-topic" value="Est-ce que Montreal est au Canada?"></div>
-    <button onclick="lancerRelais()">Lancer un relais</button>
-    <div id="orch-status" class="muted" style="margin-top:10px;"></div>
-    <div id="orch-trace" style="margin-top:10px;"></div>
-  </section>
+  <div class="tab-panel" data-tab="orchestrateur">
+    <section class="panel">
+      <h2><span class="title">Orchestrateur -- relais LLM multi-tours</span></h2>
+      <p class="muted">
+        Lance un VRAI relais de N tours contre le serveur CSTL (127.0.0.1:5050) :
+        a chaque tour, un agent LLM reel (Hermes local &gt; Gemini &gt; Anthropic,
+        via resolve_brain("auto")) genere une relation, elle est signee Ed25519
+        et envoyee au serveur, la vraie reponse est capturee. Si aucun agent LLM
+        n'est disponible, l'endpoint le dit honnetement -- rien n'est simule.
+      </p>
+      <div class="field" style="max-width:160px;"><label>Nombre de tours</label><input id="orch-turns" type="number" min="1" max="20" value="4"></div>
+      <div class="field"><label>Sujet du relais</label><input id="orch-topic" value="Est-ce que Montreal est au Canada?"></div>
+      <button onclick="lancerRelais()">Lancer un relais</button>
+      <div id="orch-status" class="muted" style="margin-top:10px;"></div>
+      <div id="orch-trace" style="margin-top:10px;"></div>
+    </section>
+  </div>
 
   <!-- === JARVIS === -->
   <!--
@@ -174,68 +205,70 @@
     /api/send (meme flux que le compositeur manuel ci-dessus) -- aucune
     logique de generation ou d'envoi dupliquee ici.
   -->
-  <section class="panel full">
-    <h2><span class="title">Jarvis -- interface vocale (experimentale)</span></h2>
-    <p class="muted">
-      Parle a l'agent CSTL : le micro transcrit ta phrase, une relation est
-      composee via le meme agent LLM que le compositeur ci-dessus (Hermes
-      local &gt; Gemini &gt; Anthropic), puis envoyee au vrai serveur CSTL.
-      Coche la case pour entendre un resume court de la reponse.
-    </p>
-    <p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">
-      Support navigateur honnete -- reconnaissance vocale (SpeechRecognition) :
-      <strong>bon</strong> sur Chrome/Edge, <strong>partiel</strong> sur Safari,
-      <strong>tres limite / absent</strong> sur Firefox. Synthese vocale
-      (SpeechSynthesis) : disponible sur la plupart des navigateurs modernes,
-      voix et qualite variables selon l'OS. Rien de tout cela n'a pu etre
-      teste avec un vrai micro/haut-parleur dans cet environnement de
-      developpement (aucun materiel audio ici) -- a verifier par toi, sur ta
-      machine, avec un vrai navigateur.
-    </p>
+  <div class="tab-panel" data-tab="jarvis">
+    <section class="panel">
+      <h2><span class="title">Jarvis -- interface vocale (experimentale)</span></h2>
+      <p class="muted">
+        Parle a l'agent CSTL : le micro transcrit ta phrase, une relation est
+        composee via le meme agent LLM que le compositeur ci-dessus (Hermes
+        local &gt; Gemini &gt; Anthropic), puis envoyee au vrai serveur CSTL.
+        Coche la case pour entendre un resume court de la reponse.
+      </p>
+      <p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">
+        Support navigateur honnete -- reconnaissance vocale (SpeechRecognition) :
+        <strong>bon</strong> sur Chrome/Edge, <strong>partiel</strong> sur Safari,
+        <strong>tres limite / absent</strong> sur Firefox. Synthese vocale
+        (SpeechSynthesis) : disponible sur la plupart des navigateurs modernes,
+        voix et qualite variables selon l'OS. Rien de tout cela n'a pu etre
+        teste avec un vrai micro/haut-parleur dans cet environnement de
+        developpement (aucun materiel audio ici) -- a verifier par toi, sur ta
+        machine, avec un vrai navigateur.
+      </p>
 
-    <div id="jarvis-unsupported" class="muted" style="display:none; color:var(--down); border:1px solid var(--down); border-radius:6px; padding:10px;">
-      Ce navigateur ne supporte pas <code>SpeechRecognition</code> /
-      <code>webkitSpeechRecognition</code> (cas typique de Firefox). La
-      reconnaissance vocale de Jarvis est indisponible ici -- utilise Chrome
-      ou Edge pour cette fonctionnalite. (La saisie manuelle via le
-      compositeur ci-dessus reste disponible, elle.)
-    </div>
-
-    <div id="jarvis-controls">
-      <div class="field" style="max-width:220px;">
-        <label>Langue de reconnaissance</label>
-        <select id="jarvis-lang" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 8px; font-size:13px;">
-          <option value="fr-FR">fr-FR (France -- choix par defaut, le plus largement teste sur Chrome)</option>
-          <option value="fr-CA">fr-CA (Canada -- a essayer si fr-FR reconnait mal ton accent)</option>
-        </select>
-      </div>
-      <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
-        <button id="jarvis-mic-btn" onclick="jarvisToggleListening()">Demarrer l'ecoute</button>
-        <span id="jarvis-mic-status" class="muted">inactif</span>
-      </div>
-      <div class="field">
-        <label>Transcription en direct</label>
-        <div id="jarvis-transcript" class="muted" style="min-height:20px; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px;">(rien entendu encore)</div>
-      </div>
-      <label class="muted" style="display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" id="jarvis-speak-checkbox" style="width:auto;">
-        Lire la reponse a voix haute (resume court, pas le wire-format brut)
-      </label>
-      <div id="jarvis-tts-unsupported" class="muted" style="display:none; color:var(--warn);">
-        SpeechSynthesis indisponible dans ce navigateur -- la case ci-dessus
-        restera sans effet.
+      <div id="jarvis-unsupported" class="muted" style="display:none; color:var(--down); border:1px solid var(--down); border-radius:6px; padding:10px;">
+        Ce navigateur ne supporte pas <code>SpeechRecognition</code> /
+        <code>webkitSpeechRecognition</code> (cas typique de Firefox). La
+        reconnaissance vocale de Jarvis est indisponible ici -- utilise Chrome
+        ou Edge pour cette fonctionnalite. (La saisie manuelle via le
+        compositeur ci-dessus reste disponible, elle.)
       </div>
 
-      <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">
-        <p class="muted">Relation generee par l'agent LLM a partir de la transcription :</p>
-        <div id="jarvis-relation-status" class="muted">(en attente d'une phrase transcrite)</div>
-        <p class="muted" style="margin-top:8px;">Reponse reelle du serveur CSTL (meme endpoint /api/send que le compositeur) :</p>
-        <pre id="jarvis-send-raw">(aucun envoi encore effectue via Jarvis)</pre>
-        <p class="muted">Resume construit pour la lecture a voix haute (<code>human_summary</code>, champ additif de /api/send) :</p>
-        <div id="jarvis-summary" class="muted">(pas encore disponible)</div>
+      <div id="jarvis-controls">
+        <div class="field" style="max-width:220px;">
+          <label>Langue de reconnaissance</label>
+          <select id="jarvis-lang" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 8px; font-size:13px;">
+            <option value="fr-FR">fr-FR (France -- choix par defaut, le plus largement teste sur Chrome)</option>
+            <option value="fr-CA">fr-CA (Canada -- a essayer si fr-FR reconnait mal ton accent)</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+          <button id="jarvis-mic-btn" onclick="jarvisToggleListening()">Demarrer l'ecoute</button>
+          <span id="jarvis-mic-status" class="muted">inactif</span>
+        </div>
+        <div class="field">
+          <label>Transcription en direct</label>
+          <div id="jarvis-transcript" class="muted" style="min-height:20px; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px;">(rien entendu encore)</div>
+        </div>
+        <label class="muted" style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="jarvis-speak-checkbox" style="width:auto;">
+          Lire la reponse a voix haute (resume court, pas le wire-format brut)
+        </label>
+        <div id="jarvis-tts-unsupported" class="muted" style="display:none; color:var(--warn);">
+          SpeechSynthesis indisponible dans ce navigateur -- la case ci-dessus
+          restera sans effet.
+        </div>
+
+        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">
+          <p class="muted">Relation generee par l'agent LLM a partir de la transcription :</p>
+          <div id="jarvis-relation-status" class="muted">(en attente d'une phrase transcrite)</div>
+          <p class="muted" style="margin-top:8px;">Reponse reelle du serveur CSTL (meme endpoint /api/send que le compositeur) :</p>
+          <pre id="jarvis-send-raw">(aucun envoi encore effectue via Jarvis)</pre>
+          <p class="muted">Resume construit pour la lecture a voix haute (<code>human_summary</code>, champ additif de /api/send) :</p>
+          <div id="jarvis-summary" class="muted">(pas encore disponible)</div>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
   <script>
     // === JARVIS === logique JS, isolee dans son propre bloc <script> pour
     // ne pas se melanger au script principal ci-dessous. N'appelle que
@@ -402,6 +435,15 @@
 </main>
 
 <script>
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-btn').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === name);
+  });
+}
+
 function addRelationRow(subject, predicate, object) {
   const div = document.createElement('div');
   div.className = 'rel-row';
@@ -664,7 +706,9 @@ async function lancerRelais() {
 }
 
 // Un seul chargement automatique a l'ouverture de la page -- ensuite,
-// tout rafraichissement est manuel (bouton), comme demande.
+// tout rafraichissement est manuel (bouton), comme demande. Les trois
+// tabs non actifs au chargement sont quand meme rafraichis en arriere-plan
+// pour que les donnees soient pretes des qu'on clique sur leur onglet.
 refreshStatus();
 refreshAdn();
 refreshOther();
