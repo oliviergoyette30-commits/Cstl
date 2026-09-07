@@ -11,21 +11,27 @@
      servie localement par dashboard/server.py sur la machine de l'utilisateur,
      pas soumise a la restriction CDN de l'outil Artifact. Ajoute 07/09/2026
      pour "terminal complet interactif pour chaque outil".
-     BUG TROUVE ET CORRIGE LE 07/09/2026 : les URLs cdnjs 5.3.0/lib/*.min.js
-     initiales renvoyaient un vrai 404 (verifie en direct dans Chrome sur la
-     machine de l'utilisateur -- Terminal/FitAddon restaient "undefined",
-     le clic sur "Connecter" restait bloque sur "Verification du pont
-     terminal..." sans jamais avancer). cdnjs n'a plus de sous-dossier /lib/
-     ni de build .min.js pour xterm recent -- verifie via cdnjs.com/libraries/xterm
-     que le fichier reel s'appelle xterm.js (pas .min) directement sous le
-     dossier de version, seule 6.0.0 (stable la plus recente) confirmee
-     presente. xterm-addon-fit n'existe carrement pas sur cdnjs (404 sur
-     cdnjs.com/libraries/xterm-addon-fit) -- charge depuis jsdelivr
-     (@xterm/addon-fit, autorise par la liste blanche CDN) a la place.
-     Les deux URLs ci-dessous verifiees en direct (fetch 200, window.Terminal
-     et window.FitAddon.FitAddon bien definis) avant ce commit. -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.js"></script>
+     DEUX BUGS TROUVES ET CORRIGES EN DIRECT LE 07/09/2026 (verifies dans le
+     vrai Chrome de l'utilisateur, pas juste en sandbox) :
+     1) Les URLs cdnjs 5.3.0/lib/*.min.js initiales etaient un vrai 404 --
+        cdnjs n'a plus de sous-dossier /lib/ ni de build .min.js pour xterm
+        recent (confirme via cdnjs.com/libraries/xterm), et xterm-addon-fit
+        n'existe carrement pas sur cdnjs (404 sur
+        cdnjs.com/libraries/xterm-addon-fit) -- addon-fit charge depuis
+        jsdelivr (@xterm/addon-fit, liste blanche CDN) a la place.
+     2) xterm 6.0.0 + @xterm/addon-fit@0.10.0 chargent tous les deux sans
+        erreur mais PLANTENT A L'USAGE : addon-fit 0.10.0 lit une propriete
+        interne (`_core.viewport.scrollBarWidth`) que xterm 6.x a renommee/
+        deplacee -- TypeError reel intercepte en direct ("Cannot read
+        properties of undefined (reading 'scrollBarWidth')"), qui bloquait
+        silencieusement "Connecter" sur "Verification du pont terminal...".
+        Fixe en figeant xterm sur la derniere 5.x stable (5.5.0, la version
+        pour laquelle addon-fit 0.10.0 a ete construit) -- combinaison
+        reellement testee de bout en bout : clic Connecter -> vrai process
+        Ollama lance -> vrai banner ">>> Send a message (/? for help)"
+        affiche dans le terminal. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.5.0/xterm.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.5.0/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <style>
   /* === CSTL / aspect futuriste (demande 07/09/2026) ===
