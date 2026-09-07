@@ -3,62 +3,120 @@
 <head>
 <meta charset="utf-8">
 <title>CSTL Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  /* === CSTL / aspect futuriste (demande 07/09/2026) ===
+     Meme structure HTML, memes IDs/classes utilisees par le JS -- seule la
+     couche visuelle change. Thematique "console de bord agentic" : fond
+     grille animee, accents neon cyan/violet, typographie Orbitron pour les
+     titres/donnees, JetBrains Mono pour le code/wire-format, coins en
+     "bracket" façon HUD sur les panneaux, pastille de statut qui pulse
+     quand le serveur est UP. Google Fonts charge normalement ici (page
+     servie par dashboard/server.py sur ta machine, pas de sandbox CSP). */
   :root {
-    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e6e9ef;
-    --muted: #8b93a3; --ok: #3ecf8e; --down: #e05252; --warn: #e0a940;
-    --accent: #5b8cff;
+    --bg: #05060a; --panel: rgba(15,18,28,0.72); --border: #1f2a3d;
+    --border-bright: #2ea8c9; --text: #dce8f5;
+    --muted: #6f83a3; --ok: #2af5b0; --down: #ff4d6d; --warn: #ffb02e;
+    --accent: #38e0ff; --accent2: #b967ff;
+    --font-display: "Orbitron", "SF Mono", sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin:0; background: var(--bg); color: var(--text);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
-  header h1 { margin:0; font-size: 18px; }
-  header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  body {
+    margin:0; color: var(--text); font: 14px/1.5 var(--font-mono);
+    background:
+      radial-gradient(ellipse 1200px 700px at 15% -10%, rgba(56,224,255,0.10), transparent 60%),
+      radial-gradient(ellipse 900px 600px at 100% 0%, rgba(185,103,255,0.08), transparent 55%),
+      repeating-linear-gradient(0deg, rgba(56,224,255,0.035) 0px, rgba(56,224,255,0.035) 1px, transparent 1px, transparent 32px),
+      repeating-linear-gradient(90deg, rgba(56,224,255,0.035) 0px, rgba(56,224,255,0.035) 1px, transparent 1px, transparent 32px),
+      var(--bg);
+    min-height: 100vh;
+  }
+  header { padding: 20px 28px 16px; border-bottom: 1px solid var(--border); position: relative; }
+  header::after {
+    content: ""; position: absolute; left:0; right:0; bottom:-1px; height:1px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), transparent 70%);
+    box-shadow: 0 0 8px 1px rgba(56,224,255,0.6);
+  }
+  header h1 {
+    margin:0; font-family: var(--font-display); font-weight: 700; font-size: 20px;
+    letter-spacing: 3px; text-transform: uppercase;
+    background: linear-gradient(90deg, #eafcff 0%, var(--accent) 55%, var(--accent2) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 24px rgba(56,224,255,0.25);
+  }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 11px; letter-spacing: 0.5px; }
   nav.tabs { display:flex; gap:2px; padding: 0 24px; border-bottom: 1px solid var(--border);
-    overflow-x: auto; background: var(--panel); }
+    overflow-x: auto; background: rgba(9,12,20,0.85); backdrop-filter: blur(6px); }
   nav.tabs button.tab-btn { background:transparent; border:none; color: var(--muted);
-    padding: 12px 16px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent;
-    border-radius: 0; white-space: nowrap; }
-  nav.tabs button.tab-btn:hover { opacity:1; color: var(--text); }
-  nav.tabs button.tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
-  main { padding: 20px; }
+    font-family: var(--font-display); padding: 14px 18px; font-size: 11px; cursor: pointer;
+    border-bottom: 2px solid transparent; border-radius: 0; white-space: nowrap;
+    letter-spacing: 1.5px; text-transform: uppercase; transition: color .15s ease; }
+  nav.tabs button.tab-btn:hover { color: var(--text); }
+  nav.tabs button.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent);
+    text-shadow: 0 0 10px rgba(56,224,255,0.7); }
+  main { padding: 24px; }
   .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
-    max-width: 900px; }
-  .panel h2 { margin: 0 0 12px; font-size: 14px; display:flex; align-items:center; gap:8px; justify-content: space-between;}
-  .panel h2 .title { display:flex; align-items:center; gap:8px; }
-  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: var(--muted); }
-  .dot.up { background: var(--ok); }
-  .dot.down { background: var(--down); }
-  button { background: var(--accent); color: white; border: none; border-radius: 6px;
-    padding: 6px 12px; font-size: 12px; cursor: pointer; }
-  button:hover { opacity: 0.85; }
-  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .tab-panel.active { display: block; animation: fade-in .18s ease; }
+  @keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 18px;
+    max-width: 900px; position: relative; backdrop-filter: blur(8px);
+    box-shadow: 0 0 0 1px rgba(56,224,255,0.04), 0 8px 30px rgba(0,0,0,0.35); }
+  /* coins "bracket" style HUD sur chaque panneau */
+  .panel::before, .panel::after {
+    content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+    border: 1px solid var(--accent); opacity: 0.7;
+  }
+  .panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .panel h2 { margin: 0 0 14px; font-family: var(--font-display); font-size: 12px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--text);
+    display:flex; align-items:center; gap:8px; justify-content: space-between;}
+  .panel h2 .title { display:flex; align-items:center; gap:9px; }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; background: var(--muted); }
+  .dot.up { background: var(--ok); box-shadow: 0 0 8px 2px rgba(42,245,176,0.7); animation: pulse-dot 1.8s ease-in-out infinite; }
+  .dot.down { background: var(--down); box-shadow: 0 0 8px 2px rgba(255,77,109,0.6); }
+  @keyframes pulse-dot { 0%,100% { box-shadow: 0 0 6px 1px rgba(42,245,176,0.6); } 50% { box-shadow: 0 0 12px 4px rgba(42,245,176,0.9); } }
+  button { background: linear-gradient(135deg, var(--accent), #1c8fb0); color: #04141a; border: none;
+    border-radius: 3px; padding: 8px 14px; font-family: var(--font-display); font-size: 11px;
+    letter-spacing: 1px; text-transform: uppercase; font-weight: 700; cursor: pointer;
+    box-shadow: 0 0 12px rgba(56,224,255,0.35); transition: box-shadow .15s ease, transform .1s ease; }
+  button:hover { box-shadow: 0 0 18px rgba(56,224,255,0.6); transform: translateY(-1px); }
+  button.secondary { background: transparent; border: 1px solid var(--border-bright); color: var(--accent);
+    box-shadow: none; }
+  button.secondary:hover { background: rgba(56,224,255,0.08); box-shadow: 0 0 10px rgba(56,224,255,0.25); }
   table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; }
-  code, pre { font-family: "SF Mono", Menlo, Consolas, monospace; }
-  pre { background: #0a0c10; border: 1px solid var(--border); border-radius: 6px;
-    padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--accent); font-weight: 600; font-family: var(--font-display); font-size: 10px;
+    letter-spacing: 1px; text-transform: uppercase; }
+  code, pre { font-family: var(--font-mono); }
+  pre { background: #030407; border: 1px solid var(--border); border-left: 2px solid var(--accent2);
+    border-radius: 3px; padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    font-size: 12px; color: #b9f3ff; }
   .field { margin-bottom: 10px; }
-  .field label { display:block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
-  .field input { width: 100%; background: #0a0c10; border: 1px solid var(--border);
-    color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .field label { display:block; font-size: 10px; color: var(--muted); margin-bottom: 4px;
+    letter-spacing: 1px; text-transform: uppercase; font-family: var(--font-display); }
+  .field input { width: 100%; background: #030407; border: 1px solid var(--border);
+    color: var(--text); border-radius: 3px; padding: 8px 10px; font-size: 13px; font-family: var(--font-mono);
+    transition: border-color .15s ease, box-shadow .15s ease; }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 12px rgba(56,224,255,0.3); }
   .rel-row { display:flex; gap:6px; margin-bottom:6px; }
   .rel-row input { flex: 1; }
   .muted { color: var(--muted); font-size: 12px; }
   .stat-row { display:flex; gap: 16px; margin-bottom: 10px; }
-  .stat { flex:1; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px; text-align:center; }
-  .stat .n { font-size: 20px; font-weight: 600; }
-  .stat .l { font-size: 11px; color: var(--muted); }
-  .badge { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
-  .badge.wired { background: rgba(224,169,64,0.15); color: var(--warn); }
-  .badge.none { background: rgba(224,82,82,0.15); color: var(--down); }
-  .badge.present { background: rgba(62,207,142,0.15); color: var(--ok); }
-  .badge.neutral { background: rgba(139,147,163,0.15); color: var(--muted); }
-  .timestamp { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .stat { flex:1; background:#030407; border:1px solid var(--border); border-radius:3px; padding:10px; text-align:center; }
+  .stat .n { font-size: 22px; font-weight: 700; font-family: var(--font-display); color: var(--accent);
+    text-shadow: 0 0 10px rgba(56,224,255,0.4); }
+  .stat .l { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+  .badge { display:inline-block; padding: 3px 9px; border-radius: 3px; font-size: 10px;
+    font-family: var(--font-display); letter-spacing: 0.5px; text-transform: uppercase;
+    border: 1px solid currentColor; }
+  .badge.wired { background: rgba(255,176,46,0.1); color: var(--warn); }
+  .badge.none { background: rgba(255,77,109,0.1); color: var(--down); }
+  .badge.present { background: rgba(42,245,176,0.1); color: var(--ok); }
+  .badge.neutral { background: rgba(111,131,163,0.1); color: var(--muted); }
+  .timestamp { font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.5px; }
 </style>
 </head>
 <body>
