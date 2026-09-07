@@ -265,30 +265,38 @@
 
   <!-- === CLAUDE CODE === -->
   <!--
-    Onglet dedie pour Claude Code, ajoute a la demande explicite de
-    l'utilisateur ("un autre pour claude code"). Honnete comme le reste du
-    dashboard : Claude Code (cette session, l'outil qui a construit une
-    bonne partie de CSTL et de ce dashboard) n'est PAS un service TCP/HTTP
-    a interroger -- rien a "tester" ici, contrairement a Hermes/OpenClaw.
-    Aucun faux bouton de statut invente.
+    Onglet dedie pour Claude Code, avec une VRAIE interface d'utilisation
+    ajoutee a la demande explicite de l'utilisateur ("dans l'onglet claude
+    code je veux pouvoir l'utiliser"). Cote serveur : POST /api/claude-code
+    lance reellement `claude -p "<prompt>"` (CLI Claude Code, mode "print"
+    non-interactif) sur CETTE machine, dans le repo courant -- voir
+    run_claude_code() dans server.py pour le detail et les limites
+    honnetes (pas de session persistante : chaque envoi est un nouveau
+    processus `claude` independant, pas de memoire d'un appel a l'autre
+    depuis cet onglet ; timeout 90s ; aucune permission elargie ajoutee).
   -->
   <div class="tab-panel" data-tab="claude-code">
     <section class="panel">
       <h2><span class="title">Claude Code</span></h2>
       <p class="muted">
-        <strong>Hors cadre serveur</strong> -- Claude Code est un outil d'edition/agent local
-        (cette session elle-meme), pas un service a interroger en TCP ou HTTP. Il n'y a donc
-        rien a "tester" ici comme pour Hermes ou OpenClaw : pas de port, pas d'API, pas d'etat
-        verifiable depuis ce dashboard. Aucun statut fabrique.
+        Lance une VRAIE requete <code>claude -p "..."</code> (CLI Claude Code, mode non
+        interactif) sur cette machine, dans le repo courant. <strong>Pas de session
+        persistante</strong> -- chaque envoi est un nouveau processus independant, sans memoire
+        du precedent depuis cet onglet (contrairement a cette conversation-ci). Peut prendre
+        plusieurs secondes (timeout a 90s).
       </p>
-      <p class="muted">
-        Ce que Claude Code a reellement fait dans ce projet : ecrit et modifie le code Rust du
-        serveur CSTL (<code>src/</code>), le SDK Python, ce dashboard lui-meme (
-        <code>dashboard/server.py</code>, <code>dashboard/index.html</code>), et les scripts de
-        lancement (<code>CSTL_OS.app</code>, les fichiers <code>.command</code>) -- via edition de
-        fichiers et commandes shell reelles, verifiees par compilation/tests/execution a chaque
-        etape, pas par simulation.
-      </p>
+      <div class="field">
+        <label>Prompt</label>
+        <textarea id="cc-prompt" rows="3" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:13px;" placeholder="Ex: liste les fichiers .rs dans src/"></textarea>
+      </div>
+      <button onclick="runClaudeCode()">Envoyer</button>
+      <div id="cc-status" class="muted" style="margin-top:10px;"></div>
+      <p class="muted" style="margin-top:10px;">Sortie reelle (stdout) :</p>
+      <pre id="cc-stdout">(aucun envoi encore effectue)</pre>
+      <div id="cc-stderr-wrap" style="display:none;">
+        <p class="muted">stderr :</p>
+        <pre id="cc-stderr"></pre>
+      </div>
     </section>
   </div>
 
@@ -760,6 +768,43 @@ async function refreshGraphify() {
       <p class="muted">${j.stale_reason||''}</p>`;
   } catch (e) {
     body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function runClaudeCode() {
+  const promptEl = document.getElementById('cc-prompt');
+  const statusEl = document.getElementById('cc-status');
+  const stdoutEl = document.getElementById('cc-stdout');
+  const stderrWrap = document.getElementById('cc-stderr-wrap');
+  const stderrEl = document.getElementById('cc-stderr');
+  const prompt = promptEl.value;
+  if (!prompt.trim()) {
+    statusEl.textContent = 'Ecris un prompt avant d\'envoyer.';
+    return;
+  }
+  statusEl.textContent = 'Envoi a claude -p en cours (peut prendre jusqu\'a 90s)...';
+  stdoutEl.textContent = '(en attente)';
+  stderrWrap.style.display = 'none';
+  try {
+    const r = await fetch('/api/claude-code', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt})
+    });
+    const j = await r.json();
+    if (!j.ok && j.error) {
+      statusEl.innerHTML = `<span style="color:var(--down)">Erreur: ${j.error}</span>`;
+      stdoutEl.textContent = '(aucune sortie)';
+      return;
+    }
+    const color = j.ok ? 'var(--ok)' : 'var(--down)';
+    statusEl.innerHTML = `<span style="color:${color}">${j.ok ? 'OK' : 'code de sortie ' + j.returncode}</span> -- ${j.elapsed_ms} ms (${j.binary})`;
+    stdoutEl.textContent = j.stdout || '(sortie vide)';
+    if (j.stderr) {
+      stderrWrap.style.display = 'block';
+      stderrEl.textContent = j.stderr;
+    }
+  } catch (e) {
+    statusEl.textContent = 'Erreur cote dashboard: ' + e;
   }
 }
 

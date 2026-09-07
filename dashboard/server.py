@@ -140,6 +140,7 @@ JARVIS (interface vocale, voir index.html section "=== JARVIS ===") :
 import json
 import os
 import re
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -960,6 +961,68 @@ def check_hermes_connection():
         }
 
 
+def run_claude_code(prompt):
+    """Lance une VRAIE requete one-shot au CLI Claude Code (`claude -p
+    "<prompt>"`) sur cette machine, dans le repo courant (REPO_ROOT).
+    Ajoute a la demande explicite de l'utilisateur ("dans l'onglet claude
+    code je veux pouvoir l'utiliser").
+
+    Honnete sur les limites, comme le reste de ce dashboard :
+      - Mode "print" (-p) du CLI : une requete, une reponse, PUIS LE
+        PROCESSUS QUITTE -- pas de session persistante, pas de memoire
+        d'un appel a l'autre depuis cet onglet (chaque clic sur "Envoyer"
+        est un nouveau processus `claude` independant).
+      - Aucune permission elargie ajoutee ici (pas de
+        --dangerously-skip-permissions) : si le CLI a besoin d'une
+        approbation d'outil qu'il ne peut pas demander en mode non
+        interactif, il le dit dans sa reponse plutot que d'agir sans
+        confirmation -- comportement par defaut du CLI, pas quelque chose
+        invente ici.
+      - Timeout de 90s : une vraie requete LLM peut prendre du temps ; au
+        dela, on arrete d'attendre et on le dit, sans pretendre a un
+        resultat.
+    """
+    prompt = (prompt or "").strip()
+    if not prompt:
+        return {"ok": False, "error": "prompt vide -- rien a envoyer a Claude Code."}
+
+    claude_bin = shutil.which("claude")
+    if not claude_bin:
+        candidate = Path.home() / ".npm-global" / "bin" / "claude"
+        if candidate.exists():
+            claude_bin = str(candidate)
+    if not claude_bin:
+        return {
+            "ok": False,
+            "error": ("commande 'claude' introuvable (ni dans PATH, ni dans "
+                      "~/.npm-global/bin) -- le CLI Claude Code n'est pas installe, "
+                      "ou pas trouvable depuis ce serveur dashboard."),
+        }
+
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(
+            [claude_bin, "-p", prompt],
+            cwd=str(REPO_ROOT),
+            capture_output=True, text=True, timeout=90,
+        )
+    except subprocess.TimeoutExpired:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return {"ok": False, "error": f"timeout apres {elapsed_ms} ms -- `claude -p` n'a pas repondu a temps (90s)."}
+    except OSError as e:
+        return {"ok": False, "error": f"echec de lancement du processus 'claude': {e}"}
+
+    elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+    return {
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "elapsed_ms": elapsed_ms,
+        "binary": claude_bin,
+    }
+
+
 def check_other_systems():
     """Statuts honnetes des "autres systemes" -- jamais une case verte
     fabriquee. Chaque ligne dit precisement sur quoi son statut est base."""
@@ -1096,6 +1159,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             turns = fields.get("turns", 4)
             topic = fields.get("topic", "Est-ce que Montreal est au Canada?")
             self._send_json(run_orchestrated_relay(turns, topic))
+        elif parsed.path == "/api/claude-code":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                fields = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
+                return
+            self._send_json(run_claude_code(fields.get("prompt", "")))
         else:
             self.send_error(404, "Not found")
 
