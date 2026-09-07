@@ -137,6 +137,7 @@ JARVIS (interface vocale, voir index.html section "=== JARVIS ===") :
     inchangees ; le compositeur manuel les ignore et continue de marcher.
 """
 
+import datetime
 import json
 import os
 import re
@@ -701,11 +702,19 @@ def summarize_cstl_response_for_speech(send_result):
     return " ".join(parts)
 
 
-def generate_relation_via_llm(topic):
+def generate_relation_via_llm(topic, include_context=True):
     """Essaie dans l'ordre Hermes/Ollama (local, gratuit) -> Gemini ->
     Anthropic via resolve_brain("auto") de sdk/python/cstl_llm_agent.py --
     AUCUNE logique de generation dupliquee ici, seulement l'appel et la mise
     en forme honnete du resultat pour le compositeur du dashboard.
+
+    include_context=True (defaut) : prepend le VRAI contexte du projet
+    (gather_project_context() -- ADN store + Graphify + Obsidian si
+    configure) au sujet avant de l'envoyer au modele. Utilise aussi par
+    Jarvis (meme fonction, pas de duplication) -- ajoute a la demande
+    explicite de l'utilisateur de lier Hermes/Jarvis a la memoire du
+    projet. Le champ "context_included" du retour dit precisement ce qui
+    a reellement ete inclus.
 
     Retourne un dict JSON-serialisable, jamais une exception non geree:
     {"ok": False, "brain": None, "message": "..."} si aucun brain n'est
@@ -723,6 +732,17 @@ def generate_relation_via_llm(topic):
     topic = (topic or "").strip()
     if not topic:
         return {"ok": False, "brain": None, "message": "sujet vide -- rien a demander a un agent LLM."}
+
+    context_meta = None
+    topic_for_llm = topic
+    if include_context:
+        context_text, context_meta = gather_project_context()
+        if context_text:
+            topic_for_llm = (
+                "[Contexte reel du projet CSTL ci-dessous, pour information -- "
+                "reponds quand meme UNIQUEMENT avec le JSON demande sur le sujet "
+                f"actuel]\n{context_text}\n\n=== Sujet actuel ===\n{topic}"
+            )
 
     try:
         brain = resolve_brain("auto")
@@ -742,7 +762,7 @@ def generate_relation_via_llm(topic):
     brain_name = type(brain).__name__
     model = getattr(brain, "model", None)
     try:
-        relation = brain.generate_relation(topic, None)
+        relation = brain.generate_relation(topic_for_llm, None)
     except Exception as e:
         return {
             "ok": False, "brain": brain_name, "model": model,
@@ -755,7 +775,7 @@ def generate_relation_via_llm(topic):
             "message": f"reponse du modele mal formee (attendu type/subject/object): {relation!r}",
         }
 
-    return {"ok": True, "brain": brain_name, "model": model, "relation": relation}
+    return {"ok": True, "brain": brain_name, "model": model, "relation": relation, "context_included": context_meta}
 
 
 def read_graphify_summary():
@@ -961,11 +981,19 @@ def check_hermes_connection():
         }
 
 
-def run_claude_code(prompt):
+def run_claude_code(prompt, include_context=True):
     """Lance une VRAIE requete one-shot au CLI Claude Code (`claude -p
     "<prompt>"`) sur cette machine, dans le repo courant (REPO_ROOT).
     Ajoute a la demande explicite de l'utilisateur ("dans l'onglet claude
     code je veux pouvoir l'utiliser").
+
+    include_context=True (defaut) : prepend le VRAI contexte du projet
+    (gather_project_context() -- ADN store + Graphify + Obsidian si
+    configure) avant le prompt de l'utilisateur. Utile meme si `claude`
+    tourne deja dans REPO_ROOT et peut lire les fichiers lui-meme : l'ADN
+    store (memoire d'echanges CSTL reels) et Graphify ne sont pas des
+    fichiers qu'il penserait a consulter spontanement. "context_included"
+    dans le retour dit precisement ce qui a ete inclus.
 
     Honnete sur les limites, comme le reste de ce dashboard :
       - Mode "print" (-p) du CLI : une requete, une reponse, PUIS LE
@@ -986,6 +1014,16 @@ def run_claude_code(prompt):
     if not prompt:
         return {"ok": False, "error": "prompt vide -- rien a envoyer a Claude Code."}
 
+    context_meta = None
+    prompt_for_cli = prompt
+    if include_context:
+        context_text, context_meta = gather_project_context()
+        if context_text:
+            prompt_for_cli = (
+                "[Contexte reel du projet CSTL ci-dessous, pour information]\n"
+                f"{context_text}\n\n=== Demande actuelle ===\n{prompt}"
+            )
+
     claude_bin = shutil.which("claude")
     if not claude_bin:
         candidate = Path.home() / ".npm-global" / "bin" / "claude"
@@ -1002,7 +1040,7 @@ def run_claude_code(prompt):
     started = time.monotonic()
     try:
         proc = subprocess.run(
-            [claude_bin, "-p", prompt],
+            [claude_bin, "-p", prompt_for_cli],
             cwd=str(REPO_ROOT),
             capture_output=True, text=True, timeout=90,
         )
@@ -1016,10 +1054,167 @@ def run_claude_code(prompt):
     return {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
+        "context_included": context_meta,
         "stdout": proc.stdout,
         "stderr": proc.stderr,
         "elapsed_ms": elapsed_ms,
         "binary": claude_bin,
+    }
+
+
+def gather_project_context(max_entries=6, max_chars_per_entry=280, max_total_chars=3000):
+    """Compile un bloc de contexte REEL a partir de trois sources deja
+    existantes de ce projet -- ADN store (memoire du protocole CSTL),
+    Graphify (graphe reel), et le vault Obsidian SI OBSIDIAN_VAULT_PATH est
+    definie pour CE process dashboard. Ajoute a la demande explicite de
+    l'utilisateur ("faut que claude, hermes, openclaw et jarvis soit
+    linker avec la memoire de cstl et obsidian et graphify pour qu'on
+    puisse retrouver les context et la memoire du projet").
+
+    Limite honnete deja documentee ailleurs dans ce fichier
+    (check_telegram_obsidian_status) : ce dashboard tourne dans un PROCESS
+    SEPARE du serveur Rust -- il ne peut lire le vault Obsidian QUE si
+    OBSIDIAN_VAULT_PATH est AUSSI definie pour ce process Python (pas
+    seulement pour le process Rust). Si absente, la section Obsidian reste
+    honnetement vide plutot que de fabriquer un contenu.
+
+    Retourne (texte: str, meta: dict) -- meta dit precisement ce qui a
+    reellement ete inclus, pour que l'appelant (et l'utilisateur, via
+    /api/project-context) puisse verifier plutot que de faire confiance
+    aveuglement."""
+    parts = []
+    meta = {"adn": False, "graphify": False, "obsidian": False, "obsidian_reason": None}
+
+    if ADN_DB_PATH.exists():
+        try:
+            uri = f"file:{ADN_DB_PATH.as_posix()}?mode=ro"
+            conn = sqlite3.connect(uri, uri=True, timeout=2.0)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT hash, produced_by, created_at, payload FROM adn_store "
+                "ORDER BY created_at DESC LIMIT ?", (max_entries,)
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+            conn.close()
+            if rows:
+                lines = ["=== Memoire CSTL (ADN store, dernieres entrees reelles, ordre chronologique) ==="]
+                for r in reversed(rows):
+                    payload = (r.get("payload") or "").replace("\n", " ")[:max_chars_per_entry]
+                    lines.append(f"[{r.get('created_at')}] {r.get('produced_by')} "
+                                 f"(hash {str(r.get('hash'))[:12]}...): {payload}")
+                parts.append("\n".join(lines))
+                meta["adn"] = True
+        except sqlite3.OperationalError:
+            pass
+
+    graphify = read_graphify_summary()
+    if graphify.get("ok"):
+        parts.append(
+            f"=== Graphify (graphe reel: {graphify['node_count']} noeuds, "
+            f"{graphify['link_count']} liens, {graphify['community_count']} communautes, "
+            f"genere le {graphify.get('generated_at')}) ==="
+        )
+        meta["graphify"] = True
+
+    vault = os.environ.get("OBSIDIAN_VAULT_PATH")
+    if not vault:
+        meta["obsidian_reason"] = ("OBSIDIAN_VAULT_PATH non definie pour ce process dashboard -- "
+                                    "meme limite que /api/telegram-obsidian-status, rien a lire ici.")
+    else:
+        vault_path = Path(vault)
+        if not vault_path.exists():
+            meta["obsidian_reason"] = f"OBSIDIAN_VAULT_PATH={vault} ne pointe vers rien sur cette machine."
+        else:
+            try:
+                md_files = sorted(vault_path.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:3]
+                if md_files:
+                    lines = ["=== Obsidian (notes reelles les plus recentes du vault) ==="]
+                    for f in md_files:
+                        content = f.read_text(encoding="utf-8", errors="replace")[:max_chars_per_entry]
+                        lines.append(f"-- {f.name} --\n{content}")
+                    parts.append("\n".join(lines))
+                    meta["obsidian"] = True
+                else:
+                    meta["obsidian_reason"] = f"vault trouve ({vault}) mais aucun fichier .md dedans."
+            except OSError as e:
+                meta["obsidian_reason"] = f"lecture du vault echouee: {e}"
+
+    text = "\n\n".join(parts)
+    if len(text) > max_total_chars:
+        text = text[:max_total_chars] + "\n... (tronque)"
+    return text, meta
+
+
+def _openclaw_workspace_dir():
+    """Lit le VRAI chemin du workspace OpenClaw depuis
+    ~/.openclaw/openclaw.json (agents.defaults.workspace) -- pas hardcode,
+    s'adapte si l'utilisateur le change un jour. None si le fichier de
+    config ou la cle sont absents/illisibles."""
+    config_path = Path.home() / ".openclaw" / "openclaw.json"
+    if not config_path.exists():
+        return None
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        workspace = config.get("agents", {}).get("defaults", {}).get("workspace")
+        return Path(workspace) if workspace else None
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def sync_context_to_openclaw():
+    """Ecrit un VRAI extrait de gather_project_context() dans
+    memory/<aujourd'hui>.md du workspace OpenClaw -- convention DEJA
+    documentee par OpenClaw lui-meme, pas inventee ici (voir
+    workspace/AGENTS.md sur cette machine : "Daily notes:
+    memory/YYYY-MM-DD.md ... Use runtime-provided startup context first.
+    That context may already include ... recent daily memory"). Ajoute a
+    la demande explicite de l'utilisateur.
+
+    Limite honnete, cruciale : ceci n'affecte QUE les FUTURES sessions
+    OpenClaw qui redemarrent et relisent memory/ selon leur propre
+    convention -- une session OpenClaw DEJA ouverte ne relit pas ce
+    fichier en direct, rien ici ne peut forcer ca depuis ce dashboard.
+
+    APPEND, jamais overwrite -- ce fichier peut deja contenir les propres
+    notes de l'utilisateur ou d'autres sessions OpenClaw."""
+    workspace = _openclaw_workspace_dir()
+    if workspace is None:
+        return {"ok": False, "error": "workspace OpenClaw introuvable (~/.openclaw/openclaw.json absent ou incomplet)."}
+    if not workspace.exists():
+        return {"ok": False, "error": f"le workspace configure ({workspace}) n'existe pas sur cette machine."}
+
+    context_text, meta = gather_project_context()
+    if not context_text:
+        return {"ok": False, "error": "aucun contexte reel a synchroniser (ADN store vide, Graphify absent, Obsidian non configure)."}
+
+    memory_dir = workspace / "memory"
+    try:
+        memory_dir.mkdir(exist_ok=True)
+        today = datetime.date.today().isoformat()
+        target = memory_dir / f"{today}.md"
+        stamp = datetime.datetime.now().strftime("%H:%M:%S")
+        block = (
+            f"\n\n## Synchronisation CSTL Dashboard ({stamp})\n"
+            "_Ecrit automatiquement par dashboard/server.py::sync_context_to_openclaw() "
+            "a la demande de l'utilisateur -- memoire reelle du projet CSTL (ADN store + "
+            "Graphify + Obsidian si configure)._\n\n"
+            f"{context_text}\n"
+        )
+        with open(target, "a", encoding="utf-8") as f:
+            f.write(block)
+    except OSError as e:
+        return {"ok": False, "error": f"ecriture echouee: {e}"}
+
+    return {
+        "ok": True,
+        "written_to": str(target),
+        "bytes_appended": len(block.encode("utf-8")),
+        "sources_included": meta,
+        "note": ("pris en compte par OpenClaw a son PROCHAIN demarrage de session "
+                 "(convention memory/ de son propre AGENTS.md) -- pas en direct sur "
+                 "une session deja ouverte."),
     }
 
 
@@ -1119,6 +1314,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(check_openclaw_connection())
         elif parsed.path == "/api/hermes-check":
             self._send_json(check_hermes_connection())
+        elif parsed.path == "/api/project-context":
+            context_text, meta = gather_project_context()
+            self._send_json({"context": context_text, "meta": meta})
         else:
             self.send_error(404, "Not found")
 
@@ -1147,7 +1345,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
                 return
-            self._send_json(generate_relation_via_llm(fields.get("topic", "")))
+            self._send_json(generate_relation_via_llm(fields.get("topic", ""), fields.get("include_context", True)))
         elif parsed.path == "/api/orchestrate":
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length) if length else b"{}"
@@ -1167,7 +1365,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
                 return
-            self._send_json(run_claude_code(fields.get("prompt", "")))
+            self._send_json(run_claude_code(fields.get("prompt", ""), fields.get("include_context", True)))
+        elif parsed.path == "/api/openclaw-sync-context":
+            self._send_json(sync_context_to_openclaw())
         else:
             self.send_error(404, "Not found")
 
