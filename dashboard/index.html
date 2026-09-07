@@ -168,6 +168,10 @@
       <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
         <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
         <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
+        <label class="muted" style="display:flex; align-items:center; gap:6px; margin-top:8px;">
+          <input type="checkbox" id="f-llm-context" checked style="width:auto;">
+          Inclure le contexte reel du projet (ADN store + Graphify + Obsidian si configure)
+        </label>
         <div style="margin-top:8px;">
           <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
         </div>
@@ -199,9 +203,11 @@
       <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
         <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
         <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
+        <button class="secondary" onclick="refreshProjectContext()">Voir le contexte projet envoye a Hermes/Claude Code (ADN + Graphify + Obsidian)</button>
       </div>
       <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
       <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
+      <pre id="project-context-body" style="display:none; margin-top:10px;"></pre>
       <p class="muted" style="margin-top:14px;">Hermes/Ollama et OpenClaw ont chacun leur propre onglet dedie ci-dessus (verification en direct + explication honnete de ce qui est reellement teste).</p>
     </section>
   </div>
@@ -260,6 +266,20 @@
       </p>
       <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
       <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
+
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+        <p class="muted">
+          <strong>Memoire liee</strong> -- OpenClaw a sa propre convention documentee
+          (<code>workspace/AGENTS.md</code> sur cette machine) : il charge automatiquement
+          <code>memory/AAAA-MM-JJ.md</code> au demarrage d'une session. Le bouton ci-dessous
+          ecrit un VRAI extrait de la memoire CSTL (ADN store + Graphify + Obsidian si
+          configure) dans ce fichier -- pas invente, sa propre convention.
+          <strong>Limite honnete</strong> : pris en compte au PROCHAIN demarrage de session
+          OpenClaw seulement, pas sur une session deja ouverte.
+        </p>
+        <button class="secondary" onclick="syncOpenClawContext()">Synchroniser la memoire CSTL vers OpenClaw (memory/AAAA-MM-JJ.md)</button>
+        <div id="openclaw-sync-body" class="muted" style="margin-top:10px;"></div>
+      </div>
     </section>
   </div>
 
@@ -289,6 +309,10 @@
         <label>Prompt</label>
         <textarea id="cc-prompt" rows="3" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:13px;" placeholder="Ex: liste les fichiers .rs dans src/"></textarea>
       </div>
+      <label class="muted" style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+        <input type="checkbox" id="cc-context" checked style="width:auto;">
+        Inclure le contexte reel du projet (ADN store + Graphify + Obsidian si configure)
+      </label>
       <button onclick="runClaudeCode()">Envoyer</button>
       <div id="cc-status" class="muted" style="margin-top:10px;"></div>
       <p class="muted" style="margin-top:10px;">Sortie reelle (stdout) :</p>
@@ -366,7 +390,10 @@
         Parle a l'agent CSTL : le micro transcrit ta phrase, une relation est
         composee via le meme agent LLM que le compositeur ci-dessus (Hermes
         local &gt; Gemini &gt; Anthropic), puis envoyee au vrai serveur CSTL.
-        Coche la case pour entendre un resume court de la reponse.
+        Coche la case pour entendre un resume court de la reponse. Meme
+        endpoint que le Compositeur (<code>/api/generate-relation</code>) --
+        le contexte reel du projet (ADN store + Graphify + Obsidian si
+        configure) est inclus par defaut ici aussi.
       </p>
       <p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">
         Support navigateur honnete -- reconnaissance vocale (SpeechRecognition) :
@@ -675,12 +702,13 @@ async function refreshAdn() {
 
 async function generateRelationViaLlm() {
   const topic = document.getElementById('f-llm-topic').value;
+  const includeContext = document.getElementById('f-llm-context').checked;
   const status = document.getElementById('llm-gen-status');
   status.textContent = 'Tentative Hermes local -> Gemini -> Anthropic...';
   try {
     const r = await fetch('/api/generate-relation', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({topic})
+      body: JSON.stringify({topic, include_context: includeContext})
     });
     const j = await r.json();
     if (!j.ok) {
@@ -688,7 +716,9 @@ async function generateRelationViaLlm() {
       return;
     }
     addRelationRow(j.relation.subject, j.relation.type, j.relation.object);
-    status.innerHTML = `<span style="color:var(--ok)">Relation generee par ${j.brain}${j.model ? ' ('+j.model+')' : ''} et ajoutee ci-dessous -- relis-la avant d'envoyer.</span>`;
+    const ctx = j.context_included;
+    const ctxNote = ctx ? ` (contexte inclus -- ADN:${ctx.adn?'oui':'non'}, Graphify:${ctx.graphify?'oui':'non'}, Obsidian:${ctx.obsidian?'oui':'non'})` : '';
+    status.innerHTML = `<span style="color:var(--ok)">Relation generee par ${j.brain}${j.model ? ' ('+j.model+')' : ''} et ajoutee ci-dessous -- relis-la avant d'envoyer.${ctxNote}</span>`;
   } catch (e) {
     status.textContent = 'Erreur cote dashboard: ' + e;
   }
@@ -778,6 +808,7 @@ async function runClaudeCode() {
   const stderrWrap = document.getElementById('cc-stderr-wrap');
   const stderrEl = document.getElementById('cc-stderr');
   const prompt = promptEl.value;
+  const includeContext = document.getElementById('cc-context').checked;
   if (!prompt.trim()) {
     statusEl.textContent = 'Ecris un prompt avant d\'envoyer.';
     return;
@@ -788,7 +819,7 @@ async function runClaudeCode() {
   try {
     const r = await fetch('/api/claude-code', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({prompt})
+      body: JSON.stringify({prompt, include_context: includeContext})
     });
     const j = await r.json();
     if (!j.ok && j.error) {
@@ -797,7 +828,9 @@ async function runClaudeCode() {
       return;
     }
     const color = j.ok ? 'var(--ok)' : 'var(--down)';
-    statusEl.innerHTML = `<span style="color:${color}">${j.ok ? 'OK' : 'code de sortie ' + j.returncode}</span> -- ${j.elapsed_ms} ms (${j.binary})`;
+    const ctx = j.context_included;
+    const ctxNote = ctx ? ` -- contexte: ADN:${ctx.adn?'oui':'non'}, Graphify:${ctx.graphify?'oui':'non'}, Obsidian:${ctx.obsidian?'oui':'non'}` : '';
+    statusEl.innerHTML = `<span style="color:${color}">${j.ok ? 'OK' : 'code de sortie ' + j.returncode}</span> -- ${j.elapsed_ms} ms (${j.binary})${ctxNote}`;
     stdoutEl.textContent = j.stdout || '(sortie vide)';
     if (j.stderr) {
       stderrWrap.style.display = 'block';
@@ -822,6 +855,25 @@ async function testHermes() {
   }
 }
 
+async function syncOpenClawContext() {
+  const body = document.getElementById('openclaw-sync-body');
+  body.textContent = 'Ecriture dans memory/AAAA-MM-JJ.md du workspace OpenClaw...';
+  try {
+    const r = await fetch('/api/openclaw-sync-context', {method: 'POST'});
+    const j = await r.json();
+    if (!j.ok) {
+      body.innerHTML = `<span style="color:var(--down)">${j.error}</span>`;
+      return;
+    }
+    const s = j.sources_included;
+    body.innerHTML = `<strong style="color:var(--ok)">ECRIT</strong> -- ${j.bytes_appended} octets ajoutes a <code>${j.written_to}</code>
+      (sources: ADN:${s.adn?'oui':'non'}, Graphify:${s.graphify?'oui':'non'}, Obsidian:${s.obsidian?'oui':'non'})<br>
+      <span class="muted">${j.note}</span>`;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
 async function testOpenClaw() {
   const body = document.getElementById('openclaw-body');
   body.textContent = 'Tentative de connexion vers ws://127.0.0.1:18789...';
@@ -831,6 +883,28 @@ async function testOpenClaw() {
     const color = j.reachable ? 'var(--ok)' : 'var(--down)';
     body.innerHTML = `<strong style="color:${color}">${j.reachable ? 'PORT ACCESSIBLE' : 'INACCESSIBLE DEPUIS ICI'}</strong>
       (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function refreshProjectContext() {
+  const body = document.getElementById('project-context-body');
+  body.style.display = 'block';
+  body.textContent = 'Lecture en cours...';
+  try {
+    const r = await fetch('/api/project-context');
+    const j = await r.json();
+    const m = j.meta;
+    const lines = [
+      `ADN store inclus: ${m.adn ? 'oui' : 'non'}`,
+      `Graphify inclus: ${m.graphify ? 'oui' : 'non'}`,
+      `Obsidian inclus: ${m.obsidian ? 'oui' : 'non'}${m.obsidian_reason ? ' -- ' + m.obsidian_reason : ''}`,
+      '',
+      '--- texte reellement envoye ---',
+      j.context || '(vide -- aucune source disponible)',
+    ];
+    body.textContent = lines.join('\n');
   } catch (e) {
     body.textContent = 'Erreur cote dashboard: ' + e;
   }
