@@ -110,9 +110,43 @@
     <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
       <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
       <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:19001)</button>
+      <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
     </div>
     <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
     <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
+    <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
+  </section>
+
+  <!-- === ORCHESTRATEUR === -->
+  <!--
+    Relais multi-tours reel entre le dashboard (agent LLM signe Ed25519,
+    identite propre "dashboard_orchestrator") et le vrai serveur CSTL (port
+    5050), via /api/orchestrate. Reutilise tel quel resolve_brain(),
+    load_or_create_keypair(), register_agent(), send_signed_relation() et
+    sign_intent() de sdk/python/cstl_llm_agent.py, plus CstlClient de
+    cstl_client.py -- voir dashboard/server.py::run_orchestrated_relay()
+    pour le detail. Dans ce sandbox, aucun brain LLM n'est disponible (ni
+    Ollama, ni cle Gemini/Anthropic) -- l'endpoint retourne une erreur
+    honnete plutot que d'inventer un relais ; voir
+    dashboard/test_orchestrator_stub.py pour la preuve, avec un brain
+    factice injecte, que la MECANIQUE (boucle de tours, enregistrement reel,
+    envois TCP reels, capture de trace) fonctionne independamment de la
+    disponibilite d'un vrai modele.
+  -->
+  <section class="panel full">
+    <h2><span class="title">Orchestrateur -- relais LLM multi-tours</span></h2>
+    <p class="muted">
+      Lance un VRAI relais de N tours contre le serveur CSTL (127.0.0.1:5050) :
+      a chaque tour, un agent LLM reel (Hermes local &gt; Gemini &gt; Anthropic,
+      via resolve_brain("auto")) genere une relation, elle est signee Ed25519
+      et envoyee au serveur, la vraie reponse est capturee. Si aucun agent LLM
+      n'est disponible, l'endpoint le dit honnetement -- rien n'est simule.
+    </p>
+    <div class="field" style="max-width:160px;"><label>Nombre de tours</label><input id="orch-turns" type="number" min="1" max="20" value="4"></div>
+    <div class="field"><label>Sujet du relais</label><input id="orch-topic" value="Est-ce que Montreal est au Canada?"></div>
+    <button onclick="lancerRelais()">Lancer un relais</button>
+    <div id="orch-status" class="muted" style="margin-top:10px;"></div>
+    <div id="orch-trace" style="margin-top:10px;"></div>
   </section>
 
   <!-- === JARVIS === -->
@@ -552,6 +586,80 @@ async function testOpenClaw() {
       (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
   } catch (e) {
     body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+async function refreshTelegramObsidian() {
+  const body = document.getElementById('telegram-obsidian-body');
+  body.textContent = 'Lecture de l\'ADN store (preuve indirecte) en cours...';
+  try {
+    const r = await fetch('/api/telegram-obsidian-status');
+    const j = await r.json();
+    const fmtEvidence = (e) => {
+      if (e.evidence === 'aucune_escalade_dans_historique' || e.evidence === 'aucune_inconsistance_dans_historique') {
+        return `<span class="badge neutral">aucune escalade dans l'historique</span> ${e.detail}`;
+      }
+      if (e.evidence === 'base_absente' || e.evidence === 'lecture_impossible' || e.evidence === 'requete_echouee') {
+        return `<span class="badge none">verification impossible</span> ${e.detail}`;
+      }
+      return `<span class="badge wired">escalade detectee (preuve indirecte)</span> ${e.detail}`;
+    };
+    let html = `<p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">${j.limite_architecturale}</p>`;
+    html += `<p class="muted">Vu par CE process dashboard (pas le serveur Rust) : TELEGRAM_BOT_TOKEN=${j.dashboard_process_env.TELEGRAM_BOT_TOKEN}, TELEGRAM_CHAT_ID=${j.dashboard_process_env.TELEGRAM_CHAT_ID}, OBSIDIAN_VAULT_PATH=${j.dashboard_process_env.OBSIDIAN_VAULT_PATH}</p>`;
+    html += `<p><strong>Telegram</strong>: ${fmtEvidence(j.telegram)}</p>`;
+    if (j.telegram.priority_critical_payloads_recents && j.telegram.priority_critical_payloads_recents.length) {
+      html += '<table><thead><tr><th>hash (priority=critical)</th><th>created_at</th></tr></thead><tbody>';
+      for (const e of j.telegram.priority_critical_payloads_recents) {
+        html += `<tr><td>${(e.hash||'').slice(0,24)}...</td><td>${new Date(e.created_at*1000).toLocaleString()}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    if (j.telegram.governance_alerts_recents && j.telegram.governance_alerts_recents.length) {
+      html += '<table><thead><tr><th>governance_alerts.sender</th><th>last_alert_ts</th></tr></thead><tbody>';
+      for (const e of j.telegram.governance_alerts_recents) {
+        html += `<tr><td>${e.sender}</td><td>${new Date(e.last_alert_ts*1000).toLocaleString()}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    html += `<p><strong>Obsidian</strong>: ${fmtEvidence(j.obsidian)}</p>`;
+    if (j.obsidian.governance_events_inconsistency_recents && j.obsidian.governance_events_inconsistency_recents.length) {
+      html += '<table><thead><tr><th>governance_events.sender</th><th>ts</th></tr></thead><tbody>';
+      for (const e of j.obsidian.governance_events_inconsistency_recents) {
+        html += `<tr><td>${e.sender}</td><td>${new Date(e.ts*1000).toLocaleString()}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.textContent = 'Erreur cote dashboard: ' + e;
+  }
+}
+
+// === ORCHESTRATEUR ===
+async function lancerRelais() {
+  const turns = document.getElementById('orch-turns').value;
+  const topic = document.getElementById('orch-topic').value;
+  const status = document.getElementById('orch-status');
+  const traceDiv = document.getElementById('orch-trace');
+  status.textContent = `Lancement d'un relais reel de ${turns} tour(s) contre le serveur CSTL...`;
+  traceDiv.innerHTML = '';
+  try {
+    const r = await fetch('/api/orchestrate', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({turns: parseInt(turns, 10), topic})
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      status.innerHTML = `<span style="color:var(--down)">${j.error}</span>`;
+      if (j.trace && j.trace.length) {
+        traceDiv.innerHTML = '<p class="muted">Trace partielle avant echec :</p><pre>' + JSON.stringify(j.trace, null, 2) + '</pre>';
+      }
+      return;
+    }
+    status.innerHTML = `<span style="color:var(--ok)">${j.turns_completed} tour(s) reellement effectue(s)</span> -- brain=${j.brain}${j.model ? ' ('+j.model+')' : ''}${j.real_brain ? '' : ' (BRAIN INJECTE POUR TEST -- pas un vrai modele)'}`;
+    traceDiv.innerHTML = '<p class="muted">Trace complete (payload envoye + reponse recue a chaque tour) :</p><pre>' + JSON.stringify(j.trace, null, 2) + '</pre>';
+  } catch (e) {
+    status.textContent = 'Erreur cote dashboard: ' + e;
   }
 }
 
