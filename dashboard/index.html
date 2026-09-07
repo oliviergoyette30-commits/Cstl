@@ -5,6 +5,15 @@
 <title>CSTL Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- xterm.js -- VRAI emulateur de terminal cote navigateur, affiche a l'identique
+     les octets bruts (sequences ANSI incluses) recus du pont PTY reel
+     (dashboard/pty_bridge.py) via WebSocket. Charge par CDN : cette page est
+     servie localement par dashboard/server.py sur la machine de l'utilisateur,
+     pas soumise a la restriction CDN de l'outil Artifact. Ajoute 07/09/2026
+     pour "terminal complet interactif pour chaque outil". -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/css/xterm.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.min.js"></script>
 <style>
   /* === CSTL / aspect futuriste (demande 07/09/2026) ===
      Meme structure HTML, memes IDs/classes utilisees par le JS -- seule la
@@ -117,6 +126,11 @@
   .badge.present { background: rgba(42,245,176,0.1); color: var(--ok); }
   .badge.neutral { background: rgba(111,131,163,0.1); color: var(--muted); }
   .timestamp { font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.5px; }
+  /* === Terminal reel (pont PTY, ajoute 07/09/2026) === */
+  .term-status { font-size: 12px; color: var(--muted); margin: 8px 0; }
+  .term-box { display:none; margin-top:10px; border:1px solid var(--border); border-radius:4px;
+    background:#000; padding:6px; }
+  .term-box .xterm { padding: 4px; }
 </style>
 </head>
 <body>
@@ -240,6 +254,15 @@
       <button class="secondary" onclick="testHermes()">Tester Hermes/Ollama (127.0.0.1:11434)</button>
       <div id="hermes-check-body" class="muted" style="margin-top:10px;"></div>
       <p class="muted" style="margin-top:14px;">Pour generer une vraie relation via Hermes (ou son fallback Gemini/Anthropic), utilise l'onglet Compositeur ("Générer une relation via agent LLM") ou l'onglet Jarvis (voix).</p>
+
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+        <p class="muted">
+          <strong>Terminal reel</strong> -- lance <code>ollama run &lt;modele&gt;</code> (le premier
+          modele installe detecte) dans un vrai pseudo-terminal sur cette machine, relaye en
+          direct ici. Pas une simulation : tape dedans comme dans une vraie fenetre Terminal.
+        </p>
+        <div id="term-hermes-controls"></div>
+      </div>
     </section>
   </div>
 
@@ -279,6 +302,14 @@
         </p>
         <button class="secondary" onclick="syncOpenClawContext()">Synchroniser la memoire CSTL vers OpenClaw (memory/AAAA-MM-JJ.md)</button>
         <div id="openclaw-sync-body" class="muted" style="margin-top:10px;"></div>
+      </div>
+
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+        <p class="muted">
+          <strong>Terminal reel</strong> -- lance <code>openclaw chat</code> dans un vrai
+          pseudo-terminal sur cette machine, relaye en direct ici. Pas une simulation.
+        </p>
+        <div id="term-openclaw-controls"></div>
       </div>
     </section>
   </div>
@@ -320,6 +351,16 @@
       <div id="cc-stderr-wrap" style="display:none;">
         <p class="muted">stderr :</p>
         <pre id="cc-stderr"></pre>
+      </div>
+
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+        <p class="muted">
+          <strong>Terminal reel</strong> -- lance <code>claude</code> en mode interactif complet
+          (pas <code>-p</code>, pas one-shot) dans un vrai pseudo-terminal sur cette machine,
+          relaye en direct ici : session persistante, memoire de conversation, exactement comme
+          dans une vraie fenetre Terminal.
+        </p>
+        <div id="term-claude-code-controls"></div>
       </div>
     </section>
   </div>
@@ -983,6 +1024,123 @@ async function lancerRelais() {
     status.textContent = 'Erreur cote dashboard: ' + e;
   }
 }
+
+// === TERMINAL REEL (pont PTY dashboard/pty_bridge.py, ajoute 07/09/2026) ===
+// "j'aimerais avoir la vraie interface" -> "terminal complet interactif pour
+// chaque outil". Un module partage pour les 3 onglets (hermes, openclaw,
+// claude-code) : meme logique, seul le nom d'outil change (utilise comme
+// segment de chemin ws://host:port/<tool>, lu cote serveur par
+// pty_bridge._handle_client via le path de la connexion).
+const TERMINALS = {}; // tool -> { term, fitAddon, ws, connected }
+
+function utf8ToBase64(str) {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+}
+function base64ToUint8Array(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function mountTerminal(tool) {
+  const controls = document.getElementById(`term-${tool}-controls`);
+  if (!controls) return;
+  controls.innerHTML = `
+    <div id="term-${tool}-status" class="term-status">Non connecte.</div>
+    <button class="secondary" id="term-${tool}-connect" onclick="connectTerminal('${tool}')">Connecter</button>
+    <button class="secondary" id="term-${tool}-disconnect" onclick="disconnectTerminal('${tool}')" disabled>Deconnecter</button>
+    <div id="term-${tool}-box" class="term-box"></div>`;
+  TERMINALS[tool] = { term: null, fitAddon: null, ws: null, connected: false };
+}
+
+async function connectTerminal(tool) {
+  const statusEl = document.getElementById(`term-${tool}-status`);
+  const boxEl = document.getElementById(`term-${tool}-box`);
+  const connectBtn = document.getElementById(`term-${tool}-connect`);
+  const disconnectBtn = document.getElementById(`term-${tool}-disconnect`);
+  const state = TERMINALS[tool];
+  if (!state || state.connected) return;
+
+  statusEl.textContent = 'Verification du pont terminal...';
+  let info;
+  try {
+    info = await (await fetch('/api/terminal-info')).json();
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:var(--down)">Erreur cote dashboard: ${e}</span>`;
+    return;
+  }
+  if (!info.available) {
+    statusEl.innerHTML = `<span style="color:var(--down)">Pont terminal indisponible -- ${info.reason}</span>`;
+    return;
+  }
+
+  if (!state.term) {
+    state.term = new Terminal({
+      convertEol: true, cursorBlink: true, fontFamily: 'JetBrains Mono, monospace',
+      fontSize: 13, theme: { background: '#000000', foreground: '#dce8f5' },
+    });
+    state.fitAddon = new FitAddon.FitAddon();
+    state.term.loadAddon(state.fitAddon);
+    state.term.open(boxEl);
+  }
+  boxEl.style.display = 'block';
+  state.fitAddon.fit();
+
+  const wsUrl = `ws://${info.host}:${info.port}/${tool}`;
+  const ws = new WebSocket(wsUrl);
+  state.ws = ws;
+
+  ws.onopen = () => { statusEl.textContent = 'Connexion WebSocket ouverte, lancement du process...'; };
+  ws.onerror = () => { statusEl.innerHTML = `<span style="color:var(--down)">Erreur WebSocket (${wsUrl})</span>`; };
+  ws.onclose = () => {
+    state.connected = false;
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    statusEl.textContent = 'Deconnecte.';
+  };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'started') {
+      state.connected = true;
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false;
+      statusEl.innerHTML = `<span style="color:var(--ok)">Process reel lance</span> -- ${msg.argv.join(' ')}`;
+      state.term.focus();
+    } else if (msg.type === 'stdout') {
+      state.term.write(base64ToUint8Array(msg.data));
+    } else if (msg.type === 'error') {
+      statusEl.innerHTML = `<span style="color:var(--down)">${msg.message}</span>`;
+      boxEl.style.display = 'none';
+    } else if (msg.type === 'exit') {
+      statusEl.textContent = 'Le process reel s\'est termine (EOF).';
+    }
+  };
+
+  state.term.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'stdin', data: utf8ToBase64(data) }));
+    }
+  });
+  const sendResize = () => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'resize', cols: state.term.cols, rows: state.term.rows }));
+    }
+  };
+  state.term.onResize(sendResize);
+  window.addEventListener('resize', () => { if (state.connected) state.fitAddon.fit(); });
+}
+
+function disconnectTerminal(tool) {
+  const state = TERMINALS[tool];
+  if (!state) return;
+  if (state.ws) { state.ws.close(); state.ws = null; }
+  const boxEl = document.getElementById(`term-${tool}-box`);
+  if (boxEl) boxEl.style.display = 'none';
+  state.connected = false;
+}
+
+['hermes', 'openclaw', 'claude-code'].forEach(mountTerminal);
 
 // Un seul chargement automatique a l'ouverture de la page -- ensuite,
 // tout rafraichissement est manuel (bouton), comme demande. Les trois

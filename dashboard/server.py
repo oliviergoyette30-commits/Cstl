@@ -151,6 +151,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+try:
+    import pty_bridge
+except ImportError:
+    pty_bridge = None
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # sdk/python/cstl_llm_agent.py expose deja resolve_brain() (Hermes/Ollama ->
@@ -195,6 +200,8 @@ except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
     _ORCHESTRATOR_IMPORT_ERROR = str(e)
 
 DASHBOARD_PORT = int(os.environ.get("CSTL_DASHBOARD_PORT", "5099"))
+PTY_BRIDGE_PORT = int(os.environ.get("CSTL_PTY_BRIDGE_PORT", "5100"))
+PTY_BRIDGE_STARTED = False  # mis a jour reellement dans main() -- jamais suppose True
 CSTL_SERVER_HOST = os.environ.get("CSTL_SERVER_HOST", "127.0.0.1")
 CSTL_SERVER_PORT = int(os.environ.get("CSTL_SERVER_PORT", "5050"))
 ADN_DB_PATH = Path(os.environ.get("CSTL_ADN_DB_PATH", str(REPO_ROOT / "cstl_adn.db")))
@@ -1317,6 +1324,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/project-context":
             context_text, meta = gather_project_context()
             self._send_json({"context": context_text, "meta": meta})
+        elif parsed.path == "/api/terminal-info":
+            self._send_json(get_terminal_info())
         else:
             self.send_error(404, "Not found")
 
@@ -1385,12 +1394,46 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def get_terminal_info():
+    """Etat REEL du pont terminal PTY (dashboard/pty_bridge.py) -- jamais
+    fabrique : si le module est absent (import echoue) ou le paquet
+    `websockets` n'est pas installe, available=False avec la raison
+    precise, et le frontend le montre tel quel plutot que d'essayer de se
+    connecter dans le vide."""
+    if pty_bridge is None:
+        return {"available": False, "reason": "module dashboard/pty_bridge.py introuvable ou import en echec."}
+    if pty_bridge.websockets is None:
+        return {"available": False, "reason": "paquet Python 'websockets' non installe sur cette machine (pip install websockets)."}
+    if not PTY_BRIDGE_STARTED:
+        return {"available": False, "reason": "le pont PTY n'a pas demarre (voir les logs du dashboard au lancement)."}
+    return {
+        "available": True,
+        "host": "127.0.0.1",
+        "port": PTY_BRIDGE_PORT,
+        "tools": ["hermes", "openclaw", "claude-code"],
+        "note": ("chaque connexion WebSocket lance son PROPRE process reel -- "
+                 "deux onglets ouverts en meme temps sur le meme outil sont deux "
+                 "vrais process independants."),
+    }
+
+
 def main():
+    global PTY_BRIDGE_STARTED
     addr = ("127.0.0.1", DASHBOARD_PORT)
     httpd = ThreadingHTTPServer(addr, DashboardHandler)
     print(f"[dashboard] CSTL Dashboard sur http://127.0.0.1:{DASHBOARD_PORT}/")
     print(f"[dashboard] Serveur CSTL cible: {CSTL_SERVER_HOST}:{CSTL_SERVER_PORT}")
     print(f"[dashboard] ADN store lu depuis: {ADN_DB_PATH}")
+    if pty_bridge is not None:
+        try:
+            PTY_BRIDGE_STARTED = pty_bridge.start_server(REPO_ROOT, port=PTY_BRIDGE_PORT)
+        except Exception as e:
+            PTY_BRIDGE_STARTED = False
+            print(f"[dashboard] pont terminal PTY: echec du demarrage -- {e}")
+    if PTY_BRIDGE_STARTED:
+        print(f"[dashboard] Pont terminal PTY (Hermes/OpenClaw/Claude Code) sur ws://127.0.0.1:{PTY_BRIDGE_PORT}/<outil>")
+    else:
+        print("[dashboard] Pont terminal PTY indisponible (voir /api/terminal-info) -- le reste du dashboard fonctionne normalement.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
