@@ -115,6 +115,256 @@
     <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
   </section>
 
+  <!-- === JARVIS === -->
+  <!--
+    Interface vocale pour parler a l'agent CSTL (esprit Iron Man). Contrainte
+    honnete : reconnaissance ET synthese vocales tournent EXCLUSIVEMENT dans
+    le navigateur de l'utilisateur (Web Speech API : SpeechRecognition /
+    webkitSpeechRecognition pour l'ecoute, SpeechSynthesis pour la lecture a
+    voix haute) -- ZERO dependance serveur, ZERO cle API cloud requise pour
+    la voix elle-meme. Ce sandbox de developpement n'a ni micro ni
+    haut-parleur : rien ici n'a pu etre teste avec une vraie voix humaine,
+    seulement relu attentivement et verifie pour absence d'erreur de syntaxe
+    (voir rapport de session). Support navigateur reellement variable et
+    documente explicitement dans l'UI ci-dessous, pas seulement en
+    commentaire :
+      - Chrome / Edge (Chromium) : bon support de SpeechRecognition ET
+        SpeechSynthesis, y compris en francais.
+      - Safari : SpeechSynthesis correct, SpeechRecognition partiel/recent
+        et pas garanti sur toutes les versions.
+      - Firefox : SpeechRecognition NON supporte en pratique (flag experimental
+        desactive par defaut) -- Jarvis le detecte et l'affiche clairement
+        plutot que d'echouer silencieusement (exigence explicite de la tache).
+    Reutilise TEL QUEL les endpoints deja existants /api/generate-relation
+    (transcription -> topic -> relation via Hermes/Gemini/Anthropic) et
+    /api/send (meme flux que le compositeur manuel ci-dessus) -- aucune
+    logique de generation ou d'envoi dupliquee ici.
+  -->
+  <section class="panel full">
+    <h2><span class="title">Jarvis -- interface vocale (experimentale)</span></h2>
+    <p class="muted">
+      Parle a l'agent CSTL : le micro transcrit ta phrase, une relation est
+      composee via le meme agent LLM que le compositeur ci-dessus (Hermes
+      local &gt; Gemini &gt; Anthropic), puis envoyee au vrai serveur CSTL.
+      Coche la case pour entendre un resume court de la reponse.
+    </p>
+    <p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">
+      Support navigateur honnete -- reconnaissance vocale (SpeechRecognition) :
+      <strong>bon</strong> sur Chrome/Edge, <strong>partiel</strong> sur Safari,
+      <strong>tres limite / absent</strong> sur Firefox. Synthese vocale
+      (SpeechSynthesis) : disponible sur la plupart des navigateurs modernes,
+      voix et qualite variables selon l'OS. Rien de tout cela n'a pu etre
+      teste avec un vrai micro/haut-parleur dans cet environnement de
+      developpement (aucun materiel audio ici) -- a verifier par toi, sur ta
+      machine, avec un vrai navigateur.
+    </p>
+
+    <div id="jarvis-unsupported" class="muted" style="display:none; color:var(--down); border:1px solid var(--down); border-radius:6px; padding:10px;">
+      Ce navigateur ne supporte pas <code>SpeechRecognition</code> /
+      <code>webkitSpeechRecognition</code> (cas typique de Firefox). La
+      reconnaissance vocale de Jarvis est indisponible ici -- utilise Chrome
+      ou Edge pour cette fonctionnalite. (La saisie manuelle via le
+      compositeur ci-dessus reste disponible, elle.)
+    </div>
+
+    <div id="jarvis-controls">
+      <div class="field" style="max-width:220px;">
+        <label>Langue de reconnaissance</label>
+        <select id="jarvis-lang" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 8px; font-size:13px;">
+          <option value="fr-FR">fr-FR (France -- choix par defaut, le plus largement teste sur Chrome)</option>
+          <option value="fr-CA">fr-CA (Canada -- a essayer si fr-FR reconnait mal ton accent)</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+        <button id="jarvis-mic-btn" onclick="jarvisToggleListening()">Demarrer l'ecoute</button>
+        <span id="jarvis-mic-status" class="muted">inactif</span>
+      </div>
+      <div class="field">
+        <label>Transcription en direct</label>
+        <div id="jarvis-transcript" class="muted" style="min-height:20px; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px;">(rien entendu encore)</div>
+      </div>
+      <label class="muted" style="display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="jarvis-speak-checkbox" style="width:auto;">
+        Lire la reponse a voix haute (resume court, pas le wire-format brut)
+      </label>
+      <div id="jarvis-tts-unsupported" class="muted" style="display:none; color:var(--warn);">
+        SpeechSynthesis indisponible dans ce navigateur -- la case ci-dessus
+        restera sans effet.
+      </div>
+
+      <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">
+        <p class="muted">Relation generee par l'agent LLM a partir de la transcription :</p>
+        <div id="jarvis-relation-status" class="muted">(en attente d'une phrase transcrite)</div>
+        <p class="muted" style="margin-top:8px;">Reponse reelle du serveur CSTL (meme endpoint /api/send que le compositeur) :</p>
+        <pre id="jarvis-send-raw">(aucun envoi encore effectue via Jarvis)</pre>
+        <p class="muted">Resume construit pour la lecture a voix haute (<code>human_summary</code>, champ additif de /api/send) :</p>
+        <div id="jarvis-summary" class="muted">(pas encore disponible)</div>
+      </div>
+    </div>
+  </section>
+  <script>
+    // === JARVIS === logique JS, isolee dans son propre bloc <script> pour
+    // ne pas se melanger au script principal ci-dessous. N'appelle que
+    // /api/generate-relation et /api/send, deja utilises par le compositeur
+    // manuel -- aucune duplication de la logique de generation/envoi.
+    (function () {
+      const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const micBtn = document.getElementById('jarvis-mic-btn');
+      const micStatus = document.getElementById('jarvis-mic-status');
+      const transcriptEl = document.getElementById('jarvis-transcript');
+      const unsupportedEl = document.getElementById('jarvis-unsupported');
+      const controlsEl = document.getElementById('jarvis-controls');
+      const relationStatusEl = document.getElementById('jarvis-relation-status');
+      const sendRawEl = document.getElementById('jarvis-send-raw');
+      const summaryEl = document.getElementById('jarvis-summary');
+      const speakCheckbox = document.getElementById('jarvis-speak-checkbox');
+      const ttsUnsupportedEl = document.getElementById('jarvis-tts-unsupported');
+
+      if (!('speechSynthesis' in window)) {
+        ttsUnsupportedEl.style.display = 'block';
+        speakCheckbox.disabled = true;
+      }
+
+      if (!SpeechRecognitionImpl) {
+        // Cas Firefox typique : pas d'echec silencieux, message explicite
+        // affiche dans l'UI (exigence de la tache), pas seulement logue.
+        unsupportedEl.style.display = 'block';
+        controlsEl.style.display = 'none';
+        return;
+      }
+
+      let recognition = null;
+      let listening = false;
+
+      function buildRecognition() {
+        const r = new SpeechRecognitionImpl();
+        r.lang = document.getElementById('jarvis-lang').value;
+        r.continuous = false;
+        r.interimResults = true;
+        r.maxAlternatives = 1;
+
+        let finalTranscript = '';
+
+        r.onresult = (event) => {
+          let interim = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const chunk = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += chunk;
+            } else {
+              interim += chunk;
+            }
+          }
+          transcriptEl.textContent = (finalTranscript + ' ' + interim).trim() || '(rien entendu encore)';
+        };
+
+        r.onerror = (event) => {
+          // Pas d'echec silencieux : erreur affichee telle quelle (ex.
+          // 'not-allowed' = permission micro refusee, 'no-speech' = rien
+          // detecte, 'network' = reconnaissance en ligne indisponible --
+          // Chrome envoie l'audio a un service Google pour le traiter, ce
+          // qui explique le besoin de reseau meme pour une API "navigateur").
+          micStatus.innerHTML = `<span style="color:var(--down)">erreur: ${event.error}</span>`;
+        };
+
+        r.onend = () => {
+          listening = false;
+          micBtn.textContent = "Demarrer l'ecoute";
+          if (micStatus.textContent === 'ecoute en cours...') {
+            micStatus.textContent = 'inactif';
+          }
+          const text = finalTranscript.trim();
+          if (text) {
+            jarvisProcess(text);
+          }
+        };
+
+        return r;
+      }
+
+      window.jarvisToggleListening = function () {
+        if (listening) {
+          recognition && recognition.stop();
+          return;
+        }
+        transcriptEl.textContent = '(ecoute...)';
+        relationStatusEl.textContent = '(en attente d\'une phrase transcrite)';
+        recognition = buildRecognition();
+        try {
+          recognition.start();
+          listening = true;
+          micBtn.textContent = 'Arreter l\'ecoute';
+          micStatus.textContent = 'ecoute en cours...';
+        } catch (e) {
+          micStatus.innerHTML = `<span style="color:var(--down)">demarrage impossible: ${e}</span>`;
+        }
+      };
+
+      async function jarvisProcess(topic) {
+        relationStatusEl.textContent = 'Generation de la relation via agent LLM (Hermes local -> Gemini -> Anthropic)...';
+        sendRawEl.textContent = '(aucun envoi encore effectue via Jarvis)';
+        summaryEl.textContent = '(pas encore disponible)';
+        let genJson;
+        try {
+          const r = await fetch('/api/generate-relation', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({topic}),
+          });
+          genJson = await r.json();
+        } catch (e) {
+          relationStatusEl.innerHTML = `<span style="color:var(--down)">Erreur cote dashboard: ${e}</span>`;
+          return;
+        }
+        if (!genJson.ok) {
+          relationStatusEl.innerHTML = `<span style="color:var(--down)">${genJson.message}</span>`;
+          return;
+        }
+        const rel = genJson.relation;
+        relationStatusEl.innerHTML = `<span style="color:var(--ok)">Relation generee par ${genJson.brain}${genJson.model ? ' (' + genJson.model + ')' : ''} :</span> `
+          + `<code>${rel.subject} -- ${rel.type} --&gt; ${rel.object}</code>`;
+
+        // Meme endpoint /api/send que le compositeur manuel -- aucune
+        // logique d'envoi dupliquee ici.
+        sendRawEl.textContent = 'Envoi en cours...';
+        let sendJson;
+        try {
+          const r2 = await fetch('/api/send', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              purpose: 'jarvis_vocal', sender: 'jarvis_user', receiver: 'server',
+              relations: [{subject: rel.subject, predicate: rel.type, object: rel.object}],
+            }),
+          });
+          sendJson = await r2.json();
+        } catch (e) {
+          sendRawEl.textContent = 'Erreur cote dashboard: ' + e;
+          return;
+        }
+        sendRawEl.textContent = sendJson.ok ? (sendJson.raw_response || '(reponse vide)') : `(echec de connexion: ${sendJson.error})`;
+
+        // human_summary : champ additif de /api/send (voir server.py), pense
+        // pour la lecture a voix haute -- jamais le wire-format brut lu mot
+        // a mot. Repli honnete si absent (ex. ancien serveur non redemarre).
+        const summary = sendJson.human_summary || (sendJson.ok
+          ? 'Reponse recue du serveur, voir le detail brut ci-dessus.'
+          : `Echec de connexion au serveur CSTL: ${sendJson.error}`);
+        summaryEl.textContent = summary;
+
+        if (speakCheckbox.checked && 'speechSynthesis' in window) {
+          try {
+            const utterance = new SpeechSynthesisUtterance(summary);
+            utterance.lang = document.getElementById('jarvis-lang').value;
+            window.speechSynthesis.cancel(); // evite l'empilement si plusieurs envois rapides
+            window.speechSynthesis.speak(utterance);
+          } catch (e) {
+            summaryEl.textContent += ` (lecture a voix haute impossible: ${e})`;
+          }
+        }
+      }
+    })();
+  </script>
+  <!-- === /JARVIS === -->
+
 </main>
 
 <script>

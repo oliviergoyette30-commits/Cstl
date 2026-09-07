@@ -96,10 +96,24 @@ LIMITES HONNETES DE CETTE V1 :
     src/telegram_council.rs, src/obsidian_escalation.rs) mais ce dashboard
     ne lit aucun etat de ces integrations -- affiche comme "cable cote
     serveur, pas encore visible ici", jamais comme "connecte".
+
+JARVIS (interface vocale, voir index.html section "=== JARVIS ===") :
+  - La reconnaissance et la synthese vocales tournent ENTIEREMENT cote
+    navigateur (Web Speech API : SpeechRecognition / SpeechSynthesis) --
+    aucun endpoit HTTP dedie ici, ce fichier ne recoit et n'envoie jamais
+    d'audio. Jarvis reutilise tel quel /api/generate-relation (transcription
+    -> topic) puis /api/send (meme flux que le compositeur manuel).
+  - Le seul changement serveur pour Jarvis est ADDITIF : /api/send retourne
+    desormais aussi "human_summary" (voir summarize_cstl_response_for_speech
+    ci-dessous), une phrase francaise courte extraite par regex de
+    raw_response, pensee pour etre lue a voix haute -- jamais le wire-format
+    brut. Toutes les cles deja existantes de la reponse /api/send restent
+    inchangees ; le compositeur manuel les ignore et continue de marcher.
 """
 
 import json
 import os
+import re
 import socket
 import sqlite3
 import subprocess
@@ -270,6 +284,60 @@ def send_cstl_payload(payload_text):
     except OSError as e:
         elapsed_ms = round((time.monotonic() - started) * 1000, 1)
         return {"ok": False, "sent": payload_text, "error": str(e), "round_trip_ms": elapsed_ms}
+
+
+# === JARVIS === (voir aussi index.html, section "=== JARVIS ===")
+# Ajout ADDITIF pour l'interface vocale Jarvis : construit un resume court,
+# lisible A VOIX HAUTE (via SpeechSynthesis cote navigateur), a partir des
+# CHAMPS DEJA PRESENTS dans la reponse de /api/send -- jamais un texte
+# invente, jamais le wire-format brut lu mot a mot (illisible a l'oral).
+# N'AJOUTE qu'une cle "human_summary" au dict retourne par send_cstl_payload()
+# (voir do_POST /api/send ci-dessous) -- ne modifie ni ne supprime aucune cle
+# existante, donc le compositeur manuel (qui ignore ce champ) continue de
+# fonctionner exactement comme avant.
+_RE_CONSISTENCY = re.compile(
+    r"CONSISTENCY \[consistent=(?P<consistent>true|false), "
+    r"contradictions=(?P<contradictions>\d+), cycles=(?P<cycles>\d+), sigma=(?P<sigma>[0-9.]+)\]"
+)
+_RE_PRIORITY = re.compile(r"PRIORITY \[value=(?P<value>[a-z]+), escalated=(?P<escalated>true|false)\]")
+_RE_VALIDATION_ERROR = re.compile(r"purpose=validation_error, errors=(?P<errors>.*)\]")
+_RE_ACK = re.compile(r"INTENT_PAYLOAD \[purpose=acknowledgement")
+
+
+def summarize_cstl_response_for_speech(send_result):
+    """Construit une phrase francaise courte a partir des champs deja
+    extraits par regex de raw_response (jamais de champ fabrique). Retourne
+    None si rien d'exploitable n'a ete trouve (ex. reponse vide, timeout) --
+    le cote client doit alors se rabattre sur un message generique plutot que
+    d'inventer un contenu."""
+    if not send_result.get("ok"):
+        return f"Echec de connexion au serveur CSTL : {send_result.get('error', 'erreur inconnue')}."
+
+    raw = send_result.get("raw_response") or ""
+
+    err_match = _RE_VALIDATION_ERROR.search(raw)
+    if err_match:
+        return f"Le serveur a rejete la relation. Erreur de validation : {err_match.group('errors')}."
+
+    if not _RE_ACK.search(raw):
+        return "Reponse recue mais non reconnue -- consulte la reponse brute a l'ecran."
+
+    parts = ["Le serveur a accepte la relation."]
+    cons_match = _RE_CONSISTENCY.search(raw)
+    if cons_match:
+        sigma = cons_match.group("sigma")
+        consistent = cons_match.group("consistent") == "true"
+        contradictions = cons_match.group("contradictions")
+        parts.append(f"Coherence sigma {sigma}" + (", sans contradiction" if contradictions == "0"
+                     else f", {contradictions} contradiction(s) detectee(s)") + ".")
+        if not consistent:
+            parts.append("Attention, le graphe est marque incoherent.")
+    prio_match = _RE_PRIORITY.search(raw)
+    if prio_match:
+        value = prio_match.group("value")
+        escalated = prio_match.group("escalated") == "true"
+        parts.append(f"Priorite {value}" + (", escalade declenchee." if escalated else "."))
+    return " ".join(parts)
 
 
 def generate_relation_via_llm(topic):
@@ -577,6 +645,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             payload_text = build_cstl_payload(fields)
             result = send_cstl_payload(payload_text)
+            # === JARVIS === champ ADDITIF (voir summarize_cstl_response_for_speech
+            # ci-dessus) -- le compositeur manuel existant ignore cette cle et
+            # continue de fonctionner a l'identique.
+            result["human_summary"] = summarize_cstl_response_for_speech(result)
             self._send_json(result)
         elif parsed.path == "/api/generate-relation":
             length = int(self.headers.get("Content-Length", "0"))
