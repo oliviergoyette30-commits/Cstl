@@ -13,3 +13,7 @@ __pycache__/
 # artefact local reconstructible a la demande, pas versionne (voir README.md
 # Couche 6 / docs/ARCHITECTURE.md pour la commande et les chiffres actuels).
 graphify-out/
+
+# Logs et fichiers d'etat ecrits par CSTL_OS.app au demarrage -- locaux,
+# jamais versionnes (voir dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS).
+dashboard/logs/
