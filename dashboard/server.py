@@ -909,6 +909,57 @@ def check_openclaw_connection():
         }
 
 
+def check_hermes_connection():
+    """Test de connectivite REEL vers le serveur Ollama local que
+    HermesAgentBrain (sdk/python/cstl_llm_agent.py) essaie en premier dans
+    resolve_brain("auto"). Contrairement a check_openclaw_connection() (port
+    seulement, protocole non documente), Ollama expose une vraie API HTTP
+    documentee -- GET /api/tags repond avec la liste des modeles installes
+    si le serveur tourne, donc ce test prouve reellement "Ollama repond ici",
+    pas seulement "un port est ouvert". Aucune dependance externe (urllib
+    de la bibliotheque standard)."""
+    import urllib.request
+    import urllib.error
+
+    host, port = "127.0.0.1", 11434
+    url = f"http://{host}:{port}/api/tags"
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(url, timeout=2.0) as resp:
+            raw = resp.read()
+            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+            try:
+                data = json.loads(raw)
+                models = [m.get("name", "?") for m in data.get("models", [])]
+            except (json.JSONDecodeError, AttributeError):
+                models = []
+            return {
+                "reachable": True, "method": "http_api_tags",
+                "host": host, "port": port, "latency_ms": elapsed_ms,
+                "models": models,
+                "detail": (f"reponse reelle de Ollama sur /api/tags -- {len(models)} modele(s) "
+                           f"installe(s): {', '.join(models) if models else '(aucun)'}."),
+            }
+    except urllib.error.URLError as e:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return {
+            "reachable": False, "method": "http_api_tags",
+            "host": host, "port": port, "latency_ms": elapsed_ms,
+            "models": [],
+            "detail": (f"connexion HTTP echouee ({e.reason if hasattr(e, 'reason') else e}) -- "
+                       "Ollama n'ecoute pas sur 127.0.0.1:11434 sur cette machine "
+                       "(pas installe, ou pas lance -- `ollama serve`)."),
+        }
+    except OSError as e:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return {
+            "reachable": False, "method": "http_api_tags",
+            "host": host, "port": port, "latency_ms": elapsed_ms,
+            "models": [],
+            "detail": f"erreur reseau ({e}) -- Ollama injoignable sur 127.0.0.1:11434.",
+        }
+
+
 def check_other_systems():
     """Statuts honnetes des "autres systemes" -- jamais une case verte
     fabriquee. Chaque ligne dit precisement sur quoi son statut est base."""
@@ -1003,6 +1054,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(read_graphify_summary())
         elif parsed.path == "/api/openclaw-check":
             self._send_json(check_openclaw_connection())
+        elif parsed.path == "/api/hermes-check":
+            self._send_json(check_hermes_connection())
         else:
             self.send_error(404, "Not found")
 
