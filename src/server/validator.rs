@@ -156,6 +156,12 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
     validate_guardrail_reports(payload, &mut result);
     validate_scope_lock(payload, &mut result);
 
+    // Validation FORMAT de la forme CLIENT de ERROR_SIGNAL (ajoutee
+    // 2026-09-08 -- CSTL_SPEC_v5_0.md §16.6). Codes E315-E316, premiers
+    // libres apres E311-E314 pris juste au-dessus (verifie: `grep -rn
+    // "E31\|E32\|W60\|W61" src/` au moment de cet ajout, aucune collision).
+    validate_error_signal_request(payload, &mut result);
+
     eprintln!("[Validator] Valid: {}, Errors: {}, Warnings: {}", 
         result.valid, result.errors.len(), result.warnings.len());
 
@@ -242,6 +248,48 @@ fn validate_scope_lock(payload: &CstlPayload, result: &mut ValidationResult) {
             result.errors.push(ValidationError {
                 code: "E314".to_string(),
                 message: format!("SCOPE_LOCK: mode={:?} hors enumeration STRICT|OPEN", mode),
+            });
+            result.valid = false;
+        }
+        _ => {}
+    }
+}
+
+/// Validation FORMAT de la forme CLIENT du bloc `ERROR_SIGNAL [role=REQUEST]`
+/// (ajoutee 2026-09-08 -- CSTL_SPEC_v5_0.md §16.6, session tripartite du
+/// 22 mai 2026). Contrairement a GUARDRAIL_REPORT/SCOPE_LOCK, `ERROR_SIGNAL`
+/// n'a qu'UNE seule valeur de `role` valide venant du client: `REQUEST`.
+/// `role=REPORT` est la forme SERVEUR (voir handler.rs) -- un client qui
+/// l'enverrait tenterait de se faire passer pour un rapport deja produit par
+/// le serveur ; rejete ici (E316), jamais accepte silencieusement comme une
+/// requete valide.
+///
+/// Meme limite honnete que `validate_guardrail_reports`/`validate_scope_lock`
+/// ci-dessus: ce check ne verifie que la FORME. La partie utile de ce bloc
+/// (le RAPPORT effectif, `role=REPORT`) est entierement generee par le
+/// serveur a partir de `execution_lab::check_deontic_consistency_with_history`
+/// dans `server/handler.rs` -- rien ici ne calcule quoi que ce soit, ce
+/// fichier ne fait que refuser une requete mal formee avant qu'elle
+/// n'atteigne ce calcul.
+fn validate_error_signal_request(payload: &CstlPayload, result: &mut ValidationResult) {
+    const KNOWN_CLIENT_ROLES: [&str; 1] = ["REQUEST"];
+
+    let Some(req) = &payload.error_signal_request else { return; };
+    match req.get("role") {
+        None => {
+            result.errors.push(ValidationError {
+                code: "E315".to_string(),
+                message: "ERROR_SIGNAL: champ 'role' manquant".to_string(),
+            });
+            result.valid = false;
+        }
+        Some(role) if !KNOWN_CLIENT_ROLES.contains(&role.as_str()) => {
+            result.errors.push(ValidationError {
+                code: "E316".to_string(),
+                message: format!(
+                    "ERROR_SIGNAL: role={:?} invalide venant d'un client (seul 'REQUEST' est accepte -- 'REPORT' est reserve au serveur)",
+                    role
+                ),
             });
             result.valid = false;
         }
@@ -556,6 +604,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
 
@@ -576,6 +625,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
 
@@ -601,6 +651,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
 
@@ -636,6 +687,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -654,6 +706,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -672,6 +725,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -690,6 +744,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -723,6 +778,7 @@ mod tests {
             parse_warnings: vec![],
             guardrail_reports: vec![],
             scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         }
     }
@@ -1022,5 +1078,51 @@ mod tests {
         ]);
         payload.scope_lock = Some(define(&[("mode", "STRICT")]));
         assert!(check_scope_lock_drift(&payload).is_empty());
+    }
+
+    // ── ERROR_SIGNAL (forme CLIENT, E315/E316 -- CSTL_SPEC_v5_0.md §16.6) ──
+
+    #[test]
+    fn test_error_signal_request_valid_no_error() {
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[("role", "REQUEST")]));
+        let result = validate_payload(&payload);
+        assert!(result.valid, "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_error_signal_request_missing_role_is_e315() {
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E315"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_error_signal_request_role_report_from_client_is_e316() {
+        // role=REPORT est la forme SERVEUR -- un client qui l'envoie tente
+        // de se faire passer pour un rapport deja produit par le serveur.
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[("role", "REPORT")]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E316"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_error_signal_request_unknown_role_is_e316() {
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[("role", "BOGUS")]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E316"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_no_error_signal_request_no_error() {
+        let payload = payload_with(vec![]);
+        let result = validate_payload(&payload);
+        assert!(result.valid);
     }
 }
