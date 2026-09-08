@@ -731,6 +731,91 @@ pub async fn handle_connection(
                         }
                     }
 
+                    // STEP 3c-ter: EXECUTION_TRACE (2026-09-08, session tripartite
+                    // du 22 mai 2026 -- CSTL_SPEC_v5_0.md §16.6). Genere PAR LE
+                    // SERVEUR uniquement (contrairement a GUARDRAIL_REPORT/SCOPE_LOCK,
+                    // envoyes par le client et relayes ici) -- resume fidele de ce
+                    // qui a REELLEMENT tourne sur CE payload jusqu'a ce point du
+                    // handler, jamais un champ invente. Toujours emis quand on
+                    // atteint ce point (le payload a deja passe STEP 2, donc
+                    // semantic_validation=PASS est toujours vrai ici -- le chemin
+                    // FAIL renvoie une reponse validation_error avant meme d'arriver
+                    // a ce bloc, cf. la branche "else" de `if validation.valid`
+                    // plus bas).
+                    //
+                    // PORTEE HONNETE, assumee explicitement (identique en esprit a
+                    // P2, §16.5) : ce bloc documente ce qui a tourne SUR CE SERVEUR
+                    // POUR CE payload precis -- il ne garantit RIEN sur ce qu'un LLM
+                    // tiers (emetteur ou recepteur) fait de la reponse ensuite, ni
+                    // que le texte libre produit en aval respecte quoi que ce soit
+                    // resume ici. `scope=SERVER_LOCAL_THIS_PAYLOAD` n'est pas
+                    // decoratif -- c'est la portee reelle et l'unique portee
+                    // possible de ce bloc, aucune boucle vers un LLM tiers n'existe
+                    // dans ce chemin serveur.
+                    let kb_ran = !verification_lines.is_empty();
+                    let execution_trace_verdict = if !consistency.consistent || !deontic_audit.consistent {
+                        "FLAGGED"
+                    } else {
+                        "PASS"
+                    };
+                    let execution_trace_line = format!(
+                        "EXECUTION_TRACE [verdict={}, semantic_validation=PASS, kb_verification={}, kb_relations_checked={}, consistency_check={}, deontic_audit={}, scope=SERVER_LOCAL_THIS_PAYLOAD]\n",
+                        execution_trace_verdict,
+                        if kb_ran { "RUN" } else { "SKIPPED" },
+                        verification_lines.lines().count(),
+                        if consistency.consistent { "PASS" } else { "FLAGGED" },
+                        if deontic_audit.consistent { "PASS" } else { "FLAGGED" },
+                    );
+
+                    // STEP 3c-quater: ERROR_SIGNAL (2026-09-08, meme origine que
+                    // EXECUTION_TRACE ci-dessus -- CSTL_SPEC_v5_0.md §16.6).
+                    // Cable directement sur `deontic_audit` (STEP 3c-deontic,
+                    // execution_lab::check_deontic_consistency_with_history), deja
+                    // calcule ci-dessus pour DEONTIC_AUDIT -- pas de duplication de
+                    // logique, ERROR_SIGNAL ajoute seulement le detail PAR
+                    // violation (subject/object/required_by/forbidden_by) que
+                    // DEONTIC_AUDIT (compte seul) ne donne pas.
+                    //
+                    // Client `ERROR_SIGNAL [role=REQUEST]` (deja valide en amont --
+                    // format seul, E315/E316, `validate_error_signal_request`) :
+                    // demande explicite d'un rapport MEME QUAND rien n'est detecte
+                    // -- sinon le silence serait ambigu ("rien detecte" vs "jamais
+                    // verifie"). Sans requete ET sans violation : silence, meme
+                    // convention que DEONTIC_AUDIT/SEMANTIC_WARNING (pas de bruit
+                    // sur le trafic normal).
+                    //
+                    // LIMITE HONNETE assumee (voir CSTL_SPEC_v5_0.md §16.6 pour le
+                    // detail complet) : seule la detection de violation
+                    // [NOT]/MUST_NOT (Axiome D) est couverte ici. La divergence de
+                    // `sigma=` (FONCTION documentee le 22 mai 2026 pour ce meme
+                    // bloc) N'EST PAS implementee -- aucune identite de relation ne
+                    // survit au-dela d'un payload dans ce depot (seul le payload
+                    // entier a un hash), et `adn_store::relations_for_predicates`
+                    // ne recharge que les predicats de `execution_lab::relevant_
+                    // predicates()`, qui n'inclut pas les predicats porteurs de
+                    // `sigma` (ex. ASSUMES de hypothesis_engine.rs). Cabler ca sans
+                    // identite de relation stable serait une correspondance
+                    // (subject, predicate, object) fragile et creatrice de faux
+                    // positifs -- pas fait ici, documente honnêtement plutot que
+                    // bricole.
+                    let error_signal_requested = payload.error_signal_request
+                        .as_ref()
+                        .map(|r| r.get("role").map(String::as_str) == Some("REQUEST"))
+                        .unwrap_or(false);
+                    let mut error_signal_lines = String::new();
+                    if !deontic_audit.violations.is_empty() {
+                        for v in &deontic_audit.violations {
+                            error_signal_lines.push_str(&format!(
+                                "ERROR_SIGNAL [role=REPORT, signal_type=DEONTIC_VIOLATION, status=DETECTED, subject={}, object={}, required_by={}, forbidden_by={}]\n",
+                                v.subject, v.object, v.required_by, v.forbidden_by
+                            ));
+                        }
+                    } else if error_signal_requested {
+                        error_signal_lines.push_str(
+                            "ERROR_SIGNAL [role=REPORT, signal_type=NONE, status=CLEAN]\n"
+                        );
+                    }
+
                     // Resume lisible du dilemme pour la notification Telegram — sans
                     // ca, "committer" est un clic aveugle, pas une decision informee.
                     let mut telegram_details = verification_lines.clone();
@@ -1159,6 +1244,8 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1175,6 +1262,8 @@ pub async fn handle_connection(
                             governance_line,
                             guardrail_report_lines,
                             scope_lock_line,
+                            error_signal_lines,
+                            execution_trace_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq

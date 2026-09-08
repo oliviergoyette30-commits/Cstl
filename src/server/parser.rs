@@ -53,6 +53,20 @@ pub struct CstlPayload {
     /// "le dernier gagne" (ambigu : lequel des deux scopes le client
     /// voulait-il vraiment verrouiller ?).
     pub scope_lock: Option<HashMap<String, String>>,
+    /// Bloc `ERROR_SIGNAL [role=REQUEST]` -- ajoute le 2026-09-08 aux cotes de
+    /// EXECUTION_TRACE (voir CSTL_SPEC_v5_0.md §16.6, session tripartite du
+    /// 22 mai 2026). Contrairement a `EXECUTION_TRACE` (jamais envoye par le
+    /// client -- purement genere par le serveur, aucun champ correspondant
+    /// ici), `ERROR_SIGNAL` a une forme CLIENT reduite: une requete explicite
+    /// de confirmation ("dis-moi si l'audit deontique historique a detecte
+    /// quelque chose sur ce payload, meme si c'est propre"). Seule
+    /// `role=REQUEST` est acceptee ici -- `role=REPORT` (forme serveur) reçue
+    /// d'un client est rejetee par le validator (E316), jamais enregistree
+    /// silencieusement comme si c'etait une requete valide. Meme regle "un
+    /// seul actif par payload, avertissement sur le second" que `scope_lock`
+    /// ci-dessus -- meme justification (ambiguite sur laquelle des deux
+    /// requetes le client voulait vraiment).
+    pub error_signal_request: Option<HashMap<String, String>>,
     pub raw: String,
 }
 
@@ -92,6 +106,18 @@ fn record_scope_lock(payload: &mut CstlPayload, map: HashMap<String, String>) {
     }
 }
 
+/// Meme role que `record_scope_lock` ci-dessus, pour `ERROR_SIGNAL` (forme
+/// CLIENT uniquement -- voir `CstlPayload::error_signal_request`).
+fn record_error_signal_request(payload: &mut CstlPayload, map: HashMap<String, String>) {
+    if payload.error_signal_request.is_some() {
+        payload.parse_warnings.push(
+            "ERROR_SIGNAL: bloc ERROR_SIGNAL supplementaire ignore (un seul actif par payload)".to_string()
+        );
+    } else {
+        payload.error_signal_request = Some(map);
+    }
+}
+
 pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     let mut payload = CstlPayload {
         version: String::new(),
@@ -103,6 +129,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         parse_warnings: Vec::new(),
         guardrail_reports: Vec::new(),
         scope_lock: None,
+        error_signal_request: None,
         raw: raw.to_string(),
     };
 
@@ -146,13 +173,18 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         // la grammaire complete.
         let is_guardrail = line.starts_with("GUARDRAIL_REPORT [");
         let is_scope_lock = line.starts_with("SCOPE_LOCK [");
+        // ERROR_SIGNAL (forme CLIENT uniquement, ajoutee 2026-09-08 --
+        // CSTL_SPEC_v5_0.md §16.6) suit la meme forme bracket generique.
+        // EXECUTION_TRACE n'apparait volontairement PAS ici -- jamais parse
+        // en entree, purement genere par le serveur (voir handler.rs).
+        let is_error_signal = line.starts_with("ERROR_SIGNAL [");
         // Contrairement a META/INTENT_PAYLOAD/RELATION, le mot-cle DEFINE
         // n'est pas immediatement suivi de "[" -- la grammaire reelle (spec
         // §9) est `DEFINE <identifier> AS <entity_type> [attrs]`, avec deux
         // tokens (identifiant + type) entre le mot-cle et le crochet.
         let is_define = line.starts_with("DEFINE ");
 
-        if is_meta || is_intent || is_relation || is_define || is_guardrail || is_scope_lock {
+        if is_meta || is_intent || is_relation || is_define || is_guardrail || is_scope_lock || is_error_signal {
             // Save previous block if exists
             if !current_block.is_empty() && !block_name.is_empty() {
                 match block_name.as_str() {
@@ -179,13 +211,18 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                             record_scope_lock(&mut payload, lock);
                         }
                     }
+                    "ERROR_SIGNAL" => {
+                        if let Ok(req) = parse_block(&current_block) {
+                            record_error_signal_request(&mut payload, req);
+                        }
+                    }
                     _ => {}
                 }
             }
 
             // Start new block
             in_block = true;
-            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else if is_guardrail { "GUARDRAIL_REPORT" } else if is_scope_lock { "SCOPE_LOCK" } else { "DEFINE" }.to_string();
+            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else if is_guardrail { "GUARDRAIL_REPORT" } else if is_scope_lock { "SCOPE_LOCK" } else if is_error_signal { "ERROR_SIGNAL" } else { "DEFINE" }.to_string();
             current_block = line.to_string();
 
             // Check if block ends on same line. Cas particulier DEFINE : le
@@ -222,6 +259,11 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                             record_scope_lock(&mut payload, lock);
                         }
                     }
+                    "ERROR_SIGNAL" => {
+                        if let Ok(req) = parse_block(&current_block) {
+                            record_error_signal_request(&mut payload, req);
+                        }
+                    }
                     _ => {}
                 }
                 in_block = false;
@@ -254,6 +296,11 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                 "SCOPE_LOCK" => {
                     if let Ok(lock) = parse_block(&current_block) {
                         record_scope_lock(&mut payload, lock);
+                    }
+                }
+                "ERROR_SIGNAL" => {
+                    if let Ok(req) = parse_block(&current_block) {
+                        record_error_signal_request(&mut payload, req);
                     }
                 }
                 _ => {}
@@ -290,7 +337,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     eprintln!("[Parser] INTENT: {} fields", payload.intent.len());
     eprintln!("[Parser] RELATIONS: {} blocks", payload.relations.len());
     eprintln!("[Parser] DEFINE: {} blocks ({} avertissement(s) R7)", payload.defines.len(), payload.parse_warnings.len());
-    eprintln!("[Parser] GUARDRAIL_REPORT: {} blocks, SCOPE_LOCK: {}", payload.guardrail_reports.len(), payload.scope_lock.is_some());
+    eprintln!("[Parser] GUARDRAIL_REPORT: {} blocks, SCOPE_LOCK: {}, ERROR_SIGNAL_REQUEST: {}", payload.guardrail_reports.len(), payload.scope_lock.is_some(), payload.error_signal_request.is_some());
 
     Ok(payload)
 }
@@ -649,6 +696,60 @@ RELATION [type=EQUALS, subject=e001, object=e001]
         assert_eq!(payload.defines.len(), 1);
         assert!(payload.scope_lock.is_some());
         assert_eq!(payload.guardrail_reports.len(), 1);
+        assert_eq!(payload.relations.len(), 1);
+    }
+
+    // ── ERROR_SIGNAL (forme CLIENT uniquement, ajoutee 2026-09-08 --
+    // CSTL_SPEC_v5_0.md §16.6). EXECUTION_TRACE n'a volontairement aucun
+    // test de parsing ici -- il n'a pas de champ CstlPayload correspondant,
+    // jamais parse en entree (voir CstlPayload::error_signal_request et
+    // server/handler.rs pour sa generation cote serveur). ──
+
+    #[test]
+    fn test_error_signal_request_parsed() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+ERROR_SIGNAL [role=REQUEST]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        let req = payload.error_signal_request.expect("ERROR_SIGNAL attendu");
+        assert_eq!(req.get("role"), Some(&"REQUEST".to_string()));
+    }
+
+    #[test]
+    fn test_second_error_signal_request_ignored_with_warning() {
+        // Meme regle que SCOPE_LOCK (un seul actif par payload) --
+        // voir CstlPayload::error_signal_request.
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+ERROR_SIGNAL [role=REQUEST]
+ERROR_SIGNAL [role=REQUEST, extra=x]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        let req = payload.error_signal_request.expect("le premier ERROR_SIGNAL doit rester actif");
+        assert!(!req.contains_key("extra"));
+        assert!(payload.parse_warnings.iter().any(|w| w.contains("ERROR_SIGNAL")));
+    }
+
+    #[test]
+    fn test_error_signal_request_coexists_with_other_blocks() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+SCOPE_LOCK [mode=OPEN]
+GUARDRAIL_REPORT [status=ALLOWED]
+ERROR_SIGNAL [role=REQUEST]
+RELATION [type=EQUALS, subject=x, object=x]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.scope_lock.is_some());
+        assert_eq!(payload.guardrail_reports.len(), 1);
+        assert!(payload.error_signal_request.is_some());
         assert_eq!(payload.relations.len(), 1);
     }
 }
