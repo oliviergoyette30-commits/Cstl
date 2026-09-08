@@ -171,6 +171,7 @@
   <button class="tab-btn" data-tab="claude-code" onclick="showTab('claude-code')">Claude Code</button>
   <button class="tab-btn" data-tab="orchestrateur" onclick="showTab('orchestrateur')">Orchestrateur</button>
   <button class="tab-btn" data-tab="jarvis" onclick="showTab('jarvis')">Jarvis</button>
+  <button class="tab-btn" data-tab="actions" onclick="showTab('actions')">Actions</button>
 </nav>
 
 <main>
@@ -527,6 +528,116 @@
       </div>
     </section>
   </div>
+
+  <!-- === ACTIONS ===
+       CSTL reste la couche de decision/audit/gouvernance: proposer une
+       action ici (POST /api/actions/propose) ne committe RIEN -- ca cree
+       seulement une entree purpose=action_request dans l'adn_store, qui
+       doit ensuite etre votee/committee par le RestrictedCouncil (quorum
+       humain deja existant, Ed25519, notifie par Telegram -- voir
+       sdk/python/cstl_client.py::send_council_decision ou le bot Telegram
+       existant). Ce dashboard n'execute la commande QU'APRES ce commit
+       (voir dashboard/action_executor.py). tool= est INFORMATIF SEULEMENT
+       dans cette v1 -- toute commande passe par le meme shell partage,
+       jamais par une session PTY specifique a l'outil. -->
+  <div class="tab-panel" data-tab="actions">
+    <section class="panel">
+      <h2><span class="title">Proposer une action</span></h2>
+      <p class="muted">
+        Propose seulement -- n'execute rien. L'action doit ensuite etre
+        committee par le RestrictedCouncil (vote humain signe, hors de ce
+        formulaire) avant que ce dashboard ne l'execute reellement.
+      </p>
+      <div class="field">
+        <label>tool</label>
+        <select id="act-tool" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:13px;">
+          <option value="claude-code">claude-code</option>
+          <option value="openclaw">openclaw</option>
+          <option value="hermes">hermes</option>
+          <option value="shell" selected>shell</option>
+        </select>
+      </div>
+      <div class="field"><label>sender</label><input id="act-sender" value="dashboard_user"></div>
+      <div class="field">
+        <label>command</label>
+        <textarea id="act-command" rows="3" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:13px;" placeholder="Ex: echo hello"></textarea>
+      </div>
+      <button onclick="proposeAction()">Proposer (purpose=action_request)</button>
+      <div id="act-propose-status" class="muted" style="margin-top:10px;"></div>
+    </section>
+
+    <section class="panel" style="margin-top:16px;">
+      <h2><span class="title">Actions (adn_store, purpose=action_request)</span>
+        <button onclick="refreshActions()">Rafraichir</button></h2>
+      <p class="muted">Rafraichi automatiquement toutes les 4s. committed=false = en attente de vote du RestrictedCouncil.</p>
+      <div id="actions-body" class="muted">Non lu -- cliquez sur Rafraichir.</div>
+    </section>
+  </div>
+
+  <script>
+    async function refreshActions() {
+      const body = document.getElementById('actions-body');
+      try {
+        const r = await fetch('/api/actions');
+        const j = await r.json();
+        if (!j.ok) {
+          body.innerHTML = `<span style="color:var(--down)">Lecture impossible</span> (${j.reason||'?'}) -- ${j.detail||j.path||''}`;
+          return;
+        }
+        if (j.actions.length === 0) {
+          body.innerHTML = '<p class="muted">(aucune action proposee pour l\'instant)</p>';
+          return;
+        }
+        let html = '<table><thead><tr><th>hash</th><th>tool</th><th>command</th>'
+          + '<th>committed</th><th>exit_code</th><th>execute_le</th></tr></thead><tbody>';
+        for (const a of j.actions) {
+          const exec = a.execution;
+          const committedLabel = a.committed
+            ? `<span style="color:var(--ok)">oui (${a.committed_by||'?'})</span>`
+            : '<span style="color:var(--warn)">en attente de vote</span>';
+          const command = a.parse_error ? '<span style="color:var(--down)">(payload non parsable)</span>' : (a.command || '');
+          html += `<tr>
+            <td>${(a.hash||'').slice(0,16)}...</td>
+            <td>${a.tool||''}</td>
+            <td style="max-width:280px; overflow-wrap:break-word;">${command}</td>
+            <td>${committedLabel}</td>
+            <td>${exec ? exec.exit_code : '-'}</td>
+            <td>${exec ? new Date(exec.executed_at*1000).toLocaleString() : '-'}</td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        body.innerHTML = html;
+      } catch (e) {
+        body.textContent = 'Erreur cote dashboard: ' + e;
+      }
+    }
+    setInterval(refreshActions, 4000);
+
+    async function proposeAction() {
+      const tool = document.getElementById('act-tool').value;
+      const sender = document.getElementById('act-sender').value;
+      const command = document.getElementById('act-command').value;
+      const status = document.getElementById('act-propose-status');
+      status.textContent = 'Envoi en cours...';
+      try {
+        const r = await fetch('/api/actions/propose', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({tool, sender, command})
+        });
+        const j = await r.json();
+        if (!j.ok) {
+          status.innerHTML = `<span style="color:var(--down)">${j.error || 'echec'}</span>`;
+          return;
+        }
+        status.innerHTML = `<span style="color:var(--ok)">Propose (round-trip ${j.round_trip_ms} ms). Reste a committer via le RestrictedCouncil.</span>`;
+        refreshActions();
+      } catch (e) {
+        status.textContent = 'Erreur cote dashboard: ' + e;
+      }
+    }
+  </script>
+  <!-- === /ACTIONS === -->
+
   <script>
     // === JARVIS === logique JS, isolee dans son propre bloc <script> pour
     // ne pas se melanger au script principal ci-dessous. N'appelle que

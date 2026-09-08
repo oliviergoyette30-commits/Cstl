@@ -146,6 +146,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -155,6 +156,11 @@ try:
     import pty_bridge
 except ImportError:
     pty_bridge = None
+
+# === ACTIONS (CSTL comme couche de decision/audit, ce dashboard comme bras
+# d'execution -- voir dashboard/action_executor.py pour le detail complet et
+# la limite honnete sur tool= informatif seulement dans cette v1) ===
+import action_executor  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -220,6 +226,13 @@ ORCHESTRATOR_KEYFILE = Path(os.environ.get("CSTL_ORCHESTRATOR_KEYFILE",
 TCP_TIMEOUT_S = 30.0
 STATUS_TIMEOUT_S = 1.0
 END_MARKER = b"---END---"
+
+# === ACTIONS ===
+# Intervalle du thread daemon qui appelle action_executor.run_action_poll_cycle()
+# -- meme style que pty_bridge.start_server (thread daemon, pas de nouvelle
+# dependance). 5s: assez reactif pour un usage interactif au dashboard, assez
+# espace pour ne pas marteler le fichier ADN en lecture readonly.
+ACTION_POLL_INTERVAL_S = 5.0
 
 
 def check_server_status():
@@ -1287,6 +1300,115 @@ def check_other_systems():
     return systems
 
 
+# === ACTIONS ===
+# Voir dashboard/action_executor.py (docstring de module) pour le contexte
+# complet: CSTL reste la couche de decision/audit/gouvernance (un
+# purpose=action_request doit etre committe par le RestrictedCouncil, quorum
+# humain deja existant), ce dashboard n'est que le bras d'execution qui agit
+# UNE FOIS qu'une action a ete committee.
+
+def list_actions():
+    """Lecture seule combinee: toutes les entrees adn_store dont le
+    purpose (audit_trail) est 'action_request' -- COMMITTEES OU NON, pour
+    montrer aussi celles en attente de vote humain -- plus leur statut
+    d'execution local (dashboard_actions.db, proprietaire de ce dashboard
+    seul). Format honnete: jamais un champ invente; tool/command a None et
+    parse_error=true si le payload n'a pas pu etre reparse."""
+    if not ADN_DB_PATH.exists():
+        return {"ok": False, "reason": "db_not_found", "path": str(ADN_DB_PATH), "actions": []}
+
+    uri = f"file:{ADN_DB_PATH.as_posix()}?mode=ro"
+    try:
+        conn = sqlite3.connect(uri, uri=True, timeout=2.0)
+        conn.row_factory = sqlite3.Row
+    except sqlite3.OperationalError as e:
+        return {"ok": False, "reason": "open_failed", "detail": str(e), "actions": []}
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT a.hash AS hash, a.payload AS payload, a.committed AS committed, "
+            "a.committed_by AS committed_by, a.created_at AS created_at "
+            "FROM adn_store a JOIN audit_trail t ON a.hash = t.hash "
+            "WHERE t.purpose = 'action_request' ORDER BY a.created_at DESC LIMIT 100"
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    except sqlite3.OperationalError as e:
+        conn.close()
+        return {"ok": False, "reason": "query_failed", "detail": str(e), "actions": []}
+    conn.close()
+
+    exec_status = {}
+    if action_executor.EXECUTED_DB_PATH.exists():
+        try:
+            exec_uri = f"file:{action_executor.EXECUTED_DB_PATH.as_posix()}?mode=ro"
+            exec_conn = sqlite3.connect(exec_uri, uri=True, timeout=2.0)
+            exec_conn.row_factory = sqlite3.Row
+            for r in exec_conn.execute("SELECT * FROM executed_actions").fetchall():
+                exec_status[r["hash"]] = dict(r)
+            exec_conn.close()
+        except sqlite3.OperationalError:
+            pass  # base locale absente/verrouillee -- juste pas de statut d'execution affiche, pas une erreur bloquante
+
+    actions = []
+    for row in rows:
+        parsed = action_executor.parse_action_request(row.get("payload") or "")
+        actions.append({
+            "hash": row["hash"],
+            "committed": bool(row["committed"]),
+            "committed_by": row.get("committed_by"),
+            "created_at": row.get("created_at"),
+            "tool": parsed["tool"] if parsed else None,
+            "command": parsed["command"] if parsed else None,
+            "parse_error": parsed is None,
+            "execution": exec_status.get(row["hash"]),
+        })
+    return {"ok": True, "actions": actions}
+
+
+def propose_action(fields):
+    """Construit un payload purpose=action_request (tool=/command=
+    ajoutes a l'INTENT_PAYLOAD) et l'envoie via send_cstl_payload -- CE POINT
+    NE COMMET RIEN, il propose seulement. Le commit reste un acte humain
+    separe (council_decision signe, voir sdk/python/cstl_client.py
+    ::send_council_decision -- pas d'onglet council dedie trouve dans ce
+    dashboard au moment d'ecrire ceci, le commit passe donc par le SDK/CLI
+    ou par Telegram, hors de ce dashboard)."""
+    tool = (fields.get("tool") or "").strip()
+    command = (fields.get("command") or "").strip()
+    sender = (fields.get("sender") or "dashboard_user").strip() or "dashboard_user"
+    if not tool or not command:
+        return {"ok": False, "error": "tool et command sont requis."}
+
+    lines = [
+        "#!CSTL v5.0.0 MODE=A",
+        "META [encoder=CstlDashboard, produced_by=dashboard]",
+        (
+            f"INTENT_PAYLOAD [purpose=action_request, sender={sender}, receiver=server, "
+            f"tool={action_executor.quote_intent_value(tool)}, "
+            f"command={action_executor.quote_intent_value(command)}]"
+        ),
+        "---END---",
+    ]
+    payload_text = "\n".join(lines) + "\n"
+    result = send_cstl_payload(payload_text)
+    return result
+
+
+def _action_poll_loop():
+    """Thread daemon periodique -- meme style que pty_bridge.start_server:
+    appelle run_action_poll_cycle() toutes les ACTION_POLL_INTERVAL_S
+    secondes. Une exception inattendue dans un cycle est loggee sur stderr
+    et le thread continue au cycle suivant plutot que de mourir en
+    silence."""
+    while True:
+        try:
+            action_executor.run_action_poll_cycle()
+        except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
+            print(f"[dashboard] action_executor: erreur inattendue dans le cycle de poll -- {e}", file=sys.stderr)
+        time.sleep(ACTION_POLL_INTERVAL_S)
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     server_version = "CSTLDashboard/1.0"
 
@@ -1326,6 +1448,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"context": context_text, "meta": meta})
         elif parsed.path == "/api/terminal-info":
             self._send_json(get_terminal_info())
+        elif parsed.path == "/api/actions":
+            self._send_json(list_actions())
         else:
             self.send_error(404, "Not found")
 
@@ -1377,6 +1501,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(run_claude_code(fields.get("prompt", ""), fields.get("include_context", True)))
         elif parsed.path == "/api/openclaw-sync-context":
             self._send_json(sync_context_to_openclaw())
+        elif parsed.path == "/api/actions/propose":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                fields = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
+                return
+            self._send_json(propose_action(fields))
         else:
             self.send_error(404, "Not found")
 
@@ -1434,6 +1567,15 @@ def main():
         print(f"[dashboard] Pont terminal PTY (Hermes/OpenClaw/Claude Code) sur ws://127.0.0.1:{PTY_BRIDGE_PORT}/<outil>")
     else:
         print("[dashboard] Pont terminal PTY indisponible (voir /api/terminal-info) -- le reste du dashboard fonctionne normalement.")
+
+    # === ACTIONS === thread daemon periodique, meme style que pty_bridge --
+    # poll les action_request committees et les execute reellement (voir
+    # action_executor.run_action_poll_cycle). Non bloquant pour le reste du
+    # dashboard: une exception dans un cycle est loggee, jamais fatale.
+    action_thread = threading.Thread(target=_action_poll_loop, daemon=True)
+    action_thread.start()
+    print(f"[dashboard] Boucle d'execution d'actions demarree (poll toutes les {ACTION_POLL_INTERVAL_S}s) -- voir dashboard/action_executor.py")
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
