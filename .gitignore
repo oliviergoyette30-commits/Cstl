@@ -17,3 +17,4 @@ graphify-out/
 # Logs et fichiers d'etat ecrits par CSTL_OS.app au demarrage -- locaux,
 # jamais versionnes (voir dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS).
 dashboard/logs/
+.claude/worktrees/

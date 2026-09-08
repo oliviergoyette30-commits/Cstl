@@ -687,9 +687,9 @@ pub async fn handle_connection(
                     let consistency = execution_lab::check_consistency_with_history(&payload.relations, &history_relations);
                     let sigma = consistency.sigma_adjustment();
                     eprintln!(
-                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} -> sigma={}",
+                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} implausibilities={} -> sigma={}",
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(),
-                        consistency.temporal_cycles.len(), sigma
+                        consistency.temporal_cycles.len(), consistency.implausibilities.len(), sigma
                     );
 
                     // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
@@ -746,6 +746,14 @@ pub async fn handle_connection(
                         telegram_details.push_str("\nTemporal cycles (E702):\n");
                         for cy in &consistency.temporal_cycles {
                             telegram_details.push_str(&format!("- {}: {}\n", cy.predicate, cy.path.join(" -> ")));
+                        }
+                    }
+                    if !consistency.implausibilities.is_empty() {
+                        telegram_details.push_str("\nDomain plausibility (domain_simulator):\n");
+                        for im in &consistency.implausibilities {
+                            telegram_details.push_str(&format!(
+                                "- {} {}={}: {}\n", im.subject, im.predicate, im.value, im.reason
+                            ));
                         }
                     }
 
@@ -922,6 +930,22 @@ pub async fn handle_connection(
                             paths
                         )
                     };
+                    // Ligne dediee pour les implausibilites de domaine
+                    // (domain_simulator, 2026-09-08) -- meme principe que
+                    // temporal_cycle_line ci-dessus: absente quand rien n'a ete
+                    // detecte, pas de bruit sur le trafic normal.
+                    let implausibility_line = if consistency.implausibilities.is_empty() {
+                        String::new()
+                    } else {
+                        let details = consistency.implausibilities.iter()
+                            .map(|im| format!("{} {}={} ({})", im.subject, im.predicate, im.value, im.reason))
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        format!(
+                            "SEMANTIC_WARNING [detail=domain_simulator: implausible value(s) ({})]\n",
+                            details
+                        )
+                    };
                     // Absent quand aucune RELATION de ce payload ne porte de `modality`
                     // ET que l'audit contre l'historique est propre -- pas de bruit sur
                     // le trafic factuel normal (l'immense majorite des payloads).
@@ -1087,6 +1111,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1094,6 +1119,7 @@ pub async fn handle_connection(
                             verification_lines,
                             consistency_line,
                             temporal_cycle_line,
+                            implausibility_line,
                             deontic_audit_line,
                             performative_line,
                             negotiation_line,
