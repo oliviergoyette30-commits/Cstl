@@ -28,6 +28,16 @@
 //! prédicats serait invisible (ou un faux cycle serait inventé si AFTER était
 //! traité comme un sens indépendant plutôt que comme l'inverse exact de BEFORE).
 //!
+//! Un quatrième check (2026-09-08, voir README.md §"Future Architecture — Level 4",
+//! ligne "Simulation / validation lab") délègue à `src/domain_simulator.rs`: la
+//! PLAUSIBILITÉ NUMÉRIQUE/PHYSIQUE d'un payload — pas "ce fait contredit-il un
+//! autre fait connu?" (les trois checks ci-dessus) mais "cette valeur peut-elle
+//! seulement EXISTER dans le monde physique réel?" (un âge de 250 ans ne
+//! contredit aucune autre relation, mais reste impossible). Voir l'en-tête de
+//! `domain_simulator.rs` pour le domaine exact couvert (bornes âge/taille/poids/
+//! distance/température, plus cohérence naissance/mort) et pourquoi ce domaine a
+//! été choisi plutôt qu'un autre.
+//!
 //! Le quorum humain (`RestrictedCouncil`, portée réduite v1 — un seul membre par
 //! défaut) est implémenté ailleurs, voir src/restricted_council.rs, pas dans ce
 //! module.
@@ -73,6 +83,11 @@ pub struct ConsistencyReport {
     /// distinguable du cycle structurel (qui n'a pas de code dédié, voir
     /// consistency_line dans server/handler.rs).
     pub temporal_cycles: Vec<Cycle>,
+    /// Violations de plausibilité numérique/physique (2026-09-08), voir
+    /// `crate::domain_simulator`. Champ séparé des trois précédents parce que
+    /// la question posée est différente: pas "ce fait contredit-il un autre
+    /// fait?" mais "cette valeur peut-elle exister dans le monde physique?".
+    pub implausibilities: Vec<crate::domain_simulator::Implausibility>,
 }
 
 impl ConsistencyReport {
@@ -228,18 +243,19 @@ fn find_temporal_cycles(relations: &[HashMap<String, String>]) -> Vec<Cycle> {
     cycles
 }
 
-/// Union de FUNCTIONAL_PREDICATES, CHAINABLE_PREDICATES et
-/// TEMPORAL_PREDICATES — les seuls prédicats dont
+/// Union de FUNCTIONAL_PREDICATES, CHAINABLE_PREDICATES, TEMPORAL_PREDICATES
+/// et `domain_simulator::relevant_predicates()` — les seuls prédicats dont
 /// `check_consistency_with_history` se sert. Existe pour que l'appelant (le
 /// handler, via `AdnStore::relations_for_predicates`) puisse ne charger que
 /// ça depuis la DB, sans dupliquer la liste à la main et risquer qu'elle
-/// diverge des constantes ci-dessus si l'une des trois change.
+/// diverge des constantes ci-dessus si l'une d'elles change.
 pub fn relevant_predicates() -> Vec<&'static str> {
     FUNCTIONAL_PREDICATES
         .iter()
         .chain(CHAINABLE_PREDICATES.iter())
         .chain(TEMPORAL_PREDICATES.iter())
         .copied()
+        .chain(crate::domain_simulator::relevant_predicates())
         .collect()
 }
 
@@ -289,6 +305,11 @@ fn edges_set(relations: &[HashMap<String, String>], predicates: &[&str]) -> Hash
 ///     arête normalisée BEFORE/AFTER de CE payload en fait partie), mais sur
 ///     un graphe distinct construit après normalisation BEFORE/AFTER — voir
 ///     `find_temporal_cycles`.
+///   - Implausibilités (2026-09-08): délégué tel quel à
+///     `domain_simulator::check_domain_plausibility(new_relations,
+///     history_relations)` — aucune logique de bornes numériques n'est
+///     dupliquée ici, ce module ne fait que fusionner le résultat dans
+///     `ConsistencyReport`.
 pub fn check_consistency_with_history(
     new_relations: &[HashMap<String, String>],
     history_relations: &[HashMap<String, String>],
@@ -354,11 +375,18 @@ pub fn check_consistency_with_history(
         })
         .collect();
 
+    let implausibilities = crate::domain_simulator::check_domain_plausibility(new_relations, history_relations)
+        .violations;
+
     ConsistencyReport {
-        consistent: contradictions.is_empty() && cycles.is_empty() && temporal_cycles.is_empty(),
+        consistent: contradictions.is_empty()
+            && cycles.is_empty()
+            && temporal_cycles.is_empty()
+            && implausibilities.is_empty(),
         contradictions,
         cycles,
         temporal_cycles,
+        implausibilities,
     }
 }
 
@@ -473,11 +501,50 @@ mod tests {
 
     #[test]
     fn test_relevant_predicates_contains_all_eight_and_nothing_else() {
+        // 8 predicats "coherence" (execution_lab historique) + 7 predicats
+        // "plausibilite" (domain_simulator, 2026-09-08: 5 bornes numeriques
+        // + birth_year + death_year) -- voir domain_simulator::
+        // relevant_predicates pour le detail de ces 7.
         let preds = relevant_predicates();
-        assert_eq!(preds.len(), 8);
+        assert_eq!(preds.len(), 15);
         for p in ["born_in", "died_in", "spouse", "capital_of", "part_of", "located_in", "BEFORE", "AFTER"] {
             assert!(preds.contains(&p), "predicat manquant: {p}");
         }
+        for p in crate::domain_simulator::relevant_predicates() {
+            assert!(preds.contains(&p), "predicat domain_simulator manquant: {p}");
+        }
+    }
+
+    // ── Integration avec domain_simulator (2026-09-08) ──
+
+    #[test]
+    fn test_implausible_age_degrades_sigma_like_a_contradiction() {
+        // Un age physiquement impossible ne contredit aucune AUTRE relation
+        // (ce n'est pas une contradiction ni un cycle) mais doit quand meme
+        // degrader sigma exactement comme les trois autres checks -- sinon
+        // ce quatrieme check n'aurait aucun effet reel sur le pipeline.
+        let relations = vec![rel("Personnage Fictif", "age", "250")];
+        let report = check_consistency_with_history(&relations, &[]);
+        assert!(!report.consistent);
+        assert_eq!(report.implausibilities.len(), 1);
+        assert_eq!(report.sigma_adjustment(), 0.09);
+    }
+
+    #[test]
+    fn test_plausible_numeric_relations_stay_consistent() {
+        let relations = vec![rel("Marie Curie", "age", "66"), rel("Marie Curie", "born_in", "Warsaw")];
+        let report = check_consistency_with_history(&relations, &[]);
+        assert!(report.consistent);
+        assert!(report.implausibilities.is_empty());
+    }
+
+    #[test]
+    fn test_lifespan_implausibility_visible_through_execution_lab_entry_point() {
+        let history = vec![rel("X", "birth_year", "2000")];
+        let new_relations = vec![rel("X", "death_year", "1990")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
+        assert_eq!(report.implausibilities.len(), 1);
     }
 
     #[test]

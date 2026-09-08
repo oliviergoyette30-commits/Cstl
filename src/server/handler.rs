@@ -167,6 +167,12 @@ pub async fn handle_connection(
                     // l'historique complet). Meme politique que les deux
                     // appels ci-dessus : avertissement seul, jamais un rejet.
                     semantic_warnings.extend(validator::check_coref_with_references(&payload));
+                    // W607 (2026-09-08) : derive de scope intra-payload contre un
+                    // SCOPE_LOCK STRICT actif -- voir
+                    // validator::check_scope_lock_drift pour la limite honnete
+                    // (detecte seulement dans les RELATION structurees de ce
+                    // payload, jamais dans le texte libre d'une reponse tierce).
+                    semantic_warnings.extend(validator::check_scope_lock_drift(&payload));
                     // R7 (parser.rs) : un bloc DEFINE mal forme (en-tete ou
                     // crochets) est deja "dropped" par le parser -- on
                     // remonte aussi l'avertissement au client plutot que de
@@ -687,9 +693,9 @@ pub async fn handle_connection(
                     let consistency = execution_lab::check_consistency_with_history(&payload.relations, &history_relations);
                     let sigma = consistency.sigma_adjustment();
                     eprintln!(
-                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} -> sigma={}",
+                        "[Handler] 🧪 ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} implausibilities={} -> sigma={}",
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(),
-                        consistency.temporal_cycles.len(), sigma
+                        consistency.temporal_cycles.len(), consistency.implausibilities.len(), sigma
                     );
 
                     // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
@@ -746,6 +752,14 @@ pub async fn handle_connection(
                         telegram_details.push_str("\nTemporal cycles (E702):\n");
                         for cy in &consistency.temporal_cycles {
                             telegram_details.push_str(&format!("- {}: {}\n", cy.predicate, cy.path.join(" -> ")));
+                        }
+                    }
+                    if !consistency.implausibilities.is_empty() {
+                        telegram_details.push_str("\nDomain plausibility (domain_simulator):\n");
+                        for im in &consistency.implausibilities {
+                            telegram_details.push_str(&format!(
+                                "- {} {}={}: {}\n", im.subject, im.predicate, im.value, im.reason
+                            ));
                         }
                     }
 
@@ -922,6 +936,22 @@ pub async fn handle_connection(
                             paths
                         )
                     };
+                    // Ligne dediee pour les implausibilites de domaine
+                    // (domain_simulator, 2026-09-08) -- meme principe que
+                    // temporal_cycle_line ci-dessus: absente quand rien n'a ete
+                    // detecte, pas de bruit sur le trafic normal.
+                    let implausibility_line = if consistency.implausibilities.is_empty() {
+                        String::new()
+                    } else {
+                        let details = consistency.implausibilities.iter()
+                            .map(|im| format!("{} {}={} ({})", im.subject, im.predicate, im.value, im.reason))
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        format!(
+                            "SEMANTIC_WARNING [detail=domain_simulator: implausible value(s) ({})]\n",
+                            details
+                        )
+                    };
                     // Absent quand aucune RELATION de ce payload ne porte de `modality`
                     // ET que l'audit contre l'historique est propre -- pas de bruit sur
                     // le trafic factuel normal (l'immense majorite des payloads).
@@ -1061,6 +1091,45 @@ pub async fn handle_connection(
                         None => String::new(),
                     };
 
+                    // STEP 3f: Relay des GUARDRAIL_REPORT (2026-09-08, session
+                    // tripartite du 22 mai 2026 -- voir CSTL_SPEC_v5_0.md).
+                    // Le serveur ne fait ici QUE relayer fidelement ce que le
+                    // CLIENT a lui-meme envoye dans ce payload -- il ne peut ni
+                    // verifier ni forcer un LLM tiers a produire ou respecter
+                    // un GUARDRAIL_REPORT (non resolvable par le format seul,
+                    // meme limite que P2 documentee pour SCOPE_LOCK). L'utilite
+                    // reelle de ce relai (faire remonter un GUARDRAIL_REPORT
+                    // d'un hop a l'autre dans une chaine multi-agent) reste donc
+                    // NON VERIFIEE hors de ce depot -- seul le format+relai
+                    // sont testes ici.
+                    let mut guardrail_report_lines = String::new();
+                    for report in &payload.guardrail_reports {
+                        guardrail_report_lines.push_str(&format!(
+                            "GUARDRAIL_REPORT_RELAYED [status={}, reason={}, blocked_operator={}]\n",
+                            report.get("status").map(String::as_str).unwrap_or("unknown"),
+                            report.get("reason").map(String::as_str).unwrap_or(""),
+                            report.get("blocked_operator").map(String::as_str).unwrap_or(""),
+                        ));
+                    }
+
+                    // STEP 3g: Confirmation explicite du SCOPE_LOCK actif
+                    // (2026-09-08) -- effet OBSERVABLE minimal exige par la
+                    // spec du 22 mai : meme sans pouvoir forcer un LLM tiers a
+                    // respecter le scope, le serveur confirme au client quel
+                    // scope il a bien recu et enregistre pour ce payload.
+                    // `drift_warnings` (calcule via semantic_warnings/W607
+                    // plus haut) reste la seule verification ADDITIONNELLE
+                    // possible -- purement intra-payload, voir
+                    // validator::check_scope_lock_drift.
+                    let scope_lock_line = match &payload.scope_lock {
+                        Some(lock) => format!(
+                            "SCOPE_LOCK_ACK [mode={}, allowed_ids={}]\n",
+                            lock.get("mode").map(String::as_str).unwrap_or("unknown"),
+                            lock.get("allowed_ids").map(String::as_str).unwrap_or(""),
+                        ),
+                        None => String::new(),
+                    };
+
                     // STEP 4: Try to route to agent — agent_registry est maintenant
                     // Arc<Mutex<_>> (B-1, dynamic registration): le nom est clone HORS
                     // du lock pour ne jamais tenir le MutexGuard pendant le
@@ -1087,6 +1156,9 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
+                            {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1094,12 +1166,15 @@ pub async fn handle_connection(
                             verification_lines,
                             consistency_line,
                             temporal_cycle_line,
+                            implausibility_line,
                             deontic_audit_line,
                             performative_line,
                             negotiation_line,
                             priority_line,
                             semantic_warning_lines,
                             governance_line,
+                            guardrail_report_lines,
+                            scope_lock_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq
