@@ -265,6 +265,23 @@ cargo test --lib
 
 174 unit tests (`cargo test --lib`) passing, 0 failures, plus 6 integration tests in `tests/` (4 in `kb_verify_mock_wikidata_test.rs`, 2 in `kb_verify_wall_clock_timeout_test.rs`) as of 2026-09-05 — this number drifts with every session, verify with `cargo test --lib` and `cargo test` rather than trusting a fixed figure; six different stale counts were found across this file, `docs/ARCHITECTURE.md` and `CSTL_SPEC_v5_0.md` before an earlier correction. Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
 
+**Added 2026-09-08**: `GUARDRAIL_REPORT` / `SCOPE_LOCK` — two of the 4 blocks a
+tripartite session (Claude+Gemini+ChatGPT) validated EMPIRICALLY IN
+CONVERSATION (not code) on 2026-05-22, ported to Rust for the first time
+(previously zero occurrences in `src/`, function-only notes). Grammar in
+`CSTL_SPEC_v5_0.md` §16.5; parsing in `server/parser.rs`; format validation
+(`E311`–`E314`/`W606`) and scope-drift detection (`W607`) in
+`server/validator.rs`; relay (`GUARDRAIL_REPORT_RELAYED`) and confirmation
+(`SCOPE_LOCK_ACK`) on the real TCP path in `server/handler.rs`, verified
+end-to-end (`examples/guardrail_scope_lock_smoke_test.rs`). **Honest limit**:
+the server can only relay a `GUARDRAIL_REPORT` and check `SCOPE_LOCK` drift
+within one payload's own structured `RELATION`/`DEFINE` — it cannot verify a
+guardrail reflects a real refusal by a receiving LLM, nor force a third-party
+LLM to actually honor a scope lock in free-text output; that requires a real
+LLM connected in a loop, which this repo does not have. `EXECUTION_TRACE` and
+`ERROR_SIGNAL` (the other two blocks from the same session) remain theoretical
+and unimplemented — never tested even in conversation as of 2026-05-22.
+
 ---
 
 ## Honest Limitations
