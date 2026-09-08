@@ -647,6 +647,98 @@ volontairement absent, un check cassé a été supprimé plutôt que réparé ; 
 jamais). Ce sont des codes DIFFÉRENTS de la plage E301–E304 "Typage" du v4.9.3
 documentée en §16.1, qui n'a jamais été portée telle quelle.
 
+### 16.5 Blocs `GUARDRAIL_REPORT` / `SCOPE_LOCK` (ajout 2026-09-08)
+
+Le 22 mai 2026, une session tripartite (Claude+Gemini+ChatGPT, **conversation
+manuelle, pas du code**) a validé EMPIRIQUEMENT en conversation 4 nouveaux
+blocs de protocole pour la cohérence cross-vendor : `GUARDRAIL_REPORT`,
+`SCOPE_LOCK`, `EXECUTION_TRACE` et `ERROR_SIGNAL`. Jusqu'au 2026-09-08, aucune
+grammaire EBNF formelle n'existait pour ces blocs et aucun n'avait de code
+Rust — seule leur FONCTION était documentée dans les notes de session. Cette
+section porte en Rust les deux qui avaient une fonction déjà testée en
+conversation à l'époque : `GUARDRAIL_REPORT` (validé sur ChatGPT V2) et
+`SCOPE_LOCK` (validé sur Gemini V2). `EXECUTION_TRACE` et `ERROR_SIGNAL`
+restent des concepts théoriques (jamais testés, même en conversation, au
+22 mai) et ne sont donc **pas** portés ici — les sur-construire sans besoin
+vérifié serait malhonnête.
+
+**Forme wire** : les deux blocs suivent EXACTEMENT la même forme bracket
+générique que `META`/`INTENT_PAYLOAD`/`RELATION` (`NOM [clé=valeur, ...]`),
+pas la forme `(RULE)`/`(MUST)` des blocs RULE/CONSTRAINTS — c'est la forme
+que `server::parser::parse_payload` reconnaît réellement sur le chemin TCP en
+production (voir §20.1).
+
+```ebnf
+guardrail_report ::= "GUARDRAIL_REPORT" "[" guardrail_attr* "]" ;
+guardrail_attr    ::= status_attr | reason_attr | operator_attr | attribute ;
+status_attr       ::= "status" "=" guardrail_status ;
+guardrail_status  ::= "BLOCKED" | "PARTIAL" | "ALLOWED" ;
+reason_attr       ::= "reason" "=" value ;
+operator_attr     ::= "blocked_operator" "=" identifier ;
+```
+
+`status` est obligatoire. `reason` est recommandé (mais pas obligatoire) dès
+que `status` ≠ `ALLOWED` : son absence produit un avertissement W606, pas un
+rejet — la FONCTION du bloc (rendre un blocage visible) reste remplie, juste
+moins exploitable. Un payload peut porter **plusieurs** `GUARDRAIL_REPORT`
+(un LLM récepteur peut bloquer plusieurs sous-instructions distinctes d'un
+même payload) — tous sont conservés et relayés.
+
+```ebnf
+scope_lock       ::= "SCOPE_LOCK" "[" scope_attr* "]" ;
+scope_attr       ::= mode_attr | allowed_ids_attr | attribute ;
+mode_attr        ::= "mode" "=" scope_mode ;
+scope_mode       ::= "STRICT" | "OPEN" ;
+allowed_ids_attr ::= "allowed_ids" "=" quoted_id_list ;
+quoted_id_list   ::= '"' identifier (";" identifier)* '"' ;
+```
+
+`mode` est obligatoire. `allowed_ids` est optionnel (liste d'identifiants
+séparés par `;`, entre guillemets — même convention que les listes CSTL
+existantes, ex. `capabilities` dans `agent_register`). Au plus **un**
+`SCOPE_LOCK` actif par payload : un second bloc dans le même document est
+ignoré (le premier reste actif) avec un avertissement de parsing, plutôt
+qu'un écrasement silencieux ou un choix arbitraire de "le dernier gagne".
+
+| Code | Sévérité | Condition réelle (`server/validator.rs`, câblé live 2026-09-08) |
+|---|---|---|
+| E311 | error | `GUARDRAIL_REPORT` sans champ `status` |
+| E312 | error | `GUARDRAIL_REPORT.status` hors énumération `BLOCKED\|PARTIAL\|ALLOWED` |
+| E313 | error | `SCOPE_LOCK` sans champ `mode` |
+| E314 | error | `SCOPE_LOCK.mode` hors énumération `STRICT\|OPEN` |
+| W606 | warning | `GUARDRAIL_REPORT.status` ≠ `ALLOWED` sans champ `reason` |
+| W607 | warning | `SCOPE_LOCK[mode=STRICT, allowed_ids=...]` actif et une `RELATION` de ce même payload référence un `subject`/`object` hors de `allowed_ids` **et** hors des `id=` des `DEFINE` de ce même payload (`server/validator.rs::check_scope_lock_drift`) |
+
+**Effet observable côté serveur** (branché sur le chemin TCP réel,
+`server/handler.rs`) :
+- tout `GUARDRAIL_REPORT` reçu est relayé fidèlement dans la réponse sous la
+  forme `GUARDRAIL_REPORT_RELAYED [status=..., reason=..., blocked_operator=...]` ;
+- tout `SCOPE_LOCK` actif est confirmé explicitement dans la réponse sous la
+  forme `SCOPE_LOCK_ACK [mode=..., allowed_ids=...]`, même quand aucune
+  dérive n'est détectée ;
+- une dérive détectée (W607) apparaît comme n'importe quel autre avertissement
+  sémantique (`SEMANTIC_WARNING [detail=...]`) — jamais un rejet.
+
+**LIMITE HONNÊTE, assumée explicitement** (identique à la remarque P2 de la
+session tripartite du 22 mai 2026, "non résolvable par le format seul") : ce
+que le serveur peut vérifier s'arrête à la FORME du bloc et à une cohérence
+INTERNE aux `RELATION`/`DEFINE` structurés d'UN payload. Il ne peut ni
+vérifier qu'un `GUARDRAIL_REPORT` reçu reflète un vrai refus produit par un
+LLM récepteur, ni forcer un LLM tiers à respecter un `SCOPE_LOCK` dans le
+texte libre de sa réponse — aucune boucle vers un LLM externe n'existe dans
+ce chemin serveur. Seul un vrai LLM tiers connecté en boucle (hors de ce
+dépôt) permettrait de vérifier ce que ces deux blocs mesurent réellement en
+conversation ; ce que couvre ce dépôt est le parsing, la validation de
+format et le relai/observabilité côté serveur, testés de bout en bout
+(`server::parser::tests`, `server::validator::tests`,
+`examples/guardrail_scope_lock_smoke_test.rs`).
+
+`EXECUTION_TRACE` (trace d'audit de conformité écrite par l'orchestrateur
+après validation d'une réponse) et `ERROR_SIGNAL` (détection de divergence de
+`sigma=` ou de violation d'un `[NOT]`/`MUST_NOT` entre ce qui a été envoyé et
+ce qui revient) restent **non spécifiés et non implémentés** — théoriques au
+22 mai 2026, jamais testés même en conversation, hors périmètre de cet ajout.
+
 ---
 
 ## 17. Profil de sécurité
@@ -1020,6 +1112,16 @@ DECISION: example_decision [sigma=0.88]
 ---
 
 ## 26. CHANGELOG
+
+### v5.0.0 — révision 6 (8 septembre 2026)
+- **Ajout** : §16.5 `GUARDRAIL_REPORT` / `SCOPE_LOCK` — grammaire EBNF conçue et
+  portée en Rust (parsing `server/parser.rs`, validation format E311–E314/W606
+  `server/validator.rs`, relai + confirmation + détection de dérive W607 sur le
+  chemin TCP réel `server/handler.rs`), pour deux des 4 blocs validés
+  EMPIRIQUEMENT EN CONVERSATION (pas en code) le 22 mai 2026 par une session
+  tripartite Claude+Gemini+ChatGPT, jamais portés avant cette révision (zéro
+  occurrence dans `src/`). `EXECUTION_TRACE`/`ERROR_SIGNAL` restent théoriques,
+  non implémentés — honnêteté délibérée, pas un oubli.
 
 ### v5.0.0 — révision 5 (4 septembre 2026, corrections d'audit)
 - **Corrigé (critique)** : §20.1 décrivait une API Rust entièrement fictive
