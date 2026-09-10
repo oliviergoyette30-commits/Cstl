@@ -1,0 +1,310 @@
+From c0419ed5d7e4cd1e2072e964e8ae20bd69419f63 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sat, 5 Sep 2026 02:05:20 +0000
+Subject: [PATCH 1/5] test(governance): verifie en direct un conseil a 3
+ membres via CSTL_COUNCIL_MEMBERS + agent_register reel
+
+Nouveau examples/multi_member_council_smoke_test.rs, verifie via
+cargo run --example: contrairement a governance_smoke_test.rs (qui override
+manuellement server.restricted_council et registry.register() en dur cote
+test), ce test configure le conseil par la VRAIE variable d'environnement
+CSTL_COUNCIL_MEMBERS=A,B,C (chemin reellement utilise par
+RestrictedCouncil::from_env() en production) et enregistre A, B, C via de
+vrais payloads purpose=agent_register auto-signes envoyes sur le TCP, avec 3
+paires de cles Ed25519 distinctes generees en direct.
+
+5 scenarios executes sur le vrai serveur TCP, tous verifies (sortie reelle
+confirmee): (1) les 3 agent_register aboutissent (agent_register_ack) ; (2)
+le vote signe d'un seul membre (A) sur une entree reste quorum=1/2,
+committed=false ; (3) le vote signe d'un deuxieme membre distinct (B) sur la
+MEME entree atteint quorum=2/2, committed=true -- le commit n'a lieu
+qu'APRES ce 2e vote, jamais avant ; (4) sur une entree differente, un seul
+vote (C) sur 3 membres reste explicitement en attente (quorum=1/2,
+committed=false) ; (5) un vote signe par la propre cle d'un imposteur tout
+en usurpant sender=A est rejete par STEP 2a (signature_rejected,
+public_key_mismatch) avant meme d'atteindre le bloc council_decision, et un
+controle supplementaire prouve que cette tentative n'a ni fausse-comptabilise
+ni bloque un vrai 2e vote (B) qui atteint ensuite le quorum normalement.
+
+Aucun bug trouve: la logique de quorum/signature deja en place (restricted_
+council.rs, adn_store.rs::cast_commit_vote, handler.rs bloc council_decision)
+se comporte correctement bout-en-bout via le chemin de configuration reel
+(env var) et le chemin d'enregistrement reel (agent_register TCP), pas
+seulement via les raccourcis de test deja couverts par governance_smoke_test.rs.
+
+Verifie: cargo build (0 warning), cargo test --lib (168/168, aucune
+regression), cargo clippy --all-targets (0 warning), cargo run --example
+multi_member_council_smoke_test (execution reelle, "Tous les scenarios
+multi-membres (config reelle via env + agent_register reel) sont conformes").
+La config par defaut de main.rs (1 membre, quorum=1) reste inchangee -- ce
+commit n'y touche pas, conformement a la decision explicite documentee dans
+restricted_council.rs et le README.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ examples/multi_member_council_smoke_test.rs | 252 ++++++++++++++++++++
+ 1 file changed, 252 insertions(+)
+ create mode 100644 examples/multi_member_council_smoke_test.rs
+
+diff --git a/examples/multi_member_council_smoke_test.rs b/examples/multi_member_council_smoke_test.rs
+new file mode 100644
+index 0000000..3e2e130
+--- /dev/null
++++ b/examples/multi_member_council_smoke_test.rs
+@@ -0,0 +1,252 @@
++/// examples/multi_member_council_smoke_test.rs -- verification live, bout-en-bout,
++/// d'un conseil a 3 membres CONFIGURE PAR LA VRAIE VARIABLE D'ENVIRONNEMENT
++/// `CSTL_COUNCIL_MEMBERS` (pas par override manuel de `server.restricted_council`
++/// comme le font governance_smoke_test.rs / signing_registration_smoke_test.rs),
++/// avec les 3 membres enregistres via de VRAIS payloads `purpose=agent_register`
++/// envoyes sur le vrai TCP (pas via `registry.register()` en dur cote test).
++///
++/// Ce test ne re-decouvre pas la logique de quorum/signature -- deja couverte
++/// par governance_smoke_test.rs (scenarios 3/5/6). Sa valeur ajoutee: prouver
++/// que le chemin de configuration REEL utilise en production
++/// (`RestrictedCouncil::from_env()`, appele depuis
++/// `CstlNativeServer::try_with_data_path`) et le chemin d'enregistrement REEL
++/// d'un agent (`purpose=agent_register` sur le TCP, pas une insertion directe
++/// dans l'`AgentRegistry` en memoire cote test) produisent bien, mis bout a
++/// bout, le meme comportement de quorum 2/3 deja verifie ailleurs de facon
++/// plus synthetique.
++///
++/// Scenarios verifies:
++/// 1. CSTL_COUNCIL_MEMBERS=A,B,C (quorum 2/3 de 3 = 2) ; A, B, C s'enregistrent
++///    chacun via un vrai agent_register auto-signe avec sa propre cle Ed25519.
++/// 2. Vote de A (commit) sur une entree fraichement soumise -> quorum=1/2,
++///    committed=false (quorum NON atteint apres le 1er vote).
++/// 3. Vote de B (commit, cle distincte de A) sur la MEME entree -> quorum=2/2,
++///    committed=true -- l'entree n'est committee qu'APRES le 2e vote, jamais
++///    avant.
++/// 4. Sur une DEUXIEME entree fraiche, seul C vote (1 vote sur 3 membres,
++///    quorum_size=2) -> quorum=1/2, committed=false, et le vote REPOSE en
++///    attente (aucun commit tant qu'un 2e vote distinct ne survient pas).
++/// 5. Un imposteur signe un council_decision avec SA PROPRE cle tout en
++///    usurpant sender=A -> rejete par STEP 2a (purpose=signature_rejected,
++///    reason=public_key_mismatch) AVANT meme d'atteindre le bloc
++///    council_decision -- aucun faux quorum possible via ce vecteur.
++use cstl_parser::server::audit::signing_bytes;
++use cstl_parser::server::parser::parse_payload;
++use cstl_parser::server::CstlNativeServer;
++use ed25519_dalek::{Signer, SigningKey};
++use rand::rngs::OsRng;
++
++async fn send(port: u16, payload: &str) -> String {
++    let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
++    use tokio::io::{AsyncReadExt, AsyncWriteExt};
++    stream.write_all(payload.as_bytes()).await.expect("send");
++    let mut buf = Vec::new();
++    let mut chunk = [0u8; 4096];
++    loop {
++        let n = stream.read(&mut chunk).await.expect("read");
++        if n == 0 {
++            break;
++        }
++        buf.extend_from_slice(&chunk[..n]);
++        if buf.windows(9).any(|w| w == b"---END---") {
++            break;
++        }
++    }
++    String::from_utf8_lossy(&buf).to_string()
++}
++
++fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
++    for line in response.lines() {
++        if line.starts_with(block) {
++            let inner = line.split_once('[')?.1.trim_end_matches(']').trim_end_matches("]\n");
++            for part in inner.split(',') {
++                let part = part.trim();
++                if let Some((k, v)) = part.split_once('=') {
++                    if k.trim() == key {
++                        return Some(v.trim().to_string());
++                    }
++                }
++            }
++        }
++    }
++    None
++}
++
++fn born_in_payload(sender: &str, subject: &str, city: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=multi_council_smoke, sender={sender}, receiver=server]\n\
++         RELATION [type=born_in, subject={subject}, object={city}]\n\
++         ---END---\n"
++    )
++}
++
++/// Construit + auto-signe un vrai payload `agent_register`, exactement comme
++/// le ferait un client reel (parse son propre brouillon, signe, injecte).
++fn agent_register_signed(name: &str, capabilities: &str, sk: &SigningKey, pubkey_hex: &str) -> String {
++    let draft = format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=agent_register, sender={name}, receiver=server, name={name}, capabilities={capabilities}]\n\
++         ---END---\n"
++    );
++    let parsed = parse_payload(&draft).expect("le brouillon agent_register doit parser");
++    let sig = sk.sign(&signing_bytes(&parsed));
++    let sig_hex = hex::encode(sig.to_bytes());
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=agent_register, sender={name}, receiver=server, name={name}, capabilities={capabilities}, signature={sig_hex}]\n\
++         ---END---\n"
++    )
++}
++
++fn council_decision_draft(sender: &str, target_hash: &str, decision: &str, pubkey_hex: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=council_decision, sender={sender}, receiver=server, target_hash={target_hash}, decision={decision}]\n\
++         ---END---\n"
++    )
++}
++
++fn council_decision_signed(sender: &str, target_hash: &str, decision: &str, pubkey_hex: &str, sig_hex: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest, public_key={pubkey_hex}]\n\
++         INTENT_PAYLOAD [purpose=council_decision, sender={sender}, receiver=server, target_hash={target_hash}, decision={decision}, signature={sig_hex}]\n\
++         ---END---\n"
++    )
++}
++
++fn sign_council_decision(sk: &SigningKey, sender: &str, target_hash: &str, decision: &str, pubkey_hex: &str) -> String {
++    let draft = council_decision_draft(sender, target_hash, decision, pubkey_hex);
++    let parsed = parse_payload(&draft).expect("le brouillon council_decision doit parser");
++    let sig = sk.sign(&signing_bytes(&parsed));
++    let sig_hex = hex::encode(sig.to_bytes());
++    council_decision_signed(sender, target_hash, decision, pubkey_hex, &sig_hex)
++}
++
++#[tokio::main]
++async fn main() {
++    // --- Configuration REELLE via la variable d'environnement, exactement
++    // comme en production (main.rs). Doit etre posee AVANT la construction
++    // du serveur: RestrictedCouncil::from_env() est appele une seule fois,
++    // dans CstlNativeServer::try_with_data_path().
++    std::env::set_var("CSTL_COUNCIL_MEMBERS", "A,B,C");
++    // Pas de TELEGRAM_BOT_TOKEN/OBSIDIAN_VAULT_PATH -- aucun appel reseau reel.
++    std::env::remove_var("TELEGRAM_BOT_TOKEN");
++    std::env::remove_var("OBSIDIAN_VAULT_PATH");
++
++    let port: u16 = 15170;
++    // with_data_path(":memory:") -- meme raison que les autres smoke-tests:
++    // ne jamais toucher un vrai cstl_adn.db sur disque.
++    let server = CstlNativeServer::with_data_path(port, ":memory:");
++    assert_eq!(server.restricted_council.member_count(), 3, "from_env() doit avoir lu CSTL_COUNCIL_MEMBERS=A,B,C");
++    assert_eq!(server.restricted_council.quorum_size(), 2, "ceil(2/3 * 3) = 2");
++    tokio::spawn(async move {
++        server.start().await.expect("server start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    let mut failures = Vec::new();
++    let mut csprng = OsRng;
++
++    // Cles reelles pour A, B, C + un imposteur.
++    let sk_a = SigningKey::generate(&mut csprng);
++    let pk_a = hex::encode(sk_a.verifying_key().to_bytes());
++    let sk_b = SigningKey::generate(&mut csprng);
++    let pk_b = hex::encode(sk_b.verifying_key().to_bytes());
++    let sk_c = SigningKey::generate(&mut csprng);
++    let pk_c = hex::encode(sk_c.verifying_key().to_bytes());
++    let sk_impostor = SigningKey::generate(&mut csprng);
++    let pk_impostor = hex::encode(sk_impostor.verifying_key().to_bytes());
++
++    // ---- Scenario 1: enregistrement REEL des 3 membres via agent_register ----
++    println!("[1/5] Enregistrement de A, B, C via de vrais payloads agent_register auto-signes...");
++    // A porte aussi capabilities=communication pour que STEP 4 (routage) du
++    // handler trouve une destination pour les payloads born_in du reste du
++    // test -- sans agent "communication" enregistre, ces payloads seraient
++    // rejetes avant meme de produire un AUDIT/hash a voter.
++    let resp_a = send(port, &agent_register_signed("A", "council;communication", &sk_a, &pk_a)).await;
++    let resp_b = send(port, &agent_register_signed("B", "council", &sk_b, &pk_b)).await;
++    let resp_c = send(port, &agent_register_signed("C", "council", &sk_c, &pk_c)).await;
++    let purpose_a = extract_field(&resp_a, "INTENT_PAYLOAD", "purpose");
++    let purpose_b = extract_field(&resp_b, "INTENT_PAYLOAD", "purpose");
++    let purpose_c = extract_field(&resp_c, "INTENT_PAYLOAD", "purpose");
++    println!("      A={:?} B={:?} C={:?}", purpose_a, purpose_b, purpose_c);
++    if purpose_a.as_deref() != Some("agent_register_ack")
++        || purpose_b.as_deref() != Some("agent_register_ack")
++        || purpose_c.as_deref() != Some("agent_register_ack")
++    {
++        failures.push("scenario 1: les 3 agents auraient du s'enregistrer avec succes (agent_register_ack)".to_string());
++    }
++
++    // ---- Scenario 2+3: A vote, puis B vote sur la MEME entree ----
++    println!("[2/5] Quorum 2/3 reel: A vote seul -> pas encore atteint...");
++    let resp_seed = send(port, &born_in_payload("some_agent", "multi_council_subject_1", "Oslo")).await;
++    let target_hash = extract_field(&resp_seed, "AUDIT", "hash").expect("hash pour scenario 2/3");
++    let vote_a = send(port, &sign_council_decision(&sk_a, "A", &target_hash, "commit", &pk_a)).await;
++    let purpose_va = extract_field(&vote_a, "INTENT_PAYLOAD", "purpose");
++    let quorum_va = extract_field(&vote_a, "INTENT_PAYLOAD", "quorum");
++    let committed_va = extract_field(&vote_a, "INTENT_PAYLOAD", "committed");
++    println!("      vote A: purpose={:?} quorum={:?} committed={:?}", purpose_va, quorum_va, committed_va);
++    if purpose_va.as_deref() != Some("council_decision_recorded") || quorum_va.as_deref() != Some("1/2") || committed_va.as_deref() != Some("false") {
++        failures.push("scenario 2: le vote de A seul (1/3 membres) ne doit PAS committer -- quorum=1/2, committed=false attendu".to_string());
++    }
++
++    println!("[3/5] B vote ensuite (cle distincte) -> quorum atteint, committed APRES ce 2e vote seulement...");
++    let vote_b = send(port, &sign_council_decision(&sk_b, "B", &target_hash, "commit", &pk_b)).await;
++    let purpose_vb = extract_field(&vote_b, "INTENT_PAYLOAD", "purpose");
++    let quorum_vb = extract_field(&vote_b, "INTENT_PAYLOAD", "quorum");
++    let committed_vb = extract_field(&vote_b, "INTENT_PAYLOAD", "committed");
++    println!("      vote B: purpose={:?} quorum={:?} committed={:?}", purpose_vb, quorum_vb, committed_vb);
++    if purpose_vb.as_deref() != Some("council_decision_applied") || quorum_vb.as_deref() != Some("2/2") || committed_vb.as_deref() != Some("true") {
++        failures.push("scenario 3: le vote de B (2e voix distincte) doit atteindre le quorum et committer -- quorum=2/2, committed=true attendu".to_string());
++    }
++
++    // ---- Scenario 4: sur une entree DIFFERENTE, un seul vote (C) ----
++    println!("[4/5] Sur une entree fraiche, un seul vote sur 3 membres (C) -> reste en attente...");
++    let resp_seed2 = send(port, &born_in_payload("some_agent", "multi_council_subject_2", "Helsinki")).await;
++    let target_hash2 = extract_field(&resp_seed2, "AUDIT", "hash").expect("hash pour scenario 4");
++    let vote_c = send(port, &sign_council_decision(&sk_c, "C", &target_hash2, "commit", &pk_c)).await;
++    let purpose_vc = extract_field(&vote_c, "INTENT_PAYLOAD", "purpose");
++    let quorum_vc = extract_field(&vote_c, "INTENT_PAYLOAD", "quorum");
++    let committed_vc = extract_field(&vote_c, "INTENT_PAYLOAD", "committed");
++    println!("      vote C: purpose={:?} quorum={:?} committed={:?}", purpose_vc, quorum_vc, committed_vc);
++    if purpose_vc.as_deref() != Some("council_decision_recorded") || quorum_vc.as_deref() != Some("1/2") || committed_vc.as_deref() != Some("false") {
++        failures.push("scenario 4: 1 vote sur 3 membres (quorum_size=2) doit rester en attente -- quorum=1/2, committed=false attendu".to_string());
++    }
++
++    // ---- Scenario 5: imposteur usurpe sender=A avec SA PROPRE cle ----
++    println!("[5/5] Imposteur usurpant sender=A avec une cle qui ne correspond pas au registre...");
++    let impostor_vote = sign_council_decision(&sk_impostor, "A", &target_hash2, "commit", &pk_impostor);
++    let resp_impostor = send(port, &impostor_vote).await;
++    let purpose_imp = extract_field(&resp_impostor, "INTENT_PAYLOAD", "purpose");
++    let reason_imp = extract_field(&resp_impostor, "INTENT_PAYLOAD", "reason");
++    println!("      purpose={:?} reason={:?}", purpose_imp, reason_imp);
++    if purpose_imp.as_deref() != Some("signature_rejected") || reason_imp.as_deref() != Some("public_key_mismatch") {
++        failures.push("scenario 5: un vote signe par une cle differente de celle enregistree pour 'A' doit etre rejete (public_key_mismatch), aucun faux quorum possible".to_string());
++    }
++    // Verification supplementaire: le vote impostor ne doit pas avoir fait
++    // progresser le quorum de l'entree 2 (toujours 1/2, C seul).
++    let vote_recheck = send(port, &sign_council_decision(&sk_b, "B", &target_hash2, "commit", &pk_b)).await;
++    let quorum_recheck = extract_field(&vote_recheck, "INTENT_PAYLOAD", "quorum");
++    let committed_recheck = extract_field(&vote_recheck, "INTENT_PAYLOAD", "committed");
++    println!("      controle: vote B (legitime, 2e voix distincte) apres tentative d'imposteur -> quorum={:?} committed={:?}", quorum_recheck, committed_recheck);
++    if quorum_recheck.as_deref() != Some("2/2") || committed_recheck.as_deref() != Some("true") {
++        failures.push("scenario 5 (controle): apres rejet de l'imposteur, un vrai 2e vote (B) doit toujours pouvoir atteindre le quorum normalement -- preuve que le vote impostor n'a ni fausse comptabilise, ni bloque, la suite".to_string());
++    }
++
++    println!();
++    if failures.is_empty() {
++        println!("✅ Tous les scenarios multi-membres (config reelle via env + agent_register reel) sont conformes.");
++    } else {
++        println!("❌ {} echec(s):", failures.len());
++        for f in &failures {
++            println!("   - {}", f);
++        }
++        std::process::exit(1);
++    }
++}
+-- 
+2.43.0
+

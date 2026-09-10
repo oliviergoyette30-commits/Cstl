@@ -1,0 +1,119 @@
+From c0efd387f76fc1b9d54a36b964061568f7549ca2 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 14:29:58 +0000
+Subject: [PATCH] fix(kb_verify): is_chainable derive de
+ execution_lab::CHAINABLE_PREDICATES
+
+Trouvaille majeure de l'audit multi-angle (2026-09-03): la notion de
+"predicat chainable sur plusieurs sauts" etait encodee independamment
+a deux endroits, dans deux espaces de cles differents, sans aucune
+reference croisee:
+
+  - kb_verify.rs::is_chainable(property_id)  -- matches!(property_id, "P131" | "P361")
+  - execution_lab.rs::CHAINABLE_PREDICATES   -- ["part_of", "located_in"]
+
+Un ajout dans l'une sans l'autre desynchronisait silencieusement la
+verification KB (Couche 3a, contre Wikidata) et le calcul de coherence
+interne (ExecutionLab) -- aucune erreur de compilation, aucun test
+existant ne l'aurait attrape.
+
+Fix: is_chainable() derive maintenant directement de
+execution_lab::CHAINABLE_PREDICATES via predicate_to_property. Une
+seule source de verite (le const CHAINABLE_PREDICATES cote
+execution_lab), plus de liste dupliquee a maintenir a la main cote
+kb_verify.
+
+Verification:
+- cargo build: compile sans erreur (CHAINABLE_PREDICATES est deja
+  pub const depuis le fix de perf ExecutionLab plus tot dans cette
+  session).
+- cargo test --lib kb_verify: les 2 tests existants passent tels
+  quels (test_chainable_properties, test_predicate_mapping_matches_python_table)
+  -- comportement observable inchange pour P131/P361/P19.
+- Nouveau test test_chainable_predicates_stay_in_sync_with_execution_lab:
+  boucle sur CHAINABLE_PREDICATES et verifie mecaniquement que chaque
+  predicat s'y trouvant se mappe vers un ID Wikidata que is_chainable
+  accepte. C'est exactement le garde-fou anti-regression que l'audit
+  demandait -- il casse immediatement si quelqu'un desynchronise a
+  nouveau les deux listes.
+- cargo test --lib (suite complete): 118 passed, 0 failed, 0 regression.
+- Verification live via Wikidata NON effectuee: le sandbox cloud de
+  cette session a son egress bloque vers www.wikidata.org (meme
+  restriction reseau deja rencontree plus tot dans la session pour
+  d'autres domaines -- confirme via curl: "CONNECT tunnel failed,
+  response 403"). kb_verify::verify_relation() fait de vrais appels
+  SPARQL sortants -- un test TCP de bout en bout necessiterait un
+  environnement avec acces reseau sortant vers Wikidata (ex: la
+  machine de l'utilisateur). La verification unitaire ci-dessus
+  couvre entierement la logique modifiee (is_chainable), qui elle
+  ne fait aucun appel reseau.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/kb_verify.rs | 43 ++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/src/kb_verify.rs b/src/kb_verify.rs
+index f057047..5b23475 100644
+--- a/src/kb_verify.rs
++++ b/src/kb_verify.rs
+@@ -33,8 +33,21 @@ fn predicate_to_property(predicate: &str) -> Option<&'static str> {
+ 
+ /// Propriétés pour lesquelles une chaîne transitive à plusieurs sauts a un
+ /// sens sémantique réel (hiérarchies d'imbrication géographique/administrative).
++///
++/// Corrige une trouvaille majeure de l'audit multi-angle (2026-09-03):
++/// cette fonction encodait independamment (`matches!(property_id, "P131" |
++/// "P361")`) la MEME notion que `execution_lab::CHAINABLE_PREDICATES`
++/// (`["part_of", "located_in"]`), dans un espace de cles different (ID
++/// Wikidata ici, nom de predicat CSTL la-bas), sans aucune reference
++/// croisee. Un ajout dans l'une sans l'autre desynchronisait silencieusement
++/// la verification KB (Couche 3a) et le calcul de coherence interne
++/// (ExecutionLab). Desormais derivee directement de
++/// execution_lab::CHAINABLE_PREDICATES via predicate_to_property -- une
++/// seule source de verite, plus de liste dupliquee a maintenir a la main.
+ fn is_chainable(property_id: &str) -> bool {
+-    matches!(property_id, "P131" | "P361")
++    crate::execution_lab::CHAINABLE_PREDICATES
++        .iter()
++        .any(|predicate| predicate_to_property(predicate) == Some(property_id))
+ }
+ 
+ #[derive(Debug, Serialize)]
+@@ -351,4 +364,32 @@ mod tests {
+         assert!(is_chainable("P361"));
+         assert!(!is_chainable("P19"));
+     }
++
++    /// Garde-fou anti-desync (audit multi-angle 2026-09-03, finding majeure):
++    /// verifie mecaniquement que TOUT predicat CSTL liste dans
++    /// `execution_lab::CHAINABLE_PREDICATES` se mappe, via `predicate_to_property`,
++    /// vers un ID Wikidata que `is_chainable` accepte. Si quelqu'un ajoute un
++    /// predicat a l'un sans penser a l'autre, ce test casse immediatement --
++    /// au lieu d'une desynchronisation silencieuse entre Couche 3a (kb_verify)
++    /// et ExecutionLab.
++    #[test]
++    fn test_chainable_predicates_stay_in_sync_with_execution_lab() {
++        for &predicate in crate::execution_lab::CHAINABLE_PREDICATES {
++            let property = predicate_to_property(predicate).unwrap_or_else(|| {
++                panic!(
++                    "predicat '{}' present dans execution_lab::CHAINABLE_PREDICATES \
++                     mais absent de la table predicate_to_property de kb_verify.rs",
++                    predicate
++                )
++            });
++            assert!(
++                is_chainable(property),
++                "predicat '{}' (-> {}) est dans execution_lab::CHAINABLE_PREDICATES \
++                 mais is_chainable('{}') retourne false -- desync",
++                predicate,
++                property,
++                property
++            );
++        }
++    }
+ }
+-- 
+2.43.0
+

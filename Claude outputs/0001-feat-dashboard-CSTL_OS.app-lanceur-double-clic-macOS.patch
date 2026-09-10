@@ -1,0 +1,253 @@
+From e2f586dfb3602dd3c4488d5caab754b86bf05008 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Mon, 7 Sep 2026 00:44:08 +0000
+Subject: [PATCH] feat(dashboard): CSTL_OS.app -- lanceur double-clic macOS
+ pour le serveur + le dashboard
+
+Bundle .app minimal (Info.plist + un script bash executable, pas
+d'Electron/Swift) qui demarre le serveur Rust CSTL (s'il ne tourne pas
+deja sur le port 5050, cable en dur dans main.rs -- pas de fausse
+configurabilite ici) puis le dashboard Python (port configurable via
+CSTL_DASHBOARD_PORT, defaut 5099), attend que les deux ports repondent
+reellement (polling TCP, pas un sleep fixe), ouvre le navigateur, et
+notifie le statut via osascript puisqu'une .app lancee depuis le Finder
+n'a pas de terminal visible. Logs reels des deux process dans
+dashboard/logs/ (exclu du suivi git) pour diagnostic.
+
+Bug trouve et corrige avant livraison, verifie en direct dans ce
+sandbox (ports 5050/15199 reels, vrai cargo run --release, vrai
+dashboard/server.py) : la premiere version de CSTL_OS_stop.command
+tuait le PID capture via `$!` sur le `cargo run` lance en arriere-plan
+-- ce PID est celui du wrapper cargo, pas du vrai binaire cstl_parser
+qu'il execute en enfant distinct. Le "arret" semblait reussir (message,
+pas d'erreur) mais `ps aux` confirmait le vrai serveur toujours actif,
+orphelin. Corrige en cherchant les vrais process par nom (pkill -f sur
+le chemin du binaire compile et sur dashboard/server.py) plutot que par
+un PID capture au demarrage -- retest complet demarrage->arret confirme
+les deux ports reellement fermes apres coup.
+
+Contrainte documentee dans le script : CSTL_OS.app doit rester a
+l'interieur de <depot>/dashboard/ (il localise le depot par sa propre
+position sur le disque, pas par un chemin en dur).
+---
+ .gitignore                                   |   4 +
+ dashboard/CSTL_OS.app/Contents/Info.plist    |  26 +++++
+ dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS | 117 +++++++++++++++++++
+ dashboard/CSTL_OS_stop.command               |  36 ++++++
+ 4 files changed, 183 insertions(+)
+ create mode 100644 dashboard/CSTL_OS.app/Contents/Info.plist
+ create mode 100755 dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS
+ create mode 100755 dashboard/CSTL_OS_stop.command
+
+diff --git a/.gitignore b/.gitignore
+index 4bfee93..7577462 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -13,3 +13,7 @@ __pycache__/
+ # artefact local reconstructible a la demande, pas versionne (voir README.md
+ # Couche 6 / docs/ARCHITECTURE.md pour la commande et les chiffres actuels).
+ graphify-out/
++
++# Logs et fichiers d'etat ecrits par CSTL_OS.app au demarrage -- locaux,
++# jamais versionnes (voir dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS).
++dashboard/logs/
+diff --git a/dashboard/CSTL_OS.app/Contents/Info.plist b/dashboard/CSTL_OS.app/Contents/Info.plist
+new file mode 100644
+index 0000000..837c4b6
+--- /dev/null
++++ b/dashboard/CSTL_OS.app/Contents/Info.plist
+@@ -0,0 +1,26 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++    <key>CFBundleName</key>
++    <string>CSTL OS</string>
++    <key>CFBundleDisplayName</key>
++    <string>CSTL OS</string>
++    <key>CFBundleIdentifier</key>
++    <string>local.cstl.os.launcher</string>
++    <key>CFBundleVersion</key>
++    <string>1.0</string>
++    <key>CFBundleShortVersionString</key>
++    <string>1.0</string>
++    <key>CFBundlePackageType</key>
++    <string>APPL</string>
++    <key>CFBundleExecutable</key>
++    <string>CSTL_OS</string>
++    <key>LSUIElement</key>
++    <false/>
++    <key>NSHighResolutionCapable</key>
++    <true/>
++    <key>LSMinimumSystemVersion</key>
++    <string>10.13</string>
++</dict>
++</plist>
+diff --git a/dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS b/dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS
+new file mode 100755
+index 0000000..0e8c04e
+--- /dev/null
++++ b/dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS
+@@ -0,0 +1,117 @@
++#!/bin/bash
++# CSTL_OS -- lanceur double-clic pour l'OS CSTL agentic kernel (2026-09-07).
++#
++# Ce script est l'executable d'une application macOS minimale (un simple
++# bundle .app -- Info.plist + ce script, pas d'app Swift/Electron compilee).
++# Double-cliquer CSTL_OS.app dans le Finder fait ceci, dans l'ordre :
++#   1. localise le depot (voir REPO_ROOT ci-dessous -- CONTRAINTE : ce
++#      fichier doit rester a l'interieur de <depot>/dashboard/CSTL_OS.app/,
++#      sinon deplace REPO_ROOT en consequence)
++#   2. demarre le serveur Rust CSTL (cargo run --release) s'il ne tourne
++#      pas deja sur le port 5050
++#   3. demarre le dashboard Python (dashboard/server.py) s'il ne tourne pas
++#      deja sur le port 5099
++#   4. ouvre http://127.0.0.1:5099/ dans le navigateur par defaut
++#   5. affiche une notification macOS de statut (demarrage / pret / erreur)
++#      puisqu'une .app lancee depuis le Finder n'a pas de terminal visible
++#      pour afficher des logs -- les vraies sorties des deux process sont
++#      quand meme ecrites dans dashboard/logs/ pour diagnostic reel.
++#
++# Ce script ne construit AUCUN "kernel" au sens OS -- il orchestre juste le
++# demarrage de deux process deja existants et verifies dans ce depot (le
++# serveur Rust et le dashboard Python). Il n'arrete rien automatiquement :
++# les deux process continuent de tourner apres la fermeture du navigateur ;
++# utilise CSTL_OS_stop.command (a cote de ce .app) pour les arreter.
++
++set -u
++
++# --- Localisation du depot : CSTL_OS.app/Contents/MacOS/CSTL_OS ------------
++SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
++APP_MACOS_DIR="$(dirname "$SCRIPT_PATH")"
++DASHBOARD_DIR="$(cd "$APP_MACOS_DIR/../../.." && pwd)"
++REPO_ROOT="$(cd "$DASHBOARD_DIR/.." && pwd)"
++LOG_DIR="$DASHBOARD_DIR/logs"
++mkdir -p "$LOG_DIR"
++
++RUST_LOG="$LOG_DIR/cstl_server.log"
++DASHBOARD_LOG="$LOG_DIR/dashboard.log"
++# NOTE (bug trouve et corrige le 2026-09-07) : ce script n'ecrit plus de
++# fichier .pid pour l'arret -- un premier essai capturait `$!` sur le
++# process `cargo run` lance en arriere-plan, mais ce PID est celui du
++# wrapper cargo, pas du vrai binaire `cstl_parser` qu'il execute en
++# ENFANT distinct. Tuer ce PID laissait le vrai serveur tourner, orphelin,
++# invisible (confirme par `ps aux` apres un "arret" reussi en apparence).
++# CSTL_OS_stop.command cherche desormais les vrais process par nom
++# (pkill -f) plutot que par un PID capture au demarrage -- voir ce fichier.
++
++# Le port du serveur Rust est cable en dur a 5050 dans src/main.rs (pas lu
++# depuis une variable d'environnement) -- ne pas le rendre "configurable"
++# ici serait mentir sur ce que le binaire fait reellement. Seul le port du
++# dashboard (CSTL_DASHBOARD_PORT, lu par dashboard/server.py) est reellement
++# configurable.
++CSTL_SERVER_PORT=5050
++CSTL_DASHBOARD_PORT="${CSTL_DASHBOARD_PORT:-5099}"
++
++notify() {
++    # Notification macOS native -- osascript est toujours present sur macOS,
++    # absent ailleurs (ce script n'est de toute facon utile que sur macOS).
++    local title="$1" message="$2"
++    osascript -e "display notification \"$message\" with title \"$title\"" >/dev/null 2>&1 || true
++}
++
++port_is_open() {
++    local port="$1"
++    # nc (netcat) est preinstalle sur macOS -- verification TCP simple, pas
++    # de dependance supplementaire a installer.
++    nc -z -w1 127.0.0.1 "$port" >/dev/null 2>&1
++}
++
++wait_for_port() {
++    local port="$1" label="$2" max_tries="${3:-60}"
++    local tries=0
++    while ! port_is_open "$port"; do
++        tries=$((tries + 1))
++        if [ "$tries" -ge "$max_tries" ]; then
++            notify "CSTL OS" "Echec : $label n'a pas repondu sur le port $port apres ${max_tries}s. Voir $LOG_DIR"
++            return 1
++        fi
++        sleep 1
++    done
++    return 0
++}
++
++notify "CSTL OS" "Demarrage en cours..."
++
++# --- 1. Serveur Rust CSTL (port 5050) --------------------------------------
++if port_is_open "$CSTL_SERVER_PORT"; then
++    echo "[$(date)] Port $CSTL_SERVER_PORT deja occupe -- suppose deja lance, on ne redemarre pas." >> "$RUST_LOG"
++else
++    if ! command -v cargo >/dev/null 2>&1; then
++        notify "CSTL OS" "Erreur : cargo introuvable. Installe Rust (rustup.rs) avant de relancer."
++        exit 1
++    fi
++    echo "[$(date)] Lancement: cargo run --release (cwd=$REPO_ROOT)" >> "$RUST_LOG"
++    ( cd "$REPO_ROOT" && nohup cargo run --release >> "$RUST_LOG" 2>&1 & )
++    if ! wait_for_port "$CSTL_SERVER_PORT" "le serveur CSTL (cargo)" 90; then
++        exit 1
++    fi
++fi
++
++# --- 2. Dashboard Python (port 5099) ---------------------------------------
++if port_is_open "$CSTL_DASHBOARD_PORT"; then
++    echo "[$(date)] Port $CSTL_DASHBOARD_PORT deja occupe -- suppose deja lance, on ne redemarre pas." >> "$DASHBOARD_LOG"
++else
++    if ! command -v python3 >/dev/null 2>&1; then
++        notify "CSTL OS" "Erreur : python3 introuvable."
++        exit 1
++    fi
++    echo "[$(date)] Lancement: python3 dashboard/server.py (cwd=$REPO_ROOT)" >> "$DASHBOARD_LOG"
++    ( cd "$REPO_ROOT" && nohup python3 dashboard/server.py >> "$DASHBOARD_LOG" 2>&1 & )
++    if ! wait_for_port "$CSTL_DASHBOARD_PORT" "le dashboard Python" 20; then
++        exit 1
++    fi
++fi
++
++# --- 3. Ouvrir le navigateur -------------------------------------------------
++open "http://127.0.0.1:${CSTL_DASHBOARD_PORT}/"
++notify "CSTL OS" "Pret -- http://127.0.0.1:${CSTL_DASHBOARD_PORT}/"
+diff --git a/dashboard/CSTL_OS_stop.command b/dashboard/CSTL_OS_stop.command
+new file mode 100755
+index 0000000..7b65de7
+--- /dev/null
++++ b/dashboard/CSTL_OS_stop.command
+@@ -0,0 +1,36 @@
++#!/bin/bash
++# CSTL_OS_stop.command -- arrete le serveur Rust CSTL et le dashboard Python
++# demarres par CSTL_OS.app (2026-09-07). Double-clic dans le Finder (ou
++# `bash CSTL_OS_stop.command` en terminal).
++#
++# Historique : la premiere version tuait le PID enregistre par CSTL_OS.app
++# (capture via `$!` sur un `nohup cargo run --release &`) -- ce PID est
++# celui du wrapper cargo, pas du vrai binaire `cstl_parser` qu'il lance en
++# enfant. Le tuer laissait le vrai serveur tourner, orphelin, invisible.
++# Trouve et corrige en verifiant reellement les process apres coup (`ps
++# aux` montrait toujours `target/release/cstl_parser` actif apres "arret").
++# Methode corrigee : chercher par le nom du VRAI binaire/script (pkill -f),
++# pas par un PID capture au demarrage.
++
++set -u
++
++kill_by_pattern() {
++    local pattern="$1" label="$2"
++    local pids
++    pids="$(pgrep -f "$pattern" 2>/dev/null || true)"
++    if [ -n "$pids" ]; then
++        echo "Arret de $label (pattern: $pattern) -- pid(s): $pids"
++        pkill -f "$pattern" 2>/dev/null || true
++    else
++        echo "$label : rien a arreter (aucun process ne correspond a: $pattern)"
++    fi
++}
++
++# Le vrai binaire compile -- c'est LUI qui ecoute reellement sur le port
++# 5050, pas le process `cargo run` qui l'a lance (celui-ci se termine tout
++# seul une fois son enfant tue).
++kill_by_pattern "target/release/cstl_parser" "serveur CSTL (binaire)"
++kill_by_pattern "cargo run --release" "serveur CSTL (wrapper cargo, si encore present)"
++kill_by_pattern "dashboard/server.py" "dashboard Python"
++
++echo "Termine."
+-- 
+2.43.0
+

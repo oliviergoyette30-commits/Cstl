@@ -1,0 +1,167 @@
+From 3d1890292b412ecc171ae05dab4414783fb0b6ac Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Fri, 4 Sep 2026 17:36:20 +0000
+Subject: [PATCH 7/8] docs(readme): corrige AuditStore perime, contradiction
+ commit()/revoke(), liste d'operateurs incomplete, W606 fantome, compte de
+ tests
+
+Trouvailles de l'audit multi-angle du repo (2026-09-04), verifiees
+personnellement avant correction:
+
+- Badge + section "Rust Server": "130 tests passing" -> 143 (chiffre reel
+  au 2026-09-04, avec note explicite qu'il faut verifier via
+  `cargo test --lib` plutot que faire confiance a un chiffre fige -- 6
+  chiffres differents coexistaient deja entre ce fichier,
+  docs/ARCHITECTURE.md et CSTL_SPEC_v5_0.md avant cette correction).
+- Section "Audit & Traceability": decrivait encore `AuditStore`
+  (`src/server/audit_store.rs`) comme un systeme separe alors qu'il a ete
+  entierement fusionne dans `AdnStore` plus tot cette meme session (une
+  seule Connection SQLite au lieu de deux verrous distincts sur le meme
+  fichier). Diagramme et section corriges; note de suivi ajoutee a la ligne
+  historique de la Couche 5 qui narrait encore l'ancien AuditStore comme
+  existant.
+- Ligne 171 (section ADN store) se contredisait avec les lignes 51/193/247
+  du meme fichier: affirmait que `commit()`/`revoke()` n'etaient jamais
+  appeles et que `committed=false` restait permanent -- faux depuis que
+  `RestrictedCouncil` est cable live et a deja commit des entrees de bout
+  en bout (y compris via un bouton Telegram). Corrigee.
+- Diagramme pipeline: "W601-W606 semantic checks" -- W606 n'a jamais ete
+  reellement emis par aucun code (seulement mentionne dans un commentaire
+  citant un check retire). Corrige a W601-W605.
+- Section "v5.0.0 Operators": omettait ~10 operateurs du vrai whitelist
+  (`semantic.rs::OFFICIAL_OPERATORS`) -- INTENT, MAINTAIN, TRANSFORM,
+  RESIST, AMP, INH, PRESSURE, CATALYZE, TRANSMIT_FAITHFUL, TRANSMIT_INFER.
+  Presentait aussi MUST/MUST_NOT/MAY/SHOULD/NOT comme des operateurs
+  `RELATION.type` au meme titre que les autres -- faux: la modalite
+  deontique est un attribut separe (`RELATION.modality`), et les valeurs
+  reellement reconnues par le moteur sont MUST/REQUIRE (obligatoire) et
+  MUST_NOT/FORBID (interdit) -- pas MAY/SHOULD/NOT, qu'aucun code ne
+  verifie aujourd'hui.
+
+Documentation seulement -- aucun changement de code, cargo build/test
+inchange (143 passed).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ README.md | 41 ++++++++++++++++++++++++++++++++---------
+ 1 file changed, 32 insertions(+), 9 deletions(-)
+
+diff --git a/README.md b/README.md
+index a2b1b2f..aef5675 100644
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,7 @@
+ > **Les relations sont plus importantes que l'information.** — [Principes fondateurs](PRINCIPES.md)
+ 
+ [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+-![Tests](https://img.shields.io/badge/tests-130%20passing-brightgreen.svg)
++![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen.svg)
+ 
+ ---
+ 
+@@ -50,7 +50,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+ | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — 2/3 quorum arithmetic and multi-voter tallying now implemented and tested (`quorum_size()`, `AdnStore::cast_commit_vote`, Layer 2 above), but the production config still registers a single authorized member, so quorum=1 in practice today |
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+-| 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live. **Fixed 2026-09-04**: the hash chain (`seq`/`parent_hash` continuity, `src/server/audit.rs::HashChain`) was, until this pass, *purely in-memory* — reset to empty on every server restart, even though `adn_store.rs` already persisted payload history with real `parent_hash` lineage. `AuditStore` (`src/server/audit_store.rs`) already implemented the fix but was dead code, called nowhere outside its own unit test, since it was written. Now wired: `CstlNativeServer::with_data_path` opens `AuditStore` against the same file as `adn_store` and seeds the chain from it at startup; `handler.rs` persists every entry. Verified with a real process kill + restart of the actual production binary (not just an in-process simulation): `[AuditStore] Loaded 2 entries from disk` on the second process, chain correctly continuing at `seq=2` instead of resetting to `seq=0/parent=root` (`examples/audit_persistence_smoke_test.rs`). **Second finding, same day, found live on the user's own machine while re-verifying the fix above**: `HashChain::append` computed `seq` as `self.entries.len()`, which silently assumed no gaps — but `AuditStore::save()` uses `INSERT OR IGNORE` (needed so a resent duplicate-content payload stays idempotent instead of erroring on the `UNIQUE(hash)` constraint), so a genuine duplicate resend leaves a gap in the persisted `seq` sequence (e.g. `seq=0` and `seq=2` on disk, no `seq=1`). After a real restart, `load_chain()` reloads exactly those (gapped) rows, `entries.len()` no longer matches the highest real `seq`, and the next `append()` recomputed a colliding `seq` — silently losing a brand-new, non-duplicate payload's persistence (confirmed live: a genuinely new payload was accepted with a normal-looking client response, `seq` colliding with an existing row, and never appeared in `audit_trail` after restart). Fixed: `seq` is now `self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — anchored to the highest real `seq`, not the entry count. Regression test added (`test_append_seq_survives_gap_from_deduplicated_reload`) simulating the exact gapped state observed on disk. Still not a single schema/single `Connection` — two SQLite connections into the same file, not yet merged |
++| 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live. **Fixed 2026-09-04**: the hash chain (`seq`/`parent_hash` continuity, `src/server/audit.rs::HashChain`) was, until this pass, *purely in-memory* — reset to empty on every server restart, even though `adn_store.rs` already persisted payload history with real `parent_hash` lineage. `AuditStore` (`src/server/audit_store.rs`) already implemented the fix but was dead code, called nowhere outside its own unit test, since it was written. Now wired: `CstlNativeServer::with_data_path` opens `AuditStore` against the same file as `adn_store` and seeds the chain from it at startup; `handler.rs` persists every entry. Verified with a real process kill + restart of the actual production binary (not just an in-process simulation): `[AuditStore] Loaded 2 entries from disk` on the second process, chain correctly continuing at `seq=2` instead of resetting to `seq=0/parent=root` (`examples/audit_persistence_smoke_test.rs`). **Second finding, same day, found live on the user's own machine while re-verifying the fix above**: `HashChain::append` computed `seq` as `self.entries.len()`, which silently assumed no gaps — but `AuditStore::save()` uses `INSERT OR IGNORE` (needed so a resent duplicate-content payload stays idempotent instead of erroring on the `UNIQUE(hash)` constraint), so a genuine duplicate resend leaves a gap in the persisted `seq` sequence (e.g. `seq=0` and `seq=2` on disk, no `seq=1`). After a real restart, `load_chain()` reloads exactly those (gapped) rows, `entries.len()` no longer matches the highest real `seq`, and the next `append()` recomputed a colliding `seq` — silently losing a brand-new, non-duplicate payload's persistence (confirmed live: a genuinely new payload was accepted with a normal-looking client response, `seq` colliding with an existing row, and never appeared in `audit_trail` after restart). Fixed: `seq` is now `self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — anchored to the highest real `seq`, not the entry count. Regression test added (`test_append_seq_survives_gap_from_deduplicated_reload`) simulating the exact gapped state observed on disk. **Since merged (2026-09-04, later the same day)**: `src/server/audit_store.rs`/`AuditStore` referenced above no longer exist as a separate file/type — fully folded into `AdnStore` (`save_audit_entry`/`load_chain`/`audit_count`), one schema, one `Connection`, one lock — see the "Rust hash chain" section below for the current state |
+ | 6 | **Human interface** — Obsidian vault escalation (`src/obsidian_escalation.rs`), wired live; Graphify (`graphifyy` PyPI package) regenerated 2026-09-04 — 793 nodes, 1646 edges, 46 communities, built from commit `f73daa6b` | ✅ Both real: Obsidian verified end-to-end against a live vault (contradiction detected by `ExecutionLab` -> written to `CSTL_Restricted_Council.md`); Graphify structure current as of commit `f73daa6b` — this run used `graphify update .` (AST re-extraction only, no LLM/API key available), so community names are structural hub labels, not the LLM-generated semantic labels from the 2026-09-03 run (967 nodes/1800 edges/63 semantically-labelled communities) — run `graphify extract . --mode deep` with an LLM key configured to restore semantic labelling; either way, re-run `graphify update .` after further commits to resync |
+ | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request). **New 2026-09-04**: registration is now dynamic — `Arc<Mutex<AgentRegistry>>` + `purpose=agent_register` wire message (self-signed, upsert by name), verified live; a real LLM agent (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) registers and signs its own messages, verified live against the real Rust server (registration, unsigned-rejected, signed-accepted) — actual model-generated content is not verifiable in this sandbox (no `anthropic` package, no API key here) and is left for the user to confirm on their own machine |
+ | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | 🟡 Built and wired live, not just "designed" (that badge understated what already ran in production for the hash chain, and overstated deontic modality — see below). Hash chain: real, persisted since 2026-09-04 (`HashChain`/`AuditStore`, see row 5). **Deontic modality — built 2026-09-04, same day**: the only live check (`server/validator.rs::validate_deontic_constraints`, before this fix) tested whether a single `RELATION.type` field contained both substrings `"MUST"` and `"MUST_NOT"` — broken twice over: the wire format never encodes MUST/MUST_NOT in `type` (KB predicate or SDL operator only), and `"MUST_NOT".contains("MUST")` is true in Rust, so a lone `MUST_NOT` relation was falsely rejected. The real engine (`semantic.rs::check_axiom_d`, SDL Axiom D, tested) existed but was never called live. Fixed in two parts: a `RELATION` now carries an optional `modality=MUST\|MUST_NOT\|REQUIRE\|FORBID` field, wired to the real Axiom D check (blocking, E107, intra-payload — a self-contradiction in the same message); and a new historical audit (`execution_lab::check_deontic_consistency_with_history`, same pattern as the existing factual `check_consistency_with_history`) checks modality-bearing relations against everything persisted by prior payloads — never rejecting (a disagreement across agents/time isn't a protocol error), surfaced as a `DEONTIC_AUDIT [consistent=false, violations=N]` response block. `adn_relations` gained a `modality` column via an idempotent migration, verified live against a file simulating the exact pre-existing production schema. Verified end-to-end on a real TCP connection, dev and release (`examples/deontic_audit_smoke_test.rs`, 4 scenarios) plus 9 new unit tests. |
+@@ -78,7 +78,7 @@ The 9 layers compose into a runtime for multi-agent coordination. The pipeline b
+    └──────┬───────────────────────────────────────┘
+           ▼
+    ┌──────────────────────────────────────────────┐
+-   │  VALIDATION  ✅  W601–W606 semantic checks    │
++   │  VALIDATION  ✅  W601–W605 semantic checks    │
+    │  contradiction · entailment · calibration     │
+    └──────┬───────────────────────────────────────┘
+           │
+@@ -141,7 +141,7 @@ The full σ trajectory — speculation to confirmed belief, with every step attr
+ 
+ Every payload is content-addressed and every decision about it is logged. Two complementary systems exist:
+ 
+-### Rust hash chain — `src/server/audit.rs`, `audit_store.rs` ✅
++### Rust hash chain — `src/server/audit.rs`, persisted via `src/adn_store.rs` ✅
+ 
+ ```
+ canonical_hash(payload)          BTreeMap-sorted, PARENT_HASH excluded from its own hash
+@@ -150,13 +150,23 @@ canonical_hash(payload)          BTreeMap-sorted, PARENT_HASH excluded from its
+ HashChain::append()  ──►  AuditEntry { hash, parent_hash, timestamp, payload }
+       │
+       ▼
+-AuditStore (SQLite)  ──►  persisted, reloadable
++AdnStore (SQLite)    ──►  persisted, reloadable (audit_trail table, same
++                          Connection as the ADN store — see below)
+       │
+       ▼
+ verify_integrity()   ──►  detects any break in the chain
+ ```
+ 
+-Deterministic, tamper-evident, tested (including `test_parent_hash_excluded_from_hash`, `test_integrity_detects_break`). Known issue: async reload hits a `blocking_lock()` conflict inside the tokio runtime — deferred refactor.
++**Corrected 2026-09-04**: `src/server/audit_store.rs` no longer exists — it was a
++separate `AuditStore` type holding its own SQLite `Connection` to the *same* file as
++`adn_store`, which meant two independent `Arc<Mutex<..>>` locks over one physical
++file, a real coordination risk (not just cosmetic debt). Fully merged into `AdnStore`
++(`save_audit_entry`/`load_chain`/`audit_count`, one schema, one `Connection`, one
++lock). Deterministic, tamper-evident, tested (including
++`test_parent_hash_excluded_from_hash`, `test_integrity_detects_break`,
++`test_audit_persistence_survives_reopen_on_real_file_and_shares_adn_store_data`).
++Known issue: async reload hits a `blocking_lock()` conflict inside the tokio runtime
++— deferred refactor.
+ 
+ ### Rust ADN store — `src/adn_store.rs` 🟡
+ 
+@@ -168,7 +178,7 @@ Content-addressed semantic memory with three tables, built natively in Rust (SQL
+ | `adn_council_log` | every council action — `commit` / `revoke`, by whom, with a note and timestamp. **This is the human arbitration audit trail.** |
+ | `emergence_proofs` | per-question record of each model's *solo* answer (Claude, GPT, Gemini, others), the *final* collective decision, **who changed position**, what they changed to, and the resulting `delta_sigma` |
+ 
+-**Not built yet, honestly flagged:** TF-IDF retrieval, `get_primer()` / `load_context()` context reconstruction, and `ADNDeltaDetector` (novelty detection against existing entries). `commit()` / `revoke()` exist on `AdnStore` but nothing in the running server calls them — there is no `RestrictedCouncil` yet to make that call, so every entry currently written stays `committed=false` permanently.
++**Not built yet, honestly flagged:** TF-IDF retrieval, `get_primer()` / `load_context()` context reconstruction, and `ADNDeltaDetector` (novelty detection against existing entries). **Corrected 2026-09-04** (this line self-contradicted the rest of the document, per the repo audit): `commit()` / `revoke()` on `AdnStore` are NOT dead — `RestrictedCouncil` (`src/restricted_council.rs`) exists, is wired live in `handler.rs`'s `council_decision` block, and has actually called `commit()`/`revoke()` end-to-end (including via a Telegram button) — see the Layer 2/3b rows above and `examples/governance_smoke_test.rs`. Entries stay `committed=false` only until a real council vote reaching quorum (`quorum_size()`) commits them — not permanently by construction.
+ 
+ **Why `emergence_proofs` matters for Level 4.** Level 4 asks whether several LLMs coordinating produce something no single one produced alone. That table is the instrument for answering it empirically: it records the counterfactual (each solo answer) alongside the outcome, making position changes and σ shifts auditable rather than asserted.
+ 
+@@ -210,16 +220,29 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
+ 
+ ## v5.0.0 Operators
+ 
++**Corrected 2026-09-04** (repo audit): this list previously omitted about a third of
++the real whitelist (`semantic.rs::OFFICIAL_OPERATORS`, the actual list the running
++server checks `RELATION.type` against, `E101`/`W601`) and mis-described deontic
++modality as `RELATION.type` operators — they are not. Both fixed below.
++
+ **Logical:** `ENTAILS`, `CONTRADICTS`
+ **Epistemic:** `KNOWS`, `BELIEVES`, `ASSUMES`, `DOUBTS`
+ **Temporal (Allen 1983 subset):** `BEFORE`, `AFTER`, `DURING`
+ **Relational:** `EQUALS`, `POSSESSES`, `RESEMBLES`, `CO_LOCATES`, `OPPOSES`, `COMPARES`
+-**Deontic:** `MUST`, `MUST_NOT`, `MAY`, `SHOULD`, `NOT`
+ **Causality:** `ARR`, `ARR.CREATE`, `ARR.JOIN`, `ARR.PRODUCE`, `ARR.ACCESS`
+ **Speech acts:** `COMMAND`, `ASK`, `STATE`, `PERFORM`, `RECOMMEND`
++**Intent / dynamics (previously missing from this list):** `INTENT`, `MAINTAIN`, `TRANSFORM`, `RESIST`, `AMP`, `INH`, `PRESSURE`, `CATALYZE`, `TRANSMIT_FAITHFUL`, `TRANSMIT_INFER`
+ **Fallback:** `RELATE [type=custom gloss="…"]` — honest admission when no canonical operator fits
+ **Deprecated:** `MUTUAL` (use a specific relational operator, W601)
+ 
++**Deontic modality is a separate mechanism, not a `RELATION.type` operator.** It
++travels as an optional `RELATION.modality=<value>` attribute, checked by
++`semantic.rs::check_axiom_d` (E107, blocking) and `execution_lab`'s historical audit
++(Layer 8) — not by the operator whitelist above. The real values the engine
++recognizes are `MUST` / `REQUIRE` (obligatory) and `MUST_NOT` / `FORBID` (forbidden) —
++**not** `MAY`, `SHOULD`, `NOT` as an earlier version of this table claimed; those are
++not checked by any live code today.
++
+ *Planned (v6):* five remaining Allen relations — `MEETS`, `OVERLAPS`, `STARTS`, `FINISHES`, `CONTAINS`. Converses handled by argument order rather than new symbols.
+ 
+ ---
+@@ -230,7 +253,7 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
+ cargo test --lib
+ ```
+ 
+-130 tests passing, 0 failures. Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
++143 tests passing, 0 failures (as of 2026-09-04 — this number drifts with every session, verify with `cargo test --lib` rather than trusting a fixed figure; six different stale counts were found across this file, `docs/ARCHITECTURE.md` and `CSTL_SPEC_v5_0.md` before this correction). Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
+ 
+ ---
+ 
+-- 
+2.43.0
+

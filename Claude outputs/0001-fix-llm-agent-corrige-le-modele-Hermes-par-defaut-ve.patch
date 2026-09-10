@@ -1,0 +1,43 @@
+From e7bc84c94a9bbc85305a404e2dd230abc06b8a09 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Mon, 7 Sep 2026 01:19:45 +0000
+Subject: [PATCH] fix(llm-agent): corrige le modele Hermes par defaut vers
+ hermes3:8b (confirme reel sur la machine de l'utilisateur)
+
+Le defaut precedent ("hermes3" sans tag) ne correspond pas au nom exact
+sous lequel Ollama installe le modele (`ollama pull hermes3` -> liste
+comme "hermes3:8b" dans `ollama list`). Confirme en direct le
+2026-09-07 : `curl .../api/generate -d '{"model":"hermes3:8b",...}'` a
+retourne une vraie reponse generee ; Ollama exige une correspondance
+nom:tag exacte, "hermes3" seul n'aurait pas resolu vers ce modele sans
+un tag "latest" present. CSTL_OLLAMA_MODEL reste disponible pour
+surcharger si l'utilisateur installe un autre tag.
+---
+ sdk/python/cstl_llm_agent.py | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/sdk/python/cstl_llm_agent.py b/sdk/python/cstl_llm_agent.py
+index 94386bb..571b6f3 100644
+--- a/sdk/python/cstl_llm_agent.py
++++ b/sdk/python/cstl_llm_agent.py
+@@ -414,7 +414,16 @@ class HermesAgentBrain:
+     def from_env(cls, model: str | None = None) -> Optional["HermesAgentBrain"]:
+         host = os.environ.get("CSTL_OLLAMA_HOST", "127.0.0.1")
+         port = int(os.environ.get("CSTL_OLLAMA_PORT", "11434"))
+-        resolved_model = model or os.environ.get("CSTL_OLLAMA_MODEL", "hermes3")
++        # Defaut "hermes3:8b" (pas juste "hermes3") -- confirme le 2026-09-07
++        # sur la machine de l'utilisateur : `ollama list` liste le modele
++        # sous le tag exact "hermes3:8b" (`ollama pull hermes3` l'a installe
++        # sous ce nom), et Ollama exige une correspondance exacte nom:tag --
++        # "hermes3" seul (sans tag) ne resout PAS automatiquement vers
++        # "hermes3:8b". Verifie en direct : `curl http://localhost:11434/api/generate
++        # -d '{"model":"hermes3:8b","prompt":"...","stream":false}'` a repondu
++        # un vrai texte genere ; le meme appel avec "model":"hermes3" echouerait
++        # si aucun tag "latest" n'existe pour ce modele sur cette machine.
++        resolved_model = model or os.environ.get("CSTL_OLLAMA_MODEL", "hermes3:8b")
+         tags_url = f"http://{host}:{port}/api/tags"
+         try:
+             with urllib.request.urlopen(tags_url, timeout=1.0):
+-- 
+2.43.0
+
