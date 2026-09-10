@@ -3,153 +3,54 @@
 <head>
 <meta charset="utf-8">
 <title>CSTL Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<!-- xterm.js -- VRAI emulateur de terminal cote navigateur, affiche a l'identique
-     les octets bruts (sequences ANSI incluses) recus du pont PTY reel
-     (dashboard/pty_bridge.py) via WebSocket. Charge par CDN : cette page est
-     servie localement par dashboard/server.py sur la machine de l'utilisateur,
-     pas soumise a la restriction CDN de l'outil Artifact. Ajoute 07/09/2026
-     pour "terminal complet interactif pour chaque outil".
-     DEUX BUGS TROUVES ET CORRIGES EN DIRECT LE 07/09/2026 (verifies dans le
-     vrai Chrome de l'utilisateur, pas juste en sandbox) :
-     1) Les URLs cdnjs 5.3.0/lib/*.min.js initiales etaient un vrai 404 --
-        cdnjs n'a plus de sous-dossier /lib/ ni de build .min.js pour xterm
-        recent (confirme via cdnjs.com/libraries/xterm), et xterm-addon-fit
-        n'existe carrement pas sur cdnjs (404 sur
-        cdnjs.com/libraries/xterm-addon-fit) -- addon-fit charge depuis
-        jsdelivr (@xterm/addon-fit, liste blanche CDN) a la place.
-     2) xterm 6.0.0 + @xterm/addon-fit@0.10.0 chargent tous les deux sans
-        erreur mais PLANTENT A L'USAGE : addon-fit 0.10.0 lit une propriete
-        interne (`_core.viewport.scrollBarWidth`) que xterm 6.x a renommee/
-        deplacee -- TypeError reel intercepte en direct ("Cannot read
-        properties of undefined (reading 'scrollBarWidth')"), qui bloquait
-        silencieusement "Connecter" sur "Verification du pont terminal...".
-        Fixe en figeant xterm sur la derniere 5.x stable (5.5.0, la version
-        pour laquelle addon-fit 0.10.0 a ete construit) -- combinaison
-        reellement testee de bout en bout : clic Connecter -> vrai process
-        Ollama lance -> vrai banner ">>> Send a message (/? for help)"
-        affiche dans le terminal. -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.5.0/xterm.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.5.0/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <style>
-  /* === CSTL / aspect futuriste (demande 07/09/2026) ===
-     Meme structure HTML, memes IDs/classes utilisees par le JS -- seule la
-     couche visuelle change. Thematique "console de bord agentic" : fond
-     grille animee, accents neon cyan/violet, typographie Orbitron pour les
-     titres/donnees, JetBrains Mono pour le code/wire-format, coins en
-     "bracket" façon HUD sur les panneaux, pastille de statut qui pulse
-     quand le serveur est UP. Google Fonts charge normalement ici (page
-     servie par dashboard/server.py sur ta machine, pas de sandbox CSP). */
   :root {
-    --bg: #05060a; --panel: rgba(15,18,28,0.72); --border: #1f2a3d;
-    --border-bright: #2ea8c9; --text: #dce8f5;
-    --muted: #6f83a3; --ok: #2af5b0; --down: #ff4d6d; --warn: #ffb02e;
-    --accent: #38e0ff; --accent2: #b967ff;
-    --font-display: "Orbitron", "SF Mono", sans-serif;
-    --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e6e9ef;
+    --muted: #8b93a3; --ok: #3ecf8e; --down: #e05252; --warn: #e0a940;
+    --accent: #5b8cff;
   }
   * { box-sizing: border-box; }
-  body {
-    margin:0; color: var(--text); font: 14px/1.5 var(--font-mono);
-    background:
-      radial-gradient(ellipse 1200px 700px at 15% -10%, rgba(56,224,255,0.10), transparent 60%),
-      radial-gradient(ellipse 900px 600px at 100% 0%, rgba(185,103,255,0.08), transparent 55%),
-      repeating-linear-gradient(0deg, rgba(56,224,255,0.035) 0px, rgba(56,224,255,0.035) 1px, transparent 1px, transparent 32px),
-      repeating-linear-gradient(90deg, rgba(56,224,255,0.035) 0px, rgba(56,224,255,0.035) 1px, transparent 1px, transparent 32px),
-      var(--bg);
-    min-height: 100vh;
-  }
-  header { padding: 20px 28px 16px; border-bottom: 1px solid var(--border); position: relative; }
-  header::after {
-    content: ""; position: absolute; left:0; right:0; bottom:-1px; height:1px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2), transparent 70%);
-    box-shadow: 0 0 8px 1px rgba(56,224,255,0.6);
-  }
-  header h1 {
-    margin:0; font-family: var(--font-display); font-weight: 700; font-size: 20px;
-    letter-spacing: 3px; text-transform: uppercase;
-    background: linear-gradient(90deg, #eafcff 0%, var(--accent) 55%, var(--accent2) 100%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    text-shadow: 0 0 24px rgba(56,224,255,0.25);
-  }
-  header p { margin: 6px 0 0; color: var(--muted); font-size: 11px; letter-spacing: 0.5px; }
-  nav.tabs { display:flex; gap:2px; padding: 0 24px; border-bottom: 1px solid var(--border);
-    overflow-x: auto; background: rgba(9,12,20,0.85); backdrop-filter: blur(6px); }
-  nav.tabs button.tab-btn { background:transparent; border:none; color: var(--muted);
-    font-family: var(--font-display); padding: 14px 18px; font-size: 11px; cursor: pointer;
-    border-bottom: 2px solid transparent; border-radius: 0; white-space: nowrap;
-    letter-spacing: 1.5px; text-transform: uppercase; transition: color .15s ease; }
-  nav.tabs button.tab-btn:hover { color: var(--text); }
-  nav.tabs button.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent);
-    text-shadow: 0 0 10px rgba(56,224,255,0.7); }
-  main { padding: 24px; }
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; animation: fade-in .18s ease; }
-  @keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 18px;
-    max-width: 900px; position: relative; backdrop-filter: blur(8px);
-    box-shadow: 0 0 0 1px rgba(56,224,255,0.04), 0 8px 30px rgba(0,0,0,0.35); }
-  /* coins "bracket" style HUD sur chaque panneau */
-  .panel::before, .panel::after {
-    content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
-    border: 1px solid var(--accent); opacity: 0.7;
-  }
-  .panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
-  .panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
-  .panel h2 { margin: 0 0 14px; font-family: var(--font-display); font-size: 12px; letter-spacing: 1.5px;
-    text-transform: uppercase; color: var(--text);
-    display:flex; align-items:center; gap:8px; justify-content: space-between;}
-  .panel h2 .title { display:flex; align-items:center; gap:9px; }
-  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; background: var(--muted); }
-  .dot.up { background: var(--ok); box-shadow: 0 0 8px 2px rgba(42,245,176,0.7); animation: pulse-dot 1.8s ease-in-out infinite; }
-  .dot.down { background: var(--down); box-shadow: 0 0 8px 2px rgba(255,77,109,0.6); }
-  @keyframes pulse-dot { 0%,100% { box-shadow: 0 0 6px 1px rgba(42,245,176,0.6); } 50% { box-shadow: 0 0 12px 4px rgba(42,245,176,0.9); } }
-  button { background: linear-gradient(135deg, var(--accent), #1c8fb0); color: #04141a; border: none;
-    border-radius: 3px; padding: 8px 14px; font-family: var(--font-display); font-size: 11px;
-    letter-spacing: 1px; text-transform: uppercase; font-weight: 700; cursor: pointer;
-    box-shadow: 0 0 12px rgba(56,224,255,0.35); transition: box-shadow .15s ease, transform .1s ease; }
-  button:hover { box-shadow: 0 0 18px rgba(56,224,255,0.6); transform: translateY(-1px); }
-  button.secondary { background: transparent; border: 1px solid var(--border-bright); color: var(--accent);
-    box-shadow: none; }
-  button.secondary:hover { background: rgba(56,224,255,0.08); box-shadow: 0 0 10px rgba(56,224,255,0.25); }
+  body { margin:0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  header h1 { margin:0; font-size: 18px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 14px; display:flex; align-items:center; gap:8px; justify-content: space-between;}
+  .panel h2 .title { display:flex; align-items:center; gap:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: var(--muted); }
+  .dot.up { background: var(--ok); }
+  .dot.down { background: var(--down); }
+  button { background: var(--accent); color: white; border: none; border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  button:hover { opacity: 0.85; }
+  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
   table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  th { color: var(--accent); font-weight: 600; font-family: var(--font-display); font-size: 10px;
-    letter-spacing: 1px; text-transform: uppercase; }
-  code, pre { font-family: var(--font-mono); }
-  pre { background: #030407; border: 1px solid var(--border); border-left: 2px solid var(--accent2);
-    border-radius: 3px; padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
-    font-size: 12px; color: #b9f3ff; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  code, pre { font-family: "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: #0a0c10; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
   .field { margin-bottom: 10px; }
-  .field label { display:block; font-size: 10px; color: var(--muted); margin-bottom: 4px;
-    letter-spacing: 1px; text-transform: uppercase; font-family: var(--font-display); }
-  .field input { width: 100%; background: #030407; border: 1px solid var(--border);
-    color: var(--text); border-radius: 3px; padding: 8px 10px; font-size: 13px; font-family: var(--font-mono);
-    transition: border-color .15s ease, box-shadow .15s ease; }
-  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 12px rgba(56,224,255,0.3); }
+  .field label { display:block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .field input { width: 100%; background: #0a0c10; border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
   .rel-row { display:flex; gap:6px; margin-bottom:6px; }
   .rel-row input { flex: 1; }
   .muted { color: var(--muted); font-size: 12px; }
   .stat-row { display:flex; gap: 16px; margin-bottom: 10px; }
-  .stat { flex:1; background:#030407; border:1px solid var(--border); border-radius:3px; padding:10px; text-align:center; }
-  .stat .n { font-size: 22px; font-weight: 700; font-family: var(--font-display); color: var(--accent);
-    text-shadow: 0 0 10px rgba(56,224,255,0.4); }
-  .stat .l { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
-  .badge { display:inline-block; padding: 3px 9px; border-radius: 3px; font-size: 10px;
-    font-family: var(--font-display); letter-spacing: 0.5px; text-transform: uppercase;
-    border: 1px solid currentColor; }
-  .badge.wired { background: rgba(255,176,46,0.1); color: var(--warn); }
-  .badge.none { background: rgba(255,77,109,0.1); color: var(--down); }
-  .badge.present { background: rgba(42,245,176,0.1); color: var(--ok); }
-  .badge.neutral { background: rgba(111,131,163,0.1); color: var(--muted); }
-  .timestamp { font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.5px; }
-  /* === Terminal reel (pont PTY, ajoute 07/09/2026) === */
-  .term-status { font-size: 12px; color: var(--muted); margin: 8px 0; }
-  .term-box { display:none; margin-top:10px; border:1px solid var(--border); border-radius:4px;
-    background:#000; padding:6px; }
-  .term-box .xterm { padding: 4px; }
+  .stat { flex:1; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px; text-align:center; }
+  .stat .n { font-size: 20px; font-weight: 600; }
+  .stat .l { font-size: 11px; color: var(--muted); }
+  .full { grid-column: 1 / -1; }
+  .badge { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .badge.wired { background: rgba(224,169,64,0.15); color: var(--warn); }
+  .badge.none { background: rgba(224,82,82,0.15); color: var(--down); }
+  .badge.present { background: rgba(62,207,142,0.15); color: var(--ok); }
+  .badge.neutral { background: rgba(139,147,163,0.15); color: var(--muted); }
+  .timestamp { font-size: 11px; color: var(--muted); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -157,249 +58,64 @@
   <h1>CSTL Dashboard</h1>
   <p>Hub local pour l'OS CSTL agentic kernel -- rafraichissement manuel, rien n'est simule.</p>
 </header>
-
-<!-- Un onglet par composant (demande 07/09/2026) -- meme HTML/JS qu'avant,
-     juste reorganise en panneaux caches/affiches un a la fois plutot qu'un
-     scroll continu. Aucun endpoint ni logique n'a change. -->
-<nav class="tabs">
-  <button class="tab-btn active" data-tab="status" onclick="showTab('status')">Serveur CSTL</button>
-  <button class="tab-btn" data-tab="adn" onclick="showTab('adn')">ADN Store</button>
-  <button class="tab-btn" data-tab="compositeur" onclick="showTab('compositeur')">Compositeur</button>
-  <button class="tab-btn" data-tab="autres" onclick="showTab('autres')">Autres systemes</button>
-  <button class="tab-btn" data-tab="hermes" onclick="showTab('hermes')">Hermes</button>
-  <button class="tab-btn" data-tab="openclaw" onclick="showTab('openclaw')">OpenClaw</button>
-  <button class="tab-btn" data-tab="claude-code" onclick="showTab('claude-code')">Claude Code</button>
-  <button class="tab-btn" data-tab="orchestrateur" onclick="showTab('orchestrateur')">Orchestrateur</button>
-  <button class="tab-btn" data-tab="jarvis" onclick="showTab('jarvis')">Jarvis</button>
-</nav>
-
 <main>
 
-  <div class="tab-panel active" data-tab="status">
-    <section class="panel">
-      <h2><span class="title"><span class="dot" id="status-dot"></span> Serveur CSTL (TCP 5050)</span>
-        <button onclick="refreshStatus()">Rafraichir</button></h2>
-      <div id="status-body" class="muted">Non verifie -- cliquez sur Rafraichir.</div>
-    </section>
-  </div>
+  <section class="panel">
+    <h2><span class="title"><span class="dot" id="status-dot"></span> Serveur CSTL (TCP 5050)</span>
+      <button onclick="refreshStatus()">Rafraichir</button></h2>
+    <div id="status-body" class="muted">Non verifie -- cliquez sur Rafraichir.</div>
+  </section>
 
-  <div class="tab-panel" data-tab="adn">
-    <section class="panel">
-      <h2><span class="title">ADN Store / Gouvernance</span>
-        <button onclick="refreshAdn()">Rafraichir</button></h2>
-      <div id="adn-body" class="muted">Non lu -- cliquez sur Rafraichir.</div>
-    </section>
-  </div>
+  <section class="panel">
+    <h2><span class="title">ADN Store / Gouvernance</span>
+      <button onclick="refreshAdn()">Rafraichir</button></h2>
+    <div id="adn-body" class="muted">Non lu -- cliquez sur Rafraichir.</div>
+  </section>
 
-  <div class="tab-panel" data-tab="compositeur">
-    <section class="panel">
-      <h2><span class="title">Compositeur de payload CSTL</span></h2>
-      <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
-      <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
-      <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
+  <section class="panel full">
+    <h2><span class="title">Compositeur de payload CSTL</span></h2>
+    <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
+    <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
+    <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
 
-      <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
-        <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
-        <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
-        <label class="muted" style="display:flex; align-items:center; gap:6px; margin-top:8px;">
-          <input type="checkbox" id="f-llm-context" checked style="width:auto;">
-          Inclure le contexte reel du projet (ADN store + Graphify + Obsidian si configure)
-        </label>
-        <div style="margin-top:8px;">
-          <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
-        </div>
-        <div id="llm-gen-status" class="muted" style="margin-top:8px;"></div>
+    <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
+      <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
+      <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
+      <div style="margin-top:8px;">
+        <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
       </div>
+      <div id="llm-gen-status" class="muted" style="margin-top:8px;"></div>
+    </div>
 
-      <label class="muted" style="display:block; margin-top:14px;">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
-      <div id="relations"></div>
-      <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
-      <div style="margin-top:12px;">
-        <button onclick="sendPayload()">Envoyer au serveur CSTL (127.0.0.1:5050)</button>
-      </div>
-      <p class="muted" style="margin-top:10px;">Payload envoye:</p>
-      <pre id="payload-preview">(genere a l'envoi)</pre>
-      <p class="muted">Reponse brute du serveur (telle quelle, non reformatee) :</p>
-      <pre id="response-raw">(aucun envoi encore effectue)</pre>
-      <div id="send-meta" class="timestamp"></div>
-    </section>
-  </div>
+    <label class="muted" style="display:block; margin-top:14px;">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
+    <div id="relations"></div>
+    <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
+    <div style="margin-top:12px;">
+      <button onclick="sendPayload()">Envoyer au serveur CSTL (127.0.0.1:5050)</button>
+    </div>
+    <p class="muted" style="margin-top:10px;">Payload envoye:</p>
+    <pre id="payload-preview">(genere a l'envoi)</pre>
+    <p class="muted">Reponse brute du serveur (telle quelle, non reformatee) :</p>
+    <pre id="response-raw">(aucun envoi encore effectue)</pre>
+    <div id="send-meta" class="timestamp"></div>
+  </section>
 
-  <div class="tab-panel" data-tab="autres">
-    <section class="panel">
-      <h2><span class="title">Autres systemes</span>
-        <button onclick="refreshOther()">Rafraichir</button></h2>
-      <table id="other-table">
-        <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
-        <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
-        <button class="secondary" onclick="refreshProjectContext()">Voir le contexte projet envoye a Hermes/Claude Code (ADN + Graphify + Obsidian)</button>
-      </div>
-      <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
-      <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
-      <pre id="project-context-body" style="display:none; margin-top:10px;"></pre>
-      <p class="muted" style="margin-top:14px;">Hermes/Ollama et OpenClaw ont chacun leur propre onglet dedie ci-dessus (verification en direct + explication honnete de ce qui est reellement teste).</p>
-    </section>
-  </div>
-
-  <!-- === HERMES === -->
-  <!--
-    Onglet dedie pour Hermes/Ollama, ajoute a la demande explicite de
-    l'utilisateur ("un onglet pour hermes"). Statut honnete inchange par
-    rapport a /api/other-systems : aucune reference a Hermes/Ollama dans
-    src/ (Rust) -- le coeur du protocole CSTL ne connait pas Hermes. Ce
-    qui EST reel : ce dashboard Python (HermesAgentBrain, via
-    sdk/python/cstl_llm_agent.py) sait parler a un serveur Ollama local, et
-    resolve_brain("auto") l'essaie en premier (avant Gemini/Anthropic) pour
-    le Compositeur et Jarvis. Nouveau bouton /api/hermes-check ci-dessous :
-    contrairement au check OpenClaw (port seulement), celui-ci fait un vrai
-    GET sur l'API documentee d'Ollama (/api/tags) -- une reponse HTTP valide
-    prouve qu'Ollama repond reellement, pas seulement qu'un port est ouvert.
-  -->
-  <div class="tab-panel" data-tab="hermes">
-    <section class="panel">
-      <h2><span class="title">Hermes / Ollama</span></h2>
-      <p class="muted">
-        <strong>Non integre au serveur Rust</strong> -- aucune reference a Hermes/Ollama
-        dans <code>src/</code>, le coeur du protocole CSTL ne sait pas lui parler directement.
-        Ce qui existe reellement : ce dashboard (via <code>HermesAgentBrain</code>,
-        <code>sdk/python/cstl_llm_agent.py</code>) sait parler a un serveur Ollama local
-        (127.0.0.1:11434) s'il est installe et lance -- <code>resolve_brain("auto")</code>
-        l'essaie en premier, avant Gemini puis Anthropic, pour le Compositeur et pour Jarvis.
-      </p>
-      <button class="secondary" onclick="testHermes()">Tester Hermes/Ollama (127.0.0.1:11434)</button>
-      <div id="hermes-check-body" class="muted" style="margin-top:10px;"></div>
-      <p class="muted" style="margin-top:14px;">Pour generer une vraie relation via Hermes (ou son fallback Gemini/Anthropic), utilise l'onglet Compositeur ("Générer une relation via agent LLM") ou l'onglet Jarvis (voix).</p>
-
-      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-        <p class="muted">
-          <strong>Terminal reel</strong> -- lance <code>ollama run &lt;modele&gt;</code> (le premier
-          modele installe detecte) dans un vrai pseudo-terminal sur cette machine, relaye en
-          direct ici. Pas une simulation : tape dedans comme dans une vraie fenetre Terminal.
-        </p>
-        <div id="term-hermes-controls"></div>
-      </div>
-    </section>
-  </div>
-
-  <!-- === OPENCLAW === -->
-  <!--
-    Onglet dedie pour OpenClaw, ajoute a la demande explicite de
-    l'utilisateur ("un autre pour openclaw"). Bouton et logique deplaces
-    tels quels depuis l'ancien panneau "Autres systemes" (meme fonction JS
-    testOpenClaw(), meme endpoint /api/openclaw-check, meme id
-    openclaw-body) -- aucune duplication de logique, seulement un
-    deplacement de markup pour lui donner sa propre place.
-  -->
-  <div class="tab-panel" data-tab="openclaw">
-    <section class="panel">
-      <h2><span class="title">OpenClaw</span></h2>
-      <p class="muted">
-        <strong>Non integre au serveur Rust</strong> -- aucune reference dans <code>src/</code>.
-        Le test ci-dessous verifie seulement l'ouverture du port
-        <code>ws://127.0.0.1:18789</code> (ou une poignee de main WebSocket si le paquet
-        <code>websockets</code> est installe), sans parler le protocole applicatif d'OpenClaw
-        (non documente). Pour une vraie interaction, utilise la console reelle d'OpenClaw
-        (<code>openclaw dashboard</code>, ou le script
-        <code>CSTL_OS_open_openclaw_dashboard.command</code> a cote de ce dashboard).
-      </p>
-      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:18789)</button>
-      <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
-
-      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-        <p class="muted">
-          <strong>Memoire liee</strong> -- OpenClaw a sa propre convention documentee
-          (<code>workspace/AGENTS.md</code> sur cette machine) : il charge automatiquement
-          <code>memory/AAAA-MM-JJ.md</code> au demarrage d'une session. Le bouton ci-dessous
-          ecrit un VRAI extrait de la memoire CSTL (ADN store + Graphify + Obsidian si
-          configure) dans ce fichier -- pas invente, sa propre convention.
-          <strong>Limite honnete</strong> : pris en compte au PROCHAIN demarrage de session
-          OpenClaw seulement, pas sur une session deja ouverte.
-        </p>
-        <button class="secondary" onclick="syncOpenClawContext()">Synchroniser la memoire CSTL vers OpenClaw (memory/AAAA-MM-JJ.md)</button>
-        <div id="openclaw-sync-body" class="muted" style="margin-top:10px;"></div>
-      </div>
-
-      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-        <p class="muted">
-          <strong>Activite du Gateway en direct (lecture seule)</strong> -- <code>openclaw logs
-          --follow</code>, un vrai tail RPC du log de la Gateway (documente dans
-          docs/logging.md d'OpenClaw). Fonctionne QUAND la Gateway tourne (aucun conflit de
-          port), aucune frappe n'est envoyee a ce process -- tu regardes, tu n'interagis pas.
-          Ajoute a la demande explicite : "une copy de openclaw qu'on ne peut pas interagir
-          avec mais qu'on voit ce qui se passe".
-        </p>
-        <div id="term-openclaw-logs-controls"></div>
-      </div>
-
-      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-        <p class="muted">
-          <strong>Terminal reel (interactif)</strong> -- lance <code>openclaw chat</code> dans un
-          vrai pseudo-terminal sur cette machine, relaye en direct ici. Pas une simulation.
-          <strong>Conflit de port</strong> : `openclaw chat` reprend le meme port que la vraie
-          Gateway (18789) -- si la Gateway tourne deja (cas normal, demarree par CSTL_OS), ce
-          terminal se termine immediatement (EOF). Arrete la Gateway d'abord
-          (<code>openclaw gateway stop</code> dans ton propre Terminal) si tu veux une vraie
-          session interactive ici plutot que le mode lecture seule ci-dessus.
-        </p>
-        <div id="term-openclaw-controls"></div>
-      </div>
-    </section>
-  </div>
-
-  <!-- === CLAUDE CODE === -->
-  <!--
-    Onglet dedie pour Claude Code, avec une VRAIE interface d'utilisation
-    ajoutee a la demande explicite de l'utilisateur ("dans l'onglet claude
-    code je veux pouvoir l'utiliser"). Cote serveur : POST /api/claude-code
-    lance reellement `claude -p "<prompt>"` (CLI Claude Code, mode "print"
-    non-interactif) sur CETTE machine, dans le repo courant -- voir
-    run_claude_code() dans server.py pour le detail et les limites
-    honnetes (pas de session persistante : chaque envoi est un nouveau
-    processus `claude` independant, pas de memoire d'un appel a l'autre
-    depuis cet onglet ; timeout 90s ; aucune permission elargie ajoutee).
-  -->
-  <div class="tab-panel" data-tab="claude-code">
-    <section class="panel">
-      <h2><span class="title">Claude Code</span></h2>
-      <p class="muted">
-        Lance une VRAIE requete <code>claude -p "..."</code> (CLI Claude Code, mode non
-        interactif) sur cette machine, dans le repo courant. <strong>Pas de session
-        persistante</strong> -- chaque envoi est un nouveau processus independant, sans memoire
-        du precedent depuis cet onglet (contrairement a cette conversation-ci). Peut prendre
-        plusieurs secondes (timeout a 90s).
-      </p>
-      <div class="field">
-        <label>Prompt</label>
-        <textarea id="cc-prompt" rows="3" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:13px;" placeholder="Ex: liste les fichiers .rs dans src/"></textarea>
-      </div>
-      <label class="muted" style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-        <input type="checkbox" id="cc-context" checked style="width:auto;">
-        Inclure le contexte reel du projet (ADN store + Graphify + Obsidian si configure)
-      </label>
-      <button onclick="runClaudeCode()">Envoyer</button>
-      <div id="cc-status" class="muted" style="margin-top:10px;"></div>
-      <p class="muted" style="margin-top:10px;">Sortie reelle (stdout) :</p>
-      <pre id="cc-stdout">(aucun envoi encore effectue)</pre>
-      <div id="cc-stderr-wrap" style="display:none;">
-        <p class="muted">stderr :</p>
-        <pre id="cc-stderr"></pre>
-      </div>
-
-      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-        <p class="muted">
-          <strong>Terminal reel</strong> -- lance <code>claude</code> en mode interactif complet
-          (pas <code>-p</code>, pas one-shot) dans un vrai pseudo-terminal sur cette machine,
-          relaye en direct ici : session persistante, memoire de conversation, exactement comme
-          dans une vraie fenetre Terminal.
-        </p>
-        <div id="term-claude-code-controls"></div>
-      </div>
-    </section>
-  </div>
+  <section class="panel full">
+    <h2><span class="title">Autres systemes</span>
+      <button onclick="refreshOther()">Rafraichir</button></h2>
+    <table id="other-table">
+      <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
+      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:19001)</button>
+      <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
+    </div>
+    <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
+    <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
+    <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
+  </section>
 
   <!-- === ORCHESTRATEUR === -->
   <!--
@@ -417,23 +133,21 @@
     envois TCP reels, capture de trace) fonctionne independamment de la
     disponibilite d'un vrai modele.
   -->
-  <div class="tab-panel" data-tab="orchestrateur">
-    <section class="panel">
-      <h2><span class="title">Orchestrateur -- relais LLM multi-tours</span></h2>
-      <p class="muted">
-        Lance un VRAI relais de N tours contre le serveur CSTL (127.0.0.1:5050) :
-        a chaque tour, un agent LLM reel (Hermes local &gt; Gemini &gt; Anthropic,
-        via resolve_brain("auto")) genere une relation, elle est signee Ed25519
-        et envoyee au serveur, la vraie reponse est capturee. Si aucun agent LLM
-        n'est disponible, l'endpoint le dit honnetement -- rien n'est simule.
-      </p>
-      <div class="field" style="max-width:160px;"><label>Nombre de tours</label><input id="orch-turns" type="number" min="1" max="20" value="4"></div>
-      <div class="field"><label>Sujet du relais</label><input id="orch-topic" value="Est-ce que Montreal est au Canada?"></div>
-      <button onclick="lancerRelais()">Lancer un relais</button>
-      <div id="orch-status" class="muted" style="margin-top:10px;"></div>
-      <div id="orch-trace" style="margin-top:10px;"></div>
-    </section>
-  </div>
+  <section class="panel full">
+    <h2><span class="title">Orchestrateur -- relais LLM multi-tours</span></h2>
+    <p class="muted">
+      Lance un VRAI relais de N tours contre le serveur CSTL (127.0.0.1:5050) :
+      a chaque tour, un agent LLM reel (Hermes local &gt; Gemini &gt; Anthropic,
+      via resolve_brain("auto")) genere une relation, elle est signee Ed25519
+      et envoyee au serveur, la vraie reponse est capturee. Si aucun agent LLM
+      n'est disponible, l'endpoint le dit honnetement -- rien n'est simule.
+    </p>
+    <div class="field" style="max-width:160px;"><label>Nombre de tours</label><input id="orch-turns" type="number" min="1" max="20" value="4"></div>
+    <div class="field"><label>Sujet du relais</label><input id="orch-topic" value="Est-ce que Montreal est au Canada?"></div>
+    <button onclick="lancerRelais()">Lancer un relais</button>
+    <div id="orch-status" class="muted" style="margin-top:10px;"></div>
+    <div id="orch-trace" style="margin-top:10px;"></div>
+  </section>
 
   <!-- === JARVIS === -->
   <!--
@@ -460,73 +174,68 @@
     /api/send (meme flux que le compositeur manuel ci-dessus) -- aucune
     logique de generation ou d'envoi dupliquee ici.
   -->
-  <div class="tab-panel" data-tab="jarvis">
-    <section class="panel">
-      <h2><span class="title">Jarvis -- interface vocale (experimentale)</span></h2>
-      <p class="muted">
-        Parle a l'agent CSTL : le micro transcrit ta phrase, une relation est
-        composee via le meme agent LLM que le compositeur ci-dessus (Hermes
-        local &gt; Gemini &gt; Anthropic), puis envoyee au vrai serveur CSTL.
-        Coche la case pour entendre un resume court de la reponse. Meme
-        endpoint que le Compositeur (<code>/api/generate-relation</code>) --
-        le contexte reel du projet (ADN store + Graphify + Obsidian si
-        configure) est inclus par defaut ici aussi.
-      </p>
-      <p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">
-        Support navigateur honnete -- reconnaissance vocale (SpeechRecognition) :
-        <strong>bon</strong> sur Chrome/Edge, <strong>partiel</strong> sur Safari,
-        <strong>tres limite / absent</strong> sur Firefox. Synthese vocale
-        (SpeechSynthesis) : disponible sur la plupart des navigateurs modernes,
-        voix et qualite variables selon l'OS. Rien de tout cela n'a pu etre
-        teste avec un vrai micro/haut-parleur dans cet environnement de
-        developpement (aucun materiel audio ici) -- a verifier par toi, sur ta
-        machine, avec un vrai navigateur.
-      </p>
+  <section class="panel full">
+    <h2><span class="title">Jarvis -- interface vocale (experimentale)</span></h2>
+    <p class="muted">
+      Parle a l'agent CSTL : le micro transcrit ta phrase, une relation est
+      composee via le meme agent LLM que le compositeur ci-dessus (Hermes
+      local &gt; Gemini &gt; Anthropic), puis envoyee au vrai serveur CSTL.
+      Coche la case pour entendre un resume court de la reponse.
+    </p>
+    <p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">
+      Support navigateur honnete -- reconnaissance vocale (SpeechRecognition) :
+      <strong>bon</strong> sur Chrome/Edge, <strong>partiel</strong> sur Safari,
+      <strong>tres limite / absent</strong> sur Firefox. Synthese vocale
+      (SpeechSynthesis) : disponible sur la plupart des navigateurs modernes,
+      voix et qualite variables selon l'OS. Rien de tout cela n'a pu etre
+      teste avec un vrai micro/haut-parleur dans cet environnement de
+      developpement (aucun materiel audio ici) -- a verifier par toi, sur ta
+      machine, avec un vrai navigateur.
+    </p>
 
-      <div id="jarvis-unsupported" class="muted" style="display:none; color:var(--down); border:1px solid var(--down); border-radius:6px; padding:10px;">
-        Ce navigateur ne supporte pas <code>SpeechRecognition</code> /
-        <code>webkitSpeechRecognition</code> (cas typique de Firefox). La
-        reconnaissance vocale de Jarvis est indisponible ici -- utilise Chrome
-        ou Edge pour cette fonctionnalite. (La saisie manuelle via le
-        compositeur ci-dessus reste disponible, elle.)
+    <div id="jarvis-unsupported" class="muted" style="display:none; color:var(--down); border:1px solid var(--down); border-radius:6px; padding:10px;">
+      Ce navigateur ne supporte pas <code>SpeechRecognition</code> /
+      <code>webkitSpeechRecognition</code> (cas typique de Firefox). La
+      reconnaissance vocale de Jarvis est indisponible ici -- utilise Chrome
+      ou Edge pour cette fonctionnalite. (La saisie manuelle via le
+      compositeur ci-dessus reste disponible, elle.)
+    </div>
+
+    <div id="jarvis-controls">
+      <div class="field" style="max-width:220px;">
+        <label>Langue de reconnaissance</label>
+        <select id="jarvis-lang" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 8px; font-size:13px;">
+          <option value="fr-FR">fr-FR (France -- choix par defaut, le plus largement teste sur Chrome)</option>
+          <option value="fr-CA">fr-CA (Canada -- a essayer si fr-FR reconnait mal ton accent)</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+        <button id="jarvis-mic-btn" onclick="jarvisToggleListening()">Demarrer l'ecoute</button>
+        <span id="jarvis-mic-status" class="muted">inactif</span>
+      </div>
+      <div class="field">
+        <label>Transcription en direct</label>
+        <div id="jarvis-transcript" class="muted" style="min-height:20px; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px;">(rien entendu encore)</div>
+      </div>
+      <label class="muted" style="display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="jarvis-speak-checkbox" style="width:auto;">
+        Lire la reponse a voix haute (resume court, pas le wire-format brut)
+      </label>
+      <div id="jarvis-tts-unsupported" class="muted" style="display:none; color:var(--warn);">
+        SpeechSynthesis indisponible dans ce navigateur -- la case ci-dessus
+        restera sans effet.
       </div>
 
-      <div id="jarvis-controls">
-        <div class="field" style="max-width:220px;">
-          <label>Langue de reconnaissance</label>
-          <select id="jarvis-lang" style="width:100%; background:#0a0c10; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 8px; font-size:13px;">
-            <option value="fr-FR">fr-FR (France -- choix par defaut, le plus largement teste sur Chrome)</option>
-            <option value="fr-CA">fr-CA (Canada -- a essayer si fr-FR reconnait mal ton accent)</option>
-          </select>
-        </div>
-        <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
-          <button id="jarvis-mic-btn" onclick="jarvisToggleListening()">Demarrer l'ecoute</button>
-          <span id="jarvis-mic-status" class="muted">inactif</span>
-        </div>
-        <div class="field">
-          <label>Transcription en direct</label>
-          <div id="jarvis-transcript" class="muted" style="min-height:20px; background:#0a0c10; border:1px solid var(--border); border-radius:6px; padding:8px;">(rien entendu encore)</div>
-        </div>
-        <label class="muted" style="display:flex; align-items:center; gap:6px;">
-          <input type="checkbox" id="jarvis-speak-checkbox" style="width:auto;">
-          Lire la reponse a voix haute (resume court, pas le wire-format brut)
-        </label>
-        <div id="jarvis-tts-unsupported" class="muted" style="display:none; color:var(--warn);">
-          SpeechSynthesis indisponible dans ce navigateur -- la case ci-dessus
-          restera sans effet.
-        </div>
-
-        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">
-          <p class="muted">Relation generee par l'agent LLM a partir de la transcription :</p>
-          <div id="jarvis-relation-status" class="muted">(en attente d'une phrase transcrite)</div>
-          <p class="muted" style="margin-top:8px;">Reponse reelle du serveur CSTL (meme endpoint /api/send que le compositeur) :</p>
-          <pre id="jarvis-send-raw">(aucun envoi encore effectue via Jarvis)</pre>
-          <p class="muted">Resume construit pour la lecture a voix haute (<code>human_summary</code>, champ additif de /api/send) :</p>
-          <div id="jarvis-summary" class="muted">(pas encore disponible)</div>
-        </div>
+      <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">
+        <p class="muted">Relation generee par l'agent LLM a partir de la transcription :</p>
+        <div id="jarvis-relation-status" class="muted">(en attente d'une phrase transcrite)</div>
+        <p class="muted" style="margin-top:8px;">Reponse reelle du serveur CSTL (meme endpoint /api/send que le compositeur) :</p>
+        <pre id="jarvis-send-raw">(aucun envoi encore effectue via Jarvis)</pre>
+        <p class="muted">Resume construit pour la lecture a voix haute (<code>human_summary</code>, champ additif de /api/send) :</p>
+        <div id="jarvis-summary" class="muted">(pas encore disponible)</div>
       </div>
-    </section>
-  </div>
+    </div>
+  </section>
   <script>
     // === JARVIS === logique JS, isolee dans son propre bloc <script> pour
     // ne pas se melanger au script principal ci-dessous. N'appelle que
@@ -693,15 +402,6 @@
 </main>
 
 <script>
-function showTab(name) {
-  document.querySelectorAll('.tab-panel').forEach(el => {
-    el.classList.toggle('active', el.dataset.tab === name);
-  });
-  document.querySelectorAll('.tab-btn').forEach(el => {
-    el.classList.toggle('active', el.dataset.tab === name);
-  });
-}
-
 function addRelationRow(subject, predicate, object) {
   const div = document.createElement('div');
   div.className = 'rel-row';
@@ -779,13 +479,12 @@ async function refreshAdn() {
 
 async function generateRelationViaLlm() {
   const topic = document.getElementById('f-llm-topic').value;
-  const includeContext = document.getElementById('f-llm-context').checked;
   const status = document.getElementById('llm-gen-status');
   status.textContent = 'Tentative Hermes local -> Gemini -> Anthropic...';
   try {
     const r = await fetch('/api/generate-relation', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({topic, include_context: includeContext})
+      body: JSON.stringify({topic})
     });
     const j = await r.json();
     if (!j.ok) {
@@ -793,9 +492,7 @@ async function generateRelationViaLlm() {
       return;
     }
     addRelationRow(j.relation.subject, j.relation.type, j.relation.object);
-    const ctx = j.context_included;
-    const ctxNote = ctx ? ` (contexte inclus -- ADN:${ctx.adn?'oui':'non'}, Graphify:${ctx.graphify?'oui':'non'}, Obsidian:${ctx.obsidian?'oui':'non'})` : '';
-    status.innerHTML = `<span style="color:var(--ok)">Relation generee par ${j.brain}${j.model ? ' ('+j.model+')' : ''} et ajoutee ci-dessous -- relis-la avant d'envoyer.${ctxNote}</span>`;
+    status.innerHTML = `<span style="color:var(--ok)">Relation generee par ${j.brain}${j.model ? ' ('+j.model+')' : ''} et ajoutee ci-dessous -- relis-la avant d'envoyer.</span>`;
   } catch (e) {
     status.textContent = 'Erreur cote dashboard: ' + e;
   }
@@ -878,110 +575,15 @@ async function refreshGraphify() {
   }
 }
 
-async function runClaudeCode() {
-  const promptEl = document.getElementById('cc-prompt');
-  const statusEl = document.getElementById('cc-status');
-  const stdoutEl = document.getElementById('cc-stdout');
-  const stderrWrap = document.getElementById('cc-stderr-wrap');
-  const stderrEl = document.getElementById('cc-stderr');
-  const prompt = promptEl.value;
-  const includeContext = document.getElementById('cc-context').checked;
-  if (!prompt.trim()) {
-    statusEl.textContent = 'Ecris un prompt avant d\'envoyer.';
-    return;
-  }
-  statusEl.textContent = 'Envoi a claude -p en cours (peut prendre jusqu\'a 90s)...';
-  stdoutEl.textContent = '(en attente)';
-  stderrWrap.style.display = 'none';
-  try {
-    const r = await fetch('/api/claude-code', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({prompt, include_context: includeContext})
-    });
-    const j = await r.json();
-    if (!j.ok && j.error) {
-      statusEl.innerHTML = `<span style="color:var(--down)">Erreur: ${j.error}</span>`;
-      stdoutEl.textContent = '(aucune sortie)';
-      return;
-    }
-    const color = j.ok ? 'var(--ok)' : 'var(--down)';
-    const ctx = j.context_included;
-    const ctxNote = ctx ? ` -- contexte: ADN:${ctx.adn?'oui':'non'}, Graphify:${ctx.graphify?'oui':'non'}, Obsidian:${ctx.obsidian?'oui':'non'}` : '';
-    statusEl.innerHTML = `<span style="color:${color}">${j.ok ? 'OK' : 'code de sortie ' + j.returncode}</span> -- ${j.elapsed_ms} ms (${j.binary})${ctxNote}`;
-    stdoutEl.textContent = j.stdout || '(sortie vide)';
-    if (j.stderr) {
-      stderrWrap.style.display = 'block';
-      stderrEl.textContent = j.stderr;
-    }
-  } catch (e) {
-    statusEl.textContent = 'Erreur cote dashboard: ' + e;
-  }
-}
-
-async function testHermes() {
-  const body = document.getElementById('hermes-check-body');
-  body.textContent = 'Tentative de connexion vers http://127.0.0.1:11434/api/tags...';
-  try {
-    const r = await fetch('/api/hermes-check');
-    const j = await r.json();
-    const color = j.reachable ? 'var(--ok)' : 'var(--down)';
-    body.innerHTML = `<strong style="color:${color}">${j.reachable ? 'OLLAMA REPOND' : 'INACCESSIBLE DEPUIS ICI'}</strong>
-      (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
-  } catch (e) {
-    body.textContent = 'Erreur cote dashboard: ' + e;
-  }
-}
-
-async function syncOpenClawContext() {
-  const body = document.getElementById('openclaw-sync-body');
-  body.textContent = 'Ecriture dans memory/AAAA-MM-JJ.md du workspace OpenClaw...';
-  try {
-    const r = await fetch('/api/openclaw-sync-context', {method: 'POST'});
-    const j = await r.json();
-    if (!j.ok) {
-      body.innerHTML = `<span style="color:var(--down)">${j.error}</span>`;
-      return;
-    }
-    const s = j.sources_included;
-    body.innerHTML = `<strong style="color:var(--ok)">ECRIT</strong> -- ${j.bytes_appended} octets ajoutes a <code>${j.written_to}</code>
-      (sources: ADN:${s.adn?'oui':'non'}, Graphify:${s.graphify?'oui':'non'}, Obsidian:${s.obsidian?'oui':'non'})<br>
-      <span class="muted">${j.note}</span>`;
-  } catch (e) {
-    body.textContent = 'Erreur cote dashboard: ' + e;
-  }
-}
-
 async function testOpenClaw() {
   const body = document.getElementById('openclaw-body');
-  body.textContent = 'Tentative de connexion vers ws://127.0.0.1:18789...';
+  body.textContent = 'Tentative de connexion vers ws://127.0.0.1:19001...';
   try {
     const r = await fetch('/api/openclaw-check');
     const j = await r.json();
     const color = j.reachable ? 'var(--ok)' : 'var(--down)';
     body.innerHTML = `<strong style="color:${color}">${j.reachable ? 'PORT ACCESSIBLE' : 'INACCESSIBLE DEPUIS ICI'}</strong>
       (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
-  } catch (e) {
-    body.textContent = 'Erreur cote dashboard: ' + e;
-  }
-}
-
-async function refreshProjectContext() {
-  const body = document.getElementById('project-context-body');
-  body.style.display = 'block';
-  body.textContent = 'Lecture en cours...';
-  try {
-    const r = await fetch('/api/project-context');
-    const j = await r.json();
-    const m = j.meta;
-    const lines = [
-      `ADN store inclus: ${m.adn ? 'oui' : 'non'}`,
-      `Graphify inclus: ${m.graphify ? 'oui' : 'non'}`,
-      `Obsidian inclus: ${m.obsidian ? 'oui' : 'non'}${m.obsidian_reason ? ' -- ' + m.obsidian_reason : ''}`,
-      '',
-      '--- texte reellement envoye ---',
-      j.context || '(vide -- aucune source disponible)',
-    ];
-    body.textContent = lines.join('\n');
   } catch (e) {
     body.textContent = 'Erreur cote dashboard: ' + e;
   }
@@ -1061,136 +663,8 @@ async function lancerRelais() {
   }
 }
 
-// === TERMINAL REEL (pont PTY dashboard/pty_bridge.py, ajoute 07/09/2026) ===
-// "j'aimerais avoir la vraie interface" -> "terminal complet interactif pour
-// chaque outil". Un module partage pour les 3 onglets (hermes, openclaw,
-// claude-code) : meme logique, seul le nom d'outil change (utilise comme
-// segment de chemin ws://host:port/<tool>, lu cote serveur par
-// pty_bridge._handle_client via le path de la connexion).
-const TERMINALS = {}; // tool -> { term, fitAddon, ws, connected }
-
-function utf8ToBase64(str) {
-  return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
-}
-function base64ToUint8Array(b64) {
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return arr;
-}
-
-// Outils dont le terminal est lecture seule -- aucune frappe n'est jamais
-// envoyee au process reel, meme si l'utilisateur clique dedans et tape.
-// Applique dans connectTerminal() en ne cablant pas term.onData du tout
-// (pas juste une etiquette visuelle).
-const READONLY_TOOLS = new Set(['openclaw-logs']);
-
-function mountTerminal(tool) {
-  const controls = document.getElementById(`term-${tool}-controls`);
-  if (!controls) return;
-  const readOnly = READONLY_TOOLS.has(tool);
-  controls.innerHTML = `
-    <div id="term-${tool}-status" class="term-status">Non connecte.</div>
-    <button class="secondary" id="term-${tool}-connect" onclick="connectTerminal('${tool}')">${readOnly ? 'Regarder' : 'Connecter'}</button>
-    <button class="secondary" id="term-${tool}-disconnect" onclick="disconnectTerminal('${tool}')" disabled>${readOnly ? 'Arreter de regarder' : 'Deconnecter'}</button>
-    <div id="term-${tool}-box" class="term-box"></div>`;
-  TERMINALS[tool] = { term: null, fitAddon: null, ws: null, connected: false };
-}
-
-async function connectTerminal(tool) {
-  const statusEl = document.getElementById(`term-${tool}-status`);
-  const boxEl = document.getElementById(`term-${tool}-box`);
-  const connectBtn = document.getElementById(`term-${tool}-connect`);
-  const disconnectBtn = document.getElementById(`term-${tool}-disconnect`);
-  const state = TERMINALS[tool];
-  if (!state || state.connected) return;
-
-  statusEl.textContent = 'Verification du pont terminal...';
-  let info;
-  try {
-    info = await (await fetch('/api/terminal-info')).json();
-  } catch (e) {
-    statusEl.innerHTML = `<span style="color:var(--down)">Erreur cote dashboard: ${e}</span>`;
-    return;
-  }
-  if (!info.available) {
-    statusEl.innerHTML = `<span style="color:var(--down)">Pont terminal indisponible -- ${info.reason}</span>`;
-    return;
-  }
-
-  if (!state.term) {
-    state.term = new Terminal({
-      convertEol: true, cursorBlink: true, fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 13, theme: { background: '#000000', foreground: '#dce8f5' },
-    });
-    state.fitAddon = new FitAddon.FitAddon();
-    state.term.loadAddon(state.fitAddon);
-    state.term.open(boxEl);
-  }
-  boxEl.style.display = 'block';
-  state.fitAddon.fit();
-
-  const wsUrl = `ws://${info.host}:${info.port}/${tool}`;
-  const ws = new WebSocket(wsUrl);
-  state.ws = ws;
-
-  ws.onopen = () => { statusEl.textContent = 'Connexion WebSocket ouverte, lancement du process...'; };
-  ws.onerror = () => { statusEl.innerHTML = `<span style="color:var(--down)">Erreur WebSocket (${wsUrl})</span>`; };
-  ws.onclose = () => {
-    state.connected = false;
-    connectBtn.disabled = false;
-    disconnectBtn.disabled = true;
-    statusEl.textContent = 'Deconnecte.';
-  };
-  ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.type === 'started') {
-      state.connected = true;
-      connectBtn.disabled = true;
-      disconnectBtn.disabled = false;
-      statusEl.innerHTML = `<span style="color:var(--ok)">Process reel lance</span> -- ${msg.argv.join(' ')}`;
-      state.term.focus();
-    } else if (msg.type === 'stdout') {
-      state.term.write(base64ToUint8Array(msg.data));
-    } else if (msg.type === 'error') {
-      statusEl.innerHTML = `<span style="color:var(--down)">${msg.message}</span>`;
-      boxEl.style.display = 'none';
-    } else if (msg.type === 'exit') {
-      statusEl.textContent = 'Le process reel s\'est termine (EOF).';
-    }
-  };
-
-  if (!READONLY_TOOLS.has(tool)) {
-    state.term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'stdin', data: utf8ToBase64(data) }));
-      }
-    });
-  }
-  const sendResize = () => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'resize', cols: state.term.cols, rows: state.term.rows }));
-    }
-  };
-  state.term.onResize(sendResize);
-  window.addEventListener('resize', () => { if (state.connected) state.fitAddon.fit(); });
-}
-
-function disconnectTerminal(tool) {
-  const state = TERMINALS[tool];
-  if (!state) return;
-  if (state.ws) { state.ws.close(); state.ws = null; }
-  const boxEl = document.getElementById(`term-${tool}-box`);
-  if (boxEl) boxEl.style.display = 'none';
-  state.connected = false;
-}
-
-['hermes', 'openclaw', 'openclaw-logs', 'claude-code'].forEach(mountTerminal);
-
 // Un seul chargement automatique a l'ouverture de la page -- ensuite,
-// tout rafraichissement est manuel (bouton), comme demande. Les trois
-// tabs non actifs au chargement sont quand meme rafraichis en arriere-plan
-// pour que les donnees soient pretes des qu'on clique sur leur onglet.
+// tout rafraichissement est manuel (bouton), comme demande.
 refreshStatus();
 refreshAdn();
 refreshOther();

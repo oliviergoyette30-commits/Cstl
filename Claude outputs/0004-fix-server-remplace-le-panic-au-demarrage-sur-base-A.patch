@@ -1,0 +1,157 @@
+From d84c423ce51c204d0b283b00f1de9f2e6d1bf87c Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Fri, 4 Sep 2026 17:31:48 +0000
+Subject: [PATCH 4/8] fix(server): remplace le panic au demarrage sur base ADN
+ illisible par un Result
+
+Trouve par l'audit multi-angle du repo (2026-09-04): `with_data_path`
+faisait `.expect("failed to open cstl_adn.db")` puis
+`.expect("failed to load persisted audit chain")` -- un fichier SQLite
+corrompu ou verrouille au demarrage produisait un panic Rust brut
+(backtrace, aucun message actionnable) plutot qu'une sortie propre. Pas
+exploitable a distance (c'est un chemin de demarrage, pas reseau), mais un
+vrai defaut de robustesse operationnelle.
+
+Le comportement fail-fast (refuser de demarrer avec une base illisible)
+est correct et conserve -- ce qui change, c'est que l'appelant peut
+maintenant CHOISIR comment il echoue:
+- `with_data_path` (inchangee en signature): toujours un panic si erreur --
+  approprie pour les tests/smoke-tests (bases ":memory:" ou fichiers
+  jetables, ou un echec DOIT arreter le test immediatement). Implementee
+  maintenant comme un appel a la nouvelle fonction ci-dessous.
+- `try_with_data_path` (nouvelle): retourne `Result<Self, String>`.
+  `main.rs` l'utilise et, sur erreur, affiche un message francais clair
+  puis `std::process::exit(1)` -- plus de backtrace Rust au demarrage
+  reel du serveur.
+
+Verifie en direct: un exemple jetable pointant `try_with_data_path` vers
+un chemin de fichier invalide (`/nonexistent_dir_xyz/impossible.db`)
+confirme un `Err` propre (pas de panic), avec le message
+"impossible d'ouvrir la base ADN '...': unable to open database file:
+...". Les 6 smoke-tests existants (audit_persistence, deontic_audit,
+extended_semantic, governance, key_rotation, signing_registration)
+repasses tous en direct sans regression. cargo build: 0 warning.
+cargo test --lib: 143 passed.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/main.rs       | 17 ++++++++++++----
+ src/server/mod.rs | 50 +++++++++++++++++++++++++++++++++++------------
+ 2 files changed, 50 insertions(+), 17 deletions(-)
+
+diff --git a/src/main.rs b/src/main.rs
+index 27791d6..6c5536f 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,5 +1,5 @@
+-/// CSTL-Native Server
+-/// Main entry point - starts TCP listener on port 5050 (5000 est souvent pris par AirPlay Receiver sur macOS)
++//! CSTL-Native Server
++//! Main entry point - starts TCP listener on port 5050 (5000 est souvent pris par AirPlay Receiver sur macOS)
+ 
+ use cstl_parser::server::CstlNativeServer;
+ use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
+@@ -34,8 +34,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
+ 
+     eprintln!("✅ Registered agents: alice, bob");
+ 
+-    // Create server with registry
+-    let mut server = CstlNativeServer::new(5050);
++    // Create server with registry -- try_with_data_path plutot que new()/with_data_path
++    // (qui paniquent avec un backtrace Rust brut) pour que le processus puisse sortir
++    // proprement avec un message actionnable si la base ADN est corrompue/verrouillee
++    // au demarrage (trouvaille de l'audit du repo, 2026-09-04).
++    let mut server = match CstlNativeServer::try_with_data_path(5050, "cstl_adn.db") {
++        Ok(server) => server,
++        Err(msg) => {
++            eprintln!("❌ Demarrage impossible: {msg}");
++            std::process::exit(1);
++        }
++    };
+     server.agent_registry = Arc::new(Mutex::new(registry));
+ 
+     eprintln!("📡 Starting server on port 5050...");
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index 8437f65..f0ac1ce 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -1,12 +1,12 @@
+-/// CSTL-Native Server
+-/// Agent-to-agent communication natively in CSTL
+-/// 
+-/// Architecture:
+-/// 1. TCP Listener (incoming CSTL payloads)
+-/// 2. Parser (validates CSTL format)
+-/// 3. Validator (semantic checking)
+-/// 4. Router (finds destination agent)
+-/// 5. Audit Trail (immutable SHA-256 record)
++//! CSTL-Native Server
++//! Agent-to-agent communication natively in CSTL
++//!
++//! Architecture:
++//! 1. TCP Listener (incoming CSTL payloads)
++//! 2. Parser (validates CSTL format)
++//! 3. Validator (semantic checking)
++//! 4. Router (finds destination agent)
++//! 5. Audit Trail (immutable SHA-256 record)
+ 
+ pub mod listener;
+ pub mod handler;
+@@ -70,17 +70,41 @@ impl CstlNativeServer {
+     /// chaque champ apres coup. Une seule `Connection` SQLite vers
+     /// `data_path` depuis la fusion du 2026-09-04 (voir le commentaire de
+     /// `adn_store` ci-dessus).
++    /// Panique si l'ouverture/le chargement echoue -- pratique pour les tests et
++    /// smoke-tests (base ":memory:" ou fichiers de test jetables, ou un echec
++    /// DOIT arreter le test immediatement). Pour un vrai processus serveur
++    /// (main.rs), preferer `try_with_data_path` et gerer l'erreur proprement:
++    /// un `.expect()` ici produisait un panic Rust brut (backtrace, pas de
++    /// message actionnable) sur un fichier SQLite corrompu/verrouille au
++    /// demarrage -- trouvaille de l'audit du repo du 2026-09-04. Le
++    /// comportement fail-fast (refuser de demarrer avec une base illisible)
++    /// est correct et conserve ici; ce qui change, c'est que l'appelant peut
++    /// maintenant choisir COMMENT il echoue.
+     pub fn with_data_path(port: u16, data_path: &str) -> Self {
+-        let adn_store = AdnStore::open(data_path).expect("failed to open cstl_adn.db");
++        match Self::try_with_data_path(port, data_path) {
++            Ok(server) => server,
++            Err(msg) => panic!("{msg}"),
++        }
++    }
++
++    /// Meme construction que `with_data_path`, mais retourne un `Result` au
++    /// lieu de paniquer -- permet a `main.rs` d'afficher un message clair et
++    /// de sortir proprement (`std::process::exit`) plutot que de crasher avec
++    /// un panic Rust brut sur une base SQLite corrompue/verrouillee.
++    pub fn try_with_data_path(port: u16, data_path: &str) -> Result<Self, String> {
++        let adn_store = AdnStore::open(data_path)
++            .map_err(|e| format!("impossible d'ouvrir la base ADN '{data_path}': {e}"))?;
+         // Seed la chaine en memoire depuis ce qui est deja persiste --
+         // AVANT le 2026-09-04, ce chargement n'existait pas du tout:
+         // `chain` demarrait toujours vide, meme quand cette meme base SQLite
+         // contenait deja des payloads avec leur propre lignee de parent_hash.
+         // Un redemarrage rompait donc silencieusement la continuite de la
+         // chaine de hachage.
+-        let chain = adn_store.load_chain().expect("failed to load persisted audit chain");
++        let chain = adn_store
++            .load_chain()
++            .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
+ 
+-        CstlNativeServer {
++        Ok(CstlNativeServer {
+             port,
+             agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
+             chain: Arc::new(Mutex::new(chain)),
+@@ -104,7 +128,7 @@ impl CstlNativeServer {
+             // propre, le serveur marche pareil sans escalade Obsidian.
+             obsidian: ObsidianEscalation::from_env().map(Arc::new),
+             governance: Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
+-        }
++        })
+     }
+ 
+     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
+-- 
+2.43.0
+

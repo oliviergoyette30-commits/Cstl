@@ -1,0 +1,758 @@
+From 339b164f9f992a10ac9634fde6c911aee6cd76b7 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sat, 5 Sep 2026 02:07:10 +0000
+Subject: [PATCH 3/5] feat(kb_verify): verifie detect_entanglement en direct
+ contre un serveur HTTP mock
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+KbVerifier::with_endpoints() ajoute un constructeur qui pointe le client
+reqwest vers des URLs arbitraires au lieu des constantes wikidata.org codees
+en dur -- new() est inchange et vise toujours les vraies URLs de production.
+Sert uniquement a exercer l'orchestration reseau depuis les tests, sans
+dependre du vrai wikidata.org (bloque sur le proxy sortant de ce sandbox,
+confirme via curl).
+
+tests/kb_verify_mock_wikidata_test.rs (4 tests, wiremock 0.6 en
+dev-dependency, registre crates.io accessible ici) demarre un vrai serveur
+HTTP local qui reproduit le format JSON des reponses SPARQL de Wikidata et
+appelle reellement detect_entanglement/query_generic_neighbors/
+has_direct_relation/resolve_label au travers de reqwest:
+- un controle positif (recouvrement de voisinage suffisant, aucune relation
+  directe connue -> une EntanglementHypothesis avec les bons QID/labels/
+  overlap=0.75/sigma<=0.35 est generee)
+- deux controles negatifs (recouvrement nul; recouvrement total mais relation
+  directe deja connue -> aucune hypothese dans les deux cas)
+- deux scenarios de panne (HTTP 500, JSON malforme -> resultat vide, pas de
+  panic)
+
+Ceci verifie reellement l'appel HTTP, la construction de requete et la
+deserialisation JSON du code de production -- pas un stub en memoire. Ca ne
+verifie PAS le vrai wikidata.org: le JSON mocke est ecrit a la main d'apres
+la lecture du code, pas capture d'une vraie reponse -- latence reelle,
+throttling et formats de donnees imprevus restent a verifier sur une machine
+avec acces reseau reel. Limite honnete documentee dans hypothesis_engine.rs
+et README.md (section "Future Architecture — Level 4").
+
+cargo build: 0 warning. cargo test --lib: 168/168 inchange, aucune
+regression. cargo clippy --all-targets: 0 warning. Nouveau test: 4/4 passent.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ Cargo.lock                            | 168 +++++++++++++++++
+ Cargo.toml                            |   8 +
+ README.md                             |   4 +-
+ src/hypothesis_engine.rs              |  15 +-
+ src/kb_verify.rs                      |  40 +++-
+ tests/kb_verify_mock_wikidata_test.rs | 254 ++++++++++++++++++++++++++
+ 6 files changed, 476 insertions(+), 13 deletions(-)
+ create mode 100644 tests/kb_verify_mock_wikidata_test.rs
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 78d3d56..54c284f 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -14,6 +14,25 @@ dependencies = [
+  "zerocopy",
+ ]
+ 
++[[package]]
++name = "aho-corasick"
++version = "1.1.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
++dependencies = [
++ "memchr",
++]
++
++[[package]]
++name = "assert-json-diff"
++version = "2.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
++dependencies = [
++ "serde",
++ "serde_json",
++]
++
+ [[package]]
+ name = "atomic-waker"
+ version = "1.1.2"
+@@ -140,6 +159,7 @@ dependencies = [
+  "sha2",
+  "tokio",
+  "unicode-normalization",
++ "wiremock",
+ ]
+ 
+ [[package]]
+@@ -169,6 +189,24 @@ dependencies = [
+  "syn 2.0.119",
+ ]
+ 
++[[package]]
++name = "deadpool"
++version = "0.12.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0be2b1d1d6ec8d846f05e137292d0b89133caf95ef33695424c09568bdd39b1b"
++dependencies = [
++ "deadpool-runtime",
++ "lazy_static",
++ "num_cpus",
++ "tokio",
++]
++
++[[package]]
++name = "deadpool-runtime"
++version = "0.1.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "092966b41edc516079bdf31ec78a2e0588d1d0c08f78b91d8307215928642b2b"
++
+ [[package]]
+ name = "der"
+ version = "0.7.10"
+@@ -310,6 +348,21 @@ dependencies = [
+  "percent-encoding",
+ ]
+ 
++[[package]]
++name = "futures"
++version = "0.3.34"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9a31d2a3fbaaeb2af2368bbdd904aa8e812d3c04a1ee10d3171f52d556e5d0a3"
++dependencies = [
++ "futures-channel",
++ "futures-core",
++ "futures-executor",
++ "futures-io",
++ "futures-sink",
++ "futures-task",
++ "futures-util",
++]
++
+ [[package]]
+ name = "futures-channel"
+ version = "0.3.34"
+@@ -317,6 +370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
+ dependencies = [
+  "futures-core",
++ "futures-sink",
+ ]
+ 
+ [[package]]
+@@ -325,6 +379,34 @@ version = "0.3.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
+ 
++[[package]]
++name = "futures-executor"
++version = "0.3.34"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "031b47cf1a3c6cc8bc2fc76cd437f521619387907d469316e7c0bc278f1f5432"
++dependencies = [
++ "futures-core",
++ "futures-task",
++ "futures-util",
++]
++
++[[package]]
++name = "futures-io"
++version = "0.3.34"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "53c0fa8157de1303bfffdaa1cc2a673bfffb60102f76b0ef4441659124373fed"
++
++[[package]]
++name = "futures-macro"
++version = "0.3.34"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.4",
++]
++
+ [[package]]
+ name = "futures-sink"
+ version = "0.3.34"
+@@ -343,8 +425,13 @@ version = "0.3.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc"
+ dependencies = [
++ "futures-channel",
+  "futures-core",
++ "futures-io",
++ "futures-macro",
++ "futures-sink",
+  "futures-task",
++ "memchr",
+  "pin-project-lite",
+  "slab",
+ ]
+@@ -424,6 +511,12 @@ dependencies = [
+  "hashbrown 0.14.5",
+ ]
+ 
++[[package]]
++name = "hermit-abi"
++version = "0.5.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
++
+ [[package]]
+ name = "hex"
+ version = "0.4.3"
+@@ -469,6 +562,12 @@ version = "1.10.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
+ 
++[[package]]
++name = "httpdate"
++version = "1.0.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
++
+ [[package]]
+ name = "hyper"
+ version = "1.11.1"
+@@ -483,6 +582,7 @@ dependencies = [
+  "http",
+  "http-body",
+  "httparse",
++ "httpdate",
+  "itoa",
+  "pin-project-lite",
+  "smallvec",
+@@ -683,6 +783,12 @@ dependencies = [
+  "wasm-bindgen",
+ ]
+ 
++[[package]]
++name = "lazy_static"
++version = "1.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
++
+ [[package]]
+ name = "libc"
+ version = "0.2.189"
+@@ -767,6 +873,16 @@ dependencies = [
+  "tempfile",
+ ]
+ 
++[[package]]
++name = "num_cpus"
++version = "1.17.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
++dependencies = [
++ "hermit-abi",
++ "libc",
++]
++
+ [[package]]
+ name = "once_cell"
+ version = "1.21.4"
+@@ -948,6 +1064,35 @@ dependencies = [
+  "bitflags",
+ ]
+ 
++[[package]]
++name = "regex"
++version = "1.13.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
++dependencies = [
++ "aho-corasick",
++ "memchr",
++ "regex-automata",
++ "regex-syntax",
++]
++
++[[package]]
++name = "regex-automata"
++version = "0.4.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
++dependencies = [
++ "aho-corasick",
++ "memchr",
++ "regex-syntax",
++]
++
++[[package]]
++name = "regex-syntax"
++version = "0.8.11"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
++
+ [[package]]
+ name = "reqwest"
+ version = "0.12.28"
+@@ -1749,6 +1894,29 @@ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+ 
++[[package]]
++name = "wiremock"
++version = "0.6.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "08db1edfb05d9b3c1542e521aea074442088292f00b5f28e435c714a98f85031"
++dependencies = [
++ "assert-json-diff",
++ "base64",
++ "deadpool",
++ "futures",
++ "http",
++ "http-body-util",
++ "hyper",
++ "hyper-util",
++ "log",
++ "once_cell",
++ "regex",
++ "serde",
++ "serde_json",
++ "tokio",
++ "url",
++]
++
+ [[package]]
+ name = "writeable"
+ version = "0.6.4"
+diff --git a/Cargo.toml b/Cargo.toml
+index f74e2b0..516becf 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -29,6 +29,14 @@ path = "src/lib.rs"
+ # les tests qui generent des paires de cles ephemeres.
+ rand = "0.8"
+ 
++[dev-dependencies.wiremock]
++# Serveur HTTP mock local pour tests/kb_verify_mock_wikidata_test.rs -- exerce
++# reellement l'orchestration reseau de KbVerifier::detect_entanglement (appels
++# HTTP, parsing JSON) contre un serveur qui reproduit le format de reponse
++# SPARQL de Wikidata, sans dependre du vrai wikidata.org (bloque sur ce
++# sandbox). dev-dependency seulement: aucun code de production n'en depend.
++version = "0.6"
++
+ [profile.release]
+ opt-level = 3
+ lto = true
+diff --git a/README.md b/README.md
+index cda4c47..5ab0762 100644
+--- a/README.md
++++ b/README.md
+@@ -115,7 +115,7 @@ Level 4 is defined as: *several LLMs coordinate a real task without semantic los
+ 
+ | Component | Role | Status |
+ |---|---|---|
+-| **Hypothesis engine** | Entanglement detection over a bounded knowledge graph (Wikidata subgraph): find node pairs with high common-neighbour overlap and no direct edge, then propose a speculative CSTL relation at deliberately low σ (`ASSUMES` / `DOUBTS`, never `KNOWS`) | 🟡 **Generative step built 2026-09-04** (`src/hypothesis_engine.rs`, wired into `src/kb_verify.rs::KbVerifier::detect_entanglement`): overlap-coefficient computation (not Jaccard — a high-degree node would tank Jaccard even at full overlap on the small side, drowning the signal), sigma formula capped at 0.35 (never reaches the 0.8 `KNOWS` threshold — see `semantic.rs::check_knows_calibration`), and CSTL relation formatting are unit-tested here (10 tests, no network). `examples/hypothesis_engine_demo.rs` verifies the pipeline end-to-end offline. **Honest limit**: the network orchestration (`query_generic_neighbors`/`resolve_label`/`detect_entanglement` against real Wikidata) could not be verified live in this environment — wikidata.org returns 403 on this sandbox's outbound proxy (confirmed with a direct `curl` before writing the code) — needs verification on a machine with real network access |
++| **Hypothesis engine** | Entanglement detection over a bounded knowledge graph (Wikidata subgraph): find node pairs with high common-neighbour overlap and no direct edge, then propose a speculative CSTL relation at deliberately low σ (`ASSUMES` / `DOUBTS`, never `KNOWS`) | 🟡 **Generative step built 2026-09-04** (`src/hypothesis_engine.rs`, wired into `src/kb_verify.rs::KbVerifier::detect_entanglement`): overlap-coefficient computation (not Jaccard — a high-degree node would tank Jaccard even at full overlap on the small side, drowning the signal), sigma formula capped at 0.35 (never reaches the 0.8 `KNOWS` threshold — see `semantic.rs::check_knows_calibration`), and CSTL relation formatting are unit-tested here (10 tests, no network). **2026-09-05**: the network orchestration itself (`query_generic_neighbors`/`has_direct_relation`/`resolve_label`/`detect_entanglement`) is now verified live against a real local HTTP server (`wiremock`, `tests/kb_verify_mock_wikidata_test.rs`, 4 tests) that reproduces Wikidata's SPARQL JSON response format — `KbVerifier::with_endpoints` makes the base URL configurable for this (`KbVerifier::new()` in production is unchanged, still hardcoded to the real wikidata.org URLs). This exercises the real HTTP call, request construction and JSON deserialization end-to-end, including a positive case (common-neighbour overlap → hypothesis generated), two negative controls (no overlap; full overlap but already directly related → no hypothesis either way), and two failure-mode cases (HTTP 500, malformed JSON → empty result, no panic). **Honest limit, still open**: this is not the real wikidata.org — the mocked JSON was written by hand from reading the code, not captured from a live response, so real-world latency, throttling, and unanticipated response shapes remain unverified. Needs confirmation on a machine with real network access to wikidata.org. |
+ | **Simulation / validation lab** | `ExecutionLab` for computationally checkable hypotheses (internal consistency, contradiction, transitive-cycle and temporal-cycle detection). Empirical world-facts stay permanently low-σ until independently corroborated — by design, not as a gap | 🟡 Contradiction + transitive cycle detection (any length, backtracking DFS, not limited to 2 nodes) implemented and wired live (`src/execution_lab.rs`, tested); temporal-cycle detection (code E702, 2026-09-05) added on top — a chain of `BEFORE`/`AFTER` relations across multiple subject pairs that loops back on itself, `BEFORE`/`AFTER` normalized to a single direction before building the graph; `check_consistency_with_history` cross-references each new payload against the full ADN store history (`adn_relations` table), not just relations within the same payload, for all three checks; only re-flags a contradiction/cycle when the NEW payload is what triggers it (pre-existing history-vs-history issues are not re-reported on every unrelated future request); domain simulators not built |
+ | **Human council** | `RestrictedCouncil`, 2/3 quorum — plausibility and harm filter before storage, not a truth oracle | 🟡 Designed, matches published precedent (Wikidata Primary Sources Tool pattern) |
+ 
+@@ -280,7 +280,7 @@ cargo test --lib
+ - Layer 2 governance state (circuit breaker + operator drift, `src/governance.rs`) is now persisted (2026-09-05, `governance_events`/`governance_alerts` in the same SQLite file/`Connection` as `adn_store`/`audit_trail`) and reloaded at startup — no longer the in-memory-only limitation stated in earlier revisions of this file; verified with a real restart (`examples/governance_persistence_smoke_test.rs`). Still observation-only by design: neither the breaker nor the drift ratio ever rejects a payload.
+ - `emergence_proofs` table: real, tested CRUD (`AdnStore::put_emergence_proof`/`get_emergence_proofs`), now reachable live via `purpose=detect_emergence` on `INTENT_PAYLOAD` (`src/emergence.rs`, a Rust port of the Python `RevisionOrchestrator` that existed nowhere in this repo before). Design matches how the project's own multi-LLM sessions actually happened (`CSTL_v4_9_1_REFERENCE_DEMO`: a human relays the same question to several LLMs and forwards their responses) — no API keys, no automated cross-vendor calling; the server only compares payloads its agents already submitted. Decision matching is a naive textual comparison (trim + lowercase), not semantic. Still zero production data — nobody has run a real tripartite session through this path yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.
+ - `ExecutionLab` consistency check now cross-references each new payload against the full ADN store history (`src/execution_lab.rs::check_consistency_with_history`, wired live in `handler.rs`), not just relations within the same payload. Covers functional-predicate contradictions, transitive cycles (`part_of`/`located_in`, any length via backtracking DFS) and, since 2026-09-05, temporal cycles (`BEFORE`/`AFTER`, code E702 — a chain across multiple subject pairs that loops back on itself, not the same thing as the pairwise E701 check in `semantic.rs`). No cross-domain simulators.
+-- Level 4 hypothesis engine: generative step now built (`src/hypothesis_engine.rs`, 2026-09-04) and unit-tested offline (overlap coefficient, sigma formula, CSTL formatting) — the network orchestration against real Wikidata is unverified in this environment (network blocked), needs confirmation on a machine with real access.
++- Level 4 hypothesis engine: generative step built (`src/hypothesis_engine.rs`, 2026-09-04) and unit-tested offline (overlap coefficient, sigma formula, CSTL formatting). Network orchestration (`KbVerifier::detect_entanglement` and the methods it calls) now verified live against a local `wiremock` server reproducing Wikidata's response format (2026-09-05, `tests/kb_verify_mock_wikidata_test.rs`) — still not the real wikidata.org, needs confirmation on a machine with real network access.
+ - Simulation lab: consistency checking prototyped; domain-specific simulators not built.
+ - Zero external adopters.
+ 
+diff --git a/src/hypothesis_engine.rs b/src/hypothesis_engine.rs
+index 0ea6a9b..1810c66 100644
+--- a/src/hypothesis_engine.rs
++++ b/src/hypothesis_engine.rs
+@@ -21,9 +21,18 @@
+ //! recouvrement, formule de sigma, formatage CSTL) est testee ici sans reseau.
+ //! L'orchestration reseau (`KbVerifier::query_generic_neighbors`/`resolve_label`/
+ //! `has_direct_relation`/`detect_entanglement`, ajoutee a `src/kb_verify.rs`) ne
+-//! peut PAS etre verifiee en direct depuis ce sandbox: wikidata.org est bloque par
+-//! la liste blanche reseau de cet environnement (403 confirme sur le proxy sortant
+-//! via un `curl` direct avant d'ecrire ce module). A verifier sur ta propre machine
++//! peut PAS etre verifiee en direct contre le VRAI wikidata.org depuis ce
++//! sandbox: wikidata.org est bloque par la liste blanche reseau de cet
++//! environnement (403 confirme sur le proxy sortant via un `curl` direct avant
++//! d'ecrire ce module). **2026-09-05**: cette orchestration reseau EST
++//! desormais verifiee en direct contre un vrai serveur HTTP local qui
++//! reproduit le format de reponse SPARQL de Wikidata (`wiremock`,
++//! `tests/kb_verify_mock_wikidata_test.rs`, 4 tests incluant un controle
++//! positif, deux controles negatifs et deux scenarios de panne reseau) --
++//! l'appel HTTP reel, la construction de requete et le parsing JSON sont donc
++//! reellement exerces. Ca ne remplace pas une verification contre le vrai
++//! wikidata.org (format de reponse reel, latence reelle, cas de donnees
++//! imprevus) -- toujours a faire sur une machine avec acces reseau reel.
+ //! -- voir README.md/docs/ARCHITECTURE.md pour le statut exact ("structurellement
+ //! construit et teste hors-reseau, jamais execute en direct contre Wikidata").
+ 
+diff --git a/src/kb_verify.rs b/src/kb_verify.rs
+index 3648265..73aa526 100644
+--- a/src/kb_verify.rs
++++ b/src/kb_verify.rs
+@@ -65,6 +65,8 @@ pub struct VerificationResult {
+ 
+ pub struct KbVerifier {
+     client: reqwest::Client,
++    search_api: String,
++    sparql_endpoint: String,
+ }
+ 
+ impl Default for KbVerifier {
+@@ -79,12 +81,34 @@ impl KbVerifier {
+             .user_agent(USER_AGENT)
+             .build()
+             .expect("failed to build reqwest client");
+-        Self { client }
++        Self {
++            client,
++            search_api: WIKIDATA_SEARCH_API.to_string(),
++            sparql_endpoint: WIKIDATA_SPARQL_ENDPOINT.to_string(),
++        }
++    }
++
++    /// Comme `new()`, mais pointe vers des endpoints arbitraires au lieu des
++    /// constantes Wikidata codees en dur -- seul moyen d'exercer reellement
++    /// l'orchestration HTTP (`detect_entanglement` et les methodes qu'il
++    /// appelle) contre un serveur mock local plutot que le vrai wikidata.org.
++    /// `new()` n'est pas modifie et continue a viser les vraies URLs de
++    /// production -- ce constructeur est strictement additif.
++    pub fn with_endpoints(search_api: impl Into<String>, sparql_endpoint: impl Into<String>) -> Self {
++        let client = reqwest::Client::builder()
++            .user_agent(USER_AGENT)
++            .build()
++            .expect("failed to build reqwest client");
++        Self {
++            client,
++            search_api: search_api.into(),
++            sparql_endpoint: sparql_endpoint.into(),
++        }
+     }
+ 
+     async fn is_disambiguation_page(&self, qid: &str) -> bool {
+         let query = format!("ASK {{ wd:{qid} wdt:P31 wd:{DISAMBIGUATION_PAGE_QID} . }}");
+-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
++        let resp = self.client.get(&self.sparql_endpoint)
+             .query(&[("query", query.as_str()), ("format", "json")])
+             .timeout(Duration::from_secs(10))
+             .send().await;
+@@ -108,7 +132,7 @@ impl KbVerifier {
+         }
+ 
+         for language in languages_to_try {
+-            let resp = self.client.get(WIKIDATA_SEARCH_API)
++            let resp = self.client.get(&self.search_api)
+                 .query(&[
+                     ("action", "wbsearchentities"),
+                     ("search", label),
+@@ -153,7 +177,7 @@ impl KbVerifier {
+             "ASK {{ {{ wd:{subject_qid} wdt:{property_id} wd:{object_qid} . }} UNION \
+              {{ wd:{object_qid} wdt:{property_id} wd:{subject_qid} . }} }}"
+         );
+-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
++        let resp = self.client.get(&self.sparql_endpoint)
+             .query(&[("query", query.as_str()), ("format", "json")])
+             .timeout(Duration::from_secs(15))
+             .send().await;
+@@ -171,7 +195,7 @@ impl KbVerifier {
+             "SELECT DISTINCT ?n WHERE {{ {{ wd:{qid} wdt:{property_id} ?n . }} UNION \
+              {{ ?n wdt:{property_id} wd:{qid} . }} }} LIMIT {limit}"
+         );
+-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
++        let resp = self.client.get(&self.sparql_endpoint)
+             .query(&[("query", query.as_str()), ("format", "json")])
+             .timeout(Duration::from_secs(15))
+             .send().await;
+@@ -237,7 +261,7 @@ impl KbVerifier {
+             "SELECT ?prop WHERE {{ {{ wd:{subject_qid} ?prop wd:{object_qid} . }} UNION \
+              {{ wd:{object_qid} ?prop wd:{subject_qid} . }} }} LIMIT 5"
+         );
+-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
++        let resp = self.client.get(&self.sparql_endpoint)
+             .query(&[("query", query.as_str()), ("format", "json")])
+             .timeout(Duration::from_secs(15))
+             .send().await;
+@@ -295,7 +319,7 @@ impl KbVerifier {
+             "SELECT DISTINCT ?n WHERE {{ {{ wd:{qid} ?p ?n . }} UNION {{ ?n ?p wd:{qid} . }} \
+              FILTER(STRSTARTS(STR(?n), \"http://www.wikidata.org/entity/Q\")) }} LIMIT {limit}"
+         );
+-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
++        let resp = self.client.get(&self.sparql_endpoint)
+             .query(&[("query", query.as_str()), ("format", "json")])
+             .timeout(Duration::from_secs(15))
+             .send().await;
+@@ -320,7 +344,7 @@ impl KbVerifier {
+             "SELECT ?label WHERE {{ wd:{qid} rdfs:label ?label . \
+              FILTER(lang(?label) = \"{lang}\" || lang(?label) = \"en\") }} LIMIT 1"
+         );
+-        let resp = self.client.get(WIKIDATA_SPARQL_ENDPOINT)
++        let resp = self.client.get(&self.sparql_endpoint)
+             .query(&[("query", query.as_str()), ("format", "json")])
+             .timeout(Duration::from_secs(10))
+             .send().await.ok()?;
+diff --git a/tests/kb_verify_mock_wikidata_test.rs b/tests/kb_verify_mock_wikidata_test.rs
+new file mode 100644
+index 0000000..aae08e7
+--- /dev/null
++++ b/tests/kb_verify_mock_wikidata_test.rs
+@@ -0,0 +1,254 @@
++//! Verification EN DIRECT de l'orchestration reseau de
++//! `KbVerifier::detect_entanglement` (et des methodes qu'elle appelle:
++//! `query_generic_neighbors`, `has_direct_relation`/`query_any_relation_exists`,
++//! `resolve_label`) -- Level 4, `src/hypothesis_engine.rs`.
++//!
++//! Ce que ce test verifie REELLEMENT: un vrai serveur HTTP (`wiremock`) tourne
++//! sur `127.0.0.1`, `KbVerifier` lui envoie de vraies requetes HTTP (via
++//! `reqwest`, meme client que la production, seule l'URL de base change via
++//! `KbVerifier::with_endpoints`), et les reponses JSON sont reellement
++//! deserialisees par le code de production dans `src/kb_verify.rs`. L'appel
++//! reseau, le parsing de la query SPARQL entrante (cote mock, pour distinguer
++//! quelle des 3 requetes SPARQL differentes arrive) et la deserialisation JSON
++//! sortante sont donc tous les trois reellement exerces -- ce n'est PAS un
++//! stub en memoire qui court-circuite reqwest.
++//!
++//! Ce que ce test NE verifie PAS: que ceci reproduit fidelement le VRAI
++//! wikidata.org. Le format JSON mocke ici est ecrit a la main d'apres la
++//! lecture du code de `src/kb_verify.rs` (SPARQL JSON results format standard),
++//! pas capture depuis une vraie reponse de wikidata.org (impossible depuis ce
++//! sandbox, wikidata.org y est bloque -- voir l'en-tete de
++//! `src/hypothesis_engine.rs`). Le vrai Wikidata peut repondre avec une
++//! latence, des donnees, des erreurs partielles (timeouts intermittents,
++//! throttling) ou des variations de format que ce mock ne reproduit pas.
++//! Reste a verifier sur une machine avec acces reseau reel a wikidata.org.
++
++use cstl_parser::kb_verify::KbVerifier;
++use wiremock::matchers::{method, path};
++use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
++
++/// Extrait tous les identifiants "QNNN" apparaissant apres un prefixe "wd:"
++/// dans le texte d'une requete SPARQL -- suffisant pour distinguer, cote mock,
++/// quelle entite (ou quelle paire d'entites) une requete concerne, sans avoir
++/// besoin d'un vrai parseur SPARQL.
++fn extract_qids(query: &str) -> Vec<String> {
++    let mut qids = Vec::new();
++    let mut rest = query;
++    let mut consumed = 0usize;
++    while let Some(pos) = rest.find("wd:") {
++        let abs_start = consumed + pos + 3;
++        let tail = &query[abs_start..];
++        let end = tail.find(|c: char| !c.is_ascii_alphanumeric()).unwrap_or(tail.len());
++        if end > 0 {
++            qids.push(tail[..end].to_string());
++        }
++        let advance = pos + 3 + end.max(1);
++        rest = &rest[advance.min(rest.len())..];
++        consumed += advance.min(query.len() - consumed);
++    }
++    qids
++}
++
++#[test]
++fn test_extract_qids_finds_all_entities_in_query() {
++    let q = "SELECT ?prop WHERE { { wd:Q1 ?prop wd:Q2 . } UNION { wd:Q2 ?prop wd:Q1 . } } LIMIT 5";
++    assert_eq!(extract_qids(q), vec!["Q1", "Q2", "Q2", "Q1"]);
++}
++
++/// Petit graphe simule, ecrit a la main pour ce test:
++/// - Q1 (sujet) a pour voisins {Q10,Q11,Q12,Q13}
++/// - Q2 a pour voisins {Q10,Q11,Q12,Q99} (3 voisins communs avec Q1, overlap
++///   0.75, AUCUNE relation directe connue avec Q1) -> DOIT declencher une
++///   hypothese.
++/// - Q3 a pour voisins {Q50,Q51} (0 voisin commun avec Q1) -> controle
++///   negatif: recouvrement insuffisant, ne doit RIEN declencher.
++/// - Q4 a pour voisins {Q10,Q11,Q12,Q13} (recouvrement total avec Q1) MAIS une
++///   relation directe deja connue avec Q1 -> deuxieme controle negatif: meme
++///   un recouvrement parfait ne doit rien declencher quand une relation
++///   directe existe deja.
++struct SparqlResponder;
++
++impl Respond for SparqlResponder {
++    fn respond(&self, request: &Request) -> ResponseTemplate {
++        let query = request
++            .url
++            .query_pairs()
++            .find(|(k, _)| k == "query")
++            .map(|(_, v)| v.into_owned())
++            .unwrap_or_default();
++
++        if query.contains("rdfs:label") {
++            let qids = extract_qids(&query);
++            let label = match qids.first().map(String::as_str) {
++                Some("Q1") => Some("Marie Curie (mock)"),
++                Some("Q2") => Some("Irene Joliot-Curie (mock)"),
++                _ => None,
++            };
++            let body = match label {
++                Some(l) => serde_json::json!({
++                    "results": { "bindings": [ { "label": { "value": l } } ] }
++                }),
++                None => serde_json::json!({ "results": { "bindings": [] } }),
++            };
++            return ResponseTemplate::new(200).set_body_json(body);
++        }
++
++        if query.contains("?prop WHERE") {
++            // query_any_relation_exists(subject_qid, object_qid): les deux
++            // QID apparaissent, le sujet (Q1 dans ce test) toujours en
++            // premier -- on cherche l'autre pour savoir quelle paire.
++            let qids = extract_qids(&query);
++            let other = qids.iter().find(|q| q.as_str() != "Q1");
++            let already_related = matches!(other.map(String::as_str), Some("Q4"));
++            let bindings = if already_related {
++                serde_json::json!([ { "prop": { "value": "http://www.wikidata.org/prop/direct/P1" } } ])
++            } else {
++                serde_json::json!([])
++            };
++            return ResponseTemplate::new(200)
++                .set_body_json(serde_json::json!({ "results": { "bindings": bindings } }));
++        }
++
++        if query.contains("SELECT DISTINCT ?n WHERE") {
++            let qids = extract_qids(&query);
++            let neighbors: &[&str] = match qids.first().map(String::as_str) {
++                Some("Q1") => &["Q10", "Q11", "Q12", "Q13"],
++                Some("Q2") => &["Q10", "Q11", "Q12", "Q99"],
++                Some("Q3") => &["Q50", "Q51"],
++                Some("Q4") => &["Q10", "Q11", "Q12", "Q13"],
++                _ => &[],
++            };
++            let bindings: Vec<_> = neighbors
++                .iter()
++                .map(|n| {
++                    serde_json::json!({
++                        "n": { "value": format!("http://www.wikidata.org/entity/{n}") }
++                    })
++                })
++                .collect();
++            return ResponseTemplate::new(200)
++                .set_body_json(serde_json::json!({ "results": { "bindings": bindings } }));
++        }
++
++        ResponseTemplate::new(200).set_body_json(serde_json::json!({ "results": { "bindings": [] } }))
++    }
++}
++
++/// Serveur qui retourne systematiquement une erreur HTTP 500 -- verifie que
++/// l'orchestration degrade proprement (aucune hypothese generee, pas de
++/// panic) quand le reseau echoue completement, au lieu de confondre "reseau
++/// en panne" avec "pas de relation" (ce que le commentaire de
++/// `KbVerifier::has_direct_relation` promet explicitement).
++struct AlwaysServerErrorResponder;
++
++impl Respond for AlwaysServerErrorResponder {
++    fn respond(&self, _request: &Request) -> ResponseTemplate {
++        ResponseTemplate::new(500).set_body_string("internal server error (mock)")
++    }
++}
++
++/// Serveur qui retourne du 200 mais un corps qui n'est PAS du JSON valide --
++/// verifie que la deserialisation echouee (`resp.json::<Value>()` en erreur)
++/// est bien absorbee sans panic, exactement comme une vraie panne partielle
++/// de service pourrait le produire.
++struct MalformedJsonResponder;
++
++impl Respond for MalformedJsonResponder {
++    fn respond(&self, _request: &Request) -> ResponseTemplate {
++        ResponseTemplate::new(200)
++            .insert_header("content-type", "application/json")
++            .set_body_string("{not valid json ]")
++    }
++}
++
++#[tokio::test]
++async fn test_detect_entanglement_against_mock_wikidata_positive_and_negative() {
++    let mock_server = MockServer::start().await;
++    Mock::given(method("GET"))
++        .and(path("/sparql"))
++        .respond_with(SparqlResponder)
++        .mount(&mock_server)
++        .await;
++
++    // wbsearchentities n'est pas appele par detect_entanglement -- l'URL de
++    // recherche pointe vers le meme mock par simplicite, jamais interrogee ici.
++    let verifier = KbVerifier::with_endpoints(
++        format!("{}/w/api.php", mock_server.uri()),
++        format!("{}/sparql", mock_server.uri()),
++    );
++
++    let candidates = vec!["Q2".to_string(), "Q3".to_string(), "Q4".to_string()];
++    let hypotheses = verifier
++        .detect_entanglement("Q1", &candidates, 50, 2, "fr")
++        .await;
++
++    assert_eq!(
++        hypotheses.len(),
++        1,
++        "attendu exactement 1 hypothese (Q2), obtenu: {hypotheses:#?}"
++    );
++
++    let h = &hypotheses[0];
++    assert_eq!(h.subject_qid, "Q1");
++    assert_eq!(h.object_qid, "Q2");
++    assert_eq!(h.subject_label.as_deref(), Some("Marie Curie (mock)"));
++    assert_eq!(h.object_label.as_deref(), Some("Irene Joliot-Curie (mock)"));
++    assert_eq!(h.common_neighbors, 3); // {Q10,Q11,Q12}
++    assert!((h.overlap_coefficient - 0.75).abs() < 1e-9); // 3 / min(4,4)
++    assert!(h.sigma <= 0.35, "sigma ne doit jamais depasser le plafond ASSUMES");
++
++    let relation = h.to_cstl_relation();
++    assert!(relation.contains("type=ASSUMES"));
++    assert!(relation.contains("subject=Marie Curie (mock)"));
++    assert!(relation.contains("object=Irene Joliot-Curie (mock)"));
++
++    // Controles negatifs verifies implicitement par assert_eq!(len(), 1) ci-dessus:
++    // Q3 (recouvrement nul) et Q4 (relation directe deja connue malgre un
++    // recouvrement total) n'ont produit AUCUNE hypothese.
++}
++
++#[tokio::test]
++async fn test_detect_entanglement_degrades_cleanly_on_http_500() {
++    let mock_server = MockServer::start().await;
++    Mock::given(method("GET"))
++        .and(path("/sparql"))
++        .respond_with(AlwaysServerErrorResponder)
++        .mount(&mock_server)
++        .await;
++
++    let verifier = KbVerifier::with_endpoints(
++        format!("{}/w/api.php", mock_server.uri()),
++        format!("{}/sparql", mock_server.uri()),
++    );
++
++    let candidates = vec!["Q2".to_string()];
++    // Ne doit PAS paniquer: query_generic_neighbors(subject) echoue (500),
++    // detect_entanglement voit un voisinage vide et retourne vide.
++    let hypotheses = verifier
++        .detect_entanglement("Q1", &candidates, 50, 2, "fr")
++        .await;
++    assert!(hypotheses.is_empty());
++}
++
++#[tokio::test]
++async fn test_detect_entanglement_degrades_cleanly_on_malformed_json() {
++    let mock_server = MockServer::start().await;
++    Mock::given(method("GET"))
++        .and(path("/sparql"))
++        .respond_with(MalformedJsonResponder)
++        .mount(&mock_server)
++        .await;
++
++    let verifier = KbVerifier::with_endpoints(
++        format!("{}/w/api.php", mock_server.uri()),
++        format!("{}/sparql", mock_server.uri()),
++    );
++
++    let candidates = vec!["Q2".to_string()];
++    // Ne doit pas paniquer sur un corps 200 mais non-JSON: resp.json() echoue,
++    // query_generic_neighbors retourne un HashSet vide -> pas d'hypothese.
++    let hypotheses = verifier
++        .detect_entanglement("Q1", &candidates, 50, 2, "fr")
++        .await;
++    assert!(hypotheses.is_empty());
++}
+-- 
+2.43.0
+

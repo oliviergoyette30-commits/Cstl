@@ -1,0 +1,556 @@
+From d257dc2bc4ac9dd668b49059155d316e42bc7661 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sun, 6 Sep 2026 22:26:43 +0000
+Subject: [PATCH] feat(semantic+adn_store+handler): negociation FIPA minimale
+ (PROPOSE/REFUSE)
+
+Le mecanisme FIPA-ACL ajoute le 2026-09-06 (semantic::FIPA_PERFORMATIVES)
+etait dormant: le serveur RECONNAISSAIT un performatif recu (bloc
+PERFORMATIVE) mais ne reagissait jamais differemment selon son type -- un
+PROPOSE et un REFUSE recevaient exactement le meme traitement de fond,
+seule l'annotation changeait. Aucune boucle PROPOSE -> REFUSE n'etait
+fermee: rien ne permettait de savoir, depuis la reponse du serveur, QUOI
+avait ete refuse.
+
+Mecanisme construit (deliberement minimal, voir les commentaires en tete
+de semantic::negotiation_status_for et le bloc NEGOTIATION dans
+handler.rs pour la justification complete):
+
+- Nouveau champ de wire format additif, INTENT_PAYLOAD.in_reply_to=<hash>
+  -- reutilise le meme hash sha256:... deja retourne dans le bloc AUDIT
+  de la reponse au PROPOSE/CFP original. Aucun changement de parser
+  necessaire (INTENT_PAYLOAD est deja une HashMap generique). Choix
+  deliberement PAS la colonne adn_store.conversation_id (deja presente
+  dans le schema mais jamais peuplee depuis aucun payload): elle designe
+  un FIL entier, alors qu'une reponse FIPA refere toujours a UN message
+  precis.
+- semantic::negotiation_status_for(purpose): REFUSE/REJECT_PROPOSAL ->
+  "refused", ACCEPT_PROPOSAL -> "accepted", tout le reste -> None
+  (PROPOSE/CFP n'ouvrent rien, AGREE reste hors scope -- semantique FIPA
+  distincte d'ACCEPT_PROPOSAL).
+- AdnStore::get_audit_entry(hash): nouvelle lecture ciblee de audit_trail
+  par hash (aucune migration de schema, la table et la colonne purpose
+  existent deja) -- retrouve le VRAI purpose du payload original sans
+  reparser tout le payload brut.
+- server/handler.rs: nouveau bloc de reponse
+  NEGOTIATION [status=refused|accepted, original_proposal=<hash>,
+  original_purpose=<PROPOSE|CFP|...>, counter_eligible=true|false]
+  quand purpose est REFUSE/REJECT_PROPOSAL/ACCEPT_PROPOSAL et que
+  in_reply_to est present; counter_eligible=true seulement pour un vrai
+  refus (pas un accord) d'une vraie proposition (PROPOSE/CFP). Absent
+  d'in_reply_to -> reason=missing_in_reply_to; hash inconnu ->
+  reason=original_not_found. Purement additif: aucun changement au
+  routage/acceptation du payload, aucun bloc pour le trafic qui n'utilise
+  pas ce vocabulaire.
+
+Hors scope, assume honnetement (voir aussi la nouvelle entree README,
+Layer 7): le serveur ne GENERE jamais de contre-proposition lui-meme
+(reste le role de l'agent/LLM client) -- pas de moteur de negociation
+automatique, pas de machine a etats multi-tours, pas d'expiration sur une
+proposition en attente, pas de resolution par hash court (in_reply_to
+doit etre le sha256:... complet, contrairement a get_by_short_id
+reserve a Telegram).
+
+Verifications:
+- cargo build: OK
+- cargo test --lib: 187 passed, 0 failed, 0 regression (5 nouveaux tests
+  unitaires: semantic::negotiation_tests)
+- cargo clippy --all-targets -- -D warnings: 0 warning
+- Smoke-test TCP live reel (examples/fipa_negotiation_smoke_test.rs, 6
+  scenarios executes contre un vrai serveur sur une vraie connexion TCP):
+  PROPOSE -> hash reel capture; REFUSE avec in_reply_to resout le
+  PROPOSE original (original_purpose=PROPOSE, counter_eligible=true);
+  REFUSE sans in_reply_to (missing_in_reply_to); REFUSE avec hash inconnu
+  (original_not_found); ACCEPT_PROPOSAL resout le meme PROPOSE
+  (counter_eligible=false); PROPOSE lui-meme ne recoit jamais de bloc
+  NEGOTIATION -- 6/6 passent.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ README.md                               |   2 +-
+ examples/fipa_negotiation_smoke_test.rs | 221 ++++++++++++++++++++++++
+ src/adn_store.rs                        |  29 ++++
+ src/semantic.rs                         |  84 +++++++++
+ src/server/handler.rs                   |  61 ++++++-
+ 5 files changed, 395 insertions(+), 2 deletions(-)
+ create mode 100644 examples/fipa_negotiation_smoke_test.rs
+
+diff --git a/README.md b/README.md
+index 29f05e1..e44de49 100644
+--- a/README.md
++++ b/README.md
+@@ -52,7 +52,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+ | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live. **Fixed 2026-09-04**: the hash chain (`seq`/`parent_hash` continuity, `src/server/audit.rs::HashChain`) was, until this pass, *purely in-memory* — reset to empty on every server restart, even though `adn_store.rs` already persisted payload history with real `parent_hash` lineage. `AuditStore` (`src/server/audit_store.rs`) already implemented the fix but was dead code, called nowhere outside its own unit test, since it was written. Now wired: `CstlNativeServer::with_data_path` opens `AuditStore` against the same file as `adn_store` and seeds the chain from it at startup; `handler.rs` persists every entry. Verified with a real process kill + restart of the actual production binary (not just an in-process simulation): `[AuditStore] Loaded 2 entries from disk` on the second process, chain correctly continuing at `seq=2` instead of resetting to `seq=0/parent=root` (`examples/audit_persistence_smoke_test.rs`). **Second finding, same day, found live on the user's own machine while re-verifying the fix above**: `HashChain::append` computed `seq` as `self.entries.len()`, which silently assumed no gaps — but `AuditStore::save()` uses `INSERT OR IGNORE` (needed so a resent duplicate-content payload stays idempotent instead of erroring on the `UNIQUE(hash)` constraint), so a genuine duplicate resend leaves a gap in the persisted `seq` sequence (e.g. `seq=0` and `seq=2` on disk, no `seq=1`). After a real restart, `load_chain()` reloads exactly those (gapped) rows, `entries.len()` no longer matches the highest real `seq`, and the next `append()` recomputed a colliding `seq` — silently losing a brand-new, non-duplicate payload's persistence (confirmed live: a genuinely new payload was accepted with a normal-looking client response, `seq` colliding with an existing row, and never appeared in `audit_trail` after restart). Fixed: `seq` is now `self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — anchored to the highest real `seq`, not the entry count. Regression test added (`test_append_seq_survives_gap_from_deduplicated_reload`) simulating the exact gapped state observed on disk. **Since merged (2026-09-04, later the same day)**: `src/server/audit_store.rs`/`AuditStore` referenced above no longer exist as a separate file/type — fully folded into `AdnStore` (`save_audit_entry`/`load_chain`/`audit_count`), one schema, one `Connection`, one lock — see the "Rust hash chain" section below for the current state |
+ | 6 | **Human interface** — Obsidian vault escalation (`src/obsidian_escalation.rs`), wired live; Graphify (`graphifyy` PyPI package) regenerated 2026-09-05 — 842 nodes, 1784 edges, 42 communities, built from commit `d529d4d6` | ✅ Both real: Obsidian verified end-to-end against a live vault (contradiction detected by `ExecutionLab` -> written to `CSTL_Restricted_Council.md`); Graphify structure current as of commit `d529d4d6` — this run used `graphify update .` (AST re-extraction only, no LLM/API key available), so community names are structural hub labels, not the LLM-generated semantic labels from the 2026-09-03 run (967 nodes/1800 edges/63 semantically-labelled communities) — run `graphify extract . --mode deep` with an LLM key configured to restore semantic labelling; either way, re-run `graphify update .` after further commits to resync |
+-| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request). **New 2026-09-04**: registration is now dynamic — `Arc<Mutex<AgentRegistry>>` + `purpose=agent_register` wire message (self-signed, upsert by name), verified live; a real LLM agent (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) registers and signs its own messages, verified live against the real Rust server (registration, unsigned-rejected, signed-accepted) — actual model-generated content is not verifiable in this sandbox (no `anthropic`/`google-genai` package, no API key here) and is left for the user to confirm on their own machine. **Added 2026-09-05**: `GeminiAgentBrain` (same `generate_relation` interface as `AnthropicAgentBrain`, `--provider anthropic\|gemini\|auto`) — Gemini has a real free tier (key at aistudio.google.com/apikey, no credit card required), unlike the Anthropic API (a Claude Max subscription only covers the chat, not the API), making a real end-to-end LLM-to-server turn reachable by the user at no cost. `google-genai` (the current unified SDK) installs and imports cleanly here; verified live against the real TCP server up to the point blocked by the missing key: `agent_register` succeeds with a real signature, `--provider auto` tries Gemini then falls back to Anthropic, both degrade cleanly (exit code 2, explicit message) since neither `GEMINI_API_KEY` nor `ANTHROPIC_API_KEY` exist in this sandbox. **Milestone reached 2026-09-05, on the operator's own machine (not this sandbox)**: the first real LLM-generated content verified end-to-end through CSTL — a real Gemini model, given only the relay topic, produced a well-formed relation (`Montréal est_située_au Canada`) that a real Ed25519-signed, registered agent submitted to the real running Rust server, which accepted it, ran it through the real audit chain (`adn_store`, real hash), and returned `status=processed`. This closes the "real LLM agent never plugged in" gap noted above for as long as this sentence stood unqualified. The same relay run then hit the Layer 3a KB-verification timeout bug documented below (fixed same day) on its third turn — the milestone itself was not affected, since that layer runs after acceptance/persistence. **Added 2026-09-06 (FIPA-ACL performatives, `semantic.rs::FIPA_PERFORMATIVES`/`is_fipa_performative`)**: found by checking the code rather than assuming — `INTENT_PAYLOAD [purpose=...]` has always been a separate envelope field from `RELATION [type=...]` (the semantic content), but `purpose` had never received any structured vocabulary for ordinary agent-to-agent communication; only protocol-control values (`agent_register`, `council_decision`, `detect_emergence`) got special handling, so a request/proposal/refusal between agents was indistinguishable from arbitrary free text. Added the standard FIPA (Foundation for Intelligent Physical Agents) performative set (`REQUEST`, `PROPOSE`, `ACCEPT_PROPOSAL`, `REJECT_PROPOSAL`, `CFP`, `AGREE`, `REFUSE`, `INFORM`, `QUERY_IF`, `QUERY_REF`, `CANCEL`, `CONFIRM`, `DISCONFIRM`, `FAILURE`, `NOT_UNDERSTOOD`, `SUBSCRIBE`) as recognized (case-insensitive) `purpose` values — purely additive, no validation is added or tightened, an unrecognized `purpose` behaves exactly as before. When recognized, the response now carries a `PERFORMATIVE [type=..., recognized=true, relations_attached=N]` block; existing speech-act-flavored `RELATION` operators (`COMMAND`/`ASK`/`STATE`/`PERFORM`/`RECOMMEND`, row 4) are untouched and coexist without conflict — they describe the content of an act, the performative describes the act itself, and the wire format already separated the two layers. Verified live end-to-end on a real TCP connection (`examples/fipa_performative_smoke_test.rs`, 4 scenarios: recognized performative with relations attached, unrecognized purpose gets no block, case-insensitive recognition, and `agent_register` never confused with a performative) plus 4 new unit tests in `semantic.rs`. |
++| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards, zero external deps | ✅ Built and wired live (`src/agent_discovery.rs`, used by every request). **New 2026-09-04**: registration is now dynamic — `Arc<Mutex<AgentRegistry>>` + `purpose=agent_register` wire message (self-signed, upsert by name), verified live; a real LLM agent (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) registers and signs its own messages, verified live against the real Rust server (registration, unsigned-rejected, signed-accepted) — actual model-generated content is not verifiable in this sandbox (no `anthropic`/`google-genai` package, no API key here) and is left for the user to confirm on their own machine. **Added 2026-09-05**: `GeminiAgentBrain` (same `generate_relation` interface as `AnthropicAgentBrain`, `--provider anthropic\|gemini\|auto`) — Gemini has a real free tier (key at aistudio.google.com/apikey, no credit card required), unlike the Anthropic API (a Claude Max subscription only covers the chat, not the API), making a real end-to-end LLM-to-server turn reachable by the user at no cost. `google-genai` (the current unified SDK) installs and imports cleanly here; verified live against the real TCP server up to the point blocked by the missing key: `agent_register` succeeds with a real signature, `--provider auto` tries Gemini then falls back to Anthropic, both degrade cleanly (exit code 2, explicit message) since neither `GEMINI_API_KEY` nor `ANTHROPIC_API_KEY` exist in this sandbox. **Milestone reached 2026-09-05, on the operator's own machine (not this sandbox)**: the first real LLM-generated content verified end-to-end through CSTL — a real Gemini model, given only the relay topic, produced a well-formed relation (`Montréal est_située_au Canada`) that a real Ed25519-signed, registered agent submitted to the real running Rust server, which accepted it, ran it through the real audit chain (`adn_store`, real hash), and returned `status=processed`. This closes the "real LLM agent never plugged in" gap noted above for as long as this sentence stood unqualified. The same relay run then hit the Layer 3a KB-verification timeout bug documented below (fixed same day) on its third turn — the milestone itself was not affected, since that layer runs after acceptance/persistence. **Added 2026-09-06 (FIPA-ACL performatives, `semantic.rs::FIPA_PERFORMATIVES`/`is_fipa_performative`)**: found by checking the code rather than assuming — `INTENT_PAYLOAD [purpose=...]` has always been a separate envelope field from `RELATION [type=...]` (the semantic content), but `purpose` had never received any structured vocabulary for ordinary agent-to-agent communication; only protocol-control values (`agent_register`, `council_decision`, `detect_emergence`) got special handling, so a request/proposal/refusal between agents was indistinguishable from arbitrary free text. Added the standard FIPA (Foundation for Intelligent Physical Agents) performative set (`REQUEST`, `PROPOSE`, `ACCEPT_PROPOSAL`, `REJECT_PROPOSAL`, `CFP`, `AGREE`, `REFUSE`, `INFORM`, `QUERY_IF`, `QUERY_REF`, `CANCEL`, `CONFIRM`, `DISCONFIRM`, `FAILURE`, `NOT_UNDERSTOOD`, `SUBSCRIBE`) as recognized (case-insensitive) `purpose` values — purely additive, no validation is added or tightened, an unrecognized `purpose` behaves exactly as before. When recognized, the response now carries a `PERFORMATIVE [type=..., recognized=true, relations_attached=N]` block; existing speech-act-flavored `RELATION` operators (`COMMAND`/`ASK`/`STATE`/`PERFORM`/`RECOMMEND`, row 4) are untouched and coexist without conflict — they describe the content of an act, the performative describes the act itself, and the wire format already separated the two layers. Verified live end-to-end on a real TCP connection (`examples/fipa_performative_smoke_test.rs`, 4 scenarios: recognized performative with relations attached, unrecognized purpose gets no block, case-insensitive recognition, and `agent_register` never confused with a performative) plus 4 new unit tests in `semantic.rs`. **Added 2026-09-06 (minimal FIPA negotiation, `semantic.rs::negotiation_status_for`, `AdnStore::get_audit_entry`, `server/handler.rs` `NEGOTIATION` block)**: closes a real gap found by checking the code — the performative mechanism above was "dormant", the server recognized and annotated an incoming performative but never behaved differently by type; a `PROPOSE` and a `REFUSE` got identical downstream processing, so there was no way to tell, from the server's own response, WHAT a `REFUSE` was actually refusing. Scope is deliberately small: the server never generates a counter-proposal itself (that stays the client agent/LLM's job) — it only retrieves and exposes, in a verifiable way against the real `audit_trail` table, the `purpose` of the payload a `REFUSE`/`REJECT_PROPOSAL`/`ACCEPT_PROPOSAL` refers to. Correlation uses a new additive wire-format field, `INTENT_PAYLOAD.in_reply_to=<hash>` (the same `sha256:...` value already returned in the response's `AUDIT [hash=...]` block) — deliberately not the pre-existing but never-populated `adn_store.conversation_id` column (a whole-thread id, wrong granularity for "which single message is this refusing"); needs no parser change since `INTENT_PAYLOAD` fields are already a generic map. When `purpose` is `REFUSE`/`REJECT_PROPOSAL`/`ACCEPT_PROPOSAL` and `in_reply_to` is present, the response carries `NEGOTIATION [status=refused\|accepted, original_proposal=<hash>, original_purpose=<PROPOSE\|CFP\|...>, counter_eligible=true\|false]`; missing `in_reply_to` yields `counter_eligible=false, reason=missing_in_reply_to`, an unknown hash yields `reason=original_not_found`. `counter_eligible` is `true` only for an actual refusal of an actual proposal (`PROPOSE`/`CFP`) — an `ACCEPT_PROPOSAL` never sets it, an accepted deal has nothing to counter. Out of scope, honestly: no automatic counter-proposal generation, no multi-round negotiation state machine, no expiry/timeout on a dangling proposal, no short-hash lookup (`in_reply_to` must be the full `sha256:...` string, unlike the Telegram-only `get_by_short_id` path). Verified live end-to-end on a real TCP connection (`examples/fipa_negotiation_smoke_test.rs`, 6 scenarios: real PROPOSE→hash captured, REFUSE with `in_reply_to` resolves the original PROPOSE with `counter_eligible=true`, REFUSE without `in_reply_to`, REFUSE with an unknown hash, ACCEPT_PROPOSAL resolves the same PROPOSE with `counter_eligible=false`, and a PROPOSE itself never gets a `NEGOTIATION` block) plus 5 new unit tests in `semantic.rs`. |
+ | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | 🟡 Built and wired live, not just "designed" (that badge understated what already ran in production for the hash chain, and overstated deontic modality — see below). Hash chain: real, persisted since 2026-09-04 (`HashChain`/`AuditStore`, see row 5). **Deontic modality — built 2026-09-04, same day**: the only live check (`server/validator.rs::validate_deontic_constraints`, before this fix) tested whether a single `RELATION.type` field contained both substrings `"MUST"` and `"MUST_NOT"` — broken twice over: the wire format never encodes MUST/MUST_NOT in `type` (KB predicate or SDL operator only), and `"MUST_NOT".contains("MUST")` is true in Rust, so a lone `MUST_NOT` relation was falsely rejected. The real engine (`semantic.rs::check_axiom_d`, SDL Axiom D, tested) existed but was never called live. Fixed in two parts: a `RELATION` now carries an optional `modality=MUST\|MUST_NOT\|REQUIRE\|FORBID` field, wired to the real Axiom D check (blocking, E107, intra-payload — a self-contradiction in the same message); and a new historical audit (`execution_lab::check_deontic_consistency_with_history`, same pattern as the existing factual `check_consistency_with_history`) checks modality-bearing relations against everything persisted by prior payloads — never rejecting (a disagreement across agents/time isn't a protocol error), surfaced as a `DEONTIC_AUDIT [consistent=false, violations=N]` response block. `adn_relations` gained a `modality` column via an idempotent migration, verified live against a file simulating the exact pre-existing production schema. **Strengthened 2026-09-05** (`semantic.rs::check_axiom_k_entailment`, E110, blocking): closes a real gap in Axiom D alone — `MUST`/`REQUIRE` on (S, A) and `MUST_NOT`/`FORBID` on (S, B), same subject, A≠B related by an `ENTAILS` chain the payload itself declares, was previously invisible (E107 requires the same exact object) even though obligating A while forbidding something A entails is the same authoring contradiction, one step removed. No `cstl_verifier.py` was found anywhere in this repository or its docs to "port" (the to-do item was checked before implementation, per this session's own methodology) — built directly from the SDL axioms already documented in `CSTL_SPEC_v5_0.md` §3 instead. Verified end-to-end on a real TCP connection, dev and release (`examples/deontic_audit_smoke_test.rs`, 5 scenarios) plus 15 new unit tests (9 for the historical audit, 6 for Axiom K: direct detection, 2-hop transitive detection, different-subjects non-trigger, no-chain non-trigger, non-duplication of E107). |
+ | 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
+ 
+diff --git a/examples/fipa_negotiation_smoke_test.rs b/examples/fipa_negotiation_smoke_test.rs
+new file mode 100644
+index 0000000..1772dbd
+--- /dev/null
++++ b/examples/fipa_negotiation_smoke_test.rs
+@@ -0,0 +1,221 @@
++/// examples/fipa_negotiation_smoke_test.rs -- verification EN DIRECT (vrai
++/// TCP, vrai serveur, pas un test unitaire isole) du mecanisme de
++/// negociation FIPA minimal ajoute le 2026-09-06 (voir le commentaire de
++/// `semantic::negotiation_status_for` et le bloc `NEGOTIATION` dans
++/// `server/handler.rs`).
++///
++/// Contexte: avant ce mecanisme, le bloc `PERFORMATIVE` (voir
++/// `examples/fipa_performative_smoke_test.rs`) etait "dormant" -- le serveur
++/// RECONNAISSAIT un performatif recu mais ne reagissait jamais differemment
++/// selon son type. Un `PROPOSE` et un `REFUSE` recevaient exactement le meme
++/// traitement de fond, seule l'annotation changeait -- aucune boucle
++/// PROPOSE -> REFUSE n'etait fermee. Ce test verifie en conditions reelles
++/// que:
++///
++/// 1. Un `PROPOSE` recoit un vrai hash `AUDIT [hash=...]` (calcule par le
++///    serveur, pas invente cote client).
++/// 2. Un `REFUSE` qui reference ce hash via `INTENT_PAYLOAD.in_reply_to=...`
++///    (nouveau champ de wire format, additif) recoit en retour un bloc
++///    `NEGOTIATION [status=refused, original_proposal=<meme hash>,
++///    original_purpose=PROPOSE, counter_eligible=true]` -- preuve que le
++///    serveur a reellement retrouve la proposition originale dans
++///    `adn_store`/`audit_trail`, pas juste annote le REFUSE isolement.
++/// 3. Un `REFUSE` SANS `in_reply_to` recoit `counter_eligible=false,
++///    reason=missing_in_reply_to` -- pas de faux positif.
++/// 4. Un `REFUSE` avec un `in_reply_to` qui ne correspond a AUCUN hash connu
++///    recoit `counter_eligible=false, reason=original_not_found`.
++/// 5. Un `ACCEPT_PROPOSAL` qui reference le meme `PROPOSE` recoit
++///    `status=accepted` (et jamais `counter_eligible=true`, l'acceptation ne
++///    se contre-propose pas).
++/// 6. Regression: un `PROPOSE` (qui n'est ni un refus ni une acceptation)
++///    ne recoit JAMAIS de bloc `NEGOTIATION`, meme s'il porte lui-meme un
++///    `in_reply_to` (portee volontairement limitee a REFUSE/REJECT_PROPOSAL/
++///    ACCEPT_PROPOSAL, voir `negotiation_status_for`).
++use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
++use cstl_parser::server::CstlNativeServer;
++use std::sync::Arc;
++use tokio::io::{AsyncReadExt, AsyncWriteExt};
++use tokio::net::TcpStream;
++use tokio::sync::Mutex;
++
++async fn send(port: u16, payload: &str) -> String {
++    let mut stream = TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
++    stream.write_all(payload.as_bytes()).await.expect("send");
++    let mut buf = Vec::new();
++    let mut chunk = [0u8; 4096];
++    loop {
++        let n = stream.read(&mut chunk).await.expect("read");
++        if n == 0 {
++            break;
++        }
++        buf.extend_from_slice(&chunk[..n]);
++        if buf.windows(9).any(|w| w == b"---END---") {
++            break;
++        }
++    }
++    String::from_utf8_lossy(&buf).to_string()
++}
++
++fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
++    for line in response.lines() {
++        if line.starts_with(block) {
++            let inner = line.split_once('[')?.1.trim_end_matches(']').trim_end_matches("]\n");
++            for part in inner.split(',') {
++                let part = part.trim();
++                if let Some((k, v)) = part.split_once('=') {
++                    if k.trim() == key {
++                        return Some(v.trim().to_string());
++                    }
++                }
++            }
++        }
++    }
++    None
++}
++
++fn make_test_server(port: u16) -> CstlNativeServer {
++    let mut server = CstlNativeServer::with_data_path(port, ":memory:");
++    let mut registry = AgentRegistry::new();
++    registry.register(AgentCard {
++        name: "smoke_router".to_string(),
++        version: "5.0.0".to_string(),
++        capabilities: vec!["communication".to_string()],
++        trust_score: 0.9,
++        public_key: None,
++    });
++    server.agent_registry = Arc::new(Mutex::new(registry));
++    server
++}
++
++#[tokio::main]
++async fn main() {
++    let port: u16 = 15191;
++    let server = make_test_server(port);
++    tokio::spawn(async move {
++        server.start().await.expect("server start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    let mut failures = Vec::new();
++
++    // ---- Etape 1: un vrai PROPOSE, on capture le hash reel de la reponse ----
++    println!("[1/6] PROPOSE (offre de prix) -> capture du hash AUDIT reel...");
++    let propose_payload =
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=PROPOSE, sender=agent_buyer, receiver=server]\n\
++         RELATION [type=STATE, subject=price, object=100_usd]\n\
++         ---END---\n";
++    let resp_propose = send(port, propose_payload).await;
++    let original_hash = match extract_field(&resp_propose, "AUDIT", "hash") {
++        Some(h) => {
++            println!("    OK: hash capture = {}", h);
++            h
++        }
++        None => {
++            failures.push(format!("1) pas de hash AUDIT dans la reponse au PROPOSE -- reponse: {resp_propose}"));
++            String::new()
++        }
++    };
++
++    // ---- Etape 2: REFUSE qui reference ce PROPOSE via in_reply_to ----
++    println!("[2/6] REFUSE avec in_reply_to=<hash du PROPOSE> -> NEGOTIATION attendu...");
++    let refuse_payload = format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=REFUSE, sender=agent_seller, receiver=server, in_reply_to={original_hash}]\n\
++         ---END---\n"
++    );
++    let resp_refuse = send(port, &refuse_payload).await;
++    match extract_field(&resp_refuse, "NEGOTIATION", "status") {
++        Some(s) if s == "refused" => println!("    OK: NEGOTIATION[status=refused]"),
++        other => failures.push(format!("2) attendu status=refused, obtenu {other:?} -- reponse: {resp_refuse}")),
++    }
++    match extract_field(&resp_refuse, "NEGOTIATION", "original_proposal") {
++        Some(h) if h == original_hash => println!("    OK: original_proposal pointe vers le vrai hash du PROPOSE"),
++        other => failures.push(format!(
++            "2) attendu original_proposal={original_hash}, obtenu {other:?} -- reponse: {resp_refuse}"
++        )),
++    }
++    match extract_field(&resp_refuse, "NEGOTIATION", "original_purpose") {
++        Some(p) if p == "PROPOSE" => println!("    OK: original_purpose=PROPOSE retrouve dans audit_trail"),
++        other => failures.push(format!("2) attendu original_purpose=PROPOSE, obtenu {other:?}")),
++    }
++    match extract_field(&resp_refuse, "NEGOTIATION", "counter_eligible") {
++        Some(v) if v == "true" => println!("    OK: counter_eligible=true (une contre-proposition a du sens ici)"),
++        other => failures.push(format!("2) attendu counter_eligible=true, obtenu {other:?}")),
++    }
++
++    // ---- Etape 3: REFUSE sans in_reply_to ----
++    println!("[3/6] REFUSE sans in_reply_to -> counter_eligible=false, reason=missing_in_reply_to...");
++    let refuse_no_ref =
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=REFUSE, sender=agent_seller, receiver=server]\n\
++         ---END---\n";
++    let resp3 = send(port, refuse_no_ref).await;
++    match extract_field(&resp3, "NEGOTIATION", "reason") {
++        Some(r) if r == "missing_in_reply_to" => println!("    OK: reason=missing_in_reply_to"),
++        other => failures.push(format!("3) attendu reason=missing_in_reply_to, obtenu {other:?} -- reponse: {resp3}")),
++    }
++    match extract_field(&resp3, "NEGOTIATION", "counter_eligible") {
++        Some(v) if v == "false" => println!("    OK: counter_eligible=false"),
++        other => failures.push(format!("3) attendu counter_eligible=false, obtenu {other:?}")),
++    }
++
++    // ---- Etape 4: REFUSE avec in_reply_to inconnu ----
++    println!("[4/6] REFUSE avec in_reply_to inconnu -> reason=original_not_found...");
++    let refuse_unknown =
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=REFUSE, sender=agent_seller, receiver=server, in_reply_to=sha256:0000000000000000000000000000000000000000000000000000000000000000]\n\
++         ---END---\n";
++    let resp4 = send(port, refuse_unknown).await;
++    match extract_field(&resp4, "NEGOTIATION", "reason") {
++        Some(r) if r == "original_not_found" => println!("    OK: reason=original_not_found"),
++        other => failures.push(format!("4) attendu reason=original_not_found, obtenu {other:?} -- reponse: {resp4}")),
++    }
++
++    // ---- Etape 5: ACCEPT_PROPOSAL qui reference le meme PROPOSE ----
++    println!("[5/6] ACCEPT_PROPOSAL avec in_reply_to=<hash du PROPOSE> -> status=accepted, jamais counter_eligible=true...");
++    let accept_payload = format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=ACCEPT_PROPOSAL, sender=agent_seller, receiver=server, in_reply_to={original_hash}]\n\
++         ---END---\n"
++    );
++    let resp5 = send(port, &accept_payload).await;
++    match extract_field(&resp5, "NEGOTIATION", "status") {
++        Some(s) if s == "accepted" => println!("    OK: NEGOTIATION[status=accepted]"),
++        other => failures.push(format!("5) attendu status=accepted, obtenu {other:?} -- reponse: {resp5}")),
++    }
++    match extract_field(&resp5, "NEGOTIATION", "counter_eligible") {
++        Some(v) if v == "false" => println!("    OK: counter_eligible=false (un accord ne se contre-propose pas)"),
++        other => failures.push(format!("5) attendu counter_eligible=false, obtenu {other:?}")),
++    }
++
++    // ---- Etape 6: un PROPOSE ne recoit jamais de bloc NEGOTIATION ----
++    println!("[6/6] PROPOSE (meme avec in_reply_to) -> AUCUN bloc NEGOTIATION attendu (regression)...");
++    let propose_with_ref = format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=PROPOSE, sender=agent_buyer, receiver=server, in_reply_to={original_hash}]\n\
++         ---END---\n"
++    );
++    let resp6 = send(port, &propose_with_ref).await;
++    if resp6.contains("NEGOTIATION") {
++        failures.push(format!("6) bloc NEGOTIATION present a tort pour un PROPOSE -- reponse: {resp6}"));
++    } else {
++        println!("    OK: aucun bloc NEGOTIATION pour PROPOSE (PROPOSE/CFP n'ouvrent jamais ce bloc)");
++    }
++
++    if failures.is_empty() {
++        println!("\n✅ TOUS LES SCENARIOS DE NEGOCIATION FIPA PASSENT (6 verifications)");
++    } else {
++        println!("\n❌ {} ECHEC(S):", failures.len());
++        for f in &failures {
++            println!("  - {f}");
++        }
++        std::process::exit(1);
++    }
++}
+diff --git a/src/adn_store.rs b/src/adn_store.rs
+index ff0a8d7..1d64075 100644
+--- a/src/adn_store.rs
++++ b/src/adn_store.rs
+@@ -254,6 +254,35 @@ impl AdnStore {
+             .optional()
+     }
+ 
++    /// Retrouve UNE entree de la chaine d'audit (`audit_trail`) par son
++    /// `hash` -- ajoute le 2026-09-06 pour la negociation FIPA minimale
++    /// (voir `server/handler.rs`, bloc `NEGOTIATION`): un `REFUSE` qui
++    /// porte `in_reply_to=<hash>` a besoin de savoir QUEL `purpose` avait
++    /// le payload original (etait-ce bien un `PROPOSE`/`CFP`, ou autre
++    /// chose ?) sans avoir a re-parser tout le payload brut stocke dans
++    /// `adn_store` -- `audit_trail` porte deja `purpose` en colonne depuis
++    /// le debut (voir `save_audit_entry`), seule la lecture cible par hash
++    /// manquait. Aucune migration de schema: la table existe deja.
++    pub fn get_audit_entry(&self, hash: &str) -> Result<Option<AuditEntry>, rusqlite::Error> {
++        self.conn
++            .query_row(
++                "SELECT seq, hash, parent_hash, sender, receiver, purpose
++                 FROM audit_trail WHERE hash = ?1",
++                params![hash],
++                |row| {
++                    Ok(AuditEntry {
++                        hash: row.get(1)?,
++                        parent_hash: row.get(2)?,
++                        sender: row.get(3)?,
++                        receiver: row.get(4)?,
++                        purpose: row.get(5)?,
++                        seq: row.get(0)?,
++                    })
++                },
++            )
++            .optional()
++    }
++
+     /// Ancrage humain (RestrictedCouncil). Rien n'est ancré sans ce commit explicite —
+     /// aucune logique de quorum n'appelle encore cette fonction automatiquement:
+     /// le quorum 2/3 humain (RestrictedCouncil) n'est pas construit dans cette passe.
+diff --git a/src/semantic.rs b/src/semantic.rs
+index af93fc5..4d07fcc 100644
+--- a/src/semantic.rs
++++ b/src/semantic.rs
+@@ -79,6 +79,49 @@ pub fn is_fipa_performative(purpose: &str) -> bool {
+     FIPA_PERFORMATIVES.contains(&upper.as_str())
+ }
+ 
++/// Negociation FIPA minimale (2026-09-06) -- ajoutee en reponse a une
++/// lacune reelle constatee APRES `FIPA_PERFORMATIVES` ci-dessus: le
++/// mecanisme etait "dormant", le serveur RECONNAISSAIT un performatif
++/// (bloc `PERFORMATIVE`) mais ne reagissait jamais differemment selon son
++/// type -- un `PROPOSE` et un `REFUSE` recevaient le meme traitement de
++/// fond, aucune boucle PROPOSE -> REFUSE n'etait fermee. Choix de portee,
++/// assumes et volontairement PETITS (voir aussi `server/handler.rs`, bloc
++/// `NEGOTIATION`, et README.md section Layer 7) :
++///
++/// 1. PAS de moteur de negociation automatique: le serveur ne GENERE
++///    jamais de contre-proposition lui-meme -- ca reste le role de
++///    l'agent/LLM client, qui a besoin du contexte exact de ce qui a ete
++///    refuse pour la construire. Ce module se contente de retrouver et
++///    d'exposer ce contexte de facon verifiable (contre l'ADN store reel,
++///    pas une supposition).
++/// 2. Seuls les performatifs qui CLOTURENT une proposition anterieure
++///    recoivent un statut ici: `REFUSE`/`REJECT_PROPOSAL` (statut
++///    "refused", la boucle qui manquait completement) et
++///    `ACCEPT_PROPOSAL` (statut "accepted", ajoute par symetrie -- meme
++///    besoin de retrouver QUELLE proposition a ete acceptee). `PROPOSE`
++///    et `CFP` n'ouvrent rien ici (ce sont eux la proposition), `AGREE`
++///    est un accord sur une ACTION demandee (semantique FIPA distincte
++///    d'ACCEPT_PROPOSAL) et reste hors de ce mecanisme minimal.
++/// 3. La correlation utilise un nouveau champ de wire format additif,
++///    `INTENT_PAYLOAD.in_reply_to=<hash>` (le hash `sha256:...` retourne
++///    dans le bloc `AUDIT` de la reponse au `PROPOSE`/`CFP` original) --
++///    PAS la colonne `conversation_id` deja presente dans le schema
++///    `adn_store` (jamais peuplee depuis aucun payload, voir
++///    `server/handler.rs` ou `put()` la recoit toujours a `None`):
++///    `conversation_id` designerait un FIL entier, alors qu'une reponse
++///    FIPA refere toujours a UN message precis -- overloader le champ
++///    existant aurait ete plus simple a court terme mais aurait cache
++///    cette distinction. `in_reply_to` est un champ d'ENVELOPPE comme
++///    `purpose`/`sender`/`receiver`, donc deja lisible sans aucun
++///    changement de parser (`payload.intent` est une HashMap generique).
++pub fn negotiation_status_for(purpose: &str) -> Option<&'static str> {
++    match purpose.to_ascii_uppercase().as_str() {
++        "REFUSE" | "REJECT_PROPOSAL" => Some("refused"),
++        "ACCEPT_PROPOSAL" => Some("accepted"),
++        _ => None,
++    }
++}
++
+ // `pub` depuis le 2026-09-04: reutilisees par
+ // execution_lab::check_deontic_consistency_with_history (Couche 8, audit
+ // deontique HISTORIQUE) pour rester l'unique source de verite sur ce qui
+@@ -672,6 +715,47 @@ mod fipa_tests {
+     }
+ }
+ 
++#[cfg(test)]
++mod negotiation_tests {
++    use super::negotiation_status_for;
++
++    #[test]
++    fn test_refuse_and_reject_proposal_are_refused_status() {
++        assert_eq!(negotiation_status_for("REFUSE"), Some("refused"));
++        assert_eq!(negotiation_status_for("REJECT_PROPOSAL"), Some("refused"));
++    }
++
++    #[test]
++    fn test_accept_proposal_is_accepted_status() {
++        assert_eq!(negotiation_status_for("ACCEPT_PROPOSAL"), Some("accepted"));
++    }
++
++    #[test]
++    fn test_case_insensitive() {
++        assert_eq!(negotiation_status_for("refuse"), Some("refused"));
++        assert_eq!(negotiation_status_for("Accept_Proposal"), Some("accepted"));
++    }
++
++    #[test]
++    fn test_propose_and_cfp_do_not_open_negotiation_status() {
++        // PROPOSE/CFP sont l'OUVERTURE d'une proposition, pas sa cloture --
++        // aucun statut ici, meme s'ils restent des performatifs FIPA valides
++        // (is_fipa_performative reste vrai pour eux).
++        assert_eq!(negotiation_status_for("PROPOSE"), None);
++        assert_eq!(negotiation_status_for("CFP"), None);
++    }
++
++    #[test]
++    fn test_agree_and_other_performatives_out_of_scope() {
++        // AGREE porte sur une ACTION demandee (semantique FIPA distincte
++        // d'ACCEPT_PROPOSAL) -- deliberement hors de ce mecanisme minimal.
++        assert_eq!(negotiation_status_for("AGREE"), None);
++        assert_eq!(negotiation_status_for("INFORM"), None);
++        assert_eq!(negotiation_status_for("agent_register"), None);
++        assert_eq!(negotiation_status_for(""), None);
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/src/server/handler.rs b/src/server/handler.rs
+index 87369d7..e6d46c4 100644
+--- a/src/server/handler.rs
++++ b/src/server/handler.rs
+@@ -24,7 +24,7 @@ use crate::security;
+ use crate::governance::GovernanceTracker;
+ use crate::agent_discovery::AgentCard;
+ use crate::signing::{self, SignatureCheck};
+-use crate::semantic::is_fipa_performative;
++use crate::semantic::{is_fipa_performative, negotiation_status_for};
+ use super::audit::HashChain;
+ use super::parser;
+ use super::validator;
+@@ -951,6 +951,63 @@ pub async fn handle_connection(
+                         String::new()
+                     };
+ 
++                    // Bloc NEGOTIATION (2026-09-06, negociation FIPA minimale) --
++                    // transforme le mecanisme PERFORMATIVE ci-dessus de "dormant"
++                    // (annotation seule, meme traitement pour PROPOSE et REFUSE) en
++                    // "utile et verifiable": ferme la boucle "on sait QUOI a ete
++                    // refuse/accepte", qui n'existait pas du tout avant ce commit. Voir
++                    // le commentaire complet de `semantic::negotiation_status_for` pour
++                    // toute la justification et les limites de portee assumees --
++                    // resume ici: le serveur ne GENERE jamais de contre-proposition, il
++                    // se contente de retrouver le `purpose` du payload original
++                    // reference par `INTENT_PAYLOAD.in_reply_to=<hash>` (nouveau champ
++                    // additif, deja lisible sans changement de parser puisque `intent`
++                    // est une HashMap generique) dans `audit_trail` (adn_store), pour
++                    // que l'agent/LLM client puisse construire sa contre-proposition
++                    // avec le contexte exact de ce qui a ete refuse. Absent quand
++                    // `purpose` n'est ni REFUSE/REJECT_PROPOSAL ni ACCEPT_PROPOSAL --
++                    // meme style d'absence conditionnelle que les autres blocs.
++                    let negotiation_line = if let Some(status) = negotiation_status_for(&purpose) {
++                        match payload.intent.get("in_reply_to") {
++                            Some(in_reply_to) => {
++                                match adn_store.lock().await.get_audit_entry(in_reply_to) {
++                                    Ok(Some(original)) => {
++                                        let original_purpose_upper = original.purpose.to_ascii_uppercase();
++                                        // counter_eligible=true seulement si (a) c'est bien
++                                        // un refus (pas un accord, qui ne se contre-propose
++                                        // pas) ET (b) ce qui a ete refuse etait reellement
++                                        // une proposition (PROPOSE/CFP) -- un REFUSE qui
++                                        // reference par erreur un payload d'un autre type
++                                        // n'ouvre pas droit a une contre-proposition.
++                                        let is_a_proposal = matches!(original_purpose_upper.as_str(), "PROPOSE" | "CFP");
++                                        let counter_eligible = status == "refused" && is_a_proposal;
++                                        format!(
++                                            "NEGOTIATION [status={}, original_proposal={}, original_purpose={}, counter_eligible={}]\n",
++                                            status, in_reply_to, original_purpose_upper, counter_eligible
++                                        )
++                                    }
++                                    Ok(None) => format!(
++                                        "NEGOTIATION [status={}, original_proposal={}, counter_eligible=false, reason=original_not_found]\n",
++                                        status, in_reply_to
++                                    ),
++                                    Err(e) => {
++                                        eprintln!("[Handler] ⚠️  NEGOTIATION: lookup audit_trail echoue pour in_reply_to={}: {}", in_reply_to, e);
++                                        format!(
++                                            "NEGOTIATION [status={}, original_proposal={}, counter_eligible=false, reason=lookup_error]\n",
++                                            status, in_reply_to
++                                        )
++                                    }
++                                }
++                            }
++                            None => format!(
++                                "NEGOTIATION [status={}, original_proposal=none, counter_eligible=false, reason=missing_in_reply_to]\n",
++                                status
++                            ),
++                        }
++                    } else {
++                        String::new()
++                    };
++
+                     // STEP 3-priority: INTENT_PAYLOAD.priority (CSTL_SPEC_v5_0.md
+                     // §6, ligne ~231 -- champ de grammaire officiel depuis la v5.0,
+                     // jamais implemente avant ce fix, cf. `grep -rn '"priority"' src/`
+@@ -1029,6 +1086,7 @@ pub async fn handle_connection(
+                             {}\
+                             {}\
+                             {}\
++                            {}\
+                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
+                             ---END---\n",
+                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
+@@ -1038,6 +1096,7 @@ pub async fn handle_connection(
+                             temporal_cycle_line,
+                             deontic_audit_line,
+                             performative_line,
++                            negotiation_line,
+                             priority_line,
+                             semantic_warning_lines,
+                             governance_line,
+-- 
+2.43.0
+

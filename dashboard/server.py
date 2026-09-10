@@ -83,7 +83,7 @@ LIMITES HONNETES DE CETTE V1 :
         honnetement plutot que d'inventer une relation.
       * /api/openclaw-check tente une connexion (WebSocket si le paquet
         `websockets` est installe, sinon TCP brut) vers
-        ws://127.0.0.1:18789 -- AUCUN protocole applicatif OpenClaw n'est
+        ws://127.0.0.1:19001 -- AUCUN protocole applicatif OpenClaw n'est
         parle (aucune documentation disponible pour l'ecrire), seulement un
         test de connectivite generique. Dans ce sandbox, retourne toujours
         "inaccessible" puisqu'OpenClaw tourne sur la machine macOS de
@@ -137,11 +137,9 @@ JARVIS (interface vocale, voir index.html section "=== JARVIS ===") :
     inchangees ; le compositeur manuel les ignore et continue de marcher.
 """
 
-import datetime
 import json
 import os
 import re
-import shutil
 import socket
 import sqlite3
 import subprocess
@@ -150,11 +148,6 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-
-try:
-    import pty_bridge
-except ImportError:
-    pty_bridge = None
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -200,8 +193,6 @@ except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
     _ORCHESTRATOR_IMPORT_ERROR = str(e)
 
 DASHBOARD_PORT = int(os.environ.get("CSTL_DASHBOARD_PORT", "5099"))
-PTY_BRIDGE_PORT = int(os.environ.get("CSTL_PTY_BRIDGE_PORT", "5100"))
-PTY_BRIDGE_STARTED = False  # mis a jour reellement dans main() -- jamais suppose True
 CSTL_SERVER_HOST = os.environ.get("CSTL_SERVER_HOST", "127.0.0.1")
 CSTL_SERVER_PORT = int(os.environ.get("CSTL_SERVER_PORT", "5050"))
 ADN_DB_PATH = Path(os.environ.get("CSTL_ADN_DB_PATH", str(REPO_ROOT / "cstl_adn.db")))
@@ -209,15 +200,7 @@ GRAPHIFY_OUT = Path(os.environ.get("CSTL_GRAPHIFY_OUT", str(REPO_ROOT / "graphif
 ORCHESTRATOR_KEYFILE = Path(os.environ.get("CSTL_ORCHESTRATOR_KEYFILE",
                                             str(Path.home() / ".cstl" / "dashboard_orchestrator_ed25519.key")))
 
-# 5.0s original -- trop court : un payload a plusieurs RELATION declenche
-# une tentative kb_verify (Wikidata) par relation cote serveur, ce qui peut
-# a lui seul depasser 5s. Teste en direct le 07/09/2026 : un payload a 2
-# relations a bien ete traite par le serveur (round-trip reel ~5-6s selon
-# la latence Wikidata) mais le client abandonnait avant la reponse. Meme
-# une seule relation a pris 8026ms en pratique sur la machine de
-# l'utilisateur (latence reseau vers Wikidata) -- confirme via le dashboard
-# reel apres correctif.
-TCP_TIMEOUT_S = 30.0
+TCP_TIMEOUT_S = 5.0
 STATUS_TIMEOUT_S = 1.0
 END_MARKER = b"---END---"
 
@@ -709,19 +692,11 @@ def summarize_cstl_response_for_speech(send_result):
     return " ".join(parts)
 
 
-def generate_relation_via_llm(topic, include_context=True):
+def generate_relation_via_llm(topic):
     """Essaie dans l'ordre Hermes/Ollama (local, gratuit) -> Gemini ->
     Anthropic via resolve_brain("auto") de sdk/python/cstl_llm_agent.py --
     AUCUNE logique de generation dupliquee ici, seulement l'appel et la mise
     en forme honnete du resultat pour le compositeur du dashboard.
-
-    include_context=True (defaut) : prepend le VRAI contexte du projet
-    (gather_project_context() -- ADN store + Graphify + Obsidian si
-    configure) au sujet avant de l'envoyer au modele. Utilise aussi par
-    Jarvis (meme fonction, pas de duplication) -- ajoute a la demande
-    explicite de l'utilisateur de lier Hermes/Jarvis a la memoire du
-    projet. Le champ "context_included" du retour dit precisement ce qui
-    a reellement ete inclus.
 
     Retourne un dict JSON-serialisable, jamais une exception non geree:
     {"ok": False, "brain": None, "message": "..."} si aucun brain n'est
@@ -739,17 +714,6 @@ def generate_relation_via_llm(topic, include_context=True):
     topic = (topic or "").strip()
     if not topic:
         return {"ok": False, "brain": None, "message": "sujet vide -- rien a demander a un agent LLM."}
-
-    context_meta = None
-    topic_for_llm = topic
-    if include_context:
-        context_text, context_meta = gather_project_context()
-        if context_text:
-            topic_for_llm = (
-                "[Contexte reel du projet CSTL ci-dessous, pour information -- "
-                "reponds quand meme UNIQUEMENT avec le JSON demande sur le sujet "
-                f"actuel]\n{context_text}\n\n=== Sujet actuel ===\n{topic}"
-            )
 
     try:
         brain = resolve_brain("auto")
@@ -769,7 +733,7 @@ def generate_relation_via_llm(topic, include_context=True):
     brain_name = type(brain).__name__
     model = getattr(brain, "model", None)
     try:
-        relation = brain.generate_relation(topic_for_llm, None)
+        relation = brain.generate_relation(topic, None)
     except Exception as e:
         return {
             "ok": False, "brain": brain_name, "model": model,
@@ -782,7 +746,7 @@ def generate_relation_via_llm(topic, include_context=True):
             "message": f"reponse du modele mal formee (attendu type/subject/object): {relation!r}",
         }
 
-    return {"ok": True, "brain": brain_name, "model": model, "relation": relation, "context_included": context_meta}
+    return {"ok": True, "brain": brain_name, "model": model, "relation": relation}
 
 
 def read_graphify_summary():
@@ -875,7 +839,7 @@ def read_graphify_summary():
 
 
 def check_openclaw_connection():
-    """Test de connectivite GENERIQUE vers ws://127.0.0.1:18789 -- PAS le
+    """Test de connectivite GENERIQUE vers ws://127.0.0.1:19001 -- PAS le
     protocole applicatif d'OpenClaw (aucune documentation de ce protocole
     n'est disponible pour cette tache, donc aucun format de message n'est
     invente ici). Deux niveaux, selon ce qui est disponible:
@@ -884,16 +848,10 @@ def check_openclaw_connection():
          qu'OpenClaw attend reellement s'il ecoute en WebSocket.
       2. Sinon: simple connexion TCP brute sur le port -- suffisant pour
          savoir si quelque chose ecoute la, pas pour parler le protocole.
-    CORRECTIF 07/09/2026 : les messages "detail" plus bas affirmaient a tort
-    "attendu dans ce sandbox, OpenClaw tourne sur la machine de l'utilisateur,
-    pas ici" -- vrai UNIQUEMENT quand ce script tournait dans le sandbox de
-    developpement Claude. Ce code tourne desormais reellement sur la machine
-    macOS de l'utilisateur (ce serveur EST "ici"), donc cette phrase mentait
-    sur le contexte reel d'execution a chaque appel. Un echec ici signifie
-    simplement qu'aucun service n'ecoute sur ce port sur CETTE machine (ex:
-    OpenClaw pas installe ou pas demarre) -- plus de pretention sur "ou" ca
-    tourne."""
-    host, port = "127.0.0.1", 18789
+    Dans CE sandbox, OpenClaw tourne (s'il tourne) sur la machine macOS de
+    l'utilisateur, pas ici -- "inaccessible depuis ici" est donc le resultat
+    ATTENDU et correct, pas un signe de bug."""
+    host, port = "127.0.0.1", 19001
     started = time.monotonic()
 
     try:
@@ -912,8 +870,8 @@ def check_openclaw_connection():
             return {
                 "reachable": False, "method": "websocket_handshake",
                 "host": host, "port": port, "latency_ms": elapsed_ms,
-                "detail": (f"echec de la poignee de main WebSocket ({e}) -- rien n'ecoute (ou ne "
-                           "repond en WebSocket) sur 127.0.0.1:18789 sur cette machine."),
+                "detail": (f"echec de la poignee de main WebSocket ({e}) -- attendu dans ce sandbox, "
+                           "OpenClaw tourne sur la machine de l'utilisateur, pas ici."),
             }
     except ImportError:
         pass
@@ -932,297 +890,9 @@ def check_openclaw_connection():
         return {
             "reachable": False, "method": "tcp_raw",
             "host": host, "port": port, "latency_ms": elapsed_ms,
-            "detail": (f"connexion TCP echouee ({e}) -- rien n'ecoute sur 127.0.0.1:18789 sur cette "
-                       "machine (OpenClaw pas installe dans le PATH ou pas demarre)."),
+            "detail": (f"connexion TCP echouee ({e}) -- attendu dans ce sandbox, OpenClaw tourne "
+                       "sur la machine de l'utilisateur, pas ici."),
         }
-
-
-def check_hermes_connection():
-    """Test de connectivite REEL vers le serveur Ollama local que
-    HermesAgentBrain (sdk/python/cstl_llm_agent.py) essaie en premier dans
-    resolve_brain("auto"). Contrairement a check_openclaw_connection() (port
-    seulement, protocole non documente), Ollama expose une vraie API HTTP
-    documentee -- GET /api/tags repond avec la liste des modeles installes
-    si le serveur tourne, donc ce test prouve reellement "Ollama repond ici",
-    pas seulement "un port est ouvert". Aucune dependance externe (urllib
-    de la bibliotheque standard)."""
-    import urllib.request
-    import urllib.error
-
-    host, port = "127.0.0.1", 11434
-    url = f"http://{host}:{port}/api/tags"
-    started = time.monotonic()
-    try:
-        with urllib.request.urlopen(url, timeout=2.0) as resp:
-            raw = resp.read()
-            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-            try:
-                data = json.loads(raw)
-                models = [m.get("name", "?") for m in data.get("models", [])]
-            except (json.JSONDecodeError, AttributeError):
-                models = []
-            return {
-                "reachable": True, "method": "http_api_tags",
-                "host": host, "port": port, "latency_ms": elapsed_ms,
-                "models": models,
-                "detail": (f"reponse reelle de Ollama sur /api/tags -- {len(models)} modele(s) "
-                           f"installe(s): {', '.join(models) if models else '(aucun)'}."),
-            }
-    except urllib.error.URLError as e:
-        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-        return {
-            "reachable": False, "method": "http_api_tags",
-            "host": host, "port": port, "latency_ms": elapsed_ms,
-            "models": [],
-            "detail": (f"connexion HTTP echouee ({e.reason if hasattr(e, 'reason') else e}) -- "
-                       "Ollama n'ecoute pas sur 127.0.0.1:11434 sur cette machine "
-                       "(pas installe, ou pas lance -- `ollama serve`)."),
-        }
-    except OSError as e:
-        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-        return {
-            "reachable": False, "method": "http_api_tags",
-            "host": host, "port": port, "latency_ms": elapsed_ms,
-            "models": [],
-            "detail": f"erreur reseau ({e}) -- Ollama injoignable sur 127.0.0.1:11434.",
-        }
-
-
-def run_claude_code(prompt, include_context=True):
-    """Lance une VRAIE requete one-shot au CLI Claude Code (`claude -p
-    "<prompt>"`) sur cette machine, dans le repo courant (REPO_ROOT).
-    Ajoute a la demande explicite de l'utilisateur ("dans l'onglet claude
-    code je veux pouvoir l'utiliser").
-
-    include_context=True (defaut) : prepend le VRAI contexte du projet
-    (gather_project_context() -- ADN store + Graphify + Obsidian si
-    configure) avant le prompt de l'utilisateur. Utile meme si `claude`
-    tourne deja dans REPO_ROOT et peut lire les fichiers lui-meme : l'ADN
-    store (memoire d'echanges CSTL reels) et Graphify ne sont pas des
-    fichiers qu'il penserait a consulter spontanement. "context_included"
-    dans le retour dit precisement ce qui a ete inclus.
-
-    Honnete sur les limites, comme le reste de ce dashboard :
-      - Mode "print" (-p) du CLI : une requete, une reponse, PUIS LE
-        PROCESSUS QUITTE -- pas de session persistante, pas de memoire
-        d'un appel a l'autre depuis cet onglet (chaque clic sur "Envoyer"
-        est un nouveau processus `claude` independant).
-      - Aucune permission elargie ajoutee ici (pas de
-        --dangerously-skip-permissions) : si le CLI a besoin d'une
-        approbation d'outil qu'il ne peut pas demander en mode non
-        interactif, il le dit dans sa reponse plutot que d'agir sans
-        confirmation -- comportement par defaut du CLI, pas quelque chose
-        invente ici.
-      - Timeout de 90s : une vraie requete LLM peut prendre du temps ; au
-        dela, on arrete d'attendre et on le dit, sans pretendre a un
-        resultat.
-    """
-    prompt = (prompt or "").strip()
-    if not prompt:
-        return {"ok": False, "error": "prompt vide -- rien a envoyer a Claude Code."}
-
-    context_meta = None
-    prompt_for_cli = prompt
-    if include_context:
-        context_text, context_meta = gather_project_context()
-        if context_text:
-            prompt_for_cli = (
-                "[Contexte reel du projet CSTL ci-dessous, pour information]\n"
-                f"{context_text}\n\n=== Demande actuelle ===\n{prompt}"
-            )
-
-    claude_bin = shutil.which("claude")
-    if not claude_bin:
-        candidate = Path.home() / ".npm-global" / "bin" / "claude"
-        if candidate.exists():
-            claude_bin = str(candidate)
-    if not claude_bin:
-        return {
-            "ok": False,
-            "error": ("commande 'claude' introuvable (ni dans PATH, ni dans "
-                      "~/.npm-global/bin) -- le CLI Claude Code n'est pas installe, "
-                      "ou pas trouvable depuis ce serveur dashboard."),
-        }
-
-    started = time.monotonic()
-    try:
-        proc = subprocess.run(
-            [claude_bin, "-p", prompt_for_cli],
-            cwd=str(REPO_ROOT),
-            capture_output=True, text=True, timeout=90,
-        )
-    except subprocess.TimeoutExpired:
-        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-        return {"ok": False, "error": f"timeout apres {elapsed_ms} ms -- `claude -p` n'a pas repondu a temps (90s)."}
-    except OSError as e:
-        return {"ok": False, "error": f"echec de lancement du processus 'claude': {e}"}
-
-    elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-    return {
-        "ok": proc.returncode == 0,
-        "returncode": proc.returncode,
-        "context_included": context_meta,
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-        "elapsed_ms": elapsed_ms,
-        "binary": claude_bin,
-    }
-
-
-def gather_project_context(max_entries=6, max_chars_per_entry=280, max_total_chars=3000):
-    """Compile un bloc de contexte REEL a partir de trois sources deja
-    existantes de ce projet -- ADN store (memoire du protocole CSTL),
-    Graphify (graphe reel), et le vault Obsidian SI OBSIDIAN_VAULT_PATH est
-    definie pour CE process dashboard. Ajoute a la demande explicite de
-    l'utilisateur ("faut que claude, hermes, openclaw et jarvis soit
-    linker avec la memoire de cstl et obsidian et graphify pour qu'on
-    puisse retrouver les context et la memoire du projet").
-
-    Limite honnete deja documentee ailleurs dans ce fichier
-    (check_telegram_obsidian_status) : ce dashboard tourne dans un PROCESS
-    SEPARE du serveur Rust -- il ne peut lire le vault Obsidian QUE si
-    OBSIDIAN_VAULT_PATH est AUSSI definie pour ce process Python (pas
-    seulement pour le process Rust). Si absente, la section Obsidian reste
-    honnetement vide plutot que de fabriquer un contenu.
-
-    Retourne (texte: str, meta: dict) -- meta dit precisement ce qui a
-    reellement ete inclus, pour que l'appelant (et l'utilisateur, via
-    /api/project-context) puisse verifier plutot que de faire confiance
-    aveuglement."""
-    parts = []
-    meta = {"adn": False, "graphify": False, "obsidian": False, "obsidian_reason": None}
-
-    if ADN_DB_PATH.exists():
-        try:
-            uri = f"file:{ADN_DB_PATH.as_posix()}?mode=ro"
-            conn = sqlite3.connect(uri, uri=True, timeout=2.0)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT hash, produced_by, created_at, payload FROM adn_store "
-                "ORDER BY created_at DESC LIMIT ?", (max_entries,)
-            )
-            rows = [dict(r) for r in cur.fetchall()]
-            conn.close()
-            if rows:
-                lines = ["=== Memoire CSTL (ADN store, dernieres entrees reelles, ordre chronologique) ==="]
-                for r in reversed(rows):
-                    payload = (r.get("payload") or "").replace("\n", " ")[:max_chars_per_entry]
-                    lines.append(f"[{r.get('created_at')}] {r.get('produced_by')} "
-                                 f"(hash {str(r.get('hash'))[:12]}...): {payload}")
-                parts.append("\n".join(lines))
-                meta["adn"] = True
-        except sqlite3.OperationalError:
-            pass
-
-    graphify = read_graphify_summary()
-    if graphify.get("ok"):
-        parts.append(
-            f"=== Graphify (graphe reel: {graphify['node_count']} noeuds, "
-            f"{graphify['link_count']} liens, {graphify['community_count']} communautes, "
-            f"genere le {graphify.get('generated_at')}) ==="
-        )
-        meta["graphify"] = True
-
-    vault = os.environ.get("OBSIDIAN_VAULT_PATH")
-    if not vault:
-        meta["obsidian_reason"] = ("OBSIDIAN_VAULT_PATH non definie pour ce process dashboard -- "
-                                    "meme limite que /api/telegram-obsidian-status, rien a lire ici.")
-    else:
-        vault_path = Path(vault)
-        if not vault_path.exists():
-            meta["obsidian_reason"] = f"OBSIDIAN_VAULT_PATH={vault} ne pointe vers rien sur cette machine."
-        else:
-            try:
-                md_files = sorted(vault_path.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:3]
-                if md_files:
-                    lines = ["=== Obsidian (notes reelles les plus recentes du vault) ==="]
-                    for f in md_files:
-                        content = f.read_text(encoding="utf-8", errors="replace")[:max_chars_per_entry]
-                        lines.append(f"-- {f.name} --\n{content}")
-                    parts.append("\n".join(lines))
-                    meta["obsidian"] = True
-                else:
-                    meta["obsidian_reason"] = f"vault trouve ({vault}) mais aucun fichier .md dedans."
-            except OSError as e:
-                meta["obsidian_reason"] = f"lecture du vault echouee: {e}"
-
-    text = "\n\n".join(parts)
-    if len(text) > max_total_chars:
-        text = text[:max_total_chars] + "\n... (tronque)"
-    return text, meta
-
-
-def _openclaw_workspace_dir():
-    """Lit le VRAI chemin du workspace OpenClaw depuis
-    ~/.openclaw/openclaw.json (agents.defaults.workspace) -- pas hardcode,
-    s'adapte si l'utilisateur le change un jour. None si le fichier de
-    config ou la cle sont absents/illisibles."""
-    config_path = Path.home() / ".openclaw" / "openclaw.json"
-    if not config_path.exists():
-        return None
-    try:
-        with open(config_path, encoding="utf-8") as f:
-            config = json.load(f)
-        workspace = config.get("agents", {}).get("defaults", {}).get("workspace")
-        return Path(workspace) if workspace else None
-    except (json.JSONDecodeError, OSError):
-        return None
-
-
-def sync_context_to_openclaw():
-    """Ecrit un VRAI extrait de gather_project_context() dans
-    memory/<aujourd'hui>.md du workspace OpenClaw -- convention DEJA
-    documentee par OpenClaw lui-meme, pas inventee ici (voir
-    workspace/AGENTS.md sur cette machine : "Daily notes:
-    memory/YYYY-MM-DD.md ... Use runtime-provided startup context first.
-    That context may already include ... recent daily memory"). Ajoute a
-    la demande explicite de l'utilisateur.
-
-    Limite honnete, cruciale : ceci n'affecte QUE les FUTURES sessions
-    OpenClaw qui redemarrent et relisent memory/ selon leur propre
-    convention -- une session OpenClaw DEJA ouverte ne relit pas ce
-    fichier en direct, rien ici ne peut forcer ca depuis ce dashboard.
-
-    APPEND, jamais overwrite -- ce fichier peut deja contenir les propres
-    notes de l'utilisateur ou d'autres sessions OpenClaw."""
-    workspace = _openclaw_workspace_dir()
-    if workspace is None:
-        return {"ok": False, "error": "workspace OpenClaw introuvable (~/.openclaw/openclaw.json absent ou incomplet)."}
-    if not workspace.exists():
-        return {"ok": False, "error": f"le workspace configure ({workspace}) n'existe pas sur cette machine."}
-
-    context_text, meta = gather_project_context()
-    if not context_text:
-        return {"ok": False, "error": "aucun contexte reel a synchroniser (ADN store vide, Graphify absent, Obsidian non configure)."}
-
-    memory_dir = workspace / "memory"
-    try:
-        memory_dir.mkdir(exist_ok=True)
-        today = datetime.date.today().isoformat()
-        target = memory_dir / f"{today}.md"
-        stamp = datetime.datetime.now().strftime("%H:%M:%S")
-        block = (
-            f"\n\n## Synchronisation CSTL Dashboard ({stamp})\n"
-            "_Ecrit automatiquement par dashboard/server.py::sync_context_to_openclaw() "
-            "a la demande de l'utilisateur -- memoire reelle du projet CSTL (ADN store + "
-            "Graphify + Obsidian si configure)._\n\n"
-            f"{context_text}\n"
-        )
-        with open(target, "a", encoding="utf-8") as f:
-            f.write(block)
-    except OSError as e:
-        return {"ok": False, "error": f"ecriture echouee: {e}"}
-
-    return {
-        "ok": True,
-        "written_to": str(target),
-        "bytes_appended": len(block.encode("utf-8")),
-        "sources_included": meta,
-        "note": ("pris en compte par OpenClaw a son PROCHAIN demarrage de session "
-                 "(convention memory/ de son propre AGENTS.md) -- pas en direct sur "
-                 "une session deja ouverte."),
-    }
 
 
 def check_other_systems():
@@ -1267,7 +937,7 @@ def check_other_systems():
         "name": "OpenClaw",
         "status": "non_integre",
         "detail": ("aucune reference dans src/ ; /api/openclaw-check de CE dashboard teste seulement "
-                   "l'ouverture du port ws://127.0.0.1:18789, sans parler le protocole applicatif "
+                   "l'ouverture du port ws://127.0.0.1:19001, sans parler le protocole applicatif "
                    "(non documente) -- clique 'Tester la connexion OpenClaw' pour un resultat en direct."),
     })
 
@@ -1319,13 +989,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(read_graphify_summary())
         elif parsed.path == "/api/openclaw-check":
             self._send_json(check_openclaw_connection())
-        elif parsed.path == "/api/hermes-check":
-            self._send_json(check_hermes_connection())
-        elif parsed.path == "/api/project-context":
-            context_text, meta = gather_project_context()
-            self._send_json({"context": context_text, "meta": meta})
-        elif parsed.path == "/api/terminal-info":
-            self._send_json(get_terminal_info())
         else:
             self.send_error(404, "Not found")
 
@@ -1354,7 +1017,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
                 return
-            self._send_json(generate_relation_via_llm(fields.get("topic", ""), fields.get("include_context", True)))
+            self._send_json(generate_relation_via_llm(fields.get("topic", "")))
         elif parsed.path == "/api/orchestrate":
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length) if length else b"{}"
@@ -1366,17 +1029,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             turns = fields.get("turns", 4)
             topic = fields.get("topic", "Est-ce que Montreal est au Canada?")
             self._send_json(run_orchestrated_relay(turns, topic))
-        elif parsed.path == "/api/claude-code":
-            length = int(self.headers.get("Content-Length", "0"))
-            raw = self.rfile.read(length) if length else b"{}"
-            try:
-                fields = json.loads(raw.decode("utf-8"))
-            except json.JSONDecodeError:
-                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
-                return
-            self._send_json(run_claude_code(fields.get("prompt", ""), fields.get("include_context", True)))
-        elif parsed.path == "/api/openclaw-sync-context":
-            self._send_json(sync_context_to_openclaw())
         else:
             self.send_error(404, "Not found")
 
@@ -1394,46 +1046,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def get_terminal_info():
-    """Etat REEL du pont terminal PTY (dashboard/pty_bridge.py) -- jamais
-    fabrique : si le module est absent (import echoue) ou le paquet
-    `websockets` n'est pas installe, available=False avec la raison
-    precise, et le frontend le montre tel quel plutot que d'essayer de se
-    connecter dans le vide."""
-    if pty_bridge is None:
-        return {"available": False, "reason": "module dashboard/pty_bridge.py introuvable ou import en echec."}
-    if pty_bridge.websockets is None:
-        return {"available": False, "reason": "paquet Python 'websockets' non installe sur cette machine (pip install websockets)."}
-    if not PTY_BRIDGE_STARTED:
-        return {"available": False, "reason": "le pont PTY n'a pas demarre (voir les logs du dashboard au lancement)."}
-    return {
-        "available": True,
-        "host": "127.0.0.1",
-        "port": PTY_BRIDGE_PORT,
-        "tools": ["hermes", "openclaw", "openclaw-logs", "claude-code"],
-        "note": ("chaque connexion WebSocket lance son PROPRE process reel -- "
-                 "deux onglets ouverts en meme temps sur le meme outil sont deux "
-                 "vrais process independants."),
-    }
-
-
 def main():
-    global PTY_BRIDGE_STARTED
     addr = ("127.0.0.1", DASHBOARD_PORT)
     httpd = ThreadingHTTPServer(addr, DashboardHandler)
     print(f"[dashboard] CSTL Dashboard sur http://127.0.0.1:{DASHBOARD_PORT}/")
     print(f"[dashboard] Serveur CSTL cible: {CSTL_SERVER_HOST}:{CSTL_SERVER_PORT}")
     print(f"[dashboard] ADN store lu depuis: {ADN_DB_PATH}")
-    if pty_bridge is not None:
-        try:
-            PTY_BRIDGE_STARTED = pty_bridge.start_server(REPO_ROOT, port=PTY_BRIDGE_PORT)
-        except Exception as e:
-            PTY_BRIDGE_STARTED = False
-            print(f"[dashboard] pont terminal PTY: echec du demarrage -- {e}")
-    if PTY_BRIDGE_STARTED:
-        print(f"[dashboard] Pont terminal PTY (Hermes/OpenClaw/Claude Code) sur ws://127.0.0.1:{PTY_BRIDGE_PORT}/<outil>")
-    else:
-        print("[dashboard] Pont terminal PTY indisponible (voir /api/terminal-info) -- le reste du dashboard fonctionne normalement.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

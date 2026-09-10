@@ -1,0 +1,625 @@
+From 2c0ee67e53c5e9570021800a3c4b3ed496af904d Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sat, 5 Sep 2026 01:39:08 +0000
+Subject: [PATCH 2/5] fix(governance): persiste l'etat du breaker/drift --
+ survit desormais a un redemarrage
+
+L'etat de la Couche 2 (circuit breaker par expediteur, ratio de drift
+d'operateur) etait purement en memoire (Arc<Mutex<GovernanceTracker>>),
+remis a zero a chaque redemarrage, contrairement a la chaine d'audit et
+l'ADN store qui survivent deja depuis les fix precedents. Un circuit
+qui venait de s'ouvrir, ou un drift qui venait de franchir le seuil,
+oubliait tout instantanement au moindre restart -- silencieusement,
+sans aucune trace.
+
+Meme patron que la fusion audit_trail/adn_store: deux nouvelles tables
+(governance_events, governance_alerts) dans la MEME Connection SQLite,
+un evenement persiste par appel record() (meme grain que
+save_audit_entry pour l'audit, un compromis latence/durabilite deja
+etabli dans ce depot), purge opportuniste des evenements plus vieux que
+la plus grande fenetre glissante pour ne jamais grossir sans limite.
+CstlNativeServer::try_with_data_path recharge cet etat au demarrage via
+GovernanceTracker::with_defaults_restored (nouveau constructeur qui
+rejoue les evenements en reconvertissant horodatage unix -> Instant
+relatif).
+
+Verifie en direct avec un vrai redemarrage (deux instances de
+CstlNativeServer sur le meme fichier SQLite reel, meme methode que
+audit_persistence_smoke_test.rs): un breaker ouvert (3/3) et un drift
+flagged (ratio=1.00) sur la premiere instance apparaissent deja
+ouverts/flagged des le premier payload traite par la seconde
+(examples/governance_persistence_smoke_test.rs, 4 scenarios) -- et un
+sender jamais vu demarre bien neutre, sans contamination croisee.
+
+cargo build: 0 warning. cargo test --lib: 143/143 (compte inchange).
+cargo clippy --all-targets: 0 warning. README.md mis a jour (Layer 2 +
+Honest Limitations) pour refleter le nouveau statut.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ README.md                                     |   3 +-
+ examples/governance_persistence_smoke_test.rs | 222 ++++++++++++++++++
+ src/adn_store.rs                              |  94 ++++++++
+ src/governance.rs                             |  97 +++++++-
+ src/server/handler.rs                         |  27 +++
+ src/server/mod.rs                             |  28 ++-
+ 6 files changed, 459 insertions(+), 12 deletions(-)
+ create mode 100644 examples/governance_persistence_smoke_test.rs
+
+diff --git a/README.md b/README.md
+index bff9e50..ba61ebf 100644
+--- a/README.md
++++ b/README.md
+@@ -46,7 +46,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
+ | # | Layer | Status |
+ |---|---|---|
+ | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
+-| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention, Ed25519 identity | 🟡 Partial, observation-only (`src/governance.rs`, wired live 2026-09-03): a per-sender rolling-window circuit breaker (repeated `ExecutionLab` inconsistency events) and an operator-drift ratio (repeated `SEMANTIC_WARNING`) are computed on every payload and exposed in a new `GOVERNANCE [...]` response block, escalating harder via Telegram when tripped — but neither ever rejects a payload, by explicit design decision, matching the only real blocking path in this server (security/parse/validation). `RestrictedCouncil::quorum_size()` now implements real ceil(2/3·n) quorum arithmetic and `AdnStore::cast_commit_vote` tallies distinct voters per hash — exercised end-to-end with a 2-member council (`examples/governance_smoke_test.rs`). **New 2026-09-04** (`src/signing.rs`): Ed25519 message signing, closing part of OWASP ASI03/ASI07 (identity & inter-agent communication were previously unauthenticated plain-text strings) — optional globally, mandatory only for a sender already registered with a `public_key`, no PKI/CA (self-signature proves key possession, not prior identity); verified live end-to-end on a real TCP connection, dev and release builds (`examples/signing_registration_smoke_test.rs`, 6 scenarios). **Second update, same day**: production council membership is now configurable (`CSTL_COUNCIL_MEMBERS`, comma-separated names — `restricted_council.rs::from_env()`), replacing the hard-coded single "Olivier" member — but making membership configurable alone would have been security theater once a second member exists: `RestrictedCouncil::is_authorized()` is a bare string comparison on `sender`, so anyone on the TCP connection could previously have forged `sender=Alice` in a `council_decision` payload with zero proof, reaching quorum alone. Fixed in `handler.rs`'s `council_decision` block: a vote is now accepted only if (1) the sender is on the authorized list, (2) the message carries a **valid** Ed25519 signature (not just "any" — STEP 2a's existing check only verifies a message is internally self-consistent with whatever key IT claims, never that this key matches the one on file), and (3) the embedded `META.public_key` matches **exactly** the key registered for that name via `agent_register` — binding claimed identity to cryptographic proof, not just the message to itself. Verified live: a legitimate 2-of-3 quorum still reaches commit (`examples/governance_smoke_test.rs`, scenarios 3/4), an unsigned vote from an authorized-but-unregistered member is rejected (`signature_required`, scenario 5), and a vote signed with an attacker's own key while claiming `sender=alice_h` is rejected (`public_key_mismatch`, scenario 6) — the last one is the actual identity-forgery case this closes. **Third update, same day**: the key↔registry binding above was initially scoped to `council_decision` only — extended to STEP 2a globally so it covers all signed traffic, not just votes. Before this, a message signed by an attacker's own key while claiming `sender=<any already-registered name>` would still pass STEP 2a (the signature was internally self-consistent with the attacker's own embedded key, and STEP 2a never compared that key to the registry) for anything other than a council vote. Now a single registry lookup in STEP 2a serves both `signature_required` and a `public_key_mismatch` rejection whenever a registered sender's message carries a different key than the one on file — `agent_register` itself stays exempt (legitimate key rotation isn't checked against the old key). Verified live end-to-end: ordinary signed traffic from a registered agent still processes normally, and the same traffic signed by an impostor's key while claiming that agent's name is rejected (`public_key_mismatch`) — `examples/governance_smoke_test.rs` now covers 8 scenarios. |
++| 2 | **Governance / Resilience** — circuit breaker, 2/3 quorum, operator drift prevention, Ed25519 identity | 🟡 Partial, observation-only (`src/governance.rs`, wired live 2026-09-03): a per-sender rolling-window circuit breaker (repeated `ExecutionLab` inconsistency events) and an operator-drift ratio (repeated `SEMANTIC_WARNING`) are computed on every payload and exposed in a new `GOVERNANCE [...]` response block, escalating harder via Telegram when tripped — but neither ever rejects a payload, by explicit design decision, matching the only real blocking path in this server (security/parse/validation). `RestrictedCouncil::quorum_size()` now implements real ceil(2/3·n) quorum arithmetic and `AdnStore::cast_commit_vote` tallies distinct voters per hash — exercised end-to-end with a 2-member council (`examples/governance_smoke_test.rs`). **New 2026-09-04** (`src/signing.rs`): Ed25519 message signing, closing part of OWASP ASI03/ASI07 (identity & inter-agent communication were previously unauthenticated plain-text strings) — optional globally, mandatory only for a sender already registered with a `public_key`, no PKI/CA (self-signature proves key possession, not prior identity); verified live end-to-end on a real TCP connection, dev and release builds (`examples/signing_registration_smoke_test.rs`, 6 scenarios). **Second update, same day**: production council membership is now configurable (`CSTL_COUNCIL_MEMBERS`, comma-separated names — `restricted_council.rs::from_env()`), replacing the hard-coded single "Olivier" member — but making membership configurable alone would have been security theater once a second member exists: `RestrictedCouncil::is_authorized()` is a bare string comparison on `sender`, so anyone on the TCP connection could previously have forged `sender=Alice` in a `council_decision` payload with zero proof, reaching quorum alone. Fixed in `handler.rs`'s `council_decision` block: a vote is now accepted only if (1) the sender is on the authorized list, (2) the message carries a **valid** Ed25519 signature (not just "any" — STEP 2a's existing check only verifies a message is internally self-consistent with whatever key IT claims, never that this key matches the one on file), and (3) the embedded `META.public_key` matches **exactly** the key registered for that name via `agent_register` — binding claimed identity to cryptographic proof, not just the message to itself. Verified live: a legitimate 2-of-3 quorum still reaches commit (`examples/governance_smoke_test.rs`, scenarios 3/4), an unsigned vote from an authorized-but-unregistered member is rejected (`signature_required`, scenario 5), and a vote signed with an attacker's own key while claiming `sender=alice_h` is rejected (`public_key_mismatch`, scenario 6) — the last one is the actual identity-forgery case this closes. **Third update, same day**: the key↔registry binding above was initially scoped to `council_decision` only — extended to STEP 2a globally so it covers all signed traffic, not just votes. Before this, a message signed by an attacker's own key while claiming `sender=<any already-registered name>` would still pass STEP 2a (the signature was internally self-consistent with the attacker's own embedded key, and STEP 2a never compared that key to the registry) for anything other than a council vote. Now a single registry lookup in STEP 2a serves both `signature_required` and a `public_key_mismatch` rejection whenever a registered sender's message carries a different key than the one on file — `agent_register` itself stays exempt (legitimate key rotation isn't checked against the old key). Verified live end-to-end: ordinary signed traffic from a registered agent still processes normally, and the same traffic signed by an impostor's key while claiming that agent's name is rejected (`public_key_mismatch`) — `examples/governance_smoke_test.rs` now covers 8 scenarios. **Fourth update, 2026-09-05**: the breaker/drift state itself was, until this pass, in-memory only (`Arc<Mutex<GovernanceTracker>>`, reset to neutral on every server restart) — a circuit that had just tripped open, or a drift ratio that had just crossed the threshold, silently forgot both the instant a process restarted. Persisted now in the same SQLite file/`Connection` as the rest (`governance_events`/`governance_alerts` tables in `adn_store.rs`, same one-event-per-payload grain as the audit trail's `save_audit_entry`, opportunistically pruned to the larger of the two rolling windows so the table never grows unbounded); `CstlNativeServer::try_with_data_path` reloads it at startup via `GovernanceTracker::with_defaults_restored`. Verified with a real restart (new `CstlNativeServer` instance against the same on-disk file, same pattern as `examples/audit_persistence_smoke_test.rs`): a breaker tripped open (3/3) and a drift ratio flagged (1.00) on the first instance both show up already open/flagged on the very first payload processed by the second instance, while a sender never seen on either instance starts neutral (`examples/governance_persistence_smoke_test.rs`, 4 scenarios). |
+ | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+ | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live (`src/execution_lab.rs`); `RestrictedCouncil` wired live (`src/restricted_council.rs`) with a Telegram bridge (buttons, live reply) — 2/3 quorum arithmetic and multi-voter tallying now implemented and tested (`quorum_size()`, `AdnStore::cast_commit_vote`, Layer 2 above), but the production config still registers a single authorized member, so quorum=1 in practice today |
+ | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+@@ -277,6 +277,7 @@ cargo test --lib
+ - Layer 3b: `ExecutionLab` and `RestrictedCouncil` are both wired live, and a commit has actually happened end-to-end (via a Telegram button). `RestrictedCouncil`'s 2/3 quorum arithmetic (`quorum_size()`) and multi-voter tallying (`AdnStore::cast_commit_vote`) are now implemented and tested, and since 2026-09-04 that quorum is also cryptographically enforced (signature + registry key match), configurable to more than one member via `CSTL_COUNCIL_MEMBERS` — production still runs with a single authorized member by default, so quorum=1 in practice unless configured otherwise — see Layer 2 for the new governance module this quorum logic is part of. Layer 6: Obsidian escalation half is real, wired live, and verified end-to-end against a live vault; Graphify half is also real — installed (`graphifyy` PyPI) and re-run 2026-09-04 against the current codebase (793 nodes, 1646 edges, 46 communities, built from commit `f73daa6b`) via `graphify update .` (AST-only, no LLM key available in that environment — community names are structural hubs, not the LLM-generated semantic labels from the earlier 2026-09-03 run); will go stale again after further commits until `graphify update .` is re-run. Layer 7 (agent discovery/routing) is built and wired live.
+ - Human council resolution rate: never measured under production conditions.
+ - Two Rust audit/memory systems (hash chain, ADN store) — both real and wired live, but linked only by a shared hash, not unified into one schema.
++- Layer 2 governance state (circuit breaker + operator drift, `src/governance.rs`) is now persisted (2026-09-05, `governance_events`/`governance_alerts` in the same SQLite file/`Connection` as `adn_store`/`audit_trail`) and reloaded at startup — no longer the in-memory-only limitation stated in earlier revisions of this file; verified with a real restart (`examples/governance_persistence_smoke_test.rs`). Still observation-only by design: neither the breaker nor the drift ratio ever rejects a payload.
+ - `emergence_proofs` table: real, tested CRUD (`AdnStore::put_emergence_proof`/`get_emergence_proofs`), now reachable live via `purpose=detect_emergence` on `INTENT_PAYLOAD` (`src/emergence.rs`, a Rust port of the Python `RevisionOrchestrator` that existed nowhere in this repo before). Design matches how the project's own multi-LLM sessions actually happened (`CSTL_v4_9_1_REFERENCE_DEMO`: a human relays the same question to several LLMs and forwards their responses) — no API keys, no automated cross-vendor calling; the server only compares payloads its agents already submitted. Decision matching is a naive textual comparison (trim + lowercase), not semantic. Still zero production data — nobody has run a real tripartite session through this path yet. `adn_council_log` now has real entries: `commit()`/`revoke()` are reachable (`RestrictedCouncil` → `AdnStore`, optionally via a Telegram button), and have actually been exercised.
+ - `ExecutionLab` consistency check now cross-references each new payload against the full ADN store history (`src/execution_lab.rs::check_consistency_with_history`, wired live in `handler.rs`), not just relations within the same payload. Still scoped to functional-predicate contradictions and 2-node cycles — no temporal-cycle detection, no cross-domain simulators.
+ - Level 4 hypothesis engine: generative step now built (`src/hypothesis_engine.rs`, 2026-09-04) and unit-tested offline (overlap coefficient, sigma formula, CSTL formatting) — the network orchestration against real Wikidata is unverified in this environment (network blocked), needs confirmation on a machine with real access.
+diff --git a/examples/governance_persistence_smoke_test.rs b/examples/governance_persistence_smoke_test.rs
+new file mode 100644
+index 0000000..42028de
+--- /dev/null
++++ b/examples/governance_persistence_smoke_test.rs
+@@ -0,0 +1,222 @@
++/// examples/governance_persistence_smoke_test.rs -- verification live de la
++/// persistance de la Couche 2 (gouvernance/resilience: circuit breaker +
++/// drift d'operateur, src/governance.rs), ajoutee le 2026-09-05.
++///
++/// Trouvaille corrigee par ce travail: `GovernanceTracker` (breaker_trips,
++/// drift_ratio, par sender) etait PUREMENT en memoire
++/// (`Arc<Mutex<GovernanceTracker>>` cote serveur) -- `CstlNativeServer::new`/
++/// `with_data_path` le reconstruisaient TOUJOURS vide (`with_defaults()`),
++/// meme quand la meme base SQLite avait deja de l'historique de breaker/
++/// drift sur disque. Un redemarrage reel remettait donc silencieusement le
++/// circuit breaker a "closed" et le ratio de drift a 0, meme pour un sender
++/// dont le circuit venait tout juste de s'ouvrir.
++///
++/// Meme patron que `examples/audit_persistence_smoke_test.rs`:
++/// `CstlNativeServer::with_data_path(port, chemin)` fait exactement ce
++/// qu'un vrai demarrage ferait (ouvre `adn_store` au meme chemin reel --
++/// PAS ":memory:" --, charge l'etat de gouvernance persiste). Construire
++/// une DEUXIEME instance pointee sur le MEME fichier reel simule fidelement
++/// un redemarrage complet du processus, sans avoir besoin de tuer/relancer
++/// un vrai processus OS pour observer le meme effet: aucune Connection ni
++/// etat en memoire n'est partage entre les deux instances, seul le fichier
++/// SQLite sur disque l'est.
++///
++/// Scenarios verifies:
++/// 1. server_a (fichier reel neuf) recoit 3 incoherences consecutives pour
++///    le meme sender -> breaker_trips=3, circuit=open.
++/// 2. server_a recoit aussi 3 SEMANTIC_WARNING pour un DEUXIEME sender ->
++///    drift_ratio=1.0, drift_flagged=true.
++/// 3. server_a est "arrete" (sort de portee), server_b -- NOUVELLE instance,
++///    MEME fichier -- demarre : un SEUL nouveau payload (sans nouvelle
++///    incoherence/warning) doit deja montrer breaker_trips=3/circuit=open
++///    pour le premier sender ET drift_ratio=1.0/drift_flagged=true pour le
++///    second -- preuve que l'etat a survecu au redemarrage, pas remis a
++///    zero.
++/// 4. Un sender jamais vu ni sur server_a ni server_b reste a l'etat neutre
++///    sur server_b (pas de contamination croisee entre senders via la
++///    persistance).
++use cstl_parser::agent_discovery::AgentCard;
++use cstl_parser::server::CstlNativeServer;
++use tokio::io::{AsyncReadExt, AsyncWriteExt};
++use tokio::net::TcpStream;
++
++async fn register_router(server: &CstlNativeServer, name: &str) {
++    let mut reg = server.agent_registry.lock().await;
++    reg.register(AgentCard {
++        name: name.to_string(),
++        version: "5.0.0".to_string(),
++        capabilities: vec!["communication".to_string()],
++        trust_score: 0.9,
++        public_key: None,
++    });
++}
++
++async fn send(port: u16, payload: &str) -> String {
++    let mut stream = TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
++    stream.write_all(payload.as_bytes()).await.expect("send");
++    let mut buf = Vec::new();
++    let mut chunk = [0u8; 4096];
++    loop {
++        let n = stream.read(&mut chunk).await.expect("read");
++        if n == 0 {
++            break;
++        }
++        buf.extend_from_slice(&chunk[..n]);
++        if buf.windows(9).any(|w| w == b"---END---") {
++            break;
++        }
++    }
++    String::from_utf8_lossy(&buf).to_string()
++}
++
++fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
++    for line in response.lines() {
++        if line.starts_with(block) {
++            let inner = line.split_once('[')?.1.trim_end_matches(']').trim_end_matches("]\n");
++            for part in inner.split(',') {
++                let part = part.trim();
++                if let Some((k, v)) = part.split_once('=') {
++                    if k.trim() == key {
++                        return Some(v.trim().to_string());
++                    }
++                }
++            }
++        }
++    }
++    None
++}
++
++/// Deux relations contradictoires sur le meme sujet -- ce qui declenche
++/// EventReason::Inconsistency via ExecutionLab (Couche 3b), exactement
++/// comme dans governance_smoke_test.rs.
++fn born_in_payload(sender: &str, subject: &str, city: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=governance_persistence_smoke, sender={sender}, receiver=server]\n\
++         RELATION [type=born_in, subject={subject}, object={city}]\n\
++         ---END---\n"
++    )
++}
++
++/// Un operateur SDL uppercase inconnu -- declenche EventReason::SemanticWarning
++/// via `validator::check_sdl_operator_whitelist` (purement consultatif, ne
++/// bloque jamais le payload).
++fn semantic_warning_payload(sender: &str, subject: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=governance_persistence_smoke, sender={sender}, receiver=server]\n\
++         RELATION [type=UNKNOWN_OPERATOR_XYZ, subject={subject}, object=target]\n\
++         ---END---\n"
++    )
++}
++
++#[tokio::main]
++async fn main() {
++    let tmp_path = std::env::temp_dir().join(format!(
++        "cstl_governance_persistence_smoke_{}.db",
++        std::process::id()
++    ));
++    let tmp_path_str = tmp_path.to_str().unwrap().to_string();
++    let _ = std::fs::remove_file(&tmp_path_str); // run precedent eventuel
++
++    let mut failures = Vec::new();
++
++    // ---- "Session 1" (server_a) ----
++    let port_a: u16 = 15180;
++    let server_a = CstlNativeServer::with_data_path(port_a, &tmp_path_str);
++    register_router(&server_a, "smoke_router_a").await;
++    tokio::spawn(async move {
++        server_a.start().await.expect("server_a start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    println!("[1/4] Session 1: 3 incoherences consecutives pour breaker_sender...");
++    let subject = "gov_persist_subject_breaker";
++    let _ = send(port_a, &born_in_payload("breaker_sender", subject, "Varsovie")).await; // baseline
++    let _ = send(port_a, &born_in_payload("breaker_sender", subject, "Paris")).await; // trip 1
++    let _ = send(port_a, &born_in_payload("breaker_sender", subject, "Berlin")).await; // trip 2
++    let resp1 = send(port_a, &born_in_payload("breaker_sender", subject, "Londres")).await; // trip 3 -> open
++    let circuit1 = extract_field(&resp1, "GOVERNANCE", "circuit");
++    let trips1 = extract_field(&resp1, "GOVERNANCE", "breaker_trips");
++    println!("      circuit={:?} breaker_trips={:?}", circuit1, trips1);
++    if circuit1.as_deref() != Some("open") || trips1.as_deref() != Some("3") {
++        failures.push("scenario 1: circuit breaker attendu ouvert avec 3 trips avant redemarrage".to_string());
++    }
++
++    println!("[2/4] Session 1: 5 SEMANTIC_WARNING pour drift_sender (drift_min_samples=5)...");
++    for i in 0..4 {
++        let _ = send(port_a, &semantic_warning_payload("drift_sender", &format!("drift_subject_{i}"))).await;
++    }
++    let resp2 = send(port_a, &semantic_warning_payload("drift_sender", "drift_subject_4")).await;
++    let drift_ratio2 = extract_field(&resp2, "GOVERNANCE", "drift_ratio");
++    let drift_flagged2 = extract_field(&resp2, "GOVERNANCE", "drift_flagged");
++    println!("      drift_ratio={:?} drift_flagged={:?}", drift_ratio2, drift_flagged2);
++    if drift_ratio2.as_deref() != Some("1.00") || drift_flagged2.as_deref() != Some("true") {
++        failures.push("scenario 2: drift attendu ratio=1.00, flagged=true avant redemarrage".to_string());
++    }
++
++    // ---- "Redemarrage" : server_b, NOUVELLE instance, MEME fichier ----
++    println!("[3/4] \"Redemarrage\" (nouvelle instance, meme fichier) -- l'etat doit survivre...");
++    let port_b: u16 = 15181;
++    let server_b = CstlNativeServer::with_data_path(port_b, &tmp_path_str);
++    register_router(&server_b, "smoke_router_b").await;
++    tokio::spawn(async move {
++        server_b.start().await.expect("server_b start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    // Un seul payload NORMAL (sans nouvelle incoherence) pour breaker_sender
++    // sur server_b -- si l'etat n'avait PAS survecu, ce serait breaker_trips=0
++    // et circuit=closed (un seul payload propre ne peut pas ouvrir le circuit).
++    let resp3 = send(port_b, &born_in_payload("breaker_sender", "gov_persist_subject_breaker_after_restart", "Rome")).await;
++    let circuit3 = extract_field(&resp3, "GOVERNANCE", "circuit");
++    let trips3 = extract_field(&resp3, "GOVERNANCE", "breaker_trips");
++    println!("      breaker_sender apres redemarrage: circuit={:?} breaker_trips={:?}", circuit3, trips3);
++    if circuit3.as_deref() != Some("open") || trips3.as_deref() != Some("3") {
++        failures.push(format!(
++            "scenario 3a: apres 'redemarrage', circuit=open/breaker_trips=3 attendus (survie), obtenu circuit={:?} breaker_trips={:?} -- \
++             l'etat de gouvernance a ete reinitialise au lieu d'etre recharge depuis le disque",
++            circuit3, trips3
++        ));
++    }
++
++    // Meme verification pour le drift, avec un payload SANS SEMANTIC_WARNING
++    // (born_in normal) -- si l'etat avait survecu, le ratio doit baisser
++    // legerement (6 echantillons, 5 avec warning) mais rester flagged,
++    // PAS repartir de 0/false.
++    let resp4 = send(port_b, &born_in_payload("drift_sender", "gov_persist_subject_drift_after_restart", "Tokyo")).await;
++    let drift_ratio4 = extract_field(&resp4, "GOVERNANCE", "drift_ratio");
++    let drift_flagged4 = extract_field(&resp4, "GOVERNANCE", "drift_flagged");
++    println!("      drift_sender apres redemarrage: drift_ratio={:?} drift_flagged={:?}", drift_ratio4, drift_flagged4);
++    if drift_flagged4.as_deref() != Some("true") {
++        failures.push(format!(
++            "scenario 3b: apres 'redemarrage', drift_flagged=true attendu (survie, 5 warnings persistes + 1 nouveau payload propre), obtenu drift_ratio={:?} drift_flagged={:?}",
++            drift_ratio4, drift_flagged4
++        ));
++    }
++
++    // ---- Isolation: un sender jamais vu doit rester neutre ----
++    println!("[4/4] Sender jamais vu (aucune contamination croisee via la persistance)...");
++    let resp5 = send(port_b, &born_in_payload("never_seen_sender", "gov_persist_subject_fresh", "Vienne")).await;
++    let circuit5 = extract_field(&resp5, "GOVERNANCE", "circuit");
++    let trips5 = extract_field(&resp5, "GOVERNANCE", "breaker_trips");
++    println!("      circuit={:?} breaker_trips={:?}", circuit5, trips5);
++    if circuit5.as_deref() != Some("closed") || trips5.as_deref() != Some("0") {
++        failures.push("scenario 4: un sender jamais vu doit demarrer a l'etat neutre (circuit=closed, breaker_trips=0)".to_string());
++    }
++
++    let _ = std::fs::remove_file(&tmp_path_str);
++
++    println!();
++    if failures.is_empty() {
++        println!("✅ L'etat de gouvernance (breaker + drift) survit correctement a un redemarrage (persistance reelle verifiee en direct).");
++    } else {
++        println!("❌ {} echec(s):", failures.len());
++        for f in &failures {
++            println!("   - {}", f);
++        }
++        std::process::exit(1);
++    }
++}
+diff --git a/src/adn_store.rs b/src/adn_store.rs
+index 039e4b9..ff0a8d7 100644
+--- a/src/adn_store.rs
++++ b/src/adn_store.rs
+@@ -140,6 +140,18 @@ impl AdnStore {
+                 sender TEXT NOT NULL,
+                 receiver TEXT NOT NULL,
+                 purpose TEXT NOT NULL
++            );
++            CREATE TABLE IF NOT EXISTS governance_events (
++                id INTEGER PRIMARY KEY AUTOINCREMENT,
++                sender TEXT NOT NULL,
++                ts INTEGER NOT NULL,
++                inconsistency INTEGER NOT NULL,
++                semantic_warning INTEGER NOT NULL
++            );
++            CREATE INDEX IF NOT EXISTS idx_governance_events_ts ON governance_events(ts);
++            CREATE TABLE IF NOT EXISTS governance_alerts (
++                sender TEXT PRIMARY KEY,
++                last_alert_ts INTEGER NOT NULL
+             );",
+         )?;
+         // Migration idempotente (2026-09-04, Couche 8: audit deontique
+@@ -548,6 +560,88 @@ impl AdnStore {
+         self.conn.query_row("SELECT COUNT(*) FROM audit_trail", [], |row| row.get(0))
+     }
+ 
++    // ── Gouvernance (Couche 2) -- persistance ajoutee le 2026-09-05.
++    // `governance.rs::GovernanceTracker` vivait purement en memoire
++    // (`Arc<Mutex<GovernanceTracker>>` cote serveur, remis a zero a chaque
++    // redemarrage) -- meme fichier/`Connection` que le reste (adn_store/
++    // audit_trail), pas une base separee, coherent avec la fusion du
++    // 2026-09-04. Un evenement = un appel `record()` (un payload traite),
++    // exactement le meme grain que `save_audit_entry` pour l'audit trail --
++    // deja le patron etabli de ce depot pour ce compromis latence/durabilite.
++
++    /// Sauvegarde un evenement de gouvernance (un appel `record()`) pour
++    /// `sender`, et purge dans la meme requete tout ce qui est devenu plus
++    /// vieux que `prune_before` (horodatage unix) -- sans cette purge,
++    /// `governance_events` grossirait sans limite sur un serveur qui tourne
++    /// des mois, alors que le mecanisme lui-meme (fenetre glissante) n'a
++    /// jamais besoin de plus que la plus grande fenetre (`DRIFT_WINDOW`).
++    /// L'appelant (`handler.rs`) calcule `prune_before` a partir des
++    /// constantes de `governance.rs` -- ce module reste agnostique du sens
++    /// de ces fenetres, il ne fait qu'ecrire/purger sur un seuil donne.
++    pub fn save_governance_event(
++        &self,
++        sender: &str,
++        ts: i64,
++        had_inconsistency: bool,
++        had_semantic_warning: bool,
++        prune_before: i64,
++    ) -> Result<(), rusqlite::Error> {
++        self.conn.execute(
++            "INSERT INTO governance_events (sender, ts, inconsistency, semantic_warning) VALUES (?1, ?2, ?3, ?4)",
++            params![sender, ts, had_inconsistency as i64, had_semantic_warning as i64],
++        )?;
++        self.conn.execute("DELETE FROM governance_events WHERE ts < ?1", params![prune_before])?;
++        Ok(())
++    }
++
++    /// Sauvegarde le dernier horodatage d'alerte connu pour `sender` --
++    /// upsert (un seul horodatage par sender a la fois a un sens pour le
++    /// cooldown anti-spam, pas un historique).
++    pub fn save_governance_alert(&self, sender: &str, ts: i64) -> Result<(), rusqlite::Error> {
++        self.conn.execute(
++            "INSERT INTO governance_alerts (sender, last_alert_ts) VALUES (?1, ?2)
++             ON CONFLICT(sender) DO UPDATE SET last_alert_ts = excluded.last_alert_ts",
++            params![sender, ts],
++        )?;
++        Ok(())
++    }
++
++    /// Charge tous les evenements de gouvernance dont l'horodatage est
++    /// superieur ou egal a `since` (deja filtre au niveau SQL -- pas la
++    /// peine de rapatrier ce qui est de toute facon hors de la plus grande
++    /// fenetre glissante), du plus ancien au plus recent -- utilise au
++    /// demarrage pour reconstruire `GovernanceTracker` via
++    /// `with_defaults_restored`.
++    pub fn load_governance_events(&self, since: i64) -> Result<Vec<(String, i64, bool, bool)>, rusqlite::Error> {
++        let mut stmt = self.conn.prepare(
++            "SELECT sender, ts, inconsistency, semantic_warning FROM governance_events WHERE ts >= ?1 ORDER BY ts ASC",
++        )?;
++        let rows = stmt.query_map(params![since], |row| {
++            Ok((
++                row.get::<_, String>(0)?,
++                row.get::<_, i64>(1)?,
++                row.get::<_, i64>(2)? != 0,
++                row.get::<_, i64>(3)? != 0,
++            ))
++        })?;
++        let mut out = Vec::new();
++        for r in rows {
++            out.push(r?);
++        }
++        Ok(out)
++    }
++
++    /// Charge tous les derniers horodatages d'alerte connus, un par sender.
++    pub fn load_governance_alerts(&self) -> Result<Vec<(String, i64)>, rusqlite::Error> {
++        let mut stmt = self.conn.prepare("SELECT sender, last_alert_ts FROM governance_alerts")?;
++        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
++        let mut out = Vec::new();
++        for r in rows {
++            out.push(r?);
++        }
++        Ok(out)
++    }
++
+     /// Tous les emergence_proofs enregistres, du plus ancien au plus recent.
+     pub fn get_emergence_proofs(&self) -> Result<Vec<EmergenceProof>, rusqlite::Error> {
+         let mut stmt = self.conn.prepare(
+diff --git a/src/governance.rs b/src/governance.rs
+index 06cf941..51809b2 100644
+--- a/src/governance.rs
++++ b/src/governance.rs
+@@ -17,13 +17,22 @@
+ //! Ajouter un chemin bloquant ici aurait introduit un précédent que rien
+ //! n'a demandé.
+ //!
+-//! Limite v1 assumée: l'état est en mémoire uniquement
+-//! (`Arc<Mutex<GovernanceTracker>>` sur le serveur, même schéma que
+-//! `chain`/`adn_store`) — il repart à zéro à chaque redémarrage du
+-//! serveur. Acceptable parce que le mécanisme est une fenêtre glissante
+-//! auto-cicatrisante par construction, contrairement à l'audit/la
+-//! provenance (`adn_store.rs`) qui doivent, elles, survivre à un
+-//! redémarrage.
++//! Persistance (2026-09-05): contrairement à ce que ce commentaire
++//! affirmait avant, l'état N'EST PLUS uniquement en mémoire. Même schéma
++//! que la chaîne d'audit (`adn_store.rs::save_audit_entry`/`load_chain`,
++//! une seule `Connection` SQLite fusionnée) : chaque événement significatif
++//! (`record()` appelé depuis `handler.rs`) est aussi écrit dans les tables
++//! `governance_events`/`governance_alerts` de cette même base, et
++//! `CstlNativeServer::try_with_data_path` recharge cet état au démarrage
++//! via `GovernanceTracker::with_defaults_restored` pour reconstruire les
++//! fenêtres glissantes plutôt que repartir de zéro. Ce qui reste vrai et
++//! motive le CHOIX de granularité (un événement par payload, comme l'audit
++//! trail, pas un snapshot périodique): le mécanisme est une fenêtre
++//! glissante auto-cicatrisante par construction — perdre les tout derniers
++//! événements non encore flushés lors d'un crash brutal (pas un arrêt
++//! propre) ne fausse jamais durablement rien, contrairement à l'audit/la
++//! provenance (`adn_store.rs`) où perdre une entrée casserait la chaîne de
++//! hachage elle-même.
+ //!
+ //! Un seul mécanisme générique ("compteur d'événements par expéditeur, à
+ //! fenêtre glissante, avec une étiquette de raison") sert à la fois pour
+@@ -33,7 +42,16 @@
+ //! séparés.
+ 
+ use std::collections::HashMap;
+-use std::time::{Duration, Instant};
++use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++
++/// Horodatage unix courant (secondes) -- meme fonction que `adn_store::now_unix`,
++/// dupliquee ici pour ne pas faire dependre `governance.rs` (module pur,
++/// sans dependance SQL) de `adn_store`. Utilisee uniquement pour convertir
++/// entre les `Instant` (horloge monotone, en memoire) de ce module et les
++/// horodatages unix (horloge murale) que la base SQLite persiste.
++fn now_unix() -> i64 {
++    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
++}
+ 
+ /// Fenêtre du circuit breaker: nombre d'incohérences tolérées sur cette
+ /// durée avant que le circuit ne s'ouvre pour cet expéditeur.
+@@ -126,6 +144,69 @@ impl GovernanceTracker {
+         }
+     }
+ 
++    /// Reconstruit un tracker a partir de l'etat persiste (`adn_store`,
++    /// tables `governance_events`/`governance_alerts`) -- utilise au
++    /// demarrage du serveur (`server/mod.rs::try_with_data_path`) a la
++    /// place de `with_defaults()` des qu'une base existante contient de
++    /// l'historique. `events` et `alerts` sont deja filtres par l'appelant
++    /// (seulement ce qui tombe encore dans la plus grande fenetre, voir
++    /// `AdnStore::load_governance_events`) -- ce constructeur ne fait que
++    /// les rejouer, chacun via `restore_event`/`restore_alert`.
++    pub fn with_defaults_restored(
++        events: &[(String, i64, bool, bool)],
++        alerts: &[(String, i64)],
++    ) -> Self {
++        let mut tracker = Self::with_defaults();
++        for (sender, ts_unix, had_inconsistency, had_semantic_warning) in events {
++            tracker.restore_event(sender, *ts_unix, *had_inconsistency, *had_semantic_warning);
++        }
++        for (sender, ts_unix) in alerts {
++            tracker.restore_alert(sender, *ts_unix);
++        }
++        tracker
++    }
++
++    /// Convertit un horodatage unix passe en un `Instant` equivalent,
++    /// relatif a MAINTENANT -- `Instant` n'a pas de representation absolue
++    /// (horloge monotone, pas murale), donc la seule facon de "rejouer" un
++    /// evenement persiste est de calculer son age (secondes ecoulees) et de
++    /// reculer d'autant depuis `Instant::now()`. `saturating_sub` cote age
++    /// (jamais negatif) + `checked_sub` cote Instant (jamais avant le debut
++    /// du programme) couvrent les deux cas limites: horodatage dans le futur
++    /// (derive d'horloge) et age qui deborderait le point de reference du
++    /// monotone clock -- dans les deux cas on retombe sur "maintenant"
++    /// plutot que paniquer.
++    fn instant_for(ts_unix: i64) -> Instant {
++        let age_secs = (now_unix() - ts_unix).max(0) as u64;
++        Instant::now().checked_sub(Duration::from_secs(age_secs)).unwrap_or_else(Instant::now)
++    }
++
++    /// Rejoue UN evenement persiste (un appel `record()` passe) dans la
++    /// fenetre du sender concerne, sans recalculer/retourner d'etat (pas
++    /// d'alerte a re-declencher pour un evenement deja traite dans une
++    /// session precedente) -- seul `record()` fait ca pour un evenement en
++    /// direct. `had_inconsistency` alimente `inconsistency_events` (breaker),
++    /// `had_semantic_warning` alimente `drift_samples` (drift) -- exactement
++    /// comme le fait `record()` pour un evenement live, colonne par colonne.
++    pub fn restore_event(&mut self, sender: &str, ts_unix: i64, had_inconsistency: bool, had_semantic_warning: bool) {
++        let instant = Self::instant_for(ts_unix);
++        let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
++        if had_inconsistency {
++            window.inconsistency_events.push(instant);
++        }
++        window.drift_samples.push((instant, had_semantic_warning));
++    }
++
++    /// Rejoue le dernier horodatage d'alerte connu pour `sender` -- pour que
++    /// le cooldown anti-spam (`ALERT_COOLDOWN`) reste effectif juste apres un
++    /// redemarrage, pas seulement apres le premier `record()` de la nouvelle
++    /// session.
++    pub fn restore_alert(&mut self, sender: &str, ts_unix: i64) {
++        let instant = Self::instant_for(ts_unix);
++        let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
++        window.last_alert = Some(instant);
++    }
++
+     /// Enregistre un événement pour `sender` (0..n raisons portées par ce
+     /// payload) et retourne l'état de gouvernance à jour pour cet
+     /// expéditeur. Ne bloque jamais rien — c'est à l'appelant (handler.rs)
+diff --git a/src/server/handler.rs b/src/server/handler.rs
+index 978e200..2c69e00 100644
+--- a/src/server/handler.rs
++++ b/src/server/handler.rs
+@@ -725,6 +725,33 @@ pub async fn handle_connection(
+                     let gov_state = {
+                         governance.lock().await.record(&governance_sender, &governance_reasons)
+                     };
++                    // Persistance (2026-09-05): meme grain que l'audit trail
++                    // (un evenement par payload, via save_audit_entry
++                    // plus bas) -- l'etat de gouvernance survivait avant ca
++                    // uniquement dans `governance` en memoire, perdu au
++                    // redemarrage. `prune_before` supprime dans la meme
++                    // requete tout ce qui est deja hors de la plus grande
++                    // fenetre glissante (DRIFT_WINDOW), pour que la table ne
++                    // grossisse jamais sans limite.
++                    let gov_ts = std::time::SystemTime::now()
++                        .duration_since(std::time::UNIX_EPOCH)
++                        .map(|d| d.as_secs() as i64)
++                        .unwrap_or(0);
++                    let gov_prune_before = gov_ts - crate::governance::DRIFT_WINDOW.as_secs() as i64;
++                    if let Err(e) = adn_store.lock().await.save_governance_event(
++                        &governance_sender,
++                        gov_ts,
++                        !consistency.consistent,
++                        !semantic_warnings.is_empty(),
++                        gov_prune_before,
++                    ) {
++                        eprintln!("[Handler] ⚠️  governance event persist failed: {}", e);
++                    }
++                    if gov_state.should_alert {
++                        if let Err(e) = adn_store.lock().await.save_governance_alert(&governance_sender, gov_ts) {
++                            eprintln!("[Handler] ⚠️  governance alert persist failed: {}", e);
++                        }
++                    }
+                     eprintln!(
+                         "[Handler] 🏛️  Governance: sender={} circuit={} breaker_trips={} drift_ratio={:.2} drift_flagged={}",
+                         governance_sender,
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index f0ac1ce..f222195 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -53,8 +53,11 @@ pub struct CstlNativeServer {
+     pub telegram: Option<Arc<TelegramNotifier>>,
+     pub obsidian: Option<Arc<ObsidianEscalation>>,
+     /// Couche 2 (gouvernance/resilience) -- circuit breaker + drift
+-    /// d'operateur, observation seule (voir src/governance.rs). Etat en
+-    /// memoire uniquement, perdu au redemarrage -- limite v1 assumee.
++    /// d'operateur, observation seule (voir src/governance.rs). Seede
++    /// depuis `adn_store` au demarrage (voir `try_with_data_path`, meme
++    /// patron que `chain` juste au-dessus) depuis le 2026-09-05 -- avant
++    /// ca, toujours reconstruit vide (`with_defaults()`), meme quand la
++    /// base SQLite avait deja de l'historique de breaker/drift sur disque.
+     pub governance: Arc<Mutex<GovernanceTracker>>,
+ }
+ 
+@@ -104,6 +107,25 @@ impl CstlNativeServer {
+             .load_chain()
+             .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
+ 
++        // Seed la Couche 2 (gouvernance) depuis ce qui est deja persiste --
++        // meme logique que `chain` juste au-dessus. `since` ne rapatrie que
++        // ce qui tombe encore dans la plus grande des deux fenetres
++        // glissantes (DRIFT_WINDOW, 1h > BREAKER_WINDOW, 10 min) -- un
++        // evenement plus vieux que ca n'aurait de toute facon plus aucun
++        // effet sur `record()` (retire des le premier appel).
++        let governance_since = std::time::SystemTime::now()
++            .duration_since(std::time::UNIX_EPOCH)
++            .map(|d| d.as_secs() as i64)
++            .unwrap_or(0)
++            - crate::governance::DRIFT_WINDOW.as_secs() as i64;
++        let governance_events = adn_store
++            .load_governance_events(governance_since)
++            .map_err(|e| format!("impossible de charger les evenements de gouvernance persistes depuis '{data_path}': {e}"))?;
++        let governance_alerts = adn_store
++            .load_governance_alerts()
++            .map_err(|e| format!("impossible de charger les alertes de gouvernance persistees depuis '{data_path}': {e}"))?;
++        let governance = GovernanceTracker::with_defaults_restored(&governance_events, &governance_alerts);
++
+         Ok(CstlNativeServer {
+             port,
+             agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
+@@ -127,7 +149,7 @@ impl CstlNativeServer {
+             // None si OBSIDIAN_VAULT_PATH absent de l'environnement - degradation
+             // propre, le serveur marche pareil sans escalade Obsidian.
+             obsidian: ObsidianEscalation::from_env().map(Arc::new),
+-            governance: Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
++            governance: Arc::new(Mutex::new(governance)),
+         })
+     }
+ 
+-- 
+2.43.0
+
