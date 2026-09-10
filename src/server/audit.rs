@@ -300,6 +300,9 @@ mod tests {
             relations: vec![],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         }
     }

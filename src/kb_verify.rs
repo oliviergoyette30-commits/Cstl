@@ -372,6 +372,18 @@ impl KbVerifier {
     /// incertitude. Non verifiable en direct depuis ce sandbox (wikidata.org
     /// bloque par la liste blanche reseau) -- voir l'en-tete de
     /// `hypothesis_engine.rs`.
+    ///
+    /// Un vrai test d'integration contre le vrai wikidata.org (endpoints de
+    /// production, `KbVerifier::new()`, pas de mock) existe desormais dans
+    /// `tests/kb_verify_real_wikidata_test.rs`, marque `#[ignore]` pour ne
+    /// jamais s'executer dans `cargo test`/`cargo test --release` normal --
+    /// seulement via `cargo test --release -- --ignored`. Ecrit et compile
+    /// dans ce sandbox (2026-09-08) mais jamais EXECUTE ici: ce sandbox n'a
+    /// pas d'acces reseau sortant vers wikidata.org (`curl` vers
+    /// `www.wikidata.org/w/api.php` echoue avec `CONNECT tunnel failed,
+    /// response 403` au niveau du proxy). Reste a lancer sur une machine
+    /// avec acces reseau reel pour obtenir la premiere confirmation
+    /// effective contre le vrai service.
     pub async fn detect_entanglement(
         &self,
         subject_qid: &str,

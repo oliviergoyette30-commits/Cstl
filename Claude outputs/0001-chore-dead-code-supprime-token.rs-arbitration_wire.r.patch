@@ -1,0 +1,344 @@
+From fea57bbdc61df3725f5a33ecb8e53998805afccd Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Fri, 4 Sep 2026 17:31:17 +0000
+Subject: [PATCH 1/8] chore(dead-code): supprime
+ token.rs/arbitration_wire.rs/parser.rs/validator.rs -- zero appelant reel
+
+Trouve par l'audit multi-angle du repo (2026-09-04):
+- src/token.rs (Lexer/tokenize/is_keyword, 200 lignes): aucun code du depot
+  ne l'appelle en dehors de ses propres tests (qu'il n'avait meme pas). Le
+  vrai chemin de parsing est src/server/parser.rs (format wire a plat,
+  HashMap), pas un lexer+tokenizer classique.
+- src/arbitration_wire.rs (ConflictQuestion/ArbitrationDecision/
+  format_conflict_cstl): seule reference dans tout le depot etait sa propre
+  declaration `pub mod` dans lib.rs. Aucun code ne construit ni n'envoie de
+  ConflictQuestion.
+- src/parser.rs et src/validator.rs (racine, distincts de
+  src/server/parser.rs et src/server/validator.rs qui sont les vrais):
+  stubs desactives de 10 lignes avec un commentaire "Old parser/validator -
+  disabled for now" et un test a corps vide qui ne peut jamais echouer.
+  Risque reel au-dela du bruit: `use cstl_parser::parser::*` depuis
+  l'exterieur du crate importait silencieusement le mauvais module.
+
+lib.rs: retire les 4 `pub mod` correspondants.
+Verifie: cargo build (0 warning), cargo test --lib (150 -> 143, -7 tests
+qui ne testaient que ce code mort ou etaient des tests a corps vide).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ src/arbitration_wire.rs |  44 ---------
+ src/lib.rs              |   4 -
+ src/parser.rs           |  10 --
+ src/token.rs            | 200 ----------------------------------------
+ src/validator.rs        |  10 --
+ 5 files changed, 268 deletions(-)
+ delete mode 100644 src/arbitration_wire.rs
+ delete mode 100644 src/parser.rs
+ delete mode 100644 src/token.rs
+ delete mode 100644 src/validator.rs
+
+diff --git a/src/arbitration_wire.rs b/src/arbitration_wire.rs
+deleted file mode 100644
+index 5d2c9f1..0000000
+--- a/src/arbitration_wire.rs
++++ /dev/null
+@@ -1,44 +0,0 @@
+-/// Wire RestrictedCouncil conflicts to human arbiter via Telegram
+-
+-pub struct ConflictQuestion {
+-    pub agent_a: String,
+-    pub agent_a_position: String,
+-    pub agent_b: String,
+-    pub agent_b_position: String,
+-    pub context: String,
+-}
+-
+-pub struct ArbitrationDecision {
+-    pub decided_by: String,
+-    pub decision: String,
+-    pub reasoning: String,
+-    pub timestamp: i64,
+-    pub immutable_hash: String,
+-}
+-
+-pub fn format_conflict_cstl(q: &ConflictQuestion) -> String {
+-    format!(
+-        "#!CSTL v5.0.0 MODE=A\nINTENT_PAYLOAD [\npurpose=request_arbitration,\nsender=RestrictedCouncil,\nreceiver=human_arbiter\n]\n\nQUESTION [\nagent_a={},\nposition={},\nagent_b={},\nposition={},\ncontext={}\n]\n\n---END---",
+-        q.agent_a, q.agent_a_position, q.agent_b, q.agent_b_position, q.context
+-    )
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn test_format_conflict_cstl() {
+-        let q = ConflictQuestion {
+-            agent_a: "alice".to_string(),
+-            agent_a_position: "user_is_authorized".to_string(),
+-            agent_b: "bob".to_string(),
+-            agent_b_position: "user_needs_approval".to_string(),
+-            context: "access_request".to_string(),
+-        };
+-        
+-        let formatted = format_conflict_cstl(&q);
+-        assert!(formatted.contains("QUESTION"));
+-        assert!(formatted.contains("alice"));
+-    }
+-}
+diff --git a/src/lib.rs b/src/lib.rs
+index 1915c1f..afa17ba 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,8 +1,4 @@
+-pub mod parser;
+-pub mod validator;
+ pub mod security;
+-pub mod token;
+-pub mod arbitration_wire;
+ pub mod agent_discovery;
+ pub mod server;
+ pub mod ast;
+diff --git a/src/parser.rs b/src/parser.rs
+deleted file mode 100644
+index 587de87..0000000
+--- a/src/parser.rs
++++ /dev/null
+@@ -1,10 +0,0 @@
+-// Old parser - disabled for now
+-// New parser will be in src/server/parser.rs for CSTL-native communication
+-
+-#[cfg(test)]
+-mod tests {
+-    #[test]
+-    fn test_parser_disabled() {
+-        // Parser moved to server module
+-    }
+-}
+diff --git a/src/token.rs b/src/token.rs
+deleted file mode 100644
+index 34d9d8d..0000000
+--- a/src/token.rs
++++ /dev/null
+@@ -1,200 +0,0 @@
+-//! CSTL v5.0.0 — Token types and Lexer
+-//! Zero external dependencies. Character-by-character, no regex.
+-
+-#[derive(Debug, Clone, PartialEq)]
+-pub enum TokenKind {
+-    Hashbang,    // #!CSTL v5.0.0 MODE=A
+-    Keyword,     // META, DISAGREEMENT_BLOCK, GAP ...
+-    Ident,       // bare word / value token
+-    LBracket,    // [
+-    RBracket,    // ]
+-    LParen,      // (
+-    RParen,      // )
+-    Equals,      // =
+-    Colon,       // :
+-    Comma,       // ,
+-    Newline,     // \n
+-    EndMarker,   // ---END---
+-    Eof,
+-}
+-
+-#[derive(Debug, Clone)]
+-pub struct Token {
+-    pub kind:  TokenKind,
+-    pub value: String,
+-    pub line:  usize,
+-    pub col:   usize,
+-}
+-
+-impl Token {
+-    pub fn new(kind: TokenKind, value: impl Into<String>, line: usize, col: usize) -> Self {
+-        Token { kind, value: value.into(), line, col }
+-    }
+-}
+-
+-/// All ratified CSTL v5.0.0 keywords (Sessions #1-#4)
+-pub fn is_keyword(word: &str) -> bool {
+-    matches!(word,
+-        // Header
+-        "META" | "MODE" | "VERSION" |
+-        // Data blocks (Session #1 G1, Session #3 alphabetical)
+-        "DEFINE" | "RULE" | "RULE_TRAILER" |
+-        "AGREEMENT_BLOCK" | "DISAGREEMENT_BLOCK" | "DECISION" |
+-        "CONSTRAINT" | "UNCERTAINTY" | "DEFINE_GROUP" |
+-        // Dissent primitives (Session #3 0x30-0x3F)
+-        "AGREEMENT" | "ALTERNATIVE" | "CAUTION" | "CONCERN" |
+-        "DISPUTE" | "GAP" | "PARTIAL_DISPUTE" | "RECOMMEND" |
+-        "REJECT" | "SELF_CRITIQUE" | "STRENGTH" | "VETO" |
+-        "CSTLTypeError" |
+-        // Modalities (Session #1 G4)
+-        "IF" | "IFF" | "MAY" | "MUST" | "MUST_NOT" | "SHOULD" | "UNLESS" |
+-        "REQUIRE" | "EXPECT" |
+-        // META keys (Session #2 ratified, Session #4 produced_by)
+-        "ACTION" | "CONTINUATION_MODE" | "CONVERSATION_ID" | "DOMAIN" |
+-        "encoder" | "NO_PROSE" | "PARENT_HASH" | "produced_by" |
+-        "payload_length_bytes" | "payload_length_tokens" |
+-        "RESPONSE_FORMAT" | "sigma" | "TIMESTAMP" | "TURN" | "VERIFIED_BY" |
+-        // Type indicators (Session #2 0x50-0x57)
+-        "bool" | "enum" | "EXTENSION" | "float" | "hash" |
+-        "int" | "iso8601" | "string" |
+-        // Relation ops (Session #3 0x60-0x66)
+-        "ARR" | "EXPRESS" | "MAINTAIN" | "TRANSFORM" | "INTENT" |
+-        // Other
+-        "AS" | "@SYNC" |
+-        // v5.0 Logical
+-        "ENTAILS" | "CONTRADICTS" |
+-        // v5.0 Epistemic
+-        "BELIEVES" | "KNOWS" | "ASSUMES" | "DOUBTS" |
+-        // v5.0 Temporal
+-        "BEFORE" | "AFTER" | "DURING" |
+-        // v5.0 Relational
+-        "EQUALS" | "POSSESSES" | "RESEMBLES" | "CO_LOCATES" | "OPPOSES" | "COMPARES" |
+-        // v5.0 DEPRECATED
+-        "MUTUAL"
+-    )
+-}
+-
+-// ── Lexer ─────────────────────────────────────────────────────────────────────
+-
+-pub struct Lexer {
+-    chars: Vec<char>,
+-    pos:   usize,
+-    line:  usize,
+-    col:   usize,
+-}
+-
+-impl Lexer {
+-    pub fn new(input: &str) -> Self {
+-        Lexer {
+-            chars: input.chars().collect(),
+-            pos:   0,
+-            line:  1,
+-            col:   1,
+-        }
+-    }
+-
+-    fn cur(&self) -> Option<char> {
+-        self.chars.get(self.pos).copied()
+-    }
+-
+-    fn peek(&self, offset: usize) -> Option<char> {
+-        self.chars.get(self.pos + offset).copied()
+-    }
+-
+-    fn advance(&mut self) -> Option<char> {
+-        let ch = self.chars.get(self.pos).copied()?;
+-        self.pos += 1;
+-        if ch == '\n' { self.line += 1; self.col = 1; } else { self.col += 1; }
+-        Some(ch)
+-    }
+-
+-    fn skip_whitespace(&mut self) {
+-        while matches!(self.cur(), Some(' ') | Some('\t')) { self.advance(); }
+-    }
+-
+-    fn read_while(&mut self, pred: impl Fn(char) -> bool) -> String {
+-        let mut buf = String::new();
+-        while let Some(ch) = self.cur() {
+-            if pred(ch) { buf.push(ch); self.advance(); } else { break; }
+-        }
+-        buf
+-    }
+-
+-    fn read_to_eol(&mut self) -> String {
+-        let s = self.read_while(|c| c != '\n');
+-        s.trim().to_string()
+-    }
+-
+-    fn rest_starts_with(&self, pat: &str) -> bool {
+-        let bytes: Vec<char> = pat.chars().collect();
+-        self.chars[self.pos..].starts_with(&bytes)
+-    }
+-
+-    pub fn tokenize(&mut self) -> Vec<Token> {
+-        let mut tokens = Vec::new();
+-
+-        loop {
+-            let (line, col) = (self.line, self.col);
+-
+-            match self.cur() {
+-                None => { tokens.push(Token::new(TokenKind::Eof, "", line, col)); break; }
+-
+-                // Whitespace (non-newline)
+-                Some(' ') | Some('\t') => { self.skip_whitespace(); }
+-
+-                // Newline
+-                Some('\n') => {
+-                    self.advance();
+-                    tokens.push(Token::new(TokenKind::Newline, "\n", line, col));
+-                }
+-
+-                // Carriage return — skip
+-                Some('\r') => { self.advance(); }
+-
+-                // Comment # (not hashbang)
+-                Some('#') if self.peek(1) != Some('!') => {
+-                    self.read_to_eol();
+-                }
+-
+-                // Hashbang #!CSTL...
+-                Some('#') if self.peek(1) == Some('!') => {
+-                    let val = self.read_to_eol();
+-                    tokens.push(Token::new(TokenKind::Hashbang, val, line, col));
+-                }
+-
+-                // END marker ---END---
+-                Some('-') if self.rest_starts_with("---END---") => {
+-                    for _ in 0..9 { self.advance(); }
+-                    tokens.push(Token::new(TokenKind::EndMarker, "---END---", line, col));
+-                }
+-
+-                // Structural chars
+-                Some('[') => { self.advance(); tokens.push(Token::new(TokenKind::LBracket, "[", line, col)); }
+-                Some(']') => { self.advance(); tokens.push(Token::new(TokenKind::RBracket, "]", line, col)); }
+-                Some('(') => { self.advance(); tokens.push(Token::new(TokenKind::LParen, "(", line, col)); }
+-                Some(')') => { self.advance(); tokens.push(Token::new(TokenKind::RParen, ")", line, col)); }
+-                Some('=') => { self.advance(); tokens.push(Token::new(TokenKind::Equals, "=", line, col)); }
+-                Some(':') => { self.advance(); tokens.push(Token::new(TokenKind::Colon, ":", line, col)); }
+-                Some(',') => { self.advance(); tokens.push(Token::new(TokenKind::Comma, ",", line, col)); }
+-
+-                // Word (keyword or identifier)
+-                Some(ch) if ch.is_alphabetic() || ch == '_' || ch == '@' => {
+-                    let word = self.read_while(|c| c.is_alphanumeric() || "_-./@+".contains(c));
+-                    let kind = if is_keyword(&word) { TokenKind::Keyword } else { TokenKind::Ident };
+-                    tokens.push(Token::new(kind, word, line, col));
+-                }
+-
+-                // Number or negative
+-                Some(ch) if ch.is_ascii_digit() || (ch == '-' && self.peek(1).is_some_and(|c| c.is_ascii_digit())) => {
+-                    let word = self.read_while(|c| c.is_alphanumeric() || "._-".contains(c));
+-                    tokens.push(Token::new(TokenKind::Ident, word, line, col));
+-                }
+-
+-                // Skip unknown
+-                _ => { self.advance(); }
+-            }
+-        }
+-
+-        tokens
+-    }
+-}
+diff --git a/src/validator.rs b/src/validator.rs
+deleted file mode 100644
+index 098d894..0000000
+--- a/src/validator.rs
++++ /dev/null
+@@ -1,10 +0,0 @@
+-// Old validator - disabled for now
+-// New validator will be in src/server/validator.rs for CSTL-native validation
+-
+-#[cfg(test)]
+-mod tests {
+-    #[test]
+-    fn test_validator_disabled() {
+-        // Validator moved to server module
+-    }
+-}
+-- 
+2.43.0
+

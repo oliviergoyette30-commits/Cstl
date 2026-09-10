@@ -1,0 +1,64 @@
+From 316def5c931d0ac6ee2909a257937b87b09dca2f Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 19:14:48 +0000
+Subject: [PATCH] docs(README): "Zero production dependencies" etait faux --
+ trouve en verifiant tout
+
+Decouvert en faisant une verification independante complete du depot a la
+demande de l'utilisateur ("regarde mon repo et dit moi si tout concorde
+parfaitement"): la section "Rust Parser" du README affirmait encore "Zero
+production dependencies" juste a cote du badge de tests qu'on venait de
+corriger -- exactement la meme fausse affirmation que celle deja corrigee
+dans le commentaire de Cargo.toml (commit precedent de cette session),
+mais cette occurrence-la avait ete manquee.
+
+Faux depuis longtemps: tokio (couche TCP async), reqwest (SPARQL Wikidata,
+kb_verify.rs), rusqlite (adn_store), sha2 (hash d'audit), serde/serde_json
+(reponses wire format), unicode-normalization (NFC, ajoutee cette session)
+sont toutes des dependances de production reelles, pas des dev-dependencies.
+Vrai seulement du lexer/parser hand-rolled de la Session #5 (v4.9.3), avant
+l'ajout de la couche serveur TCP.
+
+Corrections:
+- Titre de section "Rust Parser" -> "Rust Server" (le paquet n'est plus
+  juste un parser depuis longtemps -- meme correction deja faite dans la
+  description de Cargo.toml). Aucune ancre markdown ne pointait dessus
+  (verifie par grep) -- pas de lien casse.
+- Commande affichee `cargo test` -> `cargo test --lib` (coherent avec le
+  chiffre annonce juste apres, qui vient de cette commande precise).
+- Phrase corrigee: liste explicitement les dependances reelles au lieu de
+  pretendre qu'il n'y en a pas.
+
+Verification: cargo build + cargo test --lib -- 130 passed, 0 failed,
+0 regression (changement purement documentaire).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ README.md | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/README.md b/README.md
+index faf3498..2f4a24c 100644
+--- a/README.md
++++ b/README.md
+@@ -224,13 +224,13 @@ Earlier claims of 5×–200× compression were empirically refuted and are retra
+ 
+ ---
+ 
+-## Rust Parser
++## Rust Server
+ 
+ ```bash
+-cargo test
++cargo test --lib
+ ```
+ 
+-130 tests passing (`cargo test --lib`), 0 failures. Zero production dependencies. Deterministic O(n) parsing, no LLM in the validation path.
++130 tests passing, 0 failures. Deterministic O(n) parsing, no LLM in the validation path. Not zero-dependency: `tokio` (async TCP), `reqwest` (Wikidata SPARQL), `rusqlite` (ADN store), `sha2` (audit hash), `serde`/`serde_json` (wire responses), `unicode-normalization` (NFC canonicalization) are all real production dependencies — the "zero production dependencies" claim that stood here was true only of the v4.9.3 hand-rolled lexer/parser and stopped being accurate once the TCP server layer was added; corrected 2026-09-03 alongside the equivalent stale comment in `Cargo.toml`.
+ 
+ ---
+ 
+-- 
+2.43.0
+

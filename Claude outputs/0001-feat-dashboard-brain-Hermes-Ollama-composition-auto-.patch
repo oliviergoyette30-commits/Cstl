@@ -1,0 +1,891 @@
+From e42de36e030b2a1846aa00831d4080c2697fac25 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sun, 6 Sep 2026 23:19:36 +0000
+Subject: [PATCH] feat(dashboard): brain Hermes/Ollama + composition auto de
+ relation, resume Graphify reel, test de connexion OpenClaw
+
+Trois extensions du dashboard existant (dashboard/server.py + index.html,
+commit 8f58395), aucun nouveau serveur -- tout etendu dans les fichiers en
+place, mode manuel du compositeur intact.
+
+1. HermesAgentBrain (sdk/python/cstl_llm_agent.py) -- meme interface
+   (generate_relation/from_env) que AnthropicAgentBrain et GeminiAgentBrain
+   deja presents. Parle l'API HTTP REST standard d'Ollama (POST
+   /api/generate, stdlib urllib uniquement) vers un serveur LOCAL, modele
+   par defaut hermes3 (CSTL_OLLAMA_MODEL pour surcharger). resolve_brain()
+   essaie desormais Hermes -> Gemini -> Anthropic dans cet ordre (local et
+   gratuit d'abord). Confirme dans ce sandbox: `which ollama` (absent,
+   code 1) et `curl http://localhost:11434/api/tags` (connexion refusee,
+   curl exit 7) -- HermesAgentBrain.from_env() degrade donc proprement vers
+   None ici, comme les deux autres brains sans leur dependance. Ajoute
+   sdk/python/test_hermes_brain.py: un test reel (from_env() -> None ici,
+   sans mock) et trois tests avec un mock HTTP local (unittest.mock sur
+   urllib.request.urlopen, aucun serveur reseau reel) qui prouvent le
+   parsing d'une reponse Ollama simulee, y compris avec du texte autour du
+   JSON et la surcharge par CSTL_OLLAMA_MODEL. _structural_selftest passe
+   de 4 a 6 etapes pour couvrir Hermes.
+
+   Cable cote dashboard: POST /api/generate-relation (dashboard/server.py)
+   reutilise resolve_brain("auto") tel quel (aucune logique dupliquee),
+   genere une relation a partir d'un sujet libre et la fait apparaitre dans
+   le compositeur existant pour envoi reel -- mode manuel toujours present
+   en option. Sans aucun brain disponible (le cas ici), retourne
+   honnetement "aucun agent LLM disponible (ni Hermes local, ni cle
+   Gemini/Anthropic)" au lieu de planter.
+
+2. GET /api/graphify-summary lit le VRAI fichier graphify-out/graph.json
+   (pas de topology.json dans ce depot -- verifie avant d'ecrire le code):
+   793 noeuds, 1646 liens, 46 communautes distinctes, built_at_commit
+   f73daa6b... Compare ce commit a HEAD via `git merge-base --is-ancestor`:
+   f73daa6b n'est PAS un ancetre de 8f58395 (HEAD courant) -- signale
+   honnetement "possiblement perime" plutot que de pretendre que le graphe
+   est a jour. index.html: la ligne statique Graphify de "Autres systemes"
+   est retiree de check_other_systems() et remplacee par un bouton qui
+   affiche ce resume reel (noeuds/liens/communautes + badge de fraicheur).
+
+3. GET /api/openclaw-check tente une connexion vers ws://127.0.0.1:19001
+   (poignee de main WebSocket via le paquet `websockets` si installe,
+   sinon TCP brut) -- AUCUN protocole applicatif OpenClaw n'est invente,
+   aucune documentation de ce protocole n'etant disponible pour cette
+   tache. Dans ce sandbox le resultat est et restera "inaccessible depuis
+   ici" (OpenClaw tourne sur la machine macOS de l'utilisateur, jamais
+   ici) -- documente dans le code et le rapport comme le resultat ATTENDU,
+   pas une erreur. Ce qui manque pour un vrai pont deontique: la
+   documentation du protocole applicatif d'OpenClaw (quel message envoyer
+   pour, par exemple, demander une approbation d'execution).
+
+Verification effectuee dans ce sandbox: cargo build --release et cargo
+test --lib (187 tests, tous verts, aucun changement Rust dans cette tache)
+et cargo clippy --lib (aucun avertissement) confirment qu'aucune
+regression Rust n'a ete introduite. python3 -m py_compile sur les trois
+fichiers Python touches. Serveur Rust reel (release, base SQLite jetable)
++ dashboard/server.py lances ensemble ; chaque nouvel endpoint teste par
+curl avec le resultat exact colle dans le rapport de session (generation
+de relation -> "aucun agent disponible" ici, resume Graphify -> donnees
+reelles de graph.json, test OpenClaw -> "inaccessible", tous les resultats
+ATTENDUS). Le mode manuel existant (/api/send, /api/adn, /api/status)
+reteste et confirme intact.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ dashboard/index.html            |  80 ++++++++-
+ dashboard/server.py             | 307 +++++++++++++++++++++++++++++---
+ sdk/python/cstl_llm_agent.py    | 146 +++++++++++++--
+ sdk/python/test_hermes_brain.py | 114 ++++++++++++
+ 4 files changed, 612 insertions(+), 35 deletions(-)
+ create mode 100644 sdk/python/test_hermes_brain.py
+
+diff --git a/dashboard/index.html b/dashboard/index.html
+index f860da0..e449273 100644
+--- a/dashboard/index.html
++++ b/dashboard/index.html
+@@ -77,7 +77,17 @@
+     <div class="field"><label>purpose</label><input id="f-purpose" value="dashboard_test"></div>
+     <div class="field"><label>sender</label><input id="f-sender" value="dashboard_user"></div>
+     <div class="field"><label>receiver</label><input id="f-receiver" value="server"></div>
+-    <label class="muted">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
++
++    <div class="field" style="border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:14px;">
++      <label class="muted" style="margin-bottom:6px;">Mode auto -- composition de relation par agent LLM (Hermes local &gt; Gemini &gt; Anthropic, selon disponibilite). Le mode manuel ci-dessous reste intact.</label>
++      <input id="f-llm-topic" placeholder="De quoi veux-tu que l'agent parle ?">
++      <div style="margin-top:8px;">
++        <button class="secondary" onclick="generateRelationViaLlm()">Générer une relation via agent LLM</button>
++      </div>
++      <div id="llm-gen-status" class="muted" style="margin-top:8px;"></div>
++    </div>
++
++    <label class="muted" style="display:block; margin-top:14px;">RELATION(s) (subject / predicate / object) -- au moins une recommandee</label>
+     <div id="relations"></div>
+     <button class="secondary" onclick="addRelationRow()">+ ajouter une relation</button>
+     <div style="margin-top:12px;">
+@@ -97,6 +107,12 @@
+       <thead><tr><th>Systeme</th><th>Statut</th><th>Detail</th></tr></thead>
+       <tbody></tbody>
+     </table>
++    <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
++      <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
++      <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:19001)</button>
++    </div>
++    <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
++    <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
+   </section>
+ 
+ </main>
+@@ -177,6 +193,27 @@ async function refreshAdn() {
+   }
+ }
+ 
++async function generateRelationViaLlm() {
++  const topic = document.getElementById('f-llm-topic').value;
++  const status = document.getElementById('llm-gen-status');
++  status.textContent = 'Tentative Hermes local -> Gemini -> Anthropic...';
++  try {
++    const r = await fetch('/api/generate-relation', {
++      method: 'POST', headers: {'Content-Type':'application/json'},
++      body: JSON.stringify({topic})
++    });
++    const j = await r.json();
++    if (!j.ok) {
++      status.innerHTML = `<span style="color:var(--down)">${j.message}</span>`;
++      return;
++    }
++    addRelationRow(j.relation.subject, j.relation.type, j.relation.object);
++    status.innerHTML = `<span style="color:var(--ok)">Relation generee par ${j.brain}${j.model ? ' ('+j.model+')' : ''} et ajoutee ci-dessous -- relis-la avant d'envoyer.</span>`;
++  } catch (e) {
++    status.textContent = 'Erreur cote dashboard: ' + e;
++  }
++}
++
+ async function sendPayload() {
+   const purpose = document.getElementById('f-purpose').value;
+   const sender = document.getElementById('f-sender').value;
+@@ -227,6 +264,47 @@ async function refreshOther() {
+   }
+ }
+ 
++async function refreshGraphify() {
++  const body = document.getElementById('graphify-body');
++  body.textContent = 'Lecture de graphify-out/graph.json en cours...';
++  try {
++    const r = await fetch('/api/graphify-summary');
++    const j = await r.json();
++    if (!j.ok) {
++      body.innerHTML = `<span style="color:var(--down)">${j.reason}</span> -- ${j.detail||''}`;
++      return;
++    }
++    const staleBadge = j.stale === true ? '<span class="badge none">possiblement perime</span>'
++      : j.stale === false ? '<span class="badge present">a jour (== HEAD)</span>'
++      : '<span class="badge neutral">fraicheur non determinee</span>';
++    body.innerHTML = `
++      <div class="stat-row">
++        <div class="stat"><div class="n">${j.node_count}</div><div class="l">noeuds</div></div>
++        <div class="stat"><div class="n">${j.link_count}</div><div class="l">liens</div></div>
++        <div class="stat"><div class="n">${j.community_count}</div><div class="l">communautes</div></div>
++      </div>
++      <p class="muted">genere le ${j.generated_at ? new Date(j.generated_at*1000).toLocaleString() : '?'} (mtime du fichier) --
++        built_at_commit=${(j.built_at_commit||'?').slice(0,12)}..., HEAD=${(j.head_commit||'?').slice(0,12)}... ${staleBadge}</p>
++      <p class="muted">${j.stale_reason||''}</p>`;
++  } catch (e) {
++    body.textContent = 'Erreur cote dashboard: ' + e;
++  }
++}
++
++async function testOpenClaw() {
++  const body = document.getElementById('openclaw-body');
++  body.textContent = 'Tentative de connexion vers ws://127.0.0.1:19001...';
++  try {
++    const r = await fetch('/api/openclaw-check');
++    const j = await r.json();
++    const color = j.reachable ? 'var(--ok)' : 'var(--down)';
++    body.innerHTML = `<strong style="color:${color}">${j.reachable ? 'PORT ACCESSIBLE' : 'INACCESSIBLE DEPUIS ICI'}</strong>
++      (methode: ${j.method}, ${j.latency_ms} ms)<br><span class="muted">${j.detail}</span>`;
++  } catch (e) {
++    body.textContent = 'Erreur cote dashboard: ' + e;
++  }
++}
++
+ // Un seul chargement automatique a l'ouverture de la page -- ensuite,
+ // tout rafraichissement est manuel (bouton), comme demande.
+ refreshStatus();
+diff --git a/dashboard/server.py b/dashboard/server.py
+index abb37a3..89be368 100644
+--- a/dashboard/server.py
++++ b/dashboard/server.py
+@@ -69,8 +69,29 @@ LIMITES HONNETES DE CETTE V1 :
+     dans ce depot (`sdk/python/cstl_llm_agent.py`, Anthropic/Gemini) mais
+     tourne comme un process Python separe, hors de ce dashboard -- ce
+     dashboard ne le lance pas et ne s'y connecte pas.
+-  - Hermes/Ollama et OpenClaw : non integres, confirme par recherche dans
+-    src/ cette session -- aucune reference dans le code Rust.
++  - Hermes/Ollama et OpenClaw : toujours non integres cote serveur Rust
++    (confirme par recherche dans src/ -- aucune reference dans le code
++    Rust), mais CE dashboard sait desormais tenter une vraie connexion vers
++    chacun (voir /api/generate-relation et /api/openclaw-check ci-dessous) :
++      * /api/generate-relation (POST {"topic": "..."}) essaie dans l'ordre
++        Hermes/Ollama local (127.0.0.1:11434) -> Gemini -> Anthropic via
++        sdk/python/cstl_llm_agent.py::resolve_brain("auto") (code reutilise
++        tel quel, jamais duplique). Dans CE sandbox, aucun des trois n'est
++        disponible (Ollama absent, confirme par `which ollama` et
++        `curl http://localhost:11434/api/tags`; ni GEMINI_API_KEY ni
++        ANTHROPIC_API_KEY dans l'environnement) -- l'endpoint le rapporte
++        honnetement plutot que d'inventer une relation.
++      * /api/openclaw-check tente une connexion (WebSocket si le paquet
++        `websockets` est installe, sinon TCP brut) vers
++        ws://127.0.0.1:19001 -- AUCUN protocole applicatif OpenClaw n'est
++        parle (aucune documentation disponible pour l'ecrire), seulement un
++        test de connectivite generique. Dans ce sandbox, retourne toujours
++        "inaccessible" puisqu'OpenClaw tourne sur la machine macOS de
++        l'utilisateur, jamais ici -- resultat ATTENDU, pas une erreur.
++  - Graphify : /api/graphify-summary lit le VRAI fichier
++    graphify-out/graph.json (pas de "topology.json" dans ce depot) et
++    retourne noeuds/liens/communautes reels + comparaison honnete de
++    built_at_commit contre HEAD (perime si ce n'est pas un ancetre de HEAD).
+   - Telegram et Obsidian : cables cote serveur Rust (voir
+     src/telegram_council.rs, src/obsidian_escalation.rs) mais ce dashboard
+     ne lit aucun etat de ces integrations -- affiche comme "cable cote
+@@ -81,6 +102,8 @@ import json
+ import os
+ import socket
+ import sqlite3
++import subprocess
++import sys
+ import time
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+ from pathlib import Path
+@@ -88,6 +111,22 @@ from urllib.parse import urlparse, parse_qs
+ 
+ REPO_ROOT = Path(__file__).resolve().parent.parent
+ 
++# sdk/python/cstl_llm_agent.py expose deja resolve_brain() (Hermes/Ollama ->
++# Gemini -> Anthropic, degradation propre a None si aucun n'est disponible)
++# -- reutilise tel quel ici, jamais duplique. Import a l'interieur d'un
++# try/except: ce module importe lui-meme cstl_client.py (stdlib pur, ok) et
++# tente d'importer `cryptography` en haut de fichier (deja gere en interne
++# par un try/except la-bas) -- donc cet import ne devrait jamais echouer
++# dans un environnement Python standard, mais si sdk/python/ est deplace ou
++# absent, ce dashboard degrade proprement plutot que de planter au demarrage.
++sys.path.insert(0, str(REPO_ROOT / "sdk" / "python"))
++try:
++    from cstl_llm_agent import resolve_brain  # noqa: E402
++    _LLM_AGENT_IMPORT_ERROR = None
++except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
++    resolve_brain = None
++    _LLM_AGENT_IMPORT_ERROR = str(e)
++
+ DASHBOARD_PORT = int(os.environ.get("CSTL_DASHBOARD_PORT", "5099"))
+ CSTL_SERVER_HOST = os.environ.get("CSTL_SERVER_HOST", "127.0.0.1")
+ CSTL_SERVER_PORT = int(os.environ.get("CSTL_SERVER_PORT", "5050"))
+@@ -233,6 +272,209 @@ def send_cstl_payload(payload_text):
+         return {"ok": False, "sent": payload_text, "error": str(e), "round_trip_ms": elapsed_ms}
+ 
+ 
++def generate_relation_via_llm(topic):
++    """Essaie dans l'ordre Hermes/Ollama (local, gratuit) -> Gemini ->
++    Anthropic via resolve_brain("auto") de sdk/python/cstl_llm_agent.py --
++    AUCUNE logique de generation dupliquee ici, seulement l'appel et la mise
++    en forme honnete du resultat pour le compositeur du dashboard.
++
++    Retourne un dict JSON-serialisable, jamais une exception non geree:
++    {"ok": False, "brain": None, "message": "..."} si aucun brain n'est
++    disponible (le cas normal dans ce sandbox), ou
++    {"ok": True, "brain": "HermesAgentBrain", "model": "...",
++     "relation": {"type":..., "subject":..., "object":...}} en cas de
++    succes reel."""
++    if resolve_brain is None:
++        return {
++            "ok": False, "brain": None,
++            "message": ("import de sdk/python/cstl_llm_agent.py impossible "
++                        f"({_LLM_AGENT_IMPORT_ERROR}) -- generation LLM indisponible."),
++        }
++
++    topic = (topic or "").strip()
++    if not topic:
++        return {"ok": False, "brain": None, "message": "sujet vide -- rien a demander a un agent LLM."}
++
++    try:
++        brain = resolve_brain("auto")
++    except Exception as e:
++        return {"ok": False, "brain": None, "message": f"resolve_brain('auto') a leve une exception: {e}"}
++
++    if brain is None:
++        return {
++            "ok": False, "brain": None,
++            "message": ("aucun agent LLM disponible (ni Hermes local, ni cle "
++                        "Gemini/Anthropic) -- voir stderr du process dashboard "
++                        "pour le detail de chaque tentative (Hermes: serveur "
++                        "Ollama sur 127.0.0.1:11434 ? Gemini: GEMINI_API_KEY ? "
++                        "Anthropic: ANTHROPIC_API_KEY ?)."),
++        }
++
++    brain_name = type(brain).__name__
++    model = getattr(brain, "model", None)
++    try:
++        relation = brain.generate_relation(topic, None)
++    except Exception as e:
++        return {
++            "ok": False, "brain": brain_name, "model": model,
++            "message": f"{brain_name} disponible mais la generation a echoue reellement: {e}",
++        }
++
++    if not isinstance(relation, dict) or not all(k in relation for k in ("type", "subject", "object")):
++        return {
++            "ok": False, "brain": brain_name, "model": model,
++            "message": f"reponse du modele mal formee (attendu type/subject/object): {relation!r}",
++        }
++
++    return {"ok": True, "brain": brain_name, "model": model, "relation": relation}
++
++
++def read_graphify_summary():
++    """Lit le VRAI fichier graphify-out/graph.json s'il existe (le format
++    reellement produit par cet outil -- pas de fichier "topology.json"
++    trouve dans ce depot) et retourne un resume honnete: nombre de noeuds,
++    nombre de communautes distinctes, commit sur lequel le graphe a ete
++    construit. Aucun nombre invente: si le fichier est absent, le dit
++    explicitement ; si le commit d'origine (`built_at_commit`) n'est pas un
++    ancetre de HEAD, le signale comme possiblement perime plutot que de
++    pretendre que le graphe est a jour."""
++    graph_file = GRAPHIFY_OUT / "graph.json"
++    manifest_file = GRAPHIFY_OUT / "manifest.json"
++
++    if not graph_file.exists():
++        return {
++            "ok": False, "reason": "non_genere",
++            "detail": f"{graph_file} absent -- regenere avec `graphify update .`",
++        }
++
++    try:
++        raw = graph_file.read_text(encoding="utf-8")
++        data = json.loads(raw)
++    except (OSError, json.JSONDecodeError) as e:
++        return {"ok": False, "reason": "lecture_impossible", "detail": str(e), "path": str(graph_file)}
++
++    nodes = data.get("nodes", [])
++    links = data.get("links", [])
++    communities = {n.get("community") for n in nodes if isinstance(n, dict) and "community" in n}
++    built_at_commit = data.get("built_at_commit")
++
++    result = {
++        "ok": True,
++        "path": str(graph_file),
++        "node_count": len(nodes),
++        "link_count": len(links),
++        "community_count": len(communities),
++        "built_at_commit": built_at_commit,
++        "generated_at": None,
++    }
++
++    # Date de generation: prise du mtime reel du fichier sur disque (le
++    # format graph.json lui-meme ne porte pas de champ de date explicite,
++    # verifie sur cette instance) -- jamais fabriquee.
++    try:
++        result["generated_at"] = int(graph_file.stat().st_mtime)
++    except OSError:
++        pass
++
++    # Perime ? Comparaison SIMPLE et honnete: built_at_commit est-il un
++    # ancetre de HEAD dans CE depot git ? Si `git` ou le repo sont
++    # indisponibles, on le dit plutot que de deviner.
++    result["head_commit"] = None
++    result["stale"] = None
++    result["stale_reason"] = None
++    try:
++        head = subprocess.run(
++            ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT),
++            capture_output=True, text=True, timeout=5,
++        )
++        if head.returncode == 0:
++            head_commit = head.stdout.strip()
++            result["head_commit"] = head_commit
++            if not built_at_commit:
++                result["stale"] = None
++                result["stale_reason"] = "graph.json ne porte pas de built_at_commit -- impossible de comparer."
++            elif built_at_commit == head_commit:
++                result["stale"] = False
++                result["stale_reason"] = "built_at_commit == HEAD exactement."
++            else:
++                anc = subprocess.run(
++                    ["git", "merge-base", "--is-ancestor", built_at_commit, "HEAD"],
++                    cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=5,
++                )
++                if anc.returncode == 0:
++                    result["stale"] = True
++                    result["stale_reason"] = ("built_at_commit est un ancetre de HEAD mais pas HEAD lui-meme -- "
++                                               "des commits sont arrives depuis la generation du graphe.")
++                else:
++                    result["stale"] = True
++                    result["stale_reason"] = (f"built_at_commit ({built_at_commit[:12]}...) n'est PAS un ancetre "
++                                               "de HEAD dans l'historique courant -- le graphe a ete construit sur "
++                                               "une autre branche/ligne d'historique, possiblement perime.")
++        else:
++            result["stale_reason"] = f"`git rev-parse HEAD` a echoue: {head.stderr.strip()}"
++    except (OSError, subprocess.SubprocessError) as e:
++        result["stale_reason"] = f"comparaison git impossible: {e}"
++
++    return result
++
++
++def check_openclaw_connection():
++    """Test de connectivite GENERIQUE vers ws://127.0.0.1:19001 -- PAS le
++    protocole applicatif d'OpenClaw (aucune documentation de ce protocole
++    n'est disponible pour cette tache, donc aucun format de message n'est
++    invente ici). Deux niveaux, selon ce qui est disponible:
++      1. Si le paquet `websockets` est installe: tente une vraie poignee de
++         main WebSocket (upgrade HTTP compris) -- plus proche de ce
++         qu'OpenClaw attend reellement s'il ecoute en WebSocket.
++      2. Sinon: simple connexion TCP brute sur le port -- suffisant pour
++         savoir si quelque chose ecoute la, pas pour parler le protocole.
++    Dans CE sandbox, OpenClaw tourne (s'il tourne) sur la machine macOS de
++    l'utilisateur, pas ici -- "inaccessible depuis ici" est donc le resultat
++    ATTENDU et correct, pas un signe de bug."""
++    host, port = "127.0.0.1", 19001
++    started = time.monotonic()
++
++    try:
++        import websockets.sync.client as ws_sync  # type: ignore
++        try:
++            conn = ws_sync.connect(f"ws://{host}:{port}/", open_timeout=2.0, close_timeout=1.0)
++            conn.close()
++            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
++            return {
++                "reachable": True, "method": "websocket_handshake",
++                "host": host, "port": port, "latency_ms": elapsed_ms,
++                "detail": "poignee de main WebSocket reussie sur ce port.",
++            }
++        except Exception as e:
++            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
++            return {
++                "reachable": False, "method": "websocket_handshake",
++                "host": host, "port": port, "latency_ms": elapsed_ms,
++                "detail": (f"echec de la poignee de main WebSocket ({e}) -- attendu dans ce sandbox, "
++                           "OpenClaw tourne sur la machine de l'utilisateur, pas ici."),
++            }
++    except ImportError:
++        pass
++
++    try:
++        with socket.create_connection((host, port), timeout=2.0):
++            elapsed_ms = round((time.monotonic() - started) * 1000, 1)
++            return {
++                "reachable": True, "method": "tcp_raw",
++                "host": host, "port": port, "latency_ms": elapsed_ms,
++                "detail": ("port TCP ouvert (paquet 'websockets' absent, test TCP brut seulement -- "
++                           "ne prouve pas qu'un serveur WebSocket ou OpenClaw ecoute reellement)."),
++            }
++    except OSError as e:
++        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
++        return {
++            "reachable": False, "method": "tcp_raw",
++            "host": host, "port": port, "latency_ms": elapsed_ms,
++            "detail": (f"connexion TCP echouee ({e}) -- attendu dans ce sandbox, OpenClaw tourne "
++                       "sur la machine de l'utilisateur, pas ici."),
++        }
++
++
+ def check_other_systems():
+     """Statuts honnetes des "autres systemes" -- jamais une case verte
+     fabriquee. Chaque ligne dit precisement sur quoi son statut est base."""
+@@ -250,28 +492,34 @@ def check_other_systems():
+             "detail": f"{src_file} present dans src/" if wired else f"{src_file} absent",
+         })
+ 
+-    for name in ["Hermes", "Ollama", "OpenClaw"]:
+-        systems.append({
+-            "name": name,
+-            "status": "non_integre",
+-            "detail": "aucune reference trouvee dans src/ (grep effectue cette session)",
+-        })
++    # Hermes/Ollama : toujours non-integre cote serveur Rust lui-meme (grep
++    # src/ ne trouve aucune reference), mais depuis cette session le
++    # dashboard SAIT parler a un serveur Ollama local via HermesAgentBrain
++    # (sdk/python/cstl_llm_agent.py) -- voir /api/generate-relation. Le
++    # statut ci-dessous reste honnete: pas d'integration Rust, endpoint
++    # dashboard present.
++    systems.append({
++        "name": "Hermes/Ollama",
++        "status": "non_integre",
++        "detail": ("aucune reference dans src/ (Rust) -- mais /api/generate-relation de CE dashboard "
++                   "sait parler a un serveur Ollama local (127.0.0.1:11434) via HermesAgentBrain "
++                   "s'il est installe et lance."),
++    })
+ 
+-    # Graphify : lien statique reel si le dossier/fichier existe vraiment.
+-    topology = GRAPHIFY_OUT / "topology.json"
+-    if GRAPHIFY_OUT.is_dir() and any(GRAPHIFY_OUT.iterdir()):
+-        systems.append({
+-            "name": "Graphify",
+-            "status": "dossier_present",
+-            "detail": f"{GRAPHIFY_OUT} existe et contient des fichiers "
+-                      f"({'topology.json trouve' if topology.exists() else 'topology.json absent'})",
+-        })
+-    else:
+-        systems.append({
+-            "name": "Graphify",
+-            "status": "dossier_absent",
+-            "detail": f"{GRAPHIFY_OUT} absent ou vide (regenerer avec `graphify update .`)",
+-        })
++    # OpenClaw : voir /api/openclaw-check -- test de connectivite generique
++    # uniquement (aucun protocole applicatif documente disponible).
++    systems.append({
++        "name": "OpenClaw",
++        "status": "non_integre",
++        "detail": ("aucune reference dans src/ ; /api/openclaw-check de CE dashboard teste seulement "
++                   "l'ouverture du port ws://127.0.0.1:19001, sans parler le protocole applicatif "
++                   "(non documente) -- clique 'Tester la connexion OpenClaw' pour un resultat en direct."),
++    })
++
++    # Graphify : plus de ligne statique ici -- remplace par un resume REEL
++    # de graphify-out/graph.json, lu a la demande via /api/graphify-summary
++    # (voir read_graphify_summary()) et affiche par le bouton dedie du
++    # panneau "Autres systemes" cote index.html.
+ 
+     # Claude Code : cette session elle-meme, honnete: pas d'etat verifiable
+     # depuis un serveur externe, juste une mention.
+@@ -310,6 +558,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
+             self._send_json(read_adn_state())
+         elif parsed.path == "/api/other-systems":
+             self._send_json(check_other_systems())
++        elif parsed.path == "/api/graphify-summary":
++            self._send_json(read_graphify_summary())
++        elif parsed.path == "/api/openclaw-check":
++            self._send_json(check_openclaw_connection())
+         else:
+             self.send_error(404, "Not found")
+ 
+@@ -326,6 +578,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
+             payload_text = build_cstl_payload(fields)
+             result = send_cstl_payload(payload_text)
+             self._send_json(result)
++        elif parsed.path == "/api/generate-relation":
++            length = int(self.headers.get("Content-Length", "0"))
++            raw = self.rfile.read(length) if length else b"{}"
++            try:
++                fields = json.loads(raw.decode("utf-8"))
++            except json.JSONDecodeError:
++                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
++                return
++            self._send_json(generate_relation_via_llm(fields.get("topic", "")))
+         else:
+             self.send_error(404, "Not found")
+ 
+diff --git a/sdk/python/cstl_llm_agent.py b/sdk/python/cstl_llm_agent.py
+index dd42359..94386bb 100644
+--- a/sdk/python/cstl_llm_agent.py
++++ b/sdk/python/cstl_llm_agent.py
+@@ -65,6 +65,8 @@ import json
+ import os
+ import sys
+ import unicodedata
++import urllib.error
++import urllib.request
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Optional
+@@ -375,10 +377,91 @@ class GeminiAgentBrain:
+             raise ValueError(f"reponse du modele non-JSON: {text!r}")
+ 
+ 
++# ---------------------------------------------------------------------------
++# Cerveau Hermes/Ollama -- meme interface (generate_relation) et meme patron
++# from_env() que les deux brains ci-dessus, ajoute le 2026-09-06.
++#
++# Motivation: Hermes tourne LOCALEMENT via Ollama (aucune cle API, aucun
++# frais, aucune donnee envoyee a un tiers) -- prefere en premier dans
++# resolve_brain() precisement pour ca, si l'utilisateur l'a installe sur sa
++# machine. Parle l'API HTTP REST standard d'Ollama (POST /api/generate),
++# PAS le SDK Python d'un fournisseur -- Ollama n'en a pas besoin, seulement
++# `curl`/urllib suffit, donc aucune dependance supplementaire ici (stdlib
++# `urllib.request` uniquement, comme le reste de ce fichier evite les deps
++# non necessaires en dehors de cryptography/anthropic/google-genai).
++#
++# VERIFIE dans ce sandbox (2026-09-06), commandes executees telles quelles:
++#   `which ollama`              -> rien (code de sortie 1, binaire absent)
++#   `curl http://localhost:11434/api/tags` -> echec de connexion
++#     (curl exit 7 "Failed to connect to localhost port 11434:
++#     Connection refused") -- aucun serveur Ollama n'ecoute ici.
++# Consequence directe et voulue: HermesAgentBrain.from_env() retourne None
++# dans CE sandbox, exactement comme AnthropicAgentBrain/GeminiAgentBrain en
++# l'absence de leur dependance -- meme degradation propre, pas d'exception.
++# La verification AVEC un vrai serveur Ollama (et donc une vraie reponse de
++# hermes3) reste a faire par l'utilisateur sur sa machine (voir le README du
++# SDK) -- seul le parsing de la forme de reponse Ollama est verifie ici via
++# un mock HTTP (voir _structural_selftest et test_hermes_brain.py).
++# ---------------------------------------------------------------------------
++
++@dataclass
++class HermesAgentBrain:
++    host: str
++    port: int
++    model: str
++
++    @classmethod
++    def from_env(cls, model: str | None = None) -> Optional["HermesAgentBrain"]:
++        host = os.environ.get("CSTL_OLLAMA_HOST", "127.0.0.1")
++        port = int(os.environ.get("CSTL_OLLAMA_PORT", "11434"))
++        resolved_model = model or os.environ.get("CSTL_OLLAMA_MODEL", "hermes3")
++        tags_url = f"http://{host}:{port}/api/tags"
++        try:
++            with urllib.request.urlopen(tags_url, timeout=1.0):
++                pass
++        except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
++            print(
++                f"[HermesAgentBrain] serveur Ollama injoignable sur {tags_url} "
++                f"({e}) -- installe/lance Ollama (voir ollama.com) puis "
++                f"`ollama pull {resolved_model}`. Degradation: None.",
++                file=sys.stderr,
++            )
++            return None
++        return cls(host=host, port=port, model=resolved_model)
++
++    def generate_relation(self, topic: str, peer_message: str | None) -> dict:
++        """Meme contrat que AnthropicAgentBrain/GeminiAgentBrain.generate_relation:
++        un objet JSON {"type", "subject", "object"}. Appelle l'API HTTP REST
++        standard d'Ollama, POST /api/generate, avec stream=False pour recevoir
++        la reponse complete en un seul objet JSON (champ "response")."""
++        prompt = (
++            "Tu es un agent CSTL. Reponds UNIQUEMENT avec un objet JSON "
++            '{"type": "...", "subject": "...", "object": "..."} '
++            "representant une relation factuelle ou une prise de position "
++            f"sur le sujet suivant: {topic!r}."
++        )
++        if peer_message:
++            prompt += f" Le pair vient de dire: {peer_message!r}."
++        url = f"http://{self.host}:{self.port}/api/generate"
++        body = json.dumps({"model": self.model, "prompt": prompt, "stream": False}).encode("utf-8")
++        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
++        with urllib.request.urlopen(req, timeout=60.0) as resp:
++            payload = json.loads(resp.read().decode("utf-8"))
++        text = payload.get("response", "")
++        try:
++            return json.loads(text)
++        except json.JSONDecodeError:
++            start, end = text.find("{"), text.rfind("}")
++            if start != -1 and end != -1:
++                return json.loads(text[start:end + 1])
++            raise ValueError(f"reponse du modele non-JSON: {text!r}")
++
++
+ def resolve_brain(provider: str, model: str | None = None) -> Optional[object]:
+-    """`provider` in {"anthropic", "gemini", "auto"}. "auto" essaie Gemini
+-    en premier (palier gratuit reel, accessible sans frais a l'utilisateur)
+-    puis retombe sur Anthropic -- ordre delibere, pas arbitraire.
++    """`provider` in {"hermes", "anthropic", "gemini", "auto"}. "auto" essaie
++    Hermes/Ollama en premier (local, gratuit, aucune donnee envoyee a un
++    tiers), puis Gemini (palier gratuit reel, cle requise), puis Anthropic
++    (API payante) -- ordre delibere, pas arbitraire.
+ 
+     `model` surcharge le defaut de chaque backend quand fourni -- utile si
+     le fournisseur retire encore un nom de modele (voir le commentaire
+@@ -386,12 +469,16 @@ def resolve_brain(provider: str, model: str | None = None) -> Optional[object]:
+     gemini-2.0-flash -> gemini-3.6-flash, decouvert via l'erreur 404 d'un
+     vrai appel utilisateur) sans avoir a patcher ce fichier."""
+     kwargs = {"model": model} if model else {}
++    if provider == "hermes":
++        return HermesAgentBrain.from_env(**kwargs)
+     if provider == "anthropic":
+         return AnthropicAgentBrain.from_env(**kwargs)
+     if provider == "gemini":
+         return GeminiAgentBrain.from_env(**kwargs)
+     if provider == "auto":
+-        return GeminiAgentBrain.from_env(**kwargs) or AnthropicAgentBrain.from_env(**kwargs)
++        return (HermesAgentBrain.from_env(**kwargs)
++                or GeminiAgentBrain.from_env(**kwargs)
++                or AnthropicAgentBrain.from_env(**kwargs))
+     raise ValueError(f"provider inconnu: {provider!r}")
+ 
+ 
+@@ -466,7 +553,7 @@ def run_llm_relay(host: str, port: int, keyfile: Path, agent_name: str,
+ def _structural_selftest() -> int:
+     failures = []
+ 
+-    print("[1/4] cryptography disponible et generation de cle...")
++    print("[1/6] cryptography disponible et generation de cle...")
+     if not _HAS_CRYPTOGRAPHY:
+         failures.append("le paquet 'cryptography' est absent -- ne peut pas etre teste plus loin")
+     else:
+@@ -480,7 +567,7 @@ def _structural_selftest() -> int:
+             else:
+                 print(f"      OK (public_key stable: {pk1[:16]}...)")
+ 
+-    print("[2/4] cstl_signing_bytes -- fixture croisee Rust/Python...")
++    print("[2/6] cstl_signing_bytes -- fixture croisee Rust/Python...")
+     # Fixture IDENTIQUE a examples/print_signing_bytes_fixture.rs, verifiee
+     # manuellement octet-par-octet dans cette session (2026-09-04).
+     expected_hex = (
+@@ -509,20 +596,57 @@ def _structural_selftest() -> int:
+     else:
+         print("      OK (identique octet-par-octet a signing_bytes() cote Rust)")
+ 
+-    print("[3/4] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
++    print("[3/6] AnthropicAgentBrain.from_env() degrade proprement sans paquet/cle...")
+     brain = AnthropicAgentBrain.from_env()
+     if brain is not None:
+         print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
+     else:
+         print("      OK (None, comme attendu dans un environnement sans 'anthropic'/ANTHROPIC_API_KEY)")
+ 
+-    print("[4/4] GeminiAgentBrain.from_env() degrade proprement sans paquet/cle...")
++    print("[4/6] GeminiAgentBrain.from_env() degrade proprement sans paquet/cle...")
+     gemini_brain = GeminiAgentBrain.from_env()
+     if gemini_brain is not None:
+         print("      (un vrai modele EST disponible ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
+     else:
+         print("      OK (None, comme attendu dans un environnement sans 'google-genai'/GEMINI_API_KEY)")
+ 
++    print("[5/6] HermesAgentBrain.from_env() degrade proprement sans serveur Ollama...")
++    hermes_brain = HermesAgentBrain.from_env()
++    if hermes_brain is not None:
++        print("      (un vrai serveur Ollama EST joignable ici -- pas l'etat attendu de ce sandbox, mais pas un echec)")
++    else:
++        print("      OK (None, comme attendu dans un environnement sans serveur Ollama sur 11434)")
++
++    print("[6/6] HermesAgentBrain.generate_relation() -- parsing d'une reponse Ollama simulee (mock HTTP, aucun reseau)...")
++    try:
++        import io
++        from unittest import mock
++
++        fake_ollama_body = json.dumps({
++            "model": "hermes3", "created_at": "2026-09-06T00:00:00Z",
++            "response": '{"type": "part_of", "subject": "montreal", "object": "quebec"}',
++            "done": True,
++        }).encode("utf-8")
++
++        class _FakeHttpResponse(io.BytesIO):
++            def __enter__(self):
++                return self
++
++            def __exit__(self, *exc):
++                return False
++
++        brain_for_parsing_test = HermesAgentBrain(host="127.0.0.1", port=11434, model="hermes3")
++        with mock.patch("urllib.request.urlopen", return_value=_FakeHttpResponse(fake_ollama_body)) as mocked:
++            relation = brain_for_parsing_test.generate_relation("Montreal est-elle au Quebec?", None)
++        if relation != {"type": "part_of", "subject": "montreal", "object": "quebec"}:
++            failures.append(f"HermesAgentBrain.generate_relation a mal parse la reponse Ollama simulee: {relation!r}")
++        elif not mocked.called:
++            failures.append("HermesAgentBrain.generate_relation n'a pas appele urllib.request.urlopen (mock jamais invoque)")
++        else:
++            print("      OK (JSON extrait correctement du champ 'response' d'une reponse Ollama simulee)")
++    except Exception as e:  # pragma: no cover - le test lui-meme ne doit jamais planter le selftest
++        failures.append(f"test de parsing HermesAgentBrain a leve une exception: {e!r}")
++
+     print()
+     if failures:
+         print(f"❌ {len(failures)} echec(s):")
+@@ -543,9 +667,9 @@ def main() -> int:
+     ap.add_argument("--turns", type=int, default=3)
+     ap.add_argument("--peer-mode", choices=["stdin", "self"], default="self",
+                      help="'stdin': un humain repond a chaque tour. 'self': le meme LLM alimente les deux cotes.")
+-    ap.add_argument("--provider", choices=["anthropic", "gemini", "auto"], default="auto",
+-                     help="Backend LLM. 'auto' (defaut) essaie Gemini en premier (palier gratuit reel) "
+-                          "puis retombe sur Anthropic si Gemini est indisponible.")
++    ap.add_argument("--provider", choices=["hermes", "anthropic", "gemini", "auto"], default="auto",
++                     help="Backend LLM. 'auto' (defaut) essaie Hermes/Ollama en premier (local, "
++                          "gratuit), puis Gemini (palier gratuit reel), puis Anthropic (API payante).")
+     ap.add_argument("--model", default=None,
+                      help="Surcharge le nom de modele par defaut du backend choisi -- exige "
+                           "--provider anthropic|gemini explicite (pas 'auto'). Utile si le "
+diff --git a/sdk/python/test_hermes_brain.py b/sdk/python/test_hermes_brain.py
+new file mode 100644
+index 0000000..58261bd
+--- /dev/null
++++ b/sdk/python/test_hermes_brain.py
+@@ -0,0 +1,114 @@
++#!/usr/bin/env python3
++"""
++test_hermes_brain.py -- tests unitaires dedies a HermesAgentBrain
++(cstl_llm_agent.py). Deux choses distinctes sont testees, et il ne faut
++JAMAIS les confondre dans le rapport de resultats:
++
++  1. TestHermesAbsentIci : verifie que dans CE sandbox (aucun serveur
++     Ollama sur 11434, confirme par `which ollama` et
++     `curl http://localhost:11434/api/tags` avant l'ecriture de ce fichier)
++     HermesAgentBrain.from_env() retourne reellement None -- pas une
++     simulation, une vraie tentative de connexion TCP qui echoue reellement
++     ici.
++  2. TestHermesParsingMocke : verifie que, SI un serveur Ollama repondait
++     (simule via unittest.mock.patch sur urllib.request.urlopen -- aucun
++     socket reseau reel ouvert par ce test), generate_relation() sait
++     parser la forme de reponse standard de l'API Ollama
++     (POST /api/generate, champ JSON "response" contenant du texte qui
++     lui-meme contient un objet JSON).
++
++Lancement:
++    python3 sdk/python/test_hermes_brain.py
++    # ou: python3 -m unittest sdk/python/test_hermes_brain.py
++"""
++
++import io
++import json
++import sys
++import unittest
++from pathlib import Path
++from unittest import mock
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from cstl_llm_agent import HermesAgentBrain  # noqa: E402
++
++
++class _FakeHttpResponse(io.BytesIO):
++    """Simule l'objet retourne par urllib.request.urlopen() -- doit
++    supporter le contexte `with ... as resp:` utilise par
++    HermesAgentBrain.generate_relation()."""
++
++    def __enter__(self):
++        return self
++
++    def __exit__(self, *exc):
++        return False
++
++
++class TestHermesAbsentIci(unittest.TestCase):
++    """Aucun mock ici -- vraie tentative de connexion TCP vers 127.0.0.1:11434,
++    qui echoue reellement dans ce sandbox (confirme par `which ollama` et
++    `curl http://localhost:11434/api/tags`, tous deux en echec)."""
++
++    def test_from_env_retourne_none_sans_serveur_ollama(self):
++        brain = HermesAgentBrain.from_env()
++        self.assertIsNone(
++            brain,
++            "HermesAgentBrain.from_env() a retourne un objet -- soit un "
++            "serveur Ollama tourne reellement ici (pas l'etat attendu de "
++            "ce sandbox), soit la degradation propre est cassee.",
++        )
++
++
++class TestHermesParsingMocke(unittest.TestCase):
++    """Mock HTTP local (unittest.mock.patch) -- AUCUN serveur reel, AUCUN
++    socket reseau ouvert. Prouve uniquement que le parsing de la forme de
++    reponse Ollama fonctionne, pas qu'un vrai modele repond correctement."""
++
++    def _brain(self):
++        return HermesAgentBrain(host="127.0.0.1", port=11434, model="hermes3")
++
++    def test_parse_reponse_ollama_json_direct(self):
++        fake_body = json.dumps({
++            "model": "hermes3",
++            "created_at": "2026-09-06T00:00:00Z",
++            "response": '{"type": "part_of", "subject": "montreal", "object": "quebec"}',
++            "done": True,
++        }).encode("utf-8")
++        with mock.patch("urllib.request.urlopen", return_value=_FakeHttpResponse(fake_body)) as mocked:
++            relation = self._brain().generate_relation("Montreal est-elle au Quebec?", None)
++        self.assertEqual(relation, {"type": "part_of", "subject": "montreal", "object": "quebec"})
++        self.assertTrue(mocked.called)
++        # Verifie que la requete est bien un POST vers /api/generate avec
++        # stream=False (contrat de l'API HTTP REST standard d'Ollama).
++        sent_request = mocked.call_args[0][0]
++        self.assertEqual(sent_request.full_url, "http://127.0.0.1:11434/api/generate")
++        sent_body = json.loads(sent_request.data.decode("utf-8"))
++        self.assertEqual(sent_body["model"], "hermes3")
++        self.assertIs(sent_body["stream"], False)
++
++    def test_parse_reponse_ollama_json_entoure_de_texte(self):
++        """Les modeles ajoutent parfois du texte autour du JSON malgre la
++        consigne -- meme tolerance que AnthropicAgentBrain/GeminiAgentBrain
++        (recherche de la premiere '{' et de la derniere '}')."""
++        fake_body = json.dumps({
++            "response": 'Voici la relation: {"type": "born_in", "subject": "x", "object": "y"} voila.',
++            "done": True,
++        }).encode("utf-8")
++        with mock.patch("urllib.request.urlopen", return_value=_FakeHttpResponse(fake_body)):
++            relation = self._brain().generate_relation("sujet", "message du pair")
++        self.assertEqual(relation, {"type": "born_in", "subject": "x", "object": "y"})
++
++    def test_from_env_utilise_cstl_ollama_model(self):
++        """CSTL_OLLAMA_MODEL doit surcharger le modele par defaut -- teste
++        avec une connexion mockee comme reussie pour isoler ce comportement
++        de la disponibilite reelle d'un serveur Ollama."""
++        with mock.patch("urllib.request.urlopen", return_value=_FakeHttpResponse(b"{}")):
++            with mock.patch.dict("os.environ", {"CSTL_OLLAMA_MODEL": "hermes3:8b"}, clear=False):
++                brain = HermesAgentBrain.from_env()
++        self.assertIsNotNone(brain)
++        self.assertEqual(brain.model, "hermes3:8b")
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.43.0
+

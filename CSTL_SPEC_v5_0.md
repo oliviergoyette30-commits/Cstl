@@ -647,6 +647,275 @@ volontairement absent, un check cassé a été supprimé plutôt que réparé ; 
 jamais). Ce sont des codes DIFFÉRENTS de la plage E301–E304 "Typage" du v4.9.3
 documentée en §16.1, qui n'a jamais été portée telle quelle.
 
+### 16.5 Blocs `GUARDRAIL_REPORT` / `SCOPE_LOCK` (ajout 2026-09-08)
+
+Le 22 mai 2026, une session tripartite (Claude+Gemini+ChatGPT, **conversation
+manuelle, pas du code**) a validé EMPIRIQUEMENT en conversation 4 nouveaux
+blocs de protocole pour la cohérence cross-vendor : `GUARDRAIL_REPORT`,
+`SCOPE_LOCK`, `EXECUTION_TRACE` et `ERROR_SIGNAL`. Jusqu'au 2026-09-08, aucune
+grammaire EBNF formelle n'existait pour ces blocs et aucun n'avait de code
+Rust — seule leur FONCTION était documentée dans les notes de session. Cette
+section porte en Rust les deux qui avaient une fonction déjà testée en
+conversation à l'époque : `GUARDRAIL_REPORT` (validé sur ChatGPT V2) et
+`SCOPE_LOCK` (validé sur Gemini V2). `EXECUTION_TRACE` et `ERROR_SIGNAL`
+restent des concepts théoriques (jamais testés, même en conversation, au
+22 mai) et ne sont donc **pas** portés ici — les sur-construire sans besoin
+vérifié serait malhonnête.
+
+**Forme wire** : les deux blocs suivent EXACTEMENT la même forme bracket
+générique que `META`/`INTENT_PAYLOAD`/`RELATION` (`NOM [clé=valeur, ...]`),
+pas la forme `(RULE)`/`(MUST)` des blocs RULE/CONSTRAINTS — c'est la forme
+que `server::parser::parse_payload` reconnaît réellement sur le chemin TCP en
+production (voir §20.1).
+
+```ebnf
+guardrail_report ::= "GUARDRAIL_REPORT" "[" guardrail_attr* "]" ;
+guardrail_attr    ::= status_attr | reason_attr | operator_attr | attribute ;
+status_attr       ::= "status" "=" guardrail_status ;
+guardrail_status  ::= "BLOCKED" | "PARTIAL" | "ALLOWED" ;
+reason_attr       ::= "reason" "=" value ;
+operator_attr     ::= "blocked_operator" "=" identifier ;
+```
+
+`status` est obligatoire. `reason` est recommandé (mais pas obligatoire) dès
+que `status` ≠ `ALLOWED` : son absence produit un avertissement W606, pas un
+rejet — la FONCTION du bloc (rendre un blocage visible) reste remplie, juste
+moins exploitable. Un payload peut porter **plusieurs** `GUARDRAIL_REPORT`
+(un LLM récepteur peut bloquer plusieurs sous-instructions distinctes d'un
+même payload) — tous sont conservés et relayés.
+
+```ebnf
+scope_lock       ::= "SCOPE_LOCK" "[" scope_attr* "]" ;
+scope_attr       ::= mode_attr | allowed_ids_attr | attribute ;
+mode_attr        ::= "mode" "=" scope_mode ;
+scope_mode       ::= "STRICT" | "OPEN" ;
+allowed_ids_attr ::= "allowed_ids" "=" quoted_id_list ;
+quoted_id_list   ::= '"' identifier (";" identifier)* '"' ;
+```
+
+`mode` est obligatoire. `allowed_ids` est optionnel (liste d'identifiants
+séparés par `;`, entre guillemets — même convention que les listes CSTL
+existantes, ex. `capabilities` dans `agent_register`). Au plus **un**
+`SCOPE_LOCK` actif par payload : un second bloc dans le même document est
+ignoré (le premier reste actif) avec un avertissement de parsing, plutôt
+qu'un écrasement silencieux ou un choix arbitraire de "le dernier gagne".
+
+| Code | Sévérité | Condition réelle (`server/validator.rs`, câblé live 2026-09-08) |
+|---|---|---|
+| E311 | error | `GUARDRAIL_REPORT` sans champ `status` |
+| E312 | error | `GUARDRAIL_REPORT.status` hors énumération `BLOCKED\|PARTIAL\|ALLOWED` |
+| E313 | error | `SCOPE_LOCK` sans champ `mode` |
+| E314 | error | `SCOPE_LOCK.mode` hors énumération `STRICT\|OPEN` |
+| W606 | warning | `GUARDRAIL_REPORT.status` ≠ `ALLOWED` sans champ `reason` |
+| W607 | warning | `SCOPE_LOCK[mode=STRICT, allowed_ids=...]` actif et une `RELATION` de ce même payload référence un `subject`/`object` hors de `allowed_ids` **et** hors des `id=` des `DEFINE` de ce même payload (`server/validator.rs::check_scope_lock_drift`) |
+
+**Effet observable côté serveur** (branché sur le chemin TCP réel,
+`server/handler.rs`) :
+- tout `GUARDRAIL_REPORT` reçu est relayé fidèlement dans la réponse sous la
+  forme `GUARDRAIL_REPORT_RELAYED [status=..., reason=..., blocked_operator=...]` ;
+- tout `SCOPE_LOCK` actif est confirmé explicitement dans la réponse sous la
+  forme `SCOPE_LOCK_ACK [mode=..., allowed_ids=...]`, même quand aucune
+  dérive n'est détectée ;
+- une dérive détectée (W607) apparaît comme n'importe quel autre avertissement
+  sémantique (`SEMANTIC_WARNING [detail=...]`) — jamais un rejet.
+
+**LIMITE HONNÊTE, assumée explicitement** (identique à la remarque P2 de la
+session tripartite du 22 mai 2026, "non résolvable par le format seul") : ce
+que le serveur peut vérifier s'arrête à la FORME du bloc et à une cohérence
+INTERNE aux `RELATION`/`DEFINE` structurés d'UN payload. Il ne peut ni
+vérifier qu'un `GUARDRAIL_REPORT` reçu reflète un vrai refus produit par un
+LLM récepteur, ni forcer un LLM tiers à respecter un `SCOPE_LOCK` dans le
+texte libre de sa réponse — aucune boucle vers un LLM externe n'existe dans
+ce chemin serveur. Seul un vrai LLM tiers connecté en boucle (hors de ce
+dépôt) permettrait de vérifier ce que ces deux blocs mesurent réellement en
+conversation ; ce que couvre ce dépôt est le parsing, la validation de
+format et le relai/observabilité côté serveur, testés de bout en bout
+(`server::parser::tests`, `server::validator::tests`,
+`examples/guardrail_scope_lock_smoke_test.rs`).
+
+`EXECUTION_TRACE` (trace d'audit de conformité écrite par l'orchestrateur
+après validation d'une réponse) et `ERROR_SIGNAL` (détection de divergence de
+`sigma=` ou de violation d'un `[NOT]`/`MUST_NOT` entre ce qui a été envoyé et
+ce qui revient) restaient, au moment où ce §16.5 a été écrit (2026-09-08),
+**non spécifiés et non implémentés** — théoriques au 22 mai 2026, jamais
+testés même en conversation. La grammaire et l'implémentation des deux sont
+maintenant couvertes par le §16.6 ci-dessous.
+
+### 16.6 Blocs `EXECUTION_TRACE` / `ERROR_SIGNAL` (ajout 2026-09-08)
+
+Les deux derniers blocs identifiés par la session tripartite du 22 mai 2026
+(voir §16.5) — leur FONCTION seulement était documentée dans les notes de
+session, **aucune grammaire EBNF n'existait pour eux avant cet ajout**. Elle
+est conçue ici, de zéro, en suivant strictement les conventions déjà en place
+pour `GUARDRAIL_REPORT`/`SCOPE_LOCK` (même forme bracket générique
+`NOM [clé=valeur, ...]`) — mais avec une différence structurelle majeure par
+rapport à ces deux-là :
+
+- `GUARDRAIL_REPORT`/`SCOPE_LOCK` sont envoyés par le CLIENT et relayés par
+  le serveur ;
+- `EXECUTION_TRACE` est généré PAR LE SERVEUR lui-même, jamais par le
+  client — c'est une trace d'audit de conformité sur CE QUE CE SERVEUR a
+  réellement vérifié sur CE payload, pas une déclaration que le client peut
+  fabriquer ;
+- `ERROR_SIGNAL` a un rôle double : le serveur l'émet automatiquement en
+  RAPPORT (`role=REPORT`) quand une divergence est détectée, et le client
+  peut en émettre une forme réduite en REQUÊTE (`role=REQUEST`) pour demander
+  explicitement une confirmation (y compris quand rien n'a été détecté —
+  autrement, l'absence de ligne est ambiguë entre "rien détecté" et "jamais
+  vérifié").
+
+```ebnf
+execution_trace    ::= "EXECUTION_TRACE" "[" trace_attr+ "]" ;
+trace_attr         ::= verdict_attr | semantic_attr | kb_attr | kb_count_attr
+                      | consistency_attr | deontic_attr | scope_attr | attribute ;
+verdict_attr       ::= "verdict" "=" trace_verdict ;
+trace_verdict      ::= "PASS" | "FLAGGED" ;
+semantic_attr      ::= "semantic_validation" "=" trace_verdict ;
+kb_attr            ::= "kb_verification" "=" kb_status ;
+kb_status          ::= "RUN" | "SKIPPED" ;
+kb_count_attr      ::= "kb_relations_checked" "=" integer ;
+consistency_attr   ::= "consistency_check" "=" trace_verdict ;
+deontic_attr       ::= "deontic_audit" "=" trace_verdict ;
+scope_attr         ::= "scope" "=" "SERVER_LOCAL_THIS_PAYLOAD" ;
+```
+
+`EXECUTION_TRACE` n'est **jamais reconnu en entrée** — `server::parser`
+ne lui attribue aucun champ de `CstlPayload` (contrairement à
+`guardrail_reports`/`scope_lock`, qui sont bien des champs client). Un
+client qui en enverrait un se le verrait ignoré comme n'importe quelle ligne
+non reconnue (comportement historique déjà en place pour tout mot-clé hors
+grammaire) — ce n'est pas une omission, c'est la conséquence directe du fait
+que ce bloc n'a de sens QUE construit après coup par le serveur qui a
+réellement fait tourner les vérifications qu'il résume.
+
+Chaque champ résume fidèlement un mécanisme qui existe déjà et tourne
+réellement dans `server/handler.rs`, jamais un champ inventé :
+- `semantic_validation` : le payload est arrivé jusqu'à ce point de
+  `handler.rs` uniquement parce que `server::validator::validate_payload` a
+  retourné `valid=true` (STEP 2) — donc toujours `PASS` ici (le chemin
+  `FAIL` renvoie une réponse `validation_error` et ne produit jamais
+  d'`EXECUTION_TRACE`) ;
+- `kb_verification` / `kb_relations_checked` : reflète si la Couche 3a
+  (`kb_verify`, vérification factuelle contre Wikidata) a effectivement
+  tourné sur au moins une `RELATION` de ce payload (`RUN`, avec le nombre
+  réel de relations vérifiées) ou si aucune relation vérifiable n'était
+  présente (`SKIPPED`) ;
+- `consistency_check` : reflète `execution_lab::check_consistency_with_history`
+  (`FLAGGED` si `consistency.consistent == false`) ;
+- `deontic_audit` : reflète `execution_lab::check_deontic_consistency_with_history`
+  (`FLAGGED` si des violations Axiome D ont été détectées contre l'historique) ;
+- `verdict` : `FLAGGED` si au moins un des deux checks informatifs
+  ci-dessus (`consistency_check`/`deontic_audit`) est `FLAGGED`, `PASS`
+  sinon.
+
+**LIMITE HONNÊTE, assumée explicitement** : `scope=SERVER_LOCAL_THIS_PAYLOAD`
+n'est pas un attribut décoratif — c'est la portée réelle et l'unique portée
+possible de ce bloc. `EXECUTION_TRACE` documente ce qui a tourné SUR CE
+SERVEUR POUR CE payload précis, au moment où la réponse a été construite. Il
+ne garantit RIEN sur ce qu'un LLM tiers (émetteur ou récepteur) a fait de la
+réponse ensuite, ni que le contenu en langage naturel produit par un LLM en
+aval respecte quoi que ce soit résumé ici — exactement la même limite
+structurelle que P2 (session du 22 mai) déjà documentée pour
+`GUARDRAIL_REPORT`/`SCOPE_LOCK` au §16.5 : aucune boucle vers un LLM tiers
+n'existe dans ce chemin serveur.
+
+```ebnf
+error_signal        ::= "ERROR_SIGNAL" "[" error_signal_attr+ "]" ;
+error_signal_attr   ::= role_attr | signal_type_attr | status_attr
+                       | subject_attr | object_attr
+                       | required_by_attr | forbidden_by_attr | attribute ;
+role_attr           ::= "role" "=" signal_role ;
+signal_role         ::= "REQUEST" | "REPORT" ;
+signal_type_attr    ::= "signal_type" "=" signal_type ;
+signal_type         ::= "DEONTIC_VIOLATION" | "NONE" ;
+status_attr         ::= "status" "=" signal_status ;
+signal_status       ::= "DETECTED" | "CLEAN" ;
+subject_attr        ::= "subject" "=" value ;
+object_attr         ::= "object" "=" value ;
+required_by_attr    ::= "required_by" "=" identifier ;
+forbidden_by_attr   ::= "forbidden_by" "=" identifier ;
+```
+
+Forme CLIENT (requête, seule forme acceptée en entrée) : `ERROR_SIGNAL
+[role=REQUEST]` — demande explicite d'un rapport, même quand rien n'est
+détecté. `role=REPORT` envoyé par un client est rejeté (E316) : ce sous-champ
+est réservé au serveur, un client ne peut pas se faire passer pour un
+rapport serveur. Un deuxième `ERROR_SIGNAL` dans le même payload est ignoré
+avec un avertissement de parsing, même règle et même justification que
+`SCOPE_LOCK` (§16.5) — un seul actif par payload, pas d'écrasement
+silencieux ni de "le dernier gagne".
+
+Forme SERVEUR (rapport, en sortie uniquement, jamais parsée en entrée) :
+`ERROR_SIGNAL [role=REPORT, signal_type=DEONTIC_VIOLATION, status=DETECTED,
+subject=..., object=..., required_by=..., forbidden_by=...]` — un bloc par
+violation détectée (même convention que `GUARDRAIL_REPORT_RELAYED`, un bloc
+par instance), câblé directement sur
+`execution_lab::check_deontic_consistency_with_history` (déjà appelée en
+STEP 3c-deontic de `handler.rs` pour produire `DEONTIC_AUDIT`, jamais
+dupliquée ici) — `ERROR_SIGNAL` ajoute le détail par violation
+(`subject`/`object`/`required_by`/`forbidden_by`) que `DEONTIC_AUDIT` ne
+donne pas (`DEONTIC_AUDIT` ne porte qu'un compte). Sans requête explicite du
+client ET sans violation détectée : silence (aucune ligne), même convention
+que `DEONTIC_AUDIT`/`SEMANTIC_WARNING` de cycle temporel/implausibilité —
+pas de bruit sur le trafic normal. Avec une requête explicite
+(`role=REQUEST`) ET aucune violation détectée : `ERROR_SIGNAL [role=REPORT,
+signal_type=NONE, status=CLEAN]` — le silence serait ambigu ("rien détecté"
+vs "jamais vérifié") pour un client qui a explicitement demandé une
+confirmation.
+
+| Code | Sévérité | Condition réelle (`server/validator.rs`, câblé live 2026-09-08) |
+|---|---|---|
+| E315 | error | `ERROR_SIGNAL` (client) sans champ `role` |
+| E316 | error | `ERROR_SIGNAL.role` (client) ≠ `REQUEST` (notamment `role=REPORT`, réservé au serveur) |
+
+**LIMITE HONNÊTE, assumée explicitement — divergence de `sigma=`** : la
+FONCTION documentée par la session du 22 mai pour `ERROR_SIGNAL` couvre aussi
+la détection d'une divergence de `sigma=` (une valeur numérique change entre
+l'émission et le retour d'un même hash/relation). Cette moitié n'est **pas**
+implémentée ici, et ce n'est pas un oubli : l'architecture actuelle ne
+permet pas de la câbler raisonnablement, pour trois raisons vérifiées dans
+le code au moment de cet ajout, pas supposées :
+
+1. **Aucune identité de relation ne survit au-delà d'un payload.** Une
+   `RELATION` n'a pas de hash/id propre — seul le payload entier en a un
+   (`entry.hash`, `adn_store`). Réidentifier "la même relation" entre deux
+   payloads distincts obligerait à faire correspondre par
+   `(subject, predicate, object)`, ce qui est fragile : une deuxième
+   `RELATION [type=ASSUMES, ...]` légitime et INDÉPENDANTE portant le même
+   triplet ressemblerait alors à une "divergence de sigma", alors que ce
+   serait juste une nouvelle hypothèse.
+2. **`sigma=` sur une `RELATION` (ex. `ASSUMES` de `hypothesis_engine.rs`)
+   n'est jamais rechargé depuis l'historique au niveau attribut.**
+   `adn_store::relations_for_predicates`, seule fonction qui recharge des
+   relations passées pour comparaison, filtre explicitement sur
+   `execution_lab::relevant_predicates()` (prédicats fonctionnels/chaînables/
+   temporels/domaine) — `ASSUMES` et tout autre prédicat porteur de `sigma`
+   n'y figure pas. Étendre ce filtre sans un vrai besoin vérifié serait
+   ajouter du code jamais exercé, exactement ce que ce projet sanctionne.
+3. **`INTENT_PAYLOAD.in_reply_to`** (déjà câblé pour la négociation FIPA,
+   §Handler STEP 3-negotiation) relie un payload à UN payload précédent par
+   son hash global, jamais à une `RELATION` précise en son sein — il ne
+   donne donc aucun point d'ancrage pour comparer un `sigma=` particulier.
+
+Câbler cette moitié demanderait une identité de relation stable
+(vraisemblablement un `id=` obligatoire sur toute `RELATION` portant
+`sigma=`, jamais exigé par la grammaire actuelle) et une table dédiée pour
+tracer sigma par identité de relation à travers le temps — une vraie
+refonte, pas une extension locale. Plutôt que bricoler une correspondance
+`(subject, predicate, object)` créatrice de faux positifs, cette moitié
+reste **non implémentée et documentée comme telle** ici et dans le README.
+Seule la détection de violation `[NOT]`/`MUST_NOT` (`signal_type=
+DEONTIC_VIOLATION` ci-dessus) est couverte.
+
+**Testé de bout en bout** : `server::parser::tests` (parsing de la requête
+client `ERROR_SIGNAL [role=REQUEST]`, rejet E315/E316),
+`server::validator::tests`, et
+`examples/execution_trace_error_signal_smoke_test.rs` contre un vrai
+`CstlNativeServer` sur un vrai port TCP (génération d'`EXECUTION_TRACE` sur
+un payload normal, détection réelle d'une violation déontique historique
+remontée en `ERROR_SIGNAL`, cas négatif sans requête -> silence, cas négatif
+avec requête -> `status=CLEAN`).
+
 ---
 
 ## 17. Profil de sécurité
@@ -1020,6 +1289,16 @@ DECISION: example_decision [sigma=0.88]
 ---
 
 ## 26. CHANGELOG
+
+### v5.0.0 — révision 6 (8 septembre 2026)
+- **Ajout** : §16.5 `GUARDRAIL_REPORT` / `SCOPE_LOCK` — grammaire EBNF conçue et
+  portée en Rust (parsing `server/parser.rs`, validation format E311–E314/W606
+  `server/validator.rs`, relai + confirmation + détection de dérive W607 sur le
+  chemin TCP réel `server/handler.rs`), pour deux des 4 blocs validés
+  EMPIRIQUEMENT EN CONVERSATION (pas en code) le 22 mai 2026 par une session
+  tripartite Claude+Gemini+ChatGPT, jamais portés avant cette révision (zéro
+  occurrence dans `src/`). `EXECUTION_TRACE`/`ERROR_SIGNAL` restent théoriques,
+  non implémentés — honnêteté délibérée, pas un oubli.
 
 ### v5.0.0 — révision 5 (4 septembre 2026, corrections d'audit)
 - **Corrigé (critique)** : §20.1 décrivait une API Rust entièrement fictive

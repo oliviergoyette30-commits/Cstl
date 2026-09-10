@@ -8,6 +8,7 @@ pub mod kb_verify;
 pub mod hypothesis_engine;
 pub mod adn_store;
 pub mod execution_lab;
+pub mod domain_simulator;
 pub mod restricted_council;
 pub mod telegram_council;
 pub mod obsidian_escalation;

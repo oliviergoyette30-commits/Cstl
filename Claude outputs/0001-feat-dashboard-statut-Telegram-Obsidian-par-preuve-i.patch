@@ -1,0 +1,747 @@
+From 0dc3fb05dd63111fbfe6635da18bbcce88db28eb Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Mon, 7 Sep 2026 00:18:12 +0000
+Subject: [PATCH] feat(dashboard): statut Telegram/Obsidian par preuve
+ indirecte ADN store + orchestrateur LLM multi-tours reel
+
+Remplace la ligne statique "cable cote serveur, pas visible ici" par
+/api/telegram-obsidian-status (check_telegram_obsidian_status()) : documente
+honnetement que ce dashboard est un process Python separe du serveur Rust
+(ne peut pas lire ses variables d'environnement TELEGRAM_BOT_TOKEN/
+TELEGRAM_CHAT_ID/OBSIDIAN_VAULT_PATH), puis lit le VRAI cstl_adn.db pour des
+preuves indirectes reelles : payloads priority=critical stockes tels quels
+(handler.rs STEP 3-priority n'ecrit rien d'autre en base -- verifie en
+lisant le code), governance_alerts (circuit-breaker, mecanisme distinct) et
+governance_events.inconsistency=1 comme proxy pour Obsidian (le vault
+lui-meme n'est jamais lu). Verifie en direct : envoi d'un vrai payload
+priority=critical au serveur (cargo run --release, base jetable), confirme
+son apparition dans priority_critical_payloads_recents.
+
+Ajoute POST /api/orchestrate (run_orchestrated_relay) : relais reel de N
+tours entre le dashboard (identite Ed25519 propre, agent_register reel) et
+le serveur CSTL, en reutilisant par import resolve_brain/
+load_or_create_keypair/register_agent/send_signed_relation/sign_intent de
+sdk/python/cstl_llm_agent.py et CstlClient de cstl_client.py -- aucune
+logique de signature/canonicalisation/protocole redecrite. Sans brain
+disponible (cas de ce sandbox : ni Ollama, ni GEMINI_API_KEY, ni
+ANTHROPIC_API_KEY), l'endpoint retourne une erreur honnete plutot que
+d'inventer un relais (verifie par curl). dashboard/test_orchestrator_stub.py
+injecte un DeterministicStubBrain factice et prouve que la MECANIQUE (boucle
+de tours, agent_register reel, envois TCP reels, chainage parent_hash,
+capture de trace payload+reponse) fonctionne independamment de la
+disponibilite d'un modele -- 3 tours reels executes et verifies contre le
+vrai serveur. La qualite d'un contenu genere par un vrai modele reste a
+verifier par l'utilisateur.
+
+index.html : bouton "Statut Telegram / Obsidian" (panneau Autres systemes)
+et nouvelle section "=== ORCHESTRATEUR ===" (bouton lancer un relais, champ
+nombre de tours, affichage de la trace) -- aucune section Jarvis ni
+endpoint /api/generate-relation touches (deja committes separement,
+7396ef5).
+
+cargo test --lib inchange (187 passed, aucune modification Rust).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ dashboard/index.html                | 108 ++++++++
+ dashboard/server.py                 | 386 +++++++++++++++++++++++++++-
+ dashboard/test_orchestrator_stub.py | 115 +++++++++
+ 3 files changed, 601 insertions(+), 8 deletions(-)
+ create mode 100644 dashboard/test_orchestrator_stub.py
+
+diff --git a/dashboard/index.html b/dashboard/index.html
+index 34f97b8..73f9d08 100644
+--- a/dashboard/index.html
++++ b/dashboard/index.html
+@@ -110,9 +110,43 @@
+     <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+       <button class="secondary" onclick="refreshGraphify()">Resume Graphify (graph.json reel)</button>
+       <button class="secondary" onclick="testOpenClaw()">Tester la connexion OpenClaw (ws://127.0.0.1:19001)</button>
++      <button class="secondary" onclick="refreshTelegramObsidian()">Statut Telegram / Obsidian (preuve indirecte reelle)</button>
+     </div>
+     <div id="graphify-body" class="muted" style="margin-top:10px;"></div>
+     <div id="openclaw-body" class="muted" style="margin-top:10px;"></div>
++    <div id="telegram-obsidian-body" class="muted" style="margin-top:10px;"></div>
++  </section>
++
++  <!-- === ORCHESTRATEUR === -->
++  <!--
++    Relais multi-tours reel entre le dashboard (agent LLM signe Ed25519,
++    identite propre "dashboard_orchestrator") et le vrai serveur CSTL (port
++    5050), via /api/orchestrate. Reutilise tel quel resolve_brain(),
++    load_or_create_keypair(), register_agent(), send_signed_relation() et
++    sign_intent() de sdk/python/cstl_llm_agent.py, plus CstlClient de
++    cstl_client.py -- voir dashboard/server.py::run_orchestrated_relay()
++    pour le detail. Dans ce sandbox, aucun brain LLM n'est disponible (ni
++    Ollama, ni cle Gemini/Anthropic) -- l'endpoint retourne une erreur
++    honnete plutot que d'inventer un relais ; voir
++    dashboard/test_orchestrator_stub.py pour la preuve, avec un brain
++    factice injecte, que la MECANIQUE (boucle de tours, enregistrement reel,
++    envois TCP reels, capture de trace) fonctionne independamment de la
++    disponibilite d'un vrai modele.
++  -->
++  <section class="panel full">
++    <h2><span class="title">Orchestrateur -- relais LLM multi-tours</span></h2>
++    <p class="muted">
++      Lance un VRAI relais de N tours contre le serveur CSTL (127.0.0.1:5050) :
++      a chaque tour, un agent LLM reel (Hermes local &gt; Gemini &gt; Anthropic,
++      via resolve_brain("auto")) genere une relation, elle est signee Ed25519
++      et envoyee au serveur, la vraie reponse est capturee. Si aucun agent LLM
++      n'est disponible, l'endpoint le dit honnetement -- rien n'est simule.
++    </p>
++    <div class="field" style="max-width:160px;"><label>Nombre de tours</label><input id="orch-turns" type="number" min="1" max="20" value="4"></div>
++    <div class="field"><label>Sujet du relais</label><input id="orch-topic" value="Est-ce que Montreal est au Canada?"></div>
++    <button onclick="lancerRelais()">Lancer un relais</button>
++    <div id="orch-status" class="muted" style="margin-top:10px;"></div>
++    <div id="orch-trace" style="margin-top:10px;"></div>
+   </section>
+ 
+   <!-- === JARVIS === -->
+@@ -555,6 +589,80 @@ async function testOpenClaw() {
+   }
+ }
+ 
++async function refreshTelegramObsidian() {
++  const body = document.getElementById('telegram-obsidian-body');
++  body.textContent = 'Lecture de l\'ADN store (preuve indirecte) en cours...';
++  try {
++    const r = await fetch('/api/telegram-obsidian-status');
++    const j = await r.json();
++    const fmtEvidence = (e) => {
++      if (e.evidence === 'aucune_escalade_dans_historique' || e.evidence === 'aucune_inconsistance_dans_historique') {
++        return `<span class="badge neutral">aucune escalade dans l'historique</span> ${e.detail}`;
++      }
++      if (e.evidence === 'base_absente' || e.evidence === 'lecture_impossible' || e.evidence === 'requete_echouee') {
++        return `<span class="badge none">verification impossible</span> ${e.detail}`;
++      }
++      return `<span class="badge wired">escalade detectee (preuve indirecte)</span> ${e.detail}`;
++    };
++    let html = `<p class="muted" style="border:1px solid var(--border); border-radius:6px; padding:8px;">${j.limite_architecturale}</p>`;
++    html += `<p class="muted">Vu par CE process dashboard (pas le serveur Rust) : TELEGRAM_BOT_TOKEN=${j.dashboard_process_env.TELEGRAM_BOT_TOKEN}, TELEGRAM_CHAT_ID=${j.dashboard_process_env.TELEGRAM_CHAT_ID}, OBSIDIAN_VAULT_PATH=${j.dashboard_process_env.OBSIDIAN_VAULT_PATH}</p>`;
++    html += `<p><strong>Telegram</strong>: ${fmtEvidence(j.telegram)}</p>`;
++    if (j.telegram.priority_critical_payloads_recents && j.telegram.priority_critical_payloads_recents.length) {
++      html += '<table><thead><tr><th>hash (priority=critical)</th><th>created_at</th></tr></thead><tbody>';
++      for (const e of j.telegram.priority_critical_payloads_recents) {
++        html += `<tr><td>${(e.hash||'').slice(0,24)}...</td><td>${new Date(e.created_at*1000).toLocaleString()}</td></tr>`;
++      }
++      html += '</tbody></table>';
++    }
++    if (j.telegram.governance_alerts_recents && j.telegram.governance_alerts_recents.length) {
++      html += '<table><thead><tr><th>governance_alerts.sender</th><th>last_alert_ts</th></tr></thead><tbody>';
++      for (const e of j.telegram.governance_alerts_recents) {
++        html += `<tr><td>${e.sender}</td><td>${new Date(e.last_alert_ts*1000).toLocaleString()}</td></tr>`;
++      }
++      html += '</tbody></table>';
++    }
++    html += `<p><strong>Obsidian</strong>: ${fmtEvidence(j.obsidian)}</p>`;
++    if (j.obsidian.governance_events_inconsistency_recents && j.obsidian.governance_events_inconsistency_recents.length) {
++      html += '<table><thead><tr><th>governance_events.sender</th><th>ts</th></tr></thead><tbody>';
++      for (const e of j.obsidian.governance_events_inconsistency_recents) {
++        html += `<tr><td>${e.sender}</td><td>${new Date(e.ts*1000).toLocaleString()}</td></tr>`;
++      }
++      html += '</tbody></table>';
++    }
++    body.innerHTML = html;
++  } catch (e) {
++    body.textContent = 'Erreur cote dashboard: ' + e;
++  }
++}
++
++// === ORCHESTRATEUR ===
++async function lancerRelais() {
++  const turns = document.getElementById('orch-turns').value;
++  const topic = document.getElementById('orch-topic').value;
++  const status = document.getElementById('orch-status');
++  const traceDiv = document.getElementById('orch-trace');
++  status.textContent = `Lancement d'un relais reel de ${turns} tour(s) contre le serveur CSTL...`;
++  traceDiv.innerHTML = '';
++  try {
++    const r = await fetch('/api/orchestrate', {
++      method: 'POST', headers: {'Content-Type':'application/json'},
++      body: JSON.stringify({turns: parseInt(turns, 10), topic})
++    });
++    const j = await r.json();
++    if (!j.ok) {
++      status.innerHTML = `<span style="color:var(--down)">${j.error}</span>`;
++      if (j.trace && j.trace.length) {
++        traceDiv.innerHTML = '<p class="muted">Trace partielle avant echec :</p><pre>' + JSON.stringify(j.trace, null, 2) + '</pre>';
++      }
++      return;
++    }
++    status.innerHTML = `<span style="color:var(--ok)">${j.turns_completed} tour(s) reellement effectue(s)</span> -- brain=${j.brain}${j.model ? ' ('+j.model+')' : ''}${j.real_brain ? '' : ' (BRAIN INJECTE POUR TEST -- pas un vrai modele)'}`;
++    traceDiv.innerHTML = '<p class="muted">Trace complete (payload envoye + reponse recue a chaque tour) :</p><pre>' + JSON.stringify(j.trace, null, 2) + '</pre>';
++  } catch (e) {
++    status.textContent = 'Erreur cote dashboard: ' + e;
++  }
++}
++
+ // Un seul chargement automatique a l'ouverture de la page -- ensuite,
+ // tout rafraichissement est manuel (bouton), comme demande.
+ refreshStatus();
+diff --git a/dashboard/server.py b/dashboard/server.py
+index 0f0c19a..f018946 100644
+--- a/dashboard/server.py
++++ b/dashboard/server.py
+@@ -92,10 +92,36 @@ LIMITES HONNETES DE CETTE V1 :
+     graphify-out/graph.json (pas de "topology.json" dans ce depot) et
+     retourne noeuds/liens/communautes reels + comparaison honnete de
+     built_at_commit contre HEAD (perime si ce n'est pas un ancetre de HEAD).
+-  - Telegram et Obsidian : cables cote serveur Rust (voir
+-    src/telegram_council.rs, src/obsidian_escalation.rs) mais ce dashboard
+-    ne lit aucun etat de ces integrations -- affiche comme "cable cote
+-    serveur, pas encore visible ici", jamais comme "connecte".
++  - Telegram et Obsidian : /api/telegram-obsidian-status (voir
++    check_telegram_obsidian_status() ci-dessous) remplace desormais la ligne
++    statique "cable cote serveur, pas visible ici" par une VRAIE verification
++    en deux temps, honnetement bornee :
++      1. Ce que CE process Python voit dans SON PROPRE os.environ pour
++         TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID/OBSIDIAN_VAULT_PATH -- affiche
++         explicitement comme "vu par le dashboard, PAS une preuve de ce que
++         voit le process Rust" (deux process = deux espaces memoire = deux
++         os.environ distincts, jamais partages).
++      2. Preuve indirecte REELLE via lecture directe de cstl_adn.db :
++         - priority=critical (handler.rs STEP 3-priority) n'ecrit RIEN en
++           base -- seul effet: un tokio::spawn fire-and-forget vers l'API
++           Telegram (jamais persiste) + un eprintln sur stderr Rust
++           (inaccessible ici). Le seul signal recuperable est que le
++           payload texte contenant "priority=critical" a bien ete stocke
++           tel quel dans adn_store.payload -- preuve que le SERVEUR a recu
++           la demande d'escalade, PAS que Telegram l'a effectivement recue
++           (ca depend de TELEGRAM_BOT_TOKEN/CHAT_ID cote Rust, invisible
++           d'ici).
++         - Le circuit-breaker de gouvernance (STEP 3c-governance) est un
++           mecanisme DIFFERENT qui, lui, persiste dans governance_alerts
++           (last_alert_ts) et declenche le meme genre d'envoi Telegram --
++           preuve indirecte plus solide (table dediee), affichee separement.
++         - Obsidian (STEP 3c-bis) ecrit dans un fichier markdown du vault,
++           jamais dans SQLite -- proxy retenu : governance_events.
++           inconsistency=1, car l'escalade Obsidian se declenche exactement
++           sur la meme condition (!consistency.consistent).
++    Honnetete assumee : si aucune de ces preuves indirectes n'existe, le
++    endpoint dit "aucune escalade dans l'historique", jamais "connecte" ni
++    "deconnecte" -- ce ne sont pas des etats que ce dashboard peut observer.
+ 
+ JARVIS (interface vocale, voir index.html section "=== JARVIS ===") :
+   - La reconnaissance et la synthese vocales tournent ENTIEREMENT cote
+@@ -141,11 +167,38 @@ except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
+     resolve_brain = None
+     _LLM_AGENT_IMPORT_ERROR = str(e)
+ 
++# === ORCHESTRATEUR ===
++# Meme patron d'import honnete que ci-dessus, pour le relais multi-tours reel
++# (voir run_orchestrated_relay() plus bas). Reutilise TEL QUEL :
++#   - resolve_brain (deja importe ci-dessus, meme fonction)
++#   - load_or_create_keypair / register_agent / send_signed_relation / sign_intent
++#     de sdk/python/cstl_llm_agent.py (identite Ed25519, enregistrement
++#     dynamique aupres du serveur, signature -- AUCUNE de ces logiques n'est
++#     redecrite ici)
++#   - CstlClient de sdk/python/cstl_client.py (connexion TCP reelle vers le
++#     serveur CSTL, construction/serialisation du payload wire-format)
++# Import separe (pas dans le try/except ci-dessus) uniquement pour un message
++# d'erreur distinct si jamais cette partie manque alors que resolve_brain
++# seul suffirait encore a /api/generate-relation existant.
++try:
++    from cstl_llm_agent import load_or_create_keypair, register_agent, send_signed_relation, sign_intent
++    from cstl_client import CstlClient
++    _ORCHESTRATOR_IMPORT_ERROR = None
++except Exception as e:  # pragma: no cover - filet honnete, pas un cas attendu
++    load_or_create_keypair = None
++    register_agent = None
++    send_signed_relation = None
++    sign_intent = None
++    CstlClient = None
++    _ORCHESTRATOR_IMPORT_ERROR = str(e)
++
+ DASHBOARD_PORT = int(os.environ.get("CSTL_DASHBOARD_PORT", "5099"))
+ CSTL_SERVER_HOST = os.environ.get("CSTL_SERVER_HOST", "127.0.0.1")
+ CSTL_SERVER_PORT = int(os.environ.get("CSTL_SERVER_PORT", "5050"))
+ ADN_DB_PATH = Path(os.environ.get("CSTL_ADN_DB_PATH", str(REPO_ROOT / "cstl_adn.db")))
+ GRAPHIFY_OUT = Path(os.environ.get("CSTL_GRAPHIFY_OUT", str(REPO_ROOT / "graphify-out")))
++ORCHESTRATOR_KEYFILE = Path(os.environ.get("CSTL_ORCHESTRATOR_KEYFILE",
++                                            str(Path.home() / ".cstl" / "dashboard_orchestrator_ed25519.key")))
+ 
+ TCP_TIMEOUT_S = 5.0
+ STATUS_TIMEOUT_S = 1.0
+@@ -286,6 +339,305 @@ def send_cstl_payload(payload_text):
+         return {"ok": False, "sent": payload_text, "error": str(e), "round_trip_ms": elapsed_ms}
+ 
+ 
++def check_telegram_obsidian_status():
++    """Statut REEL (autant que possible depuis ce process) de Telegram et
++    Obsidian -- remplace la ligne statique "cable cote serveur, pas visible
++    ici". Voir le commentaire du module (en-tete du fichier) pour la
++    justification complete de chaque proxy utilise ici.
++
++    Ne retourne JAMAIS "connecte"/"deconnecte" pour Telegram/Obsidian: ce ne
++    sont pas des etats que ce process peut observer directement (process
++    Rust separe). Retourne a la place des preuves indirectes datees, ou dit
++    explicitement qu'aucune n'existe."""
++    result = {
++        "limite_architecturale": (
++            "ce dashboard tourne dans un PROCESS PYTHON SEPARE du serveur Rust "
++            "(cargo run) -- il ne peut lire QUE ses propres variables "
++            "d'environnement (os.environ de CE process), jamais celles du "
++            "process Rust voisin (deux process = deux espaces memoire distincts). "
++            "'dashboard_process_env' ci-dessous ne prouve donc RIEN sur la "
++            "configuration reelle du serveur Rust, et son absence ici ne prouve "
++            "pas non plus que le serveur Rust en soit prive."
++        ),
++        "dashboard_process_env": {
++            "TELEGRAM_BOT_TOKEN": bool(os.environ.get("TELEGRAM_BOT_TOKEN")),
++            "TELEGRAM_CHAT_ID": bool(os.environ.get("TELEGRAM_CHAT_ID")),
++            "OBSIDIAN_VAULT_PATH": bool(os.environ.get("OBSIDIAN_VAULT_PATH")),
++        },
++    }
++
++    if not ADN_DB_PATH.exists():
++        no_db = {"evidence": "base_absente", "detail": f"{ADN_DB_PATH} n'existe pas -- serveur Rust jamais lance ici, ou base ailleurs."}
++        result["telegram"] = no_db
++        result["obsidian"] = no_db
++        return result
++
++    uri = f"file:{ADN_DB_PATH.as_posix()}?mode=ro"
++    try:
++        conn = sqlite3.connect(uri, uri=True, timeout=2.0)
++        conn.row_factory = sqlite3.Row
++    except sqlite3.OperationalError as e:
++        err = {"evidence": "lecture_impossible", "detail": str(e)}
++        result["telegram"] = err
++        result["obsidian"] = err
++        return result
++
++    try:
++        cur = conn.cursor()
++
++        # Preuve n1 (Telegram, priority=critical) : handler.rs STEP 3-priority
++        # n'ecrit RIEN dans une table dediee -- le seul effet cote donnees est
++        # que le payload texte complet (contenant "priority=critical") est
++        # stocke tel quel dans adn_store.payload par le put() normal, qui a
++        # lieu independamment de la priorite. Ce n'est PAS une preuve que
++        # Telegram a recu le message (ca depend de TELEGRAM_BOT_TOKEN/CHAT_ID
++        # cote process Rust, invisible d'ici) -- seulement que le SERVEUR a
++        # traite une demande d'escalade immediate.
++        cur.execute(
++            "SELECT hash, created_at FROM adn_store WHERE payload LIKE '%priority=critical%' "
++            "ORDER BY created_at DESC LIMIT 5"
++        )
++        critical_payloads = [dict(r) for r in cur.fetchall()]
++
++        cur.execute(
++            "SELECT name FROM sqlite_master WHERE type='table' "
++            "AND name IN ('governance_events','governance_alerts')"
++        )
++        existing_tables = {r["name"] for r in cur.fetchall()}
++
++        # Preuve n2 (Telegram, circuit-breaker de gouvernance) : mecanisme
++        # DIFFERENT de priority=critical (STEP 3c-governance, pas STEP
++        # 3-priority) mais qui, lui, persiste reellement dans
++        # governance_alerts -- preuve indirecte plus solide (table dediee),
++        # meme politique d'envoi Telegram fire-and-forget en arriere-plan.
++        governance_alerts = []
++        if "governance_alerts" in existing_tables:
++            cur.execute("SELECT sender, last_alert_ts FROM governance_alerts ORDER BY last_alert_ts DESC")
++            governance_alerts = [dict(r) for r in cur.fetchall()]
++
++        # Preuve (Obsidian) : STEP 3c-bis ecrit dans un fichier markdown du
++        # vault (jamais dans SQLite) -- ce dashboard ne peut PAS lire ce
++        # fichier sans connaitre OBSIDIAN_VAULT_PATH cote process Rust
++        # (invisible ici). Proxy retenu : governance_events.inconsistency=1,
++        # car l'escalade Obsidian se declenche EXACTEMENT sur la meme
++        # condition (!consistency.consistent) que celle qui alimente ce
++        # champ -- proxy honnete, pas une lecture directe du vault.
++        inconsistency_events = []
++        if "governance_events" in existing_tables:
++            cur.execute(
++                "SELECT sender, ts FROM governance_events WHERE inconsistency=1 "
++                "ORDER BY ts DESC LIMIT 5"
++            )
++            inconsistency_events = [dict(r) for r in cur.fetchall()]
++    except sqlite3.OperationalError as e:
++        conn.close()
++        err = {"evidence": "requete_echouee", "detail": str(e)}
++        result["telegram"] = err
++        result["obsidian"] = err
++        return result
++    conn.close()
++
++    if critical_payloads or governance_alerts:
++        result["telegram"] = {
++            "evidence": "escalade_detectee_indirecte",
++            "priority_critical_payloads_recents": critical_payloads,
++            "governance_alerts_recents": governance_alerts,
++            "detail": (
++                "au moins un signal indirect trouve dans l'ADN store. "
++                "priority_critical_payloads_recents = payloads recus par le "
++                "serveur avec priority=critical (preuve que le SERVEUR a traite "
++                "la demande, PAS que Telegram l'a recue -- aucune table ne "
++                "persiste le resultat de cet envoi fire-and-forget). "
++                "governance_alerts_recents = alertes du circuit-breaker de "
++                "gouvernance (mecanisme different, mais meme canal Telegram, "
++                "et celui-ci EST persiste)."
++            ),
++        }
++    else:
++        result["telegram"] = {
++            "evidence": "aucune_escalade_dans_historique",
++            "detail": (
++                "aucun payload priority=critical et aucune ligne dans "
++                "governance_alerts dans cet ADN store -- soit aucune escalade "
++                "n'a ete demandee, soit la base a ete videe/recreee depuis."
++            ),
++        }
++
++    if inconsistency_events:
++        result["obsidian"] = {
++            "evidence": "proxy_inconsistance_detectee",
++            "governance_events_inconsistency_recents": inconsistency_events,
++            "detail": (
++                "proxy indirect (governance_events.inconsistency=1) -- ce dashboard "
++                "ne lit jamais le vault Obsidian lui-meme (chemin inconnu, "
++                "process Rust separe). Une inconsistance detectee ici correspond "
++                "exactement a la condition qui declenche ObsidianEscalation::escalate() "
++                "cote serveur, mais ne prouve pas que le fichier a reellement ete "
++                "ecrit (ca depend de OBSIDIAN_VAULT_PATH cote Rust, invisible ici)."
++            ),
++        }
++    else:
++        result["obsidian"] = {
++            "evidence": "aucune_inconsistance_dans_historique",
++            "detail": "aucune ligne governance_events.inconsistency=1 dans cet ADN store.",
++        }
++
++    return result
++
++
++# === ORCHESTRATEUR ===
++# Relais reel de N tours entre deux "positions" d'un meme agent LLM contre le
++# vrai serveur CSTL (port 5050) -- reutilise EXCLUSIVEMENT les briques deja
++# ecrites et testees de sdk/python/cstl_llm_agent.py et cstl_client.py
++# (resolve_brain, load_or_create_keypair, register_agent, send_signed_relation,
++# sign_intent, CstlClient) : rien de cryptographique, rien de protocolaire
++# n'est reimplemente ici. La seule chose ajoutee est un petit assemblage
++# ("glue") qui capture, pour chaque tour, le texte du payload REELLEMENT
++# envoye ET la reponse REELLEMENT recue -- necessaire parce que
++# send_signed_relation() (voir cstl_llm_agent.py) ne retourne QUE la reponse
++# parsee, jamais le payload qu'elle a construit et envoye. Ce petit assemblage
++# appelle les MEMES fonctions (sign_intent, client.build_payload,
++# client.send_raw) avec les MEMES arguments que send_signed_relation --
++# aucune signature, canonicalisation ou regle de wire-format n'est
++# redecrite : seule la capture du texte intermediaire differe.
++def _send_signed_relation_with_payload(client, sk, pubkey_hex, *, name, receiver,
++                                        purpose, relations, extra_intent=None):
++    meta = {"encoder": "LlmAgent", "produced_by": name, "public_key": pubkey_hex}
++    intent = {"purpose": purpose, "sender": name, "receiver": receiver}
++    if extra_intent:
++        intent.update(extra_intent)
++    sig_hex = sign_intent(sk, pubkey_hex, version="v5.0.0", mode="A",
++                           meta=meta, intent=intent, relations=relations)
++    intent["signature"] = sig_hex
++    payload_text = client.build_payload(
++        encoder=meta["encoder"], produced_by=meta["produced_by"], purpose=purpose,
++        sender=name, receiver=receiver, relations=relations,
++        extra_meta={"public_key": pubkey_hex},
++        extra_intent={k: v for k, v in intent.items() if k not in ("purpose", "sender", "receiver")},
++    )
++    resp = client.send_raw(payload_text)
++    return payload_text, resp
++
++
++def run_orchestrated_relay(turns, topic, brain=None):
++    """Lance un relais reel de `turns` tours contre le vrai serveur CSTL
++    (CSTL_SERVER_HOST:CSTL_SERVER_PORT). A chaque tour : le brain genere une
++    relation (resolve_brain("auto") en production -- Hermes local > Gemini >
++    Anthropic), la relation est signee Ed25519 et envoyee au VRAI serveur par
++    une VRAIE connexion TCP, la VRAIE reponse est capturee.
++
++    `brain` est injectable : None (defaut, chemin de production) declenche un
++    VRAI resolve_brain("auto") -- si aucun brain reel n'est disponible (cas de
++    ce sandbox), la fonction retourne honnetement une erreur plutot que
++    d'inventer un relais. Passer un objet brain factice (duck-typing
++    generate_relation(topic, peer_message)->dict, comme AnthropicAgentBrain/
++    GeminiAgentBrain/HermesAgentBrain) permet de prouver que la MECANIQUE
++    (boucle de tours, enregistrement reel, envois TCP reels, capture de
++    trace) fonctionne independamment de la disponibilite d'un vrai modele --
++    voir dashboard/test_orchestrator_stub.py.
++
++    Retourne toujours un dict JSON-serialisable, jamais une exception non
++    geree."""
++    if None in (load_or_create_keypair, register_agent, send_signed_relation, sign_intent, CstlClient):
++        return {"ok": False, "error": f"import de sdk/python impossible ({_ORCHESTRATOR_IMPORT_ERROR}) -- orchestration indisponible."}
++
++    topic = (topic or "").strip()
++    if not topic:
++        return {"ok": False, "error": "sujet vide -- rien a faire discuter aux agents."}
++
++    try:
++        turns = int(turns)
++    except (TypeError, ValueError):
++        return {"ok": False, "error": f"turns invalide (attendu un entier): {turns!r}"}
++    if turns < 1:
++        return {"ok": False, "error": f"turns doit etre >= 1 (recu: {turns})"}
++    if turns > 20:
++        return {"ok": False, "error": f"turns limite a 20 par appel pour ce dashboard v1 (recu: {turns})"}
++
++    real_brain = brain is None
++    if real_brain:
++        if resolve_brain is None:
++            return {"ok": False, "error": f"import de resolve_brain impossible ({_LLM_AGENT_IMPORT_ERROR})."}
++        try:
++            brain = resolve_brain("auto")
++        except Exception as e:
++            return {"ok": False, "error": f"resolve_brain('auto') a leve une exception: {e}"}
++        if brain is None:
++            return {
++                "ok": False,
++                "error": (
++                    "aucun agent LLM disponible pour orchestrer un relais (ni Hermes/Ollama "
++                    "local sur 127.0.0.1:11434, ni GEMINI_API_KEY, ni ANTHROPIC_API_KEY dans "
++                    "l'environnement de CE process dashboard) -- voir stderr du dashboard pour "
++                    "le detail de chaque tentative. Aucun texte n'est invente a la place."
++                ),
++            }
++
++    try:
++        sk, pubkey_hex = load_or_create_keypair(ORCHESTRATOR_KEYFILE)
++    except Exception as e:
++        return {"ok": False, "error": f"generation/chargement de la cle Ed25519 impossible: {e}"}
++
++    agent_name = "dashboard_orchestrator"
++    client = CstlClient(host=CSTL_SERVER_HOST, port=CSTL_SERVER_PORT, timeout=15.0)
++    trace = []
++    try:
++        try:
++            reg = register_agent(client, sk, pubkey_hex, agent_name)
++        except OSError as e:
++            return {"ok": False, "error": f"connexion TCP au serveur CSTL ({CSTL_SERVER_HOST}:{CSTL_SERVER_PORT}) echouee: {e}", "trace": trace}
++        trace.append({
++            "turn": 0, "kind": "agent_register",
++            "response_purpose": reg.purpose, "response_fields": reg.fields,
++            "audit_hash": reg.audit_hash, "raw_response": reg.raw,
++        })
++        if reg.purpose != "agent_register_ack":
++            return {"ok": False, "error": f"enregistrement de l'agent refuse par le serveur (purpose={reg.purpose!r})", "trace": trace}
++
++        peer_message = None
++        for turn in range(1, turns + 1):
++            try:
++                relation = brain.generate_relation(topic, peer_message)
++            except Exception as e:
++                trace.append({"turn": turn, "kind": "generation_error",
++                               "error": f"{type(brain).__name__}.generate_relation a leve une exception: {e}"})
++                return {"ok": False, "error": "generation LLM echouee en cours de relais -- voir trace.", "trace": trace}
++
++            try:
++                payload_text, resp = _send_signed_relation_with_payload(
++                    client, sk, pubkey_hex, name=agent_name, receiver="server",
++                    purpose="llm_relay_turn", relations=[relation],
++                )
++            except OSError as e:
++                trace.append({"turn": turn, "kind": "tcp_error", "relation_generated": relation, "error": str(e)})
++                return {"ok": False, "error": f"envoi TCP au serveur CSTL echoue au tour {turn}: {e}", "trace": trace}
++
++            trace.append({
++                "turn": turn,
++                "kind": "relay_turn",
++                "brain": type(brain).__name__,
++                "model": getattr(brain, "model", None),
++                "relation_generated": relation,
++                "payload_sent": payload_text,
++                "response_purpose": resp.purpose,
++                "response_status": resp.status,
++                "audit_hash": resp.audit_hash,
++                "raw_response": resp.raw,
++            })
++            peer_message = json.dumps(relation, ensure_ascii=False)
++    finally:
++        client.close()
++
++    return {
++        "ok": True,
++        "brain": type(brain).__name__,
++        "model": getattr(brain, "model", None),
++        "real_brain": real_brain,
++        "turns_completed": turns,
++        "trace": trace,
++    }
++
++
+ # === JARVIS === (voir aussi index.html, section "=== JARVIS ===")
+ # Ajout ADDITIF pour l'interface vocale Jarvis : construit un resume court,
+ # lisible A VOIX HAUTE (via SpeechSynthesis cote navigateur), a partir des
+@@ -549,15 +901,20 @@ def check_other_systems():
+     systems = []
+ 
+     # Telegram / Obsidian : cables cote Rust (verifie par lecture de
+-    # src/telegram_council.rs et src/obsidian_escalation.rs cette session),
+-    # mais ce dashboard ne lit aucun etat en direct de ces integrations.
++    # src/telegram_council.rs et src/obsidian_escalation.rs cette session).
++    # Plus une simple ligne statique -- voir check_telegram_obsidian_status()
++    # et le bouton dedie "Statut Telegram / Obsidian (preuve indirecte reelle)"
++    # cote index.html pour une VRAIE verification (preuve indirecte via ADN
++    # store), interrogee a la demande via /api/telegram-obsidian-status.
+     for name, src_file in [("Telegram", "src/telegram_council.rs"),
+                             ("Obsidian", "src/obsidian_escalation.rs")]:
+         wired = (REPO_ROOT / src_file).exists()
+         systems.append({
+             "name": name,
+-            "status": "cable_cote_serveur_pas_visible_ici" if wired else "fichier_source_introuvable",
+-            "detail": f"{src_file} present dans src/" if wired else f"{src_file} absent",
++            "status": "cable_cote_serveur_voir_bouton_statut_dedie" if wired else "fichier_source_introuvable",
++            "detail": (f"{src_file} present dans src/ -- clique 'Statut Telegram / Obsidian' "
++                       "plus bas pour une preuve indirecte reelle (ADN store)." if wired
++                       else f"{src_file} absent"),
+         })
+ 
+     # Hermes/Ollama : toujours non-integre cote serveur Rust lui-meme (grep
+@@ -626,6 +983,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
+             self._send_json(read_adn_state())
+         elif parsed.path == "/api/other-systems":
+             self._send_json(check_other_systems())
++        elif parsed.path == "/api/telegram-obsidian-status":
++            self._send_json(check_telegram_obsidian_status())
+         elif parsed.path == "/api/graphify-summary":
+             self._send_json(read_graphify_summary())
+         elif parsed.path == "/api/openclaw-check":
+@@ -659,6 +1018,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
+                 self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
+                 return
+             self._send_json(generate_relation_via_llm(fields.get("topic", "")))
++        elif parsed.path == "/api/orchestrate":
++            length = int(self.headers.get("Content-Length", "0"))
++            raw = self.rfile.read(length) if length else b"{}"
++            try:
++                fields = json.loads(raw.decode("utf-8"))
++            except json.JSONDecodeError:
++                self._send_json({"ok": False, "error": "corps JSON invalide"}, status=400)
++                return
++            turns = fields.get("turns", 4)
++            topic = fields.get("topic", "Est-ce que Montreal est au Canada?")
++            self._send_json(run_orchestrated_relay(turns, topic))
+         else:
+             self.send_error(404, "Not found")
+ 
+diff --git a/dashboard/test_orchestrator_stub.py b/dashboard/test_orchestrator_stub.py
+new file mode 100644
+index 0000000..760af73
+--- /dev/null
++++ b/dashboard/test_orchestrator_stub.py
+@@ -0,0 +1,115 @@
++#!/usr/bin/env python3
++# -*- coding: utf-8 -*-
++"""
++dashboard/test_orchestrator_stub.py -- preuve que la MECANIQUE de
++run_orchestrated_relay() (dashboard/server.py) fonctionne reellement :
++boucle de N tours, enregistrement Ed25519 reel aupres du serveur, VRAIS
++envois TCP au serveur CSTL, capture de trace (payload envoye + reponse
++recue par tour) -- en injectant un "brain" factice deterministe a la place
++d'un vrai agent LLM (Hermes/Gemini/Anthropic), exactement comme
++DeterministicStubBackend est deja utilise ailleurs dans ce depot
++(scripts/operator_agreement_study.py) pour isoler un mecanisme de la
++disponibilite d'un vrai modele.
++
++CE QUE CE TEST PROUVE : la mecanique (turns reellement executes, agent
++reellement enregistre, chaque tour reellement envoye/recu par TCP au
++serveur, trace reellement peuplee).
++
++CE QUE CE TEST NE PROUVE PAS : la qualite d'un contenu genere par un vrai
++modele -- ca reste a verifier par l'utilisateur, sur sa machine, avec un
++vrai Hermes/Gemini/Anthropic disponible (voir sdk/python/cstl_llm_agent.py).
++
++PREREQUIS : un vrai serveur CSTL (cargo run --release) qui tourne sur
++CSTL_SERVER_HOST:CSTL_SERVER_PORT (defaut 127.0.0.1:5050). Ce test ne
++demarre PAS le serveur lui-meme -- test d'integration, pas un test unitaire
++isole.
++
++Usage:
++    cargo run --release &
++    python3 dashboard/test_orchestrator_stub.py
++"""
++
++import json
++import sys
++import tempfile
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++import server as dashboard_server  # noqa: E402
++
++
++class DeterministicStubBrain:
++    """Brain factice deterministe -- meme interface (generate_relation,
++    .model) que AnthropicAgentBrain/GeminiAgentBrain/HermesAgentBrain
++    (sdk/python/cstl_llm_agent.py), duck-typing, aucune generation reelle.
++    Retourne une relation fixe et previsible, differente a chaque tour pour
++    verifier que la boucle avance reellement (pas juste qu'elle boucle sur
++    le meme tour)."""
++
++    model = "deterministic-stub-v1"
++
++    def __init__(self):
++        self.calls = []
++
++    def generate_relation(self, topic, peer_message):
++        n = len(self.calls) + 1
++        self.calls.append((topic, peer_message))
++        return {"type": "STATES", "subject": f"stub_turn_{n}", "object": topic}
++
++
++def main() -> int:
++    print(f"[test] Cible: {dashboard_server.CSTL_SERVER_HOST}:{dashboard_server.CSTL_SERVER_PORT}")
++
++    # Cle Ed25519 dediee a ce test, dans un repertoire temporaire -- ne
++    # touche jamais ~/.cstl/dashboard_orchestrator_ed25519.key (identite de
++    # production du dashboard).
++    with tempfile.TemporaryDirectory() as tmp:
++        original_keyfile = dashboard_server.ORCHESTRATOR_KEYFILE
++        dashboard_server.ORCHESTRATOR_KEYFILE = Path(tmp) / "test_orchestrator.key"
++        try:
++            stub = DeterministicStubBrain()
++            result = dashboard_server.run_orchestrated_relay(turns=3, topic="test_mecanique_relais", brain=stub)
++        finally:
++            dashboard_server.ORCHESTRATOR_KEYFILE = original_keyfile
++
++    print(json.dumps(result, indent=2, ensure_ascii=False))
++
++    failures = []
++    if not result.get("ok"):
++        failures.append(f"run_orchestrated_relay a echoue: {result.get('error')}")
++    else:
++        if result.get("real_brain") is not False:
++            failures.append("real_brain devrait etre False quand un brain est injecte")
++        if result.get("turns_completed") != 3:
++            failures.append(f"turns_completed attendu=3, recu={result.get('turns_completed')}")
++        trace = result.get("trace", [])
++        if not trace or trace[0].get("kind") != "agent_register":
++            failures.append("le premier element de trace devrait etre l'enregistrement de l'agent")
++        relay_turns = [t for t in trace if t.get("kind") == "relay_turn"]
++        if len(relay_turns) != 3:
++            failures.append(f"3 tours de relais attendus dans la trace, trouve {len(relay_turns)}")
++        for i, t in enumerate(relay_turns, start=1):
++            if not t.get("payload_sent") or "STATES" not in t["payload_sent"]:
++                failures.append(f"tour {i}: payload_sent absent ou ne contient pas la relation envoyee")
++            if not t.get("raw_response"):
++                failures.append(f"tour {i}: raw_response absente -- le serveur n'a pas repondu ou la reponse n'a pas ete capturee")
++            if t.get("brain") != "DeterministicStubBrain":
++                failures.append(f"tour {i}: brain attendu=DeterministicStubBrain, recu={t.get('brain')}")
++        if len(stub.calls) != 3:
++            failures.append(f"le stub aurait du etre appele 3 fois, appele {len(stub.calls)} fois")
++
++    print()
++    if failures:
++        print(f"ECHEC ({len(failures)}):")
++        for f in failures:
++            print(f"  - {f}")
++        return 1
++    print("OK -- mecanique du relais (boucle de tours, enregistrement reel, "
++          "envois TCP reels, capture de trace) verifiee avec un brain factice. "
++          "La qualite d'un contenu genere par un vrai modele reste a verifier "
++          "par l'utilisateur, avec un vrai Hermes/Gemini/Anthropic disponible.")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+-- 
+2.43.0
+

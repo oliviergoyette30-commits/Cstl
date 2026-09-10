@@ -149,10 +149,152 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
     // Validate deontic constraints (MUST/MUST_NOT)
     validate_deontic_constraints(payload, &mut result);
 
+    // Validation FORMAT des blocs GUARDRAIL_REPORT / SCOPE_LOCK (ajoutee
+    // 2026-09-08 -- voir CSTL_SPEC_v5_0.md, nouvelle section). Codes E311-E314,
+    // premiers libres apres E301-E310 (verifie contre §16.4 et la grille de
+    // codes deja emis dans ce fichier au 2026-09-08, aucune collision).
+    validate_guardrail_reports(payload, &mut result);
+    validate_scope_lock(payload, &mut result);
+
+    // Validation FORMAT de la forme CLIENT de ERROR_SIGNAL (ajoutee
+    // 2026-09-08 -- CSTL_SPEC_v5_0.md §16.6). Codes E315-E316, premiers
+    // libres apres E311-E314 pris juste au-dessus (verifie: `grep -rn
+    // "E31\|E32\|W60\|W61" src/` au moment de cet ajout, aucune collision).
+    validate_error_signal_request(payload, &mut result);
+
     eprintln!("[Validator] Valid: {}, Errors: {}, Warnings: {}", 
         result.valid, result.errors.len(), result.warnings.len());
 
     result
+}
+
+/// Validation FORMAT du bloc `GUARDRAIL_REPORT [status=..., reason=..., ...]`
+/// (§ nouvelle section, ajoutee 2026-09-08). Un GUARDRAIL_REPORT rend visible
+/// pourquoi un LLM RECEVEUR (pas ce serveur) a bloque ou partiellement execute
+/// une instruction -- valide EMPIRIQUEMENT en conversation sur ChatGPT V2 lors
+/// de la session tripartite du 22 mai 2026 (Claude+Gemini+ChatGPT), jamais
+/// porte en Rust avant ce fix.
+///
+/// Portee assumee, honnetement limitee : ce check verifie uniquement que le
+/// bloc a la FORME attendue (`status=` present et dans l'enumeration connue,
+/// `reason=` present quand le statut n'est pas ALLOWED). Il ne peut PAS
+/// verifier que le contenu reflete un vrai refus d'un LLM tiers -- rien dans
+/// ce pipeline ne reboucle vers un LLM receveur pour confirmer quoi que ce
+/// soit (non resolvable par le format seul, meme limite que P2 documentee
+/// pour SCOPE_LOCK ci-dessous et dans la session de mai). Un payload
+/// malveillant peut donc affirmer un GUARDRAIL_REPORT bidon -- ce check
+/// bloque seulement les blocs MAL FORMES, pas les blocs FAUX.
+fn validate_guardrail_reports(payload: &CstlPayload, result: &mut ValidationResult) {
+    const KNOWN_STATUSES: [&str; 3] = ["BLOCKED", "PARTIAL", "ALLOWED"];
+
+    for (idx, report) in payload.guardrail_reports.iter().enumerate() {
+        match report.get("status") {
+            None => {
+                result.errors.push(ValidationError {
+                    code: format!("E311[{}]", idx),
+                    message: format!("GUARDRAIL_REPORT[{}]: champ 'status' manquant", idx),
+                });
+                result.valid = false;
+            }
+            Some(status) if !KNOWN_STATUSES.contains(&status.as_str()) => {
+                result.errors.push(ValidationError {
+                    code: format!("E312[{}]", idx),
+                    message: format!(
+                        "GUARDRAIL_REPORT[{}]: status={:?} hors enumeration BLOCKED|PARTIAL|ALLOWED",
+                        idx, status
+                    ),
+                });
+                result.valid = false;
+            }
+            Some(status) if status != "ALLOWED" && !report.contains_key("reason") => {
+                // Un blocage/partiel sans motif n'est pas exploitable par
+                // l'expediteur -- avertissement seul (pas un rejet) : la
+                // FONCTION du bloc (rendre le refus visible) reste remplie,
+                // juste moins utilement.
+                result.warnings.push(format!(
+                    "W606: GUARDRAIL_REPORT[{}] status={} sans champ 'reason'", idx, status
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Validation FORMAT du bloc `SCOPE_LOCK [mode=STRICT|OPEN, ...]` (ajoutee
+/// 2026-09-08). SCOPE_LOCK: STRICT reduit la derive additive (le recepteur
+/// ajoute des references externes non demandees) en forcant le recepteur a
+/// rester dans le scope du payload recu -- valide EMPIRIQUEMENT en
+/// conversation sur Gemini V2, session tripartite du 22 mai 2026.
+///
+/// Meme limite honnete que `validate_guardrail_reports` ci-dessus : ce check
+/// (et `check_scope_lock_drift` plus bas) ne peuvent verifier que la FORME et
+/// une coherence INTERNE au payload -- jamais que le LLM receveur a
+/// REELLEMENT respecte le scope verrouille dans sa reponse en langage naturel.
+/// Non resolvable par le format seul (comme P2, session du 22 mai) : seul un
+/// vrai LLM tiers connecte en boucle (hors de ce depot) pourrait le confirmer.
+fn validate_scope_lock(payload: &CstlPayload, result: &mut ValidationResult) {
+    const KNOWN_MODES: [&str; 2] = ["STRICT", "OPEN"];
+
+    let Some(lock) = &payload.scope_lock else { return; };
+    match lock.get("mode") {
+        None => {
+            result.errors.push(ValidationError {
+                code: "E313".to_string(),
+                message: "SCOPE_LOCK: champ 'mode' manquant".to_string(),
+            });
+            result.valid = false;
+        }
+        Some(mode) if !KNOWN_MODES.contains(&mode.as_str()) => {
+            result.errors.push(ValidationError {
+                code: "E314".to_string(),
+                message: format!("SCOPE_LOCK: mode={:?} hors enumeration STRICT|OPEN", mode),
+            });
+            result.valid = false;
+        }
+        _ => {}
+    }
+}
+
+/// Validation FORMAT de la forme CLIENT du bloc `ERROR_SIGNAL [role=REQUEST]`
+/// (ajoutee 2026-09-08 -- CSTL_SPEC_v5_0.md §16.6, session tripartite du
+/// 22 mai 2026). Contrairement a GUARDRAIL_REPORT/SCOPE_LOCK, `ERROR_SIGNAL`
+/// n'a qu'UNE seule valeur de `role` valide venant du client: `REQUEST`.
+/// `role=REPORT` est la forme SERVEUR (voir handler.rs) -- un client qui
+/// l'enverrait tenterait de se faire passer pour un rapport deja produit par
+/// le serveur ; rejete ici (E316), jamais accepte silencieusement comme une
+/// requete valide.
+///
+/// Meme limite honnete que `validate_guardrail_reports`/`validate_scope_lock`
+/// ci-dessus: ce check ne verifie que la FORME. La partie utile de ce bloc
+/// (le RAPPORT effectif, `role=REPORT`) est entierement generee par le
+/// serveur a partir de `execution_lab::check_deontic_consistency_with_history`
+/// dans `server/handler.rs` -- rien ici ne calcule quoi que ce soit, ce
+/// fichier ne fait que refuser une requete mal formee avant qu'elle
+/// n'atteigne ce calcul.
+fn validate_error_signal_request(payload: &CstlPayload, result: &mut ValidationResult) {
+    const KNOWN_CLIENT_ROLES: [&str; 1] = ["REQUEST"];
+
+    let Some(req) = &payload.error_signal_request else { return; };
+    match req.get("role") {
+        None => {
+            result.errors.push(ValidationError {
+                code: "E315".to_string(),
+                message: "ERROR_SIGNAL: champ 'role' manquant".to_string(),
+            });
+            result.valid = false;
+        }
+        Some(role) if !KNOWN_CLIENT_ROLES.contains(&role.as_str()) => {
+            result.errors.push(ValidationError {
+                code: "E316".to_string(),
+                message: format!(
+                    "ERROR_SIGNAL: role={:?} invalide venant d'un client (seul 'REQUEST' est accepte -- 'REPORT' est reserve au serveur)",
+                    role
+                ),
+            });
+            result.valid = false;
+        }
+        _ => {}
+    }
 }
 
 /// Branche la whitelist des 35 opérateurs SDL officiels + dépréciation MUTUAL
@@ -323,6 +465,61 @@ pub fn check_coref_with_references(payload: &CstlPayload) -> Vec<String> {
         .collect()
 }
 
+/// W607 -- derive de scope (ajoutee 2026-09-08, aux cotes de R8 dont elle
+/// reprend la structure : meme fichier de donnees (`relations`/`defines`
+/// intra-payload), meme politique (avertissement seul, jamais un rejet).
+///
+/// Quand `SCOPE_LOCK [mode=STRICT, allowed_ids="e001;e002"]` est actif ET
+/// que la liste `allowed_ids` est fournie, chaque RELATION dont le subject
+/// OU l'object n'apparait ni dans `allowed_ids` ni dans les `id=` des
+/// DEFINE de ce meme payload declenche un avertissement -- signal qu'une
+/// entite hors du scope verrouille a ete introduite.
+///
+/// LIMITE HONNETE (voir aussi `validate_scope_lock`) : ceci detecte une
+/// derive DEJA visible dans les RELATION structurees de CE payload -- pas
+/// une derive dans le texte libre d'une reponse en langage naturel produite
+/// par un LLM tiers, que ce format ne peut structurellement pas observer.
+/// C'est le seul "effet observable" que le format seul permet de verifier :
+/// le respect REEL du scope par le LLM receveur reste non verifiable sans un
+/// vrai LLM connecte en boucle.
+///
+/// Quand `allowed_ids` est absent, aucun avertissement n'est possible faute
+/// de reference contre laquelle comparer -- `mode=STRICT` seul confirme
+/// simplement le scope actif au client (voir handler.rs, ligne SCOPE_LOCK_ACK).
+pub fn check_scope_lock_drift(payload: &CstlPayload) -> Vec<String> {
+    let Some(lock) = &payload.scope_lock else { return Vec::new(); };
+    if lock.get("mode").map(String::as_str) != Some("STRICT") {
+        return Vec::new();
+    }
+    let Some(allowed_raw) = lock.get("allowed_ids") else { return Vec::new(); };
+
+    let mut allowed: std::collections::HashSet<&str> = allowed_raw
+        .split(';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    for d in &payload.defines {
+        if let Some(id) = d.get("id") {
+            allowed.insert(id.as_str());
+        }
+    }
+
+    let mut warnings = Vec::new();
+    for r in &payload.relations {
+        for field in ["subject", "object"] {
+            if let Some(val) = r.get(field) {
+                if !val.is_empty() && !allowed.contains(val.as_str()) {
+                    warnings.push(format!(
+                        "W607: SCOPE_LOCK STRICT actif -- RELATION.{}={} hors de allowed_ids/DEFINE de ce payload",
+                        field, val
+                    ));
+                }
+            }
+        }
+    }
+    warnings
+}
+
 /// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
 /// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
 /// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE
@@ -405,6 +602,9 @@ mod tests {
             relations: vec![],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
 
@@ -423,6 +623,9 @@ mod tests {
             relations: vec![],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
 
@@ -446,6 +649,9 @@ mod tests {
             relations: vec![],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
 
@@ -479,6 +685,9 @@ mod tests {
             ],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -495,6 +704,9 @@ mod tests {
             ],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -511,6 +723,9 @@ mod tests {
             ],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -527,6 +742,9 @@ mod tests {
             ],
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -558,6 +776,9 @@ mod tests {
             relations,
             defines: vec![],
             parse_warnings: vec![],
+            guardrail_reports: vec![],
+            scope_lock: None,
+            error_signal_request: None,
             raw: String::new(),
         }
     }
@@ -727,5 +948,181 @@ mod tests {
 
         let warnings = check_coref_with_references(&payload);
         assert!(warnings.iter().any(|w| w.starts_with("R8:")));
+    }
+
+    // ── GUARDRAIL_REPORT / SCOPE_LOCK (ajoutes 2026-09-08, session
+    // tripartite du 22 mai 2026 -- voir CSTL_SPEC_v5_0.md) ──
+
+    #[test]
+    fn test_guardrail_report_valid_status_and_reason_no_error() {
+        let mut payload = payload_with(vec![]);
+        payload.guardrail_reports = vec![define(&[("status", "BLOCKED"), ("reason", "policy_violation")])];
+        let result = validate_payload(&payload);
+        assert!(result.valid, "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_guardrail_report_missing_status_is_e311() {
+        let mut payload = payload_with(vec![]);
+        payload.guardrail_reports = vec![define(&[("reason", "x")])];
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code.starts_with("E311")), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_guardrail_report_unknown_status_is_e312() {
+        let mut payload = payload_with(vec![]);
+        payload.guardrail_reports = vec![define(&[("status", "MAYBE")])];
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code.starts_with("E312")), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_guardrail_report_blocked_without_reason_warns_w606_not_error() {
+        let mut payload = payload_with(vec![]);
+        payload.guardrail_reports = vec![define(&[("status", "BLOCKED")])];
+        let result = validate_payload(&payload);
+        assert!(result.valid, "l'absence de reason est un avertissement, pas une erreur: {:?}", result.errors);
+        assert!(result.warnings.iter().any(|w| w.starts_with("W606")), "{:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_guardrail_report_allowed_without_reason_no_warning() {
+        let mut payload = payload_with(vec![]);
+        payload.guardrail_reports = vec![define(&[("status", "ALLOWED")])];
+        let result = validate_payload(&payload);
+        assert!(result.valid);
+        assert!(!result.warnings.iter().any(|w| w.starts_with("W606")));
+    }
+
+    #[test]
+    fn test_scope_lock_strict_valid_no_error() {
+        let mut payload = payload_with(vec![]);
+        payload.scope_lock = Some(define(&[("mode", "STRICT"), ("allowed_ids", "e001;e002")]));
+        let result = validate_payload(&payload);
+        assert!(result.valid, "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_scope_lock_missing_mode_is_e313() {
+        let mut payload = payload_with(vec![]);
+        payload.scope_lock = Some(define(&[("allowed_ids", "e001")]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E313"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_scope_lock_unknown_mode_is_e314() {
+        let mut payload = payload_with(vec![]);
+        payload.scope_lock = Some(define(&[("mode", "LOOSE")]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E314"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_no_scope_lock_no_error_no_warning() {
+        // Chemin rapide implicite : aucun SCOPE_LOCK -> aucun cout, aucune
+        // interference avec le trafic existant (qui n'a jamais porte ce bloc).
+        let payload = payload_with(vec![
+            relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
+        ]);
+        let result = validate_payload(&payload);
+        assert!(result.valid);
+        assert!(check_scope_lock_drift(&payload).is_empty());
+    }
+
+    // ── check_scope_lock_drift (W607) ──
+
+    #[test]
+    fn test_scope_lock_drift_detects_relation_outside_allowed_ids() {
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e001"), ("type", "EQUALS"), ("object", "e999")]),
+        ]);
+        payload.scope_lock = Some(define(&[("mode", "STRICT"), ("allowed_ids", "e001")]));
+        let warnings = check_scope_lock_drift(&payload);
+        assert!(warnings.iter().any(|w| w.starts_with("W607:") && w.contains("e999")), "{:?}", warnings);
+    }
+
+    #[test]
+    fn test_scope_lock_drift_allows_ids_from_defines_too() {
+        // Un DEFINE de ce meme payload elargit implicitement le scope, sans
+        // avoir besoin d'etre repete dans allowed_ids.
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e001"), ("type", "EQUALS"), ("object", "e002")]),
+        ]);
+        payload.defines = vec![define(&[("name", "physician"), ("entity_type", "agent"), ("id", "e002")])];
+        payload.scope_lock = Some(define(&[("mode", "STRICT"), ("allowed_ids", "e001")]));
+        let warnings = check_scope_lock_drift(&payload);
+        assert!(warnings.is_empty(), "e002 est DEFINE dans ce payload, pas de derive: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_scope_lock_open_mode_never_warns_on_drift() {
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e001"), ("type", "EQUALS"), ("object", "e999")]),
+        ]);
+        payload.scope_lock = Some(define(&[("mode", "OPEN"), ("allowed_ids", "e001")]));
+        assert!(check_scope_lock_drift(&payload).is_empty());
+    }
+
+    #[test]
+    fn test_scope_lock_strict_without_allowed_ids_never_warns() {
+        // Sans allowed_ids, aucune reference contre laquelle comparer --
+        // mode=STRICT seul ne peut pas produire de faux-positif par defaut.
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e001"), ("type", "EQUALS"), ("object", "e999")]),
+        ]);
+        payload.scope_lock = Some(define(&[("mode", "STRICT")]));
+        assert!(check_scope_lock_drift(&payload).is_empty());
+    }
+
+    // ── ERROR_SIGNAL (forme CLIENT, E315/E316 -- CSTL_SPEC_v5_0.md §16.6) ──
+
+    #[test]
+    fn test_error_signal_request_valid_no_error() {
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[("role", "REQUEST")]));
+        let result = validate_payload(&payload);
+        assert!(result.valid, "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_error_signal_request_missing_role_is_e315() {
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E315"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_error_signal_request_role_report_from_client_is_e316() {
+        // role=REPORT est la forme SERVEUR -- un client qui l'envoie tente
+        // de se faire passer pour un rapport deja produit par le serveur.
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[("role", "REPORT")]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E316"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_error_signal_request_unknown_role_is_e316() {
+        let mut payload = payload_with(vec![]);
+        payload.error_signal_request = Some(define(&[("role", "BOGUS")]));
+        let result = validate_payload(&payload);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.code == "E316"), "{:?}", result.errors);
+    }
+
+    #[test]
+    fn test_no_error_signal_request_no_error() {
+        let payload = payload_with(vec![]);
+        let result = validate_payload(&payload);
+        assert!(result.valid);
     }
 }

@@ -1,0 +1,114 @@
+From 8dc5e98aabc6d0c48dc594b24b39e7b8e5feea07 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Thu, 3 Sep 2026 19:10:14 +0000
+Subject: [PATCH] chore(Cargo.toml): nettoyer 3 details perimes + un vrai
+ warning de build
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Trois broutilles cosmetiques signalees a l'utilisateur, plus un vrai
+probleme trouve en les verifiant:
+
+1. description = "CSTL v4.9.2..." -- version perimee, tout le reste du
+   depot est en v5.0.0. Corrigee et rendue plus descriptive (le paquet
+   n'est plus juste un "parser", c'est le serveur TCP-natif complet:
+   parser, validator, chaine d'audit, verification KB).
+
+2. Commentaire "# Zero external deps — pure Rust lexer + parser" --
+   vrai en Session #5 (v4.9.3), faux depuis longtemps: tokio (couche
+   TCP), sha2/rusqlite (audit + adn_store), reqwest (kb_verify/Wikidata),
+   serde (wire format), unicode-normalization (NFC, ajoute cette session)
+   sont toutes des dependances reelles. Commentaire retire, remplace par
+   une note honnete sur son historique.
+
+3. Bloc `[[bin]] name = "cstl_validate"` commente, ne correspondant a
+   rien de reel -- le vrai binaire (`cargo run`, lance des dizaines de
+   fois cette session pour les tests live) est "cstl_parser",
+   auto-detecte par Cargo depuis src/main.rs sans avoir besoin d'une
+   section [[bin]] explicite. Bloc mort retire, remplace par un
+   commentaire expliquant pourquoi aucune section [[bin]] n'est
+   necessaire.
+
+4. TROUVE en verifiant les 3 points ci-dessus (pas signale avant): la
+   ligne `tokio = { version = "1", features = ["full"] }` vivait par
+   erreur DANS la section [profile.release] -- un profil Cargo ne prend
+   pas de dependances, donc cette ligne etait silencieusement ignoree,
+   avec pour seul effet visible le warning "unused manifest key:
+   profile.release.tokio" affiche a CHAQUE `cargo build`/`cargo test` de
+   toute cette session (et vraisemblablement depuis bien avant). Retiree
+   -- le vrai tokio est deja declare juste en dessous, avec la contrainte
+   de version reellement respectee (1.40, pas 1).
+
+Verification:
+- cargo build (apres `touch Cargo.toml` pour forcer une relecture du
+  manifeste): "Finished" propre, ZERO warning -- confirme la disparition
+  du warning unused-manifest-key qui apparaissait sur tous les builds
+  precedents de cette session.
+- cargo test --lib: 130 passed, 0 failed, 0 regression.
+- Live: `cargo run --quiet` demarre normalement, ecoute sur :5050 -- le
+  binaire cstl_parser fonctionne identiquement sans le bloc [[bin]] mort.
+- Arret propre confirme.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ Cargo.toml | 28 +++++++++++++++++++---------
+ 1 file changed, 19 insertions(+), 9 deletions(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 4493124..6e6dfe0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -2,21 +2,25 @@
+ name = "cstl_parser"
+ version = "5.0.0"
+ edition = "2021"
+-description = "CSTL v4.9.2 — Rust parser (lexer + recursive descent)"
++description = "CSTL v5.0.0 — Rust TCP-native agentic server (parser, validator, audit chain, KB verification)"
+ authors = ["Olivier Goyette"]
+ 
+-
+-# [[bin]]
+-# name = "cstl_validate"
+-# path = "src/main.rs"
+-
+ [lib]
+ name = "cstl_parser"
+ path = "src/lib.rs"
+ 
++# Pas de section [[bin]] explicite: Cargo detecte automatiquement src/main.rs
++# comme binaire par defaut (nomme d'apres le package, "cstl_parser") -- c'est
++# ce que `cargo run` lance depuis le debut de cette session. Un bloc [[bin]]
++# commente nommant "cstl_validate" trainait ici et ne correspondait a rien
++# de reel; retire le 2026-09-03 pour ne pas induire en erreur.
++
+ [dependencies]
+-# Zero external deps — pure Rust lexer + parser
+-# nom would be option 1b — here we do hand-rolled for zero-dep portability
++# Session #5 (v4.9.3): "zero deps, hand-rolled lexer+parser" etait vrai a
++# l'epoque. Plus maintenant -- ce commentaire mentait depuis l'ajout de
++# tokio (couche TCP), sha2/rusqlite (audit + adn_store), reqwest (kb_verify
++# / Wikidata), serde (wire format des reponses) et unicode-normalization
++# (NFC). Corrige le 2026-09-03.
+ 
+ [dev-dependencies]
+ 
+@@ -24,7 +28,13 @@ path = "src/lib.rs"
+ opt-level = 3
+ lto = true
+ codegen-units = 1
+-tokio = { version = "1", features = ["full"] }
++# La ligne `tokio = { version = "1", features = ["full"] }` vivait ici par
++# erreur -- une section [profile.*] ne prend pas de dependances, donc cargo
++# l'ignorait silencieusement en emettant "unused manifest key:
++# profile.release.tokio" a CHAQUE build de cette session (visible dans
++# chaque cargo build/test depuis le debut). Retiree le 2026-09-03; le vrai
++# tokio est deja declare juste en dessous, avec la contrainte de version
++# reellement utilisee (1.40, pas 1).
+ 
+ [dependencies.tokio]
+ version = "1.40"
+-- 
+2.43.0
+

@@ -1,0 +1,859 @@
+From ff15508a7c3a8d9c567a2d01bb256528f7638cc8 Mon Sep 17 00:00:00 2001
+From: cloud-sandbox <cloud-sandbox@local>
+Date: Sat, 5 Sep 2026 01:42:35 +0000
+Subject: [PATCH 4/5] feat(parser+semantic): reconstruit R8 (coref_with) et
+ complete R7 (DEFINE malforme) sur le vrai CstlPayload
+
+R8 avait ete completement retire le 2026-09-04 -- son unique implementation
+dependait de ast::Block, un arbre que ni le tokenizer ni le parser reel n'ont
+jamais construit hors tests. En creusant pour le reconstruire "correctement
+cette fois", trouvaille prealable: les blocs DEFINE n'existaient MEME PAS
+cote serveur -- server::parser::parse_payload ne reconnaissait que META,
+INTENT_PAYLOAD et RELATION. R8 etait donc structurellement impossible a
+reconstruire dans n'importe quelle forme, pas seulement prive de son
+implementation.
+
+Corrige en deux temps, sans reintroduire ast::Block:
+
+1. server::parser::parse_payload reconnait desormais les blocs DEFINE au
+   format reel de la grammaire (spec S9) -- "DEFINE <id> AS <type> [attrs]",
+   une ligne plate, meme esprit que RELATION -- et les stocke dans
+   CstlPayload.defines. Au passage (R7, jusqu'ici "partiel"): un DEFINE avec
+   en-tete malforme ou crochet jamais ferme avant ---END--- est desormais
+   "dropped + warning" (payload.parse_warnings), pas seulement "dropped"
+   silencieusement comme avant.
+
+2. server::validator::check_coref_with_references(payload) compare chaque
+   coref_with=<id> porte par une RELATION contre les id= collectes dans
+   payload.defines du MEME payload, et emet un avertissement R8 sur toute
+   reference orpheline. Cable sur le chemin TCP reel (server/handler.rs),
+   avertissement seul -- meme politique que check_sdl_operator_whitelist.
+
+Portee assumee: intra-payload seulement (comme le dit la spec S13 -- "un
+DEFINE anterieur", dans le meme document), pas l'historique cross-payload de
+execution_lab::check_deontic_consistency_with_history qui repond a une
+question differente.
+
+10 nouveaux tests unitaires (6 parser DEFINE/R7, 4 validator R8) + un smoke
+test TCP live (examples/coref_r8_r7_smoke_test.rs, 3 scenarios verifies sur
+un vrai CstlNativeServer). 153 tests --lib (was 143), 0 warning clippy.
+
+CSTL_SPEC_v5_0.md S16.4/S19/S20.1 mis a jour pour refleter le statut reel.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018JMwGsM76zmiqW9BtVgcgH
+---
+ CSTL_SPEC_v5_0.md                  |  64 +++++++--
+ examples/coref_r8_r7_smoke_test.rs | 157 ++++++++++++++++++++
+ src/server/audit.rs                |   2 +
+ src/server/handler.rs              |  10 ++
+ src/server/parser.rs               | 222 ++++++++++++++++++++++++++++-
+ src/server/validator.rs            | 117 +++++++++++++++
+ src/signing.rs                     |   2 +
+ 7 files changed, 562 insertions(+), 12 deletions(-)
+ create mode 100644 examples/coref_r8_r7_smoke_test.rs
+
+diff --git a/CSTL_SPEC_v5_0.md b/CSTL_SPEC_v5_0.md
+index 7619278..278998b 100644
+--- a/CSTL_SPEC_v5_0.md
++++ b/CSTL_SPEC_v5_0.md
+@@ -611,6 +611,15 @@ par le serveur TCP (`server/handler.rs`), avertissement seul sauf mention contra
+ (un `SEMANTIC_WARNING` n'empêche jamais `status=processed`, sauf E107 qui est
+ bloquant — seul code de ce tableau qui rejette le payload).
+ 
++Exception au tableau, ajoutée le 2026-09-05 : `R8` n'est PAS émis par
++`SemanticValidator` — il vient directement de `server/validator.rs::
++check_coref_with_references(payload: &CstlPayload)`, qui compare `relations` et
++`defines` (deux champs de `CstlPayload`) entre eux. `SemanticValidator` ne connaît
++que `Relation` (jamais `defines`), donc ce check ne pouvait structurellement pas y
++vivre. Listé ici quand même parce que `server/handler.rs` l'agrège dans le même flux
++`SEMANTIC_WARNING` que les codes ci-dessous, avec la même politique (avertissement
++seul). Voir §19 pour l'historique complet de sa reconstruction.
++
+ | Code | Sévérité | Condition réelle (moteur Rust) |
+ |---|---|---|
+ | E101 | error (non bloquant, warning affiché) | Opérateur `RELATION.type` hors whitelist officielle/domaine/déprécié |
+@@ -622,6 +631,7 @@ bloquant — seul code de ce tableau qui rejette le payload).
+ | W502 | warning | `MAINTAIN` avec `tau=p`/`p_past` |
+ | W503 | warning | `tau` hors des valeurs valides (`p`, `n`, `f`, `p_past`, `n_present`, `f_future`) |
+ | W504 | warning | Dépassement du seuil d'attributs (voir R10, §19) |
++| R8 | warning | `coref_with=<id>` sans DEFINE correspondant dans le même payload (`server/validator.rs::check_coref_with_references`, ajouté 2026-09-05) |
+ | R9 | warning | Valeur d'attribut hors ontologie (§13) |
+ | R10 | warning | >9 attributs sur une relation |
+ | W602 | warning | `CONTRADICTS` redondant (symétrie déjà impliquée) |
+@@ -685,23 +695,57 @@ détectée via un `PARENT_HASH` invalide.
+ | R4 | info | Ordre canonique des blocs recommandé | ✅ |
+ | R5 | warning | Opérateur ou type d'entité hors officiels | ✅ vérifié |
+ | R6 | fixed | Symboles σδτωι non redéfinissables par l'utilisateur | ✅ vérifié |
+-| R7 | error | DEFINE avec crochets malformés → dropped + warning | ⚠️ partiel |
+-| R8 | warning | Références coref_with validées contre les DEFINE existants | ❌ retiré (2026-09-04) |
++| R7 | error | DEFINE avec crochets malformés → dropped + warning | ✅ câblé live (`server/parser.rs`, 2026-09-05) |
++| R8 | warning | Références coref_with validées contre les DEFINE existants | ✅ reconstruit + câblé live (2026-09-05, portée intra-payload — voir note ci-dessous) |
+ | R9 | warning | Valeurs d'attributs non conformes à la whitelist §13 | ✅ câblé live (`semantic.rs::check_attribute_ontology`, 2026-09-04) |
+ | R10 | error | >9 attributs par relation → warning + drop du surplus | ✅ câblé live (`semantic.rs::check_attribute_bombing`, 2026-09-04) |
+ | R11 | error | Clé META dupliquée → invalidation du document | ✅ vérifié |
+ | R12 | error | Contenu textuel après `---END---` → truncation error | ✅ vérifié |
+ | R13 | warning | Version hashbang non reconnue (ni v4.9.x ni v5.0.x) | ✅ vérifié |
+ 
+-**Correction honnête (audit du repo, 2026-09-04) — R8** : ce check reposait sur
++**Historique — R8 retiré le 2026-09-04** : ce check reposait sur
+ `defined_entities()`/`check_undefined_entity_reference()` dans `semantic.rs`, qui
+ opéraient sur le système `ast::Block` — retiré le même jour (100% mort, aucun
+ producteur réel n'a jamais construit de `Block` en dehors de ses propres tests, voir
+-CHANGELOG). R8 n'existe donc plus du tout, pas même à l'état "spécifié" — il faudrait
+-le reconstruire sur `Relation` (le vrai modèle de données du chemin serveur) s'il
+-redevient prioritaire un jour. R9/R10, en revanche, opéraient déjà sur `Relation`
+-(jamais sur `Block`) et ont été branchés sur le chemin TCP réel le même jour, aux côtés
+-de 9 autres checks jusque-là seulement testés en isolation (voir §16.4).
++CHANGELOG). R9/R10, en revanche, opéraient déjà sur `Relation` (jamais sur `Block`) et
++ont été branchés sur le chemin TCP réel le même jour, aux côtés de 9 autres checks
++jusque-là seulement testés en isolation (voir §16.4).
++
++**Reconstruction R8 (2026-09-05)** : avant de pouvoir reconstruire quoi que ce soit,
++il a fallu constater que les blocs DEFINE n'existaient MÊME PAS côté serveur — le
++parser réel (`server::parser::parse_payload`) ne reconnaissait que META,
++INTENT_PAYLOAD et RELATION ; DEFINE n'apparaissait nulle part dans `src/`. R8 était
++donc structurellement impossible à reconstruire dans QUELQUE forme que ce soit, pas
++seulement privé de son ancienne implémentation. Corrigé en deux temps :
++
++1. `server::parser::parse_payload` reconnaît désormais les blocs DEFINE au format
++   réel de la grammaire (§9) — `DEFINE <identifier> AS <entity_type> [attrs]`, une
++   ligne plate, PAS un arbre `Block` — et les stocke dans `CstlPayload.defines: Vec<
++   HashMap<String, String>>`, même esprit que `relations`. Aucune réintroduction
++   d'`ast::Block` : c'est une extension du format à plat déjà utilisé pour RELATION,
++   pas un nouveau système structurel.
++2. `server::validator::check_coref_with_references(payload)` compare chaque
++   `coref_with=<id>` porté par une RELATION du payload contre les `id=` collectés
++   dans `payload.defines` du MÊME payload, et émet un avertissement `R8` (chaîne
++   littérale, même convention que R9/R10) sur toute référence orpheline. Câblé sur
++   le chemin TCP réel (`server/handler.rs`), avertissement seul — jamais un rejet,
++   même politique que `check_sdl_operator_whitelist`/
++   `check_extended_semantic_diagnostics`.
++
++**Portée assumée** : intra-payload seulement, conforme au libellé de la spec §13
++("un DEFINE antérieur" — dans le même document). Ne consulte PAS l'historique
++cross-payload de `execution_lab::check_deontic_consistency_with_history`, qui répond
++à une question différente (cohérence déontique dans le temps, pas résolution de
++coréférence locale à un document). Étendre R8 à l'historique croisé (un
++`coref_with` qui référence une entité DEFINE-ée dans un PAYLOAD ANTÉRIEUR plutôt que
++dans le même document) reste un prolongement possible, non fait ici faute de besoin
++identifié.
++
++Tests : `server::parser::tests` (6 tests DEFINE/R7, dont malformation d'en-tête et
++crochet jamais fermé avant `---END---`) et `server::validator::tests` (4 tests R8,
++dont référence valide/orpheline/absence totale de DEFINE). Vérification live de bout
++en bout sur un vrai `CstlNativeServer` : `examples/coref_r8_r7_smoke_test.rs`
++(`cargo run --example coref_r8_r7_smoke_test`).
+ 
+ Note : R10 applique le théorème k=9 au niveau du validator. k=9 est la
+ justification formelle (croissance logarithmique avec la taille du corpus) ;
+@@ -731,6 +775,10 @@ même raison (code mort, zéro appelant réel).
+   une structure `CstlPayload` (HashMap de blocs → HashMap de clé/valeur), pas en un
+   arbre de `Block`/`Field` structuré. Point d'entrée réel :
+   `server::parser::parse_payload(raw: &str) -> Result<CstlPayload, ParseError>`.
++  Blocs reconnus : `META`, `INTENT_PAYLOAD`, `RELATION` (depuis l'origine) et
++  `DEFINE` (ajouté le 2026-09-05, pour reconstruire R8 — voir §19 — au format
++  réel de la grammaire §9, une ligne plate par entité, pas un bloc `RELATIONS[...]`
++  multi-lignes ni un arbre).
+ - Validation structurelle/format : `server::validator::validate_payload(payload:
+   &CstlPayload) -> ValidationResult` (codes E301–E310, voir §16.4).
+ - Validation sémantique : `semantic::SemanticValidator::validate()` (codes E101,
+diff --git a/examples/coref_r8_r7_smoke_test.rs b/examples/coref_r8_r7_smoke_test.rs
+new file mode 100644
+index 0000000..5787d27
+--- /dev/null
++++ b/examples/coref_r8_r7_smoke_test.rs
+@@ -0,0 +1,157 @@
++/// examples/coref_r8_r7_smoke_test.rs -- verification live que R8 (coref_with
++/// valide contre les DEFINE du meme payload) et R7 (DEFINE mal forme -> dropped
++/// plus warning) sont bel et bien appliques sur un vrai payload envoye a un
++/// vrai serveur CstlNativeServer, pas seulement testes en isolation dans les
++/// modules server::parser et server::validator.
++///
++/// Contexte (voir CSTL_SPEC_v5_0.md §19) : R8 avait ete completement retire le
++/// 2026-09-04 -- son unique implementation dependait de `ast::Block`, un arbre
++/// que ni le tokenizer ni le parser reel n'ont jamais construit hors tests.
++/// Reconstruit le 2026-09-05 sur le vrai `CstlPayload` (HashMap plat) : il a
++/// d'abord fallu apprendre a `server::parser::parse_payload` a reconnaitre les
++/// blocs DEFINE (spec §9), qui n'existaient meme pas cote serveur avant ca.
++///
++/// Scenarios verifies (avertissement seul -- aucun payload rejete) :
++/// 1. coref_with vers un DEFINE existant du meme payload -> pas de warning R8.
++/// 2. coref_with vers un id jamais DEFINE -> SEMANTIC_WARNING R8.
++/// 3. DEFINE avec en-tete malforme (pas de "AS") -> avertissement R7 remonte
++///    au client, bloc absent des DEFINE retenus (verifie indirectement: le
++///    coref_with qui le visait devient lui-meme orphelin -> R8 en plus du R7).
++use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
++use cstl_parser::server::CstlNativeServer;
++use std::sync::Arc;
++use tokio::io::{AsyncReadExt, AsyncWriteExt};
++use tokio::net::TcpStream;
++use tokio::sync::Mutex;
++
++async fn send(port: u16, payload: &str) -> String {
++    let mut stream = TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
++    stream.write_all(payload.as_bytes()).await.expect("send");
++    let mut buf = Vec::new();
++    let mut chunk = [0u8; 4096];
++    loop {
++        let n = stream.read(&mut chunk).await.expect("read");
++        if n == 0 {
++            break;
++        }
++        buf.extend_from_slice(&chunk[..n]);
++        if buf.windows(9).any(|w| w == b"---END---") {
++            break;
++        }
++    }
++    String::from_utf8_lossy(&buf).to_string()
++}
++
++fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
++    for line in response.lines() {
++        if line.starts_with(block) {
++            let inner = line.split_once('[')?.1.trim_end_matches(']').trim_end_matches("]\n");
++            for part in inner.split(',') {
++                let part = part.trim();
++                if let Some((k, v)) = part.split_once('=') {
++                    if k.trim() == key {
++                        return Some(v.trim().to_string());
++                    }
++                }
++            }
++        }
++    }
++    None
++}
++
++fn make_test_server(port: u16) -> CstlNativeServer {
++    let mut server = CstlNativeServer::with_data_path(port, ":memory:");
++    let mut registry = AgentRegistry::new();
++    registry.register(AgentCard {
++        name: "smoke_router".to_string(),
++        version: "5.0.0".to_string(),
++        capabilities: vec!["communication".to_string()],
++        trust_score: 0.9,
++        public_key: None,
++    });
++    server.agent_registry = Arc::new(Mutex::new(registry));
++    server
++}
++
++fn payload(sender: &str, body: &str) -> String {
++    format!(
++        "#!CSTL v5.0.0 MODE=A\n\
++         META [encoder=SmokeTest, produced_by=SmokeTest]\n\
++         INTENT_PAYLOAD [purpose=coref_r8_r7_smoke, sender={sender}, receiver=server]\n\
++         {body}\n\
++         ---END---\n"
++    )
++}
++
++#[tokio::main]
++async fn main() {
++    let port: u16 = 15210;
++    let server = make_test_server(port);
++    tokio::spawn(async move {
++        server.start().await.expect("server start");
++    });
++    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
++
++    let mut failures = Vec::new();
++
++    // ---- Scenario 1: coref_with valide (DEFINE present) -> pas de R8 ----
++    println!("[1/3] coref_with vers un DEFINE existant du meme payload...");
++    let body1 = "DEFINE patient AS human [id=e001]\n\
++                 RELATION [type=EQUALS, subject=e002, object=e001, coref_with=e001]";
++    let resp1 = send(port, &payload("agent_1", body1)).await;
++    let status1 = extract_field(&resp1, "META", "status");
++    let has_r8 = resp1.contains("R8:");
++    println!("      status={:?} R8_present={}", status1, has_r8);
++    if status1.as_deref() != Some("processed") {
++        failures.push("scenario 1: un coref_with valide ne doit pas etre rejete".to_string());
++    }
++    if has_r8 {
++        failures.push("scenario 1: coref_with vers un DEFINE existant ne doit PAS produire R8".to_string());
++    }
++
++    // ---- Scenario 2: coref_with orphelin -> SEMANTIC_WARNING R8 ----
++    println!("[2/3] coref_with vers un id jamais DEFINE...");
++    let body2 = "DEFINE patient AS human [id=e001]\n\
++                 RELATION [type=EQUALS, subject=e003, object=e999, coref_with=e999]";
++    let resp2 = send(port, &payload("agent_2", body2)).await;
++    let status2 = extract_field(&resp2, "META", "status");
++    let has_r8_2 = resp2.contains("R8:") && resp2.contains("e999");
++    println!("      status={:?} R8_present={}", status2, has_r8_2);
++    if status2.as_deref() != Some("processed") {
++        failures.push("scenario 2: coref_with orphelin ne doit PAS etre rejete (avertissement seul)".to_string());
++    }
++    if !has_r8_2 {
++        failures.push("scenario 2: coref_with=e999 (jamais DEFINE) doit produire un SEMANTIC_WARNING R8".to_string());
++    }
++
++    // ---- Scenario 3: DEFINE mal forme (pas de "AS") -> R7 remonte au client,
++    // et le coref_with qui le visait devient orphelin (double avertissement) ----
++    println!("[3/3] DEFINE avec en-tete malforme (sans AS)...");
++    let body3 = "DEFINE patient human [id=e001]\n\
++                 RELATION [type=EQUALS, subject=e004, object=e001, coref_with=e001]";
++    let resp3 = send(port, &payload("agent_3", body3)).await;
++    let status3 = extract_field(&resp3, "META", "status");
++    let has_r7 = resp3.contains("R7:");
++    let has_r8_3 = resp3.contains("R8:") && resp3.contains("e001");
++    println!("      status={:?} R7_present={} R8_present={}", status3, has_r7, has_r8_3);
++    if status3.as_deref() != Some("processed") {
++        failures.push("scenario 3: un DEFINE mal forme ne doit PAS faire rejeter tout le payload".to_string());
++    }
++    if !has_r7 {
++        failures.push("scenario 3: DEFINE sans 'AS' doit produire un avertissement R7 remonte au client".to_string());
++    }
++    if !has_r8_3 {
++        failures.push("scenario 3: le DEFINE malforme etant droppe, coref_with=e001 devient orphelin -> R8 attendu aussi".to_string());
++    }
++
++    println!();
++    if failures.is_empty() {
++        println!("✅ R7 (DEFINE malforme) et R8 (coref_with) sont conformes de bout en bout sur le vrai serveur TCP.");
++    } else {
++        println!("❌ {} echec(s):", failures.len());
++        for f in &failures {
++            println!("   - {}", f);
++        }
++        std::process::exit(1);
++    }
++}
+diff --git a/src/server/audit.rs b/src/server/audit.rs
+index ba7b0c6..ebaba89 100644
+--- a/src/server/audit.rs
++++ b/src/server/audit.rs
+@@ -298,6 +298,8 @@ mod tests {
+             meta,
+             intent,
+             relations: vec![],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         }
+     }
+diff --git a/src/server/handler.rs b/src/server/handler.rs
+index 22cfe79..d7a499b 100644
+--- a/src/server/handler.rs
++++ b/src/server/handler.rs
+@@ -161,6 +161,16 @@ pub async fn handle_connection(
+                     // (avertissement seul, voir le commentaire de tete de
+                     // check_extended_semantic_diagnostics pour pourquoi).
+                     semantic_warnings.extend(validator::check_extended_semantic_diagnostics(&payload));
++                    // R8 (reconstruit le 2026-09-05 sur le vrai CstlPayload --
++                    // voir validator::check_coref_with_references pour
++                    // l'historique complet). Meme politique que les deux
++                    // appels ci-dessus : avertissement seul, jamais un rejet.
++                    semantic_warnings.extend(validator::check_coref_with_references(&payload));
++                    // R7 (parser.rs) : un bloc DEFINE mal forme (en-tete ou
++                    // crochets) est deja "dropped" par le parser -- on
++                    // remonte aussi l'avertissement au client plutot que de
++                    // le laisser uniquement dans les logs serveur (eprintln!).
++                    semantic_warnings.extend(payload.parse_warnings.iter().cloned());
+                     let mut semantic_warning_lines = String::new();
+                     if !semantic_warnings.is_empty() {
+                         eprintln!("[Handler] ⚠️  Semantic operator warnings: {:?}", semantic_warnings);
+diff --git a/src/server/parser.rs b/src/server/parser.rs
+index 97c21dd..4da55b4 100644
+--- a/src/server/parser.rs
++++ b/src/server/parser.rs
+@@ -8,6 +8,27 @@ pub struct CstlPayload {
+     pub meta: HashMap<String, String>,
+     pub intent: HashMap<String, String>,
+     pub relations: Vec<HashMap<String, String>>,
++    /// Blocs DEFINE (`DEFINE <identifier> AS <entity_type> [attr_list]`,
++    /// spec §9) -- ajoute le 2026-09-05 pour reconstruire R8 (coref_with)
++    /// sur le VRAI format wire, sans reintroduire `ast::Block` (retire le
++    /// 2026-09-04, voir semantic.rs). Avant ce fix, DEFINE n'etait meme pas
++    /// reconnu par ce parser -- seuls META/INTENT_PAYLOAD/RELATION
++    /// l'etaient -- donc R8 etait structurellement impossible a reconstruire,
++    /// pas seulement non branche. Chaque entree est un HashMap plat, meme
++    /// esprit que `relations`: "name" (identifiant, ex. "patient"),
++    /// "entity_type" (ex. "human"), plus tous les attributs `[id=..., ...]`
++    /// s'il y en a. Un DEFINE sans `id=` est conserve (les autres attributs
++    /// restent utiles) mais ne peut jamais satisfaire un coref_with, qui
++    /// reference toujours un `id`.
++    pub defines: Vec<HashMap<String, String>>,
++    /// Avertissements de parsing non fatals -- ex. bloc DEFINE avec crochets
++    /// malformes, silencieusement ignore avant ce fix (R7, §19 : "dropped +
++    /// warning" -- seul "dropped" existait). Ajoute le 2026-09-05 aux cotes
++    /// de `defines`. Ne couvre PAS (encore) les blocs RELATION malformes,
++    /// qui gardent leur comportement historique de drop silencieux
++    /// (`if let Ok(...) = parse_block(...)` plus bas) -- hors du perimetre
++    /// de R7, qui ne mentionne que DEFINE.
++    pub parse_warnings: Vec<String>,
+     pub raw: String,
+ }
+ 
+@@ -39,6 +60,8 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
+         meta: HashMap::new(),
+         intent: HashMap::new(),
+         relations: Vec::new(),
++        defines: Vec::new(),
++        parse_warnings: Vec::new(),
+         raw: raw.to_string(),
+     };
+ 
+@@ -74,8 +97,13 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
+         let is_meta = line.starts_with("META [");
+         let is_intent = line.starts_with("INTENT_PAYLOAD [");
+         let is_relation = line.starts_with("RELATION [");
++        // Contrairement a META/INTENT_PAYLOAD/RELATION, le mot-cle DEFINE
++        // n'est pas immediatement suivi de "[" -- la grammaire reelle (spec
++        // §9) est `DEFINE <identifier> AS <entity_type> [attrs]`, avec deux
++        // tokens (identifiant + type) entre le mot-cle et le crochet.
++        let is_define = line.starts_with("DEFINE ");
+ 
+-        if is_meta || is_intent || is_relation {
++        if is_meta || is_intent || is_relation || is_define {
+             // Save previous block if exists
+             if !current_block.is_empty() && !block_name.is_empty() {
+                 match block_name.as_str() {
+@@ -86,17 +114,31 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
+                             payload.relations.push(relation);
+                         }
+                     }
++                    "DEFINE" => match parse_define_block(&current_block) {
++                        Ok(def) => payload.defines.push(def),
++                        Err(e) => payload.parse_warnings.push(format!(
++                            "R7: bloc DEFINE mal forme ignore -- {}", e
++                        )),
++                    },
+                     _ => {}
+                 }
+             }
+ 
+             // Start new block
+             in_block = true;
+-            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else { "RELATION" }.to_string();
++            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else { "DEFINE" }.to_string();
+             current_block = line.to_string();
+ 
+-            // Check if block ends on same line
+-            if line.contains(']') {
++            // Check if block ends on same line. Cas particulier DEFINE : le
++            // groupe `[attrs]` etant optionnel dans la grammaire (§9), une
++            // ligne DEFINE sans aucun '[' n'a structurellement rien a
++            // attendre d'une ligne suivante -- la traiter comme multi-ligne
++            // (comme META/INTENT/RELATION le font quand ']' manque) la ferait
++            // engloutir la ligne ---END--- suivante par accident (bug reel
++            // trouve en ecrivant le test correspondant), puisqu'aucun '['
++            // jamais ouvert ne pourra jamais etre "ferme". Elle est donc
++            // complete des sa propre ligne.
++            if line.contains(']') || (block_name == "DEFINE" && !current_block.contains('[')) {
+                 match block_name.as_str() {
+                     "META" => payload.meta = parse_block(&current_block)?,
+                     "INTENT_PAYLOAD" => payload.intent = parse_block(&current_block)?,
+@@ -105,6 +147,12 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
+                             payload.relations.push(relation);
+                         }
+                     }
++                    "DEFINE" => match parse_define_block(&current_block) {
++                        Ok(def) => payload.defines.push(def),
++                        Err(e) => payload.parse_warnings.push(format!(
++                            "R7: bloc DEFINE mal forme ignore -- {}", e
++                        )),
++                    },
+                     _ => {}
+                 }
+                 in_block = false;
+@@ -123,6 +171,12 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
+                         payload.relations.push(relation);
+                     }
+                 }
++                "DEFINE" => match parse_define_block(&current_block) {
++                    Ok(def) => payload.defines.push(def),
++                    Err(e) => payload.parse_warnings.push(format!(
++                        "R7: bloc DEFINE mal forme ignore -- {}", e
++                    )),
++                },
+                 _ => {}
+             }
+             in_block = false;
+@@ -133,14 +187,78 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
+         }
+     }
+ 
++    // R7 (suite) : un bloc DEFINE dont le crochet ouvrant n'est JAMAIS ferme
++    // avant ---END--- (ex. "DEFINE patient AS human [id=e001" sans "]" nulle
++    // part ensuite) ne declenche jamais la branche `line.contains(']')`
++    // ci-dessus -- avant ce fix, il restait accumule dans `current_block`
++    // jusqu'a la fin de la boucle puis etait perdu SANS AUCUN avertissement
++    // (silencieux, pas meme un "dropped" detectable). C'est le cas le plus
++    // litteral de "crochets malformes" vise par R7 (§19). Flush explicite ici
++    // -- uniquement pour DEFINE (hors perimetre pour META/INTENT_PAYLOAD/
++    // RELATION, qui gardent leur comportement historique : `?` propage une
++    // erreur dure pour META/INTENT, drop silencieux pour RELATION).
++    if block_name == "DEFINE" && !current_block.is_empty() {
++        match parse_define_block(&current_block) {
++            Ok(def) => payload.defines.push(def),
++            Err(e) => payload.parse_warnings.push(format!(
++                "R7: bloc DEFINE mal forme ignore (jamais ferme avant ---END---) -- {}", e
++            )),
++        }
++    }
++
+     eprintln!("[Parser] Parsed CSTL v{} MODE={}", payload.version, payload.mode);
+     eprintln!("[Parser] META: {} fields", payload.meta.len());
+     eprintln!("[Parser] INTENT: {} fields", payload.intent.len());
+     eprintln!("[Parser] RELATIONS: {} blocks", payload.relations.len());
++    eprintln!("[Parser] DEFINE: {} blocks ({} avertissement(s) R7)", payload.defines.len(), payload.parse_warnings.len());
+ 
+     Ok(payload)
+ }
+ 
++/// Parse un bloc `DEFINE <identifier> AS <entity_type> [attr_list]` (spec §9)
++/// en un HashMap plat -- meme esprit que `parse_block`, mais avec un en-tete
++/// a extraire avant les crochets (identifiant + type), pas seulement une
++/// liste d'attributs. `[attr_list]` est optionnel dans la grammaire ; sans
++/// lui, l'entite est quand meme enregistree (name/entity_type seuls) mais ne
++/// pourra jamais satisfaire un `coref_with` (qui reference toujours un `id`).
++///
++/// R7 : un en-tete malforme (pas exactement "identifiant AS type") ou des
++/// crochets malformes (`[` sans `]` ou vice-versa, via `parse_block`)
++/// produisent tous les deux un `ParseError::MalformedBlock` -- l'appelant
++/// (`parse_payload`) le transforme en avertissement `payload.parse_warnings`
++/// plutot que de faire echouer tout le payload : le bloc est "dropped" (pas
++/// enregistre dans `payload.defines`), avec avertissement, exactement la
++/// regle R7 (§19).
++fn parse_define_block(block: &str) -> Result<HashMap<String, String>, ParseError> {
++    let rest = block
++        .strip_prefix("DEFINE ")
++        .ok_or_else(|| ParseError::MalformedBlock("bloc DEFINE sans prefixe attendu".to_string()))?;
++
++    let header = match rest.find('[') {
++        Some(idx) => &rest[..idx],
++        None => rest,
++    };
++    let tokens: Vec<&str> = header.split_whitespace().collect();
++    if tokens.len() != 3 || tokens[1] != "AS" {
++        return Err(ParseError::MalformedBlock(format!(
++            "en-tete DEFINE invalide (attendu '<identifiant> AS <type>'): {:?}",
++            header.trim()
++        )));
++    }
++
++    // Les attributs `[...]` sont optionnels dans la grammaire (§9: le groupe
++    // "(SP \"[\" attr_list \"]\")?" est marque `?`). Sans '[', pas d'attrs.
++    let mut map = if rest.contains('[') {
++        parse_block(block)?
++    } else {
++        HashMap::new()
++    };
++
++    map.insert("name".to_string(), tokens[0].to_string());
++    map.insert("entity_type".to_string(), tokens[2].to_string());
++    Ok(map)
++}
++
+ /// Coupe `content` sur les virgules de premier niveau seulement -- une virgule
+ /// a l'interieur d'une paire de guillemets ne separe pas deux champs. Corrige
+ /// une trouvaille critique de l'audit multi-angle (2026-09-03): l'ancien
+@@ -273,4 +391,100 @@ INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+         let result = parse_payload(payload_str);
+         assert!(matches!(result, Err(ParseError::MissingEndMarker)));
+     }
++
++    // ── DEFINE (spec §9), reconstruit le 2026-09-05 pour R8/R7 ──
++
++    #[test]
++    fn test_define_block_parsed_with_id() {
++        let payload_str = r#"#!CSTL v5.0.0 MODE=A
++META [encoder=Agent_CLAUDE, produced_by=Claude]
++INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
++DEFINE patient AS human [id=e001, age=67]
++---END---"#;
++
++        let payload = parse_payload(payload_str).unwrap();
++        assert_eq!(payload.defines.len(), 1);
++        let d = &payload.defines[0];
++        assert_eq!(d.get("name"), Some(&"patient".to_string()));
++        assert_eq!(d.get("entity_type"), Some(&"human".to_string()));
++        assert_eq!(d.get("id"), Some(&"e001".to_string()));
++        assert_eq!(d.get("age"), Some(&"67".to_string()));
++        assert!(payload.parse_warnings.is_empty());
++    }
++
++    #[test]
++    fn test_define_block_without_attrs_still_parsed() {
++        // §9 : le groupe [attr_list] est optionnel dans la grammaire.
++        let payload_str = r#"#!CSTL v5.0.0 MODE=A
++META [encoder=Agent_CLAUDE, produced_by=Claude]
++INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
++DEFINE patient AS human
++---END---"#;
++
++        let payload = parse_payload(payload_str).unwrap();
++        assert_eq!(payload.defines.len(), 1);
++        assert_eq!(payload.defines[0].get("name"), Some(&"patient".to_string()));
++        assert_eq!(payload.defines[0].get("id"), None);
++    }
++
++    #[test]
++    fn test_multiple_defines_and_relations_coexist() {
++        let payload_str = r#"#!CSTL v5.0.0 MODE=A
++META [encoder=Agent_CLAUDE, produced_by=Claude]
++INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
++DEFINE patient AS human [id=e001]
++DEFINE physician AS agent [id=e002]
++RELATION [type=EQUALS, subject=e001, object=e002]
++---END---"#;
++
++        let payload = parse_payload(payload_str).unwrap();
++        assert_eq!(payload.defines.len(), 2);
++        assert_eq!(payload.relations.len(), 1);
++    }
++
++    // ── R7 : DEFINE avec crochets/en-tete malformes -> dropped + warning ──
++
++    #[test]
++    fn test_r7_define_malformed_header_dropped_with_warning() {
++        // En-tete sans "AS" -- ne correspond pas a "<identifiant> AS <type>".
++        let payload_str = r#"#!CSTL v5.0.0 MODE=A
++META [encoder=Agent_CLAUDE, produced_by=Claude]
++INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
++DEFINE patient human [id=e001]
++---END---"#;
++
++        let payload = parse_payload(payload_str).unwrap();
++        assert!(payload.defines.is_empty(), "un DEFINE mal forme ne doit pas etre enregistre");
++        assert!(payload.parse_warnings.iter().any(|w| w.starts_with("R7:")),
++                "un avertissement R7 est attendu: {:?}", payload.parse_warnings);
++    }
++
++    #[test]
++    fn test_r7_define_never_closed_bracket_dropped_with_warning() {
++        // Crochet ouvrant jamais ferme avant ---END--- -- le cas le plus
++        // litteral de "crochets malformes" (R7, §19). Avant ce fix : perdu
++        // silencieusement, sans meme un avertissement.
++        let payload_str = "#!CSTL v5.0.0 MODE=A\n\
++            META [encoder=Agent_CLAUDE, produced_by=Claude]\n\
++            INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]\n\
++            DEFINE patient AS human [id=e001\n\
++            ---END---";
++
++        let payload = parse_payload(payload_str).unwrap();
++        assert!(payload.defines.is_empty());
++        assert!(payload.parse_warnings.iter().any(|w| w.starts_with("R7:")),
++                "un avertissement R7 est attendu: {:?}", payload.parse_warnings);
++    }
++
++    #[test]
++    fn test_r7_clean_define_produces_no_warning() {
++        let payload_str = r#"#!CSTL v5.0.0 MODE=A
++META [encoder=Agent_CLAUDE, produced_by=Claude]
++INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
++DEFINE patient AS human [id=e001]
++---END---"#;
++
++        let payload = parse_payload(payload_str).unwrap();
++        assert!(payload.parse_warnings.is_empty());
++    }
+ }
+diff --git a/src/server/validator.rs b/src/server/validator.rs
+index 6ce565d..bfb6480 100644
+--- a/src/server/validator.rs
++++ b/src/server/validator.rs
+@@ -255,6 +255,50 @@ pub fn check_extended_semantic_diagnostics(payload: &CstlPayload) -> Vec<String>
+         .collect()
+ }
+ 
++/// R8 -- reconstruit le 2026-09-05 sur le VRAI modele de donnees du chemin
++/// serveur (`CstlPayload`: `relations`/`defines` en `HashMap<String,String>`
++/// plats), PAS sur `ast::Block` (retire le 2026-09-04 -- voir semantic.rs et
++/// CSTL_SPEC_v5_0.md §19 pour l'historique complet). L'ancienne
++/// implementation (`defined_entities()`/`check_undefined_entity_reference()`)
++/// dependait d'un arbre `Block` que ni le tokenizer ni le parser reel n'ont
++/// jamais construit hors tests -- elle etait donc morte a vie, pas juste non
++/// branchee. Cette reconstruction n'a ete possible qu'apres avoir d'abord
++/// appris a `server::parser::parse_payload` a reconnaitre les blocs DEFINE
++/// (spec §9, `DEFINE <identifier> AS <entity_type> [attrs]`) : avant ca,
++/// AUCUNE entite DEFINE n'existait meme cote serveur -- `payload.defines`
++/// aurait ete vide en permanence, rendant R8 structurellement invalide dans
++/// N'IMPORTE QUELLE implementation.
++///
++/// Portee assumee : verifie uniquement les DEFINE du MEME payload (comme le
++/// dit la spec §13, "un DEFINE anterieur" -- pas l'historique cross-payload
++/// de `execution_lab::check_deontic_consistency_with_history`, qui repond a
++/// une question differente -- coherence deontique dans le temps, pas
++/// resolution de coreference locale). Avertissement seul, meme politique que
++/// `check_sdl_operator_whitelist`/`check_extended_semantic_diagnostics`: un
++/// coref orphelin est un signal de qualite (faute de frappe probable sur un
++/// id, ou DEFINE oublie), pas une contradiction structurelle qui justifierait
++/// un rejet.
++///
++/// Code choisi : `R8` (chaine litterale, meme convention que R9/R10 dans
++/// semantic.rs -- pas de collision, verifie contre §16.4 et les codes E/W
++/// deja emis par ce fichier et par semantic.rs).
++pub fn check_coref_with_references(payload: &CstlPayload) -> Vec<String> {
++    let defined_ids: std::collections::HashSet<&str> = payload.defines.iter()
++        .filter_map(|d| d.get("id").map(String::as_str))
++        .collect();
++
++    payload.relations.iter()
++        .filter_map(|r| r.get("coref_with").map(|id| (r, id.as_str())))
++        .filter(|(_, id)| !defined_ids.contains(id))
++        .map(|(r, id)| format!(
++            "R8: coref_with={} ne correspond a aucun DEFINE de ce payload (relation subject={:?}, object={:?})",
++            id,
++            r.get("subject").map(String::as_str).unwrap_or(""),
++            r.get("object").map(String::as_str).unwrap_or(""),
++        ))
++        .collect()
++}
++
+ /// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
+ /// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
+ /// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE
+@@ -334,6 +378,8 @@ mod tests {
+                 i
+             },
+             relations: vec![],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+ 
+@@ -350,6 +396,8 @@ mod tests {
+             meta: HashMap::new(),
+             intent: HashMap::new(),
+             relations: vec![],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+ 
+@@ -371,6 +419,8 @@ mod tests {
+             },
+             intent: HashMap::new(),
+             relations: vec![],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+ 
+@@ -402,6 +452,8 @@ mod tests {
+                 relation(&[("subject", "paris"), ("type", "located_in"), ("object", "france")]),
+                 relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
+             ],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+         let warnings = check_sdl_operator_whitelist(&payload);
+@@ -416,6 +468,8 @@ mod tests {
+             relations: vec![
+                 relation(&[("subject", "x"), ("type", "EQUALS"), ("object", "y")]),
+             ],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+         let warnings = check_sdl_operator_whitelist(&payload);
+@@ -430,6 +484,8 @@ mod tests {
+             relations: vec![
+                 relation(&[("subject", "x"), ("type", "FOOBAR"), ("object", "y")]),
+             ],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+         let warnings = check_sdl_operator_whitelist(&payload);
+@@ -444,6 +500,8 @@ mod tests {
+             relations: vec![
+                 relation(&[("subject", "x"), ("type", "MUTUAL"), ("object", "y")]),
+             ],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         };
+         let warnings = check_sdl_operator_whitelist(&payload);
+@@ -473,6 +531,8 @@ mod tests {
+                 i
+             },
+             relations,
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         }
+     }
+@@ -528,4 +588,61 @@ mod tests {
+         let result = validate_payload(&payload);
+         assert!(result.valid, "objets differents ne doivent pas etre traites comme contradictoires: {:?}", result.errors);
+     }
++
++    // ── check_coref_with_references (R8, reconstruit le 2026-09-05 sur le
++    // vrai CstlPayload -- PAS ast::Block, voir le commentaire de tete de la
++    // fonction pour l'historique complet de la trouvaille du 2026-09-04) ──
++
++    fn define(pairs: &[(&str, &str)]) -> HashMap<String, String> {
++        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
++    }
++
++    #[test]
++    fn test_r8_coref_with_valid_reference_no_warning() {
++        let mut payload = payload_with(vec![
++            relation(&[("subject", "e002"), ("type", "EQUALS"), ("object", "e001"), ("coref_with", "e001")]),
++        ]);
++        payload.defines = vec![define(&[("name", "patient"), ("entity_type", "human"), ("id", "e001")])];
++
++        let warnings = check_coref_with_references(&payload);
++        assert!(warnings.is_empty(), "coref_with vers un DEFINE existant ne doit pas warner: {:?}", warnings);
++    }
++
++    #[test]
++    fn test_r8_coref_with_undefined_reference_warns() {
++        let mut payload = payload_with(vec![
++            relation(&[("subject", "e003"), ("type", "EQUALS"), ("object", "e999"), ("coref_with", "e999")]),
++        ]);
++        payload.defines = vec![define(&[("name", "patient"), ("entity_type", "human"), ("id", "e001")])];
++
++        let warnings = check_coref_with_references(&payload);
++        assert!(warnings.iter().any(|w| w.starts_with("R8:") && w.contains("e999")),
++                "coref_with orphelin (e999, jamais DEFINE) doit warner R8: {:?}", warnings);
++    }
++
++    #[test]
++    fn test_r8_no_coref_with_attribute_no_warning() {
++        // Chemin rapide implicite : aucune relation ne porte coref_with ->
++        // aucun cout, aucune interference avec le trafic existant (qui n'a
++        // jamais porte cet attribut jusqu'ici).
++        let payload = payload_with(vec![
++            relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
++        ]);
++        let warnings = check_coref_with_references(&payload);
++        assert!(warnings.is_empty());
++    }
++
++    #[test]
++    fn test_r8_no_defines_at_all_still_warns_on_coref() {
++        // Payload qui utilise coref_with sans avoir JAMAIS defini l'entite
++        // (aucun DEFINE du tout, pas seulement le mauvais id) -- doit quand
++        // meme warner, pas planter ni faire un faux-negatif silencieux.
++        let payload = payload_with(vec![
++            relation(&[("subject", "e002"), ("type", "EQUALS"), ("object", "e001"), ("coref_with", "e001")]),
++        ]);
++        assert!(payload.defines.is_empty());
++
++        let warnings = check_coref_with_references(&payload);
++        assert!(warnings.iter().any(|w| w.starts_with("R8:")));
++    }
+ }
+diff --git a/src/signing.rs b/src/signing.rs
+index 6e4f3f3..1e5195f 100644
+--- a/src/signing.rs
++++ b/src/signing.rs
+@@ -151,6 +151,8 @@ mod tests {
+             meta,
+             intent,
+             relations: vec![],
++            defines: vec![],
++            parse_warnings: vec![],
+             raw: String::new(),
+         }
+     }
+-- 
+2.43.0
+
