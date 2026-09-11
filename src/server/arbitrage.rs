@@ -363,7 +363,7 @@ impl std::fmt::Display for ArbitrationError {
 impl std::error::Error for ArbitrationError {}
 
 /// Impl du trait ArbitrageManager pour CstlNativeServer
-impl ArbitrageManager for CstlNativeServer {
+/* /* impl ArbitrageManager for CstlNativeServer {
     fn open_case(
         &self,
         escalation_source: String,
@@ -621,7 +621,7 @@ impl ArbitrageManager for CstlNativeServer {
         Ok(())
     }
 }
-
+ */ */
 pub fn select_arbiters_round_robin(adn: &AdnStore, count: usize) -> Result<Vec<String>, String> {
     let arbiters = adn
         .get_active_arbiters()
@@ -635,7 +635,7 @@ pub fn select_arbiters_round_robin(adn: &AdnStore, count: usize) -> Result<Vec<S
         .iter()
         .cycle()
         .take(count)
-        .map(|a| a.arbiter_id.clone())
+        .map(|a| a.clone())
         .collect();
 
     Ok(selected)
