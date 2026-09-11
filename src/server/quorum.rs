@@ -167,6 +167,75 @@ impl VoteMessage {
         );
         recomputed == self.content_hash
     }
+
+    /// Verifies Ed25519 signature against a public key (hex-encoded 64-char string)
+    pub fn verify_signature(&self, public_key_hex: &str) -> Result<bool, String> {
+        use ed25519_dalek::{VerifyingKey, Signature, Verifier};
+        use std::convert::TryInto;
+
+        // Validate public key format (64 hex chars = 32 bytes)
+        if public_key_hex.len() != 64 {
+            return Err(format!(
+                "Invalid public key length: expected 64 hex chars, got {}",
+                public_key_hex.len()
+            ));
+        }
+
+        let public_key_bytes = hex::decode(public_key_hex)
+            .map_err(|e| format!("Invalid public key hex: {}", e))?;
+
+        if public_key_bytes.len() != 32 {
+            return Err(format!(
+                "Public key must be 32 bytes after decoding, got {}",
+                public_key_bytes.len()
+            ));
+        }
+
+        // Validate signature format (128 hex chars = 64 bytes)
+        if self.signature.len() != 128 {
+            return Err(format!(
+                "Invalid signature length: expected 128 hex chars, got {}",
+                self.signature.len()
+            ));
+        }
+
+        let signature_bytes = hex::decode(&self.signature)
+            .map_err(|e| format!("Invalid signature hex: {}", e))?;
+
+        if signature_bytes.len() != 64 {
+            return Err(format!(
+                "Signature must be 64 bytes after decoding, got {}",
+                signature_bytes.len()
+            ));
+        }
+
+        // Construct verifying key
+        let public_key_array: [u8; 32] = public_key_bytes.as_slice()
+            .try_into()
+            .map_err(|_| "Failed to convert public key bytes".to_string())?;
+
+        let verifying_key = VerifyingKey::from_bytes(&public_key_array)
+            .map_err(|e| format!("Invalid verifying key: {}", e))?;
+
+        let signature_array: [u8; 64] = signature_bytes.as_slice()
+            .try_into()
+            .map_err(|_| "Failed to convert signature bytes".to_string())?;
+
+        let signature = Signature::from_bytes(&signature_array);
+
+        // Message to verify: same format as compute_content_hash
+        let message = format!(
+            "{}|{}|{}|{}|{}",
+            self.proposal_id, self.voter_id, self.decision,
+            self.timestamp.to_rfc3339(), self.sequence_number
+        );
+
+        // Verify the signature using the Verifier trait
+        match verifying_key.verify(message.as_bytes(), &signature) {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
 }
 
 /// Tracks consensus state for a single proposal round

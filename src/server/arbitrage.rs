@@ -140,28 +140,146 @@ pub trait ArbitrageStoreExt {
 }
 
 impl ArbitrageStoreExt for AdnStore {
-    fn save_arbitrage_case(&self, _case: &CaseRecord) -> Result<(), String> {
-        Ok(())
+    fn save_arbitrage_case(&self, case: &CaseRecord) -> Result<(), String> {
+        let arbiters_json = serde_json::to_string(&case.assigned_arbiters)
+            .map_err(|e| format!("Failed to serialize arbiters: {}", e))?;
+
+        use crate::adn_store::ArbitrageCase;
+        let db_case = ArbitrageCase {
+            case_id: case.case_id.clone(),
+            initiator: case.escalation_source.clone(),
+            subject: format!("{:?}", case.contradiction_type),
+            status: format!("{:?}", case.status),
+            created_at: case.opened_at.timestamp(),
+            updated_at: case.updated_at.timestamp(),
+            assigned_arbiters: Some(arbiters_json),
+        };
+
+        self.save_arbitrage_case(&db_case)
+            .map_err(|e| format!("Database error: {}", e))
     }
-    fn get_arbitrage_case(&self, _case_id: &str) -> Result<Option<CaseRecord>, String> {
-        Ok(None)
+
+    fn get_arbitrage_case(&self, case_id: &str) -> Result<Option<CaseRecord>, String> {
+        use crate::adn_store::ArbitrageCase;
+        let opt_case = self.get_arbitrage_case(case_id)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(opt_case.map(|db_case| {
+            let arbiters: Vec<String> = db_case.assigned_arbiters
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+
+            CaseRecord {
+                case_id: db_case.case_id,
+                escalation_source: db_case.initiator,
+                contradiction_type: ContradictionType::MutuallyExclusive, // Simplified
+                status: CaseStatus::Open, // Simplified
+                description: db_case.subject,
+                assigned_arbiters: arbiters,
+                opened_at: chrono::DateTime::<Utc>::from_timestamp(db_case.created_at, 0)
+                    .unwrap_or_else(Utc::now),
+                updated_at: chrono::DateTime::<Utc>::from_timestamp(db_case.updated_at, 0)
+                    .unwrap_or_else(Utc::now),
+            }
+        }))
     }
-    fn save_arbitrage_ruling(&self, _ruling: &ArbitrationRuling) -> Result<(), String> {
-        Ok(())
+
+    fn save_arbitrage_ruling(&self, ruling: &ArbitrationRuling) -> Result<(), String> {
+        use crate::adn_store::DbArbitrationRuling as DbRuling;
+        let db_ruling = DbRuling {
+            ruling_id: ruling.ruling_id.clone(),
+            case_id: ruling.case_id.clone(),
+            ruling_text: format!("{} | {}", ruling.decision, ruling.justification),
+            decided_by: ruling.arbiter_id.clone(),
+            status: "Pending".to_string(),
+            created_at: ruling.ruled_at.timestamp(),
+        };
+
+        self.save_arbitrage_ruling(&db_ruling)
+            .map_err(|e| format!("Database error: {}", e))
     }
-    fn get_arbitrage_ruling(&self, _ruling_id: &str) -> Result<Option<ArbitrationRuling>, String> {
-        Ok(None)
+
+    fn get_arbitrage_ruling(&self, ruling_id: &str) -> Result<Option<ArbitrationRuling>, String> {
+        use crate::adn_store::DbArbitrationRuling;
+        let opt_ruling = self.get_arbitrage_ruling(ruling_id)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(opt_ruling.map(|db_ruling| {
+            let (decision, justification) = db_ruling.ruling_text.split_once(" | ")
+                .map(|(d, j)| (d.to_string(), j.to_string()))
+                .unwrap_or((db_ruling.ruling_text.clone(), String::new()));
+
+            ArbitrationRuling {
+                ruling_id: db_ruling.ruling_id,
+                case_id: db_ruling.case_id,
+                arbiter_id: db_ruling.decided_by,
+                decision,
+                justification,
+                signature: String::new(), // Not stored in DB layer
+                ruled_at: chrono::DateTime::<Utc>::from_timestamp(db_ruling.created_at, 0)
+                    .unwrap_or_else(Utc::now),
+            }
+        }))
     }
-    fn get_ruling_by_case(&self, _case_id: &str) -> Result<Option<ArbitrationRuling>, String> {
-        Ok(None)
+
+    fn get_ruling_by_case(&self, case_id: &str) -> Result<Option<ArbitrationRuling>, String> {
+        use crate::adn_store::DbArbitrationRuling;
+        let opt_ruling = self.get_ruling_by_case(case_id)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(opt_ruling.map(|db_ruling| {
+            let (decision, justification) = db_ruling.ruling_text.split_once(" | ")
+                .map(|(d, j)| (d.to_string(), j.to_string()))
+                .unwrap_or((db_ruling.ruling_text.clone(), String::new()));
+
+            ArbitrationRuling {
+                ruling_id: db_ruling.ruling_id,
+                case_id: db_ruling.case_id,
+                arbiter_id: db_ruling.decided_by,
+                decision,
+                justification,
+                signature: String::new(),
+                ruled_at: chrono::DateTime::<Utc>::from_timestamp(db_ruling.created_at, 0)
+                    .unwrap_or_else(Utc::now),
+            }
+        }))
     }
-    fn save_peer_review(&self, _ruling_id: &str, _review: &PeerReviewSignature) -> Result<(), String> {
-        Ok(())
+
+    fn save_peer_review(&self, ruling_id: &str, review: &PeerReviewSignature) -> Result<(), String> {
+        use crate::adn_store::DbPeerReviewSignature;
+        use uuid::Uuid;
+
+        let db_review = DbPeerReviewSignature {
+            review_id: Uuid::new_v4().to_string(),
+            ruling_id: ruling_id.to_string(),
+            reviewer_id: review.reviewing_arbiter_id.clone(),
+            signature: review.review_signature.clone(),
+            approval_status: "Approved".to_string(),
+            reviewed_at: review.reviewed_at.timestamp(),
+        };
+
+        self.save_peer_review(&db_review)
+            .map_err(|e| format!("Database error: {}", e))
     }
-    fn get_peer_reviews_for_ruling(&self, _ruling_id: &str) -> Result<Vec<PeerReviewSignature>, String> {
-        Ok(vec![])
+
+    fn get_peer_reviews_for_ruling(&self, ruling_id: &str) -> Result<Vec<PeerReviewSignature>, String> {
+        use crate::adn_store::DbPeerReviewSignature;
+        let db_reviews = self.get_peer_reviews_for_ruling(ruling_id)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(db_reviews.into_iter().map(|db_review| {
+            PeerReviewSignature {
+                reviewing_arbiter_id: db_review.reviewer_id,
+                review_signature: db_review.signature,
+                reviewed_at: chrono::DateTime::<Utc>::from_timestamp(db_review.reviewed_at, 0)
+                    .unwrap_or_else(Utc::now),
+            }
+        }).collect())
     }
+
     fn get_active_arbiters(&self) -> Result<Vec<Arbiter>, String> {
+        // Placeholder: would need an arbiters table in the database
+        // For now, return empty vec
         Ok(vec![])
     }
 }

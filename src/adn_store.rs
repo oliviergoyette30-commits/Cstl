@@ -72,6 +72,40 @@ pub struct EmergenceProof {
     pub timestamp: i64,
 }
 
+/// Arbitrage case for dispute resolution
+#[derive(Debug, Clone)]
+pub struct ArbitrageCase {
+    pub case_id: String,
+    pub initiator: String,
+    pub subject: String,
+    pub status: String,  // "Open", "Assigned", "Submitted", "PeerReview", "Finalized"
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub assigned_arbiters: Option<String>,
+}
+
+/// Arbitration ruling decision (database layer)
+#[derive(Debug, Clone)]
+pub struct DbArbitrationRuling {
+    pub ruling_id: String,
+    pub case_id: String,
+    pub ruling_text: String,
+    pub decided_by: String,
+    pub status: String,  // "Pending", "Approved", "Rejected", "Finalized"
+    pub created_at: i64,
+}
+
+/// Peer review signature on a ruling (database layer)
+#[derive(Debug, Clone)]
+pub struct DbPeerReviewSignature {
+    pub review_id: String,
+    pub ruling_id: String,
+    pub reviewer_id: String,
+    pub signature: String,
+    pub approval_status: String,  // "Approved", "Rejected", "Abstain"
+    pub reviewed_at: i64,
+}
+
 pub struct AdnStore {
     conn: Connection,
 }
@@ -152,7 +186,37 @@ impl AdnStore {
             CREATE TABLE IF NOT EXISTS governance_alerts (
                 sender TEXT PRIMARY KEY,
                 last_alert_ts INTEGER NOT NULL
-            );",
+            );
+            CREATE TABLE IF NOT EXISTS arbitrage_cases (
+                case_id TEXT PRIMARY KEY,
+                initiator TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                assigned_arbiters TEXT
+            );
+            CREATE TABLE IF NOT EXISTS arbitration_rulings (
+                ruling_id TEXT PRIMARY KEY,
+                case_id TEXT NOT NULL UNIQUE,
+                ruling_text TEXT NOT NULL,
+                decided_by TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(case_id) REFERENCES arbitrage_cases(case_id)
+            );
+            CREATE TABLE IF NOT EXISTS peer_review_signatures (
+                review_id TEXT PRIMARY KEY,
+                ruling_id TEXT NOT NULL,
+                reviewer_id TEXT NOT NULL,
+                signature TEXT NOT NULL,
+                approval_status TEXT NOT NULL,
+                reviewed_at INTEGER NOT NULL,
+                FOREIGN KEY(ruling_id) REFERENCES arbitration_rulings(ruling_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
+            CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
+            CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);",
         )?;
         // Migration idempotente (2026-09-04, Couche 8: audit deontique
         // historique): `adn_relations` existe deja sur les bases reelles de
@@ -694,6 +758,146 @@ impl AdnStore {
             out.push(r?);
         }
         Ok(out)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PHASE 3: Arbitrage Persistence Methods (Layer 3b)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Save an arbitrage case to the database
+    pub fn save_arbitrage_case(&self, case: &ArbitrageCase) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO arbitrage_cases
+                (case_id, initiator, subject, status, created_at, updated_at, assigned_arbiters)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &case.case_id, &case.initiator, &case.subject, &case.status,
+                &case.created_at, &case.updated_at, &case.assigned_arbiters
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve an arbitrage case by ID
+    pub fn get_arbitrage_case(&self, case_id: &str) -> Result<Option<ArbitrageCase>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT case_id, initiator, subject, status, created_at, updated_at, assigned_arbiters
+                 FROM arbitrage_cases WHERE case_id = ?1",
+                params![case_id],
+                |row| {
+                    Ok(ArbitrageCase {
+                        case_id: row.get(0)?,
+                        initiator: row.get(1)?,
+                        subject: row.get(2)?,
+                        status: row.get(3)?,
+                        created_at: row.get(4)?,
+                        updated_at: row.get(5)?,
+                        assigned_arbiters: row.get(6)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Save an arbitration ruling
+    pub fn save_arbitrage_ruling(&self, ruling: &DbArbitrationRuling) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO arbitration_rulings
+                (ruling_id, case_id, ruling_text, decided_by, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                &ruling.ruling_id, &ruling.case_id, &ruling.ruling_text,
+                &ruling.decided_by, &ruling.status, &ruling.created_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve a ruling by ID
+    pub fn get_arbitrage_ruling(&self, ruling_id: &str) -> Result<Option<DbArbitrationRuling>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT ruling_id, case_id, ruling_text, decided_by, status, created_at
+                 FROM arbitration_rulings WHERE ruling_id = ?1",
+                params![ruling_id],
+                |row| {
+                    Ok(ArbitrationRuling {
+                        ruling_id: row.get(0)?,
+                        case_id: row.get(1)?,
+                        ruling_text: row.get(2)?,
+                        decided_by: row.get(3)?,
+                        status: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Retrieve ruling by case ID
+    pub fn get_ruling_by_case(&self, case_id: &str) -> Result<Option<DbArbitrationRuling>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT ruling_id, case_id, ruling_text, decided_by, status, created_at
+                 FROM arbitration_rulings WHERE case_id = ?1",
+                params![case_id],
+                |row| {
+                    Ok(ArbitrationRuling {
+                        ruling_id: row.get(0)?,
+                        case_id: row.get(1)?,
+                        ruling_text: row.get(2)?,
+                        decided_by: row.get(3)?,
+                        status: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Save a peer review signature
+    pub fn save_peer_review(&self, review: &DbPeerReviewSignature) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO peer_review_signatures
+                (review_id, ruling_id, reviewer_id, signature, approval_status, reviewed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                &review.review_id, &review.ruling_id, &review.reviewer_id,
+                &review.signature, &review.approval_status, &review.reviewed_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get all peer reviews for a specific ruling
+    pub fn get_peer_reviews_for_ruling(&self, ruling_id: &str) -> Result<Vec<DbPeerReviewSignature>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT review_id, ruling_id, reviewer_id, signature, approval_status, reviewed_at
+             FROM peer_review_signatures WHERE ruling_id = ?1 ORDER BY reviewed_at"
+        )?;
+        let rows = stmt.query_map(params![ruling_id], |row| {
+            Ok(DbPeerReviewSignature {
+                review_id: row.get(0)?,
+                ruling_id: row.get(1)?,
+                reviewer_id: row.get(2)?,
+                signature: row.get(3)?,
+                approval_status: row.get(4)?,
+                reviewed_at: row.get(5)?,
+            })
+        })?;
+        let mut reviews = Vec::new();
+        for row in rows {
+            reviews.push(row?);
+        }
+        Ok(reviews)
+    }
+
+    /// Get all active arbiters (stub for now, would need an arbiters table)
+    pub fn get_active_arbiters(&self) -> Result<Vec<String>, rusqlite::Error> {
+        // Placeholder: in production, would query from an arbiters table
+        // For now, return empty — integration tests can mock this
+        Ok(Vec::new())
     }
 }
 
