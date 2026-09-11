@@ -89,3 +89,13 @@ features = ["rand_core"]
 # cles/signatures Ed25519. Petite dependance dediee plutot que refaire un
 # encodeur hex a la main.
 version = "0.4"
+
+[dependencies.chrono]
+# DateTime timestamps for audit trails, member health tracking, case lifecycle
+version = "0.4"
+features = ["serde"]
+
+[dependencies.uuid]
+# Case ID generation (arbitrage system)
+version = "1"
+features = ["v4", "serde"]
