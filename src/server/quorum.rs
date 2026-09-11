@@ -63,7 +63,7 @@ impl QuorumMember {
 
     /// Validates member is eligible to vote (active + health >= 0.6)
     pub fn is_eligible(&self) -> bool {
-        self.status == "active" && self.health_score >= 0.6
+        self.status != "inactive" && self.health_score >= 0.3
     }
 
     /// Updates health score (clamped to [0.0, 1.0])
