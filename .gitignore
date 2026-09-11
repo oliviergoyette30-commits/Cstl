@@ -18,3 +18,5 @@ graphify-out/
 # jamais versionnes (voir dashboard/CSTL_OS.app/Contents/MacOS/CSTL_OS).
 dashboard/logs/
 .claude/worktrees/
+Claude outputs/
+sdk/python/castle_mode_b/
