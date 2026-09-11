@@ -822,7 +822,7 @@ impl AdnStore {
                  FROM arbitration_rulings WHERE ruling_id = ?1",
                 params![ruling_id],
                 |row| {
-                    Ok(ArbitrationRuling {
+                    Ok(DbArbitrationRuling {
                         ruling_id: row.get(0)?,
                         case_id: row.get(1)?,
                         ruling_text: row.get(2)?,
@@ -843,7 +843,7 @@ impl AdnStore {
                  FROM arbitration_rulings WHERE case_id = ?1",
                 params![case_id],
                 |row| {
-                    Ok(ArbitrationRuling {
+                    Ok(DbArbitrationRuling {
                         ruling_id: row.get(0)?,
                         case_id: row.get(1)?,
                         ruling_text: row.get(2)?,
