@@ -13,6 +13,7 @@ pub mod handler;
 pub mod quorum;
 pub mod arbitrage;
 pub mod castle;
+pub mod wai;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
