@@ -17,6 +17,7 @@ pub mod wai;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use serde_json;
 
 use crate::agent_discovery::AgentRegistry;
 use crate::kb_verify::KbVerifier;
@@ -63,6 +64,10 @@ pub struct CstlNativeServer {
     /// ca, toujours reconstruit vide (`with_defaults()`), meme quand la
     /// base SQLite avait deja de l'historique de breaker/drift sur disque.
     pub governance: Arc<Mutex<GovernanceTracker>>,
+    /// Couche 10 (WAI) -- Registre de dictionnaires pour compression reseau
+    /// statique. Le dictionnaire v5.0.0 est charge au demarrage et partage
+    /// par tous les agents sur le meme serveur.
+    pub wai_registry: Arc<wai::DictionaryRegistry>,
 }
 
 impl CstlNativeServer {
@@ -130,12 +135,30 @@ impl CstlNativeServer {
             .map_err(|e| format!("impossible de charger les alertes de gouvernance persistees depuis '{data_path}': {e}"))?;
         let governance = GovernanceTracker::with_defaults_restored(&governance_events, &governance_alerts);
 
+        // Initialise le registre WAI avec le dictionnaire statique v5.0.0
+        let mut wai_registry = wai::DictionaryRegistry::new("cstl-v5.0.0".to_string());
+        let standard_dict = wai::DictionaryVersion::new_standard_cstl_v5_0_0();
+        let dict_hash = standard_dict.version_hash.clone();
+        let dict_timestamp = standard_dict.timestamp;
+        let dict_symbols_json = serde_json::to_string(&standard_dict.symbols)
+            .unwrap_or_default();
+        let dict_size = standard_dict.size_bytes;
+
+        // Enregistre le dictionnaire dans la memoire du serveur
+        wai_registry.register_version(standard_dict.clone());
+
+        // Persiste le dictionnaire dans la base ADN pour les demarrages futurs
+        adn_store
+            .save_wai_dictionary(&dict_hash, dict_timestamp, &dict_symbols_json, dict_size)
+            .map_err(|e| format!("impossible de sauvegarder le dictionnaire WAI v5.0.0: {e}"))?;
+
+        let adn_store_arc = Arc::new(Mutex::new(adn_store));
         Ok(CstlNativeServer {
             port,
             agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
             chain: Arc::new(Mutex::new(chain)),
             kb_verifier: Arc::new(KbVerifier::new()),
-            adn_store: Arc::new(Mutex::new(adn_store)),
+            adn_store: adn_store_arc,
             // Portee reduite v1, decision explicite de l'utilisateur: un seul membre
             // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
             // decrit dans le README.
@@ -154,6 +177,7 @@ impl CstlNativeServer {
             // propre, le serveur marche pareil sans escalade Obsidian.
             obsidian: ObsidianEscalation::from_env().map(Arc::new),
             governance: Arc::new(Mutex::new(governance)),
+            wai_registry: Arc::new(wai_registry),
         })
     }
 

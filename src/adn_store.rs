@@ -214,9 +214,17 @@ impl AdnStore {
                 reviewed_at INTEGER NOT NULL,
                 FOREIGN KEY(ruling_id) REFERENCES arbitration_rulings(ruling_id)
             );
+            CREATE TABLE IF NOT EXISTS wai_dictionaries (
+                dictionary_hash TEXT PRIMARY KEY,
+                timestamp INTEGER NOT NULL,
+                symbols_json TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
-            CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);",
+            CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);
+            CREATE INDEX IF NOT EXISTS idx_wai_dictionaries_created ON wai_dictionaries(created_at);",
         )?;
         // Migration idempotente (2026-09-04, Couche 8: audit deontique
         // historique): `adn_relations` existe deja sur les bases reelles de
@@ -898,6 +906,57 @@ impl AdnStore {
         // Placeholder: in production, would query from an arbiters table
         // For now, return empty — integration tests can mock this
         Ok(Vec::new())
+    }
+
+    /// Save a WAI dictionary version to persistent storage
+    pub fn save_wai_dictionary(
+        &self,
+        dictionary_hash: &str,
+        timestamp: u64,
+        symbols_json: &str,
+        size_bytes: usize,
+    ) -> Result<(), rusqlite::Error> {
+        let created_at = now_unix();
+        self.conn.execute(
+            "INSERT OR IGNORE INTO wai_dictionaries
+             (dictionary_hash, timestamp, symbols_json, size_bytes, created_at)
+             VALUES (?, ?, ?, ?, ?)",
+            params![dictionary_hash, timestamp as i64, symbols_json, size_bytes as i64, created_at],
+        )?;
+        Ok(())
+    }
+
+    /// Load a WAI dictionary version by hash
+    pub fn load_wai_dictionary(&self, dictionary_hash: &str) -> Result<Option<(u64, String, usize)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT timestamp, symbols_json, size_bytes FROM wai_dictionaries WHERE dictionary_hash = ?"
+        )?;
+
+        let result = stmt.query_row([dictionary_hash], |row| {
+            let timestamp: i64 = row.get(0)?;
+            let symbols_json: String = row.get(1)?;
+            let size_bytes: i64 = row.get(2)?;
+            Ok((timestamp as u64, symbols_json, size_bytes as usize))
+        }).optional()?;
+
+        Ok(result)
+    }
+
+    /// Get all WAI dictionaries (for discovery)
+    pub fn list_wai_dictionaries(&self) -> Result<Vec<(String, u64, usize)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT dictionary_hash, timestamp, size_bytes FROM wai_dictionaries ORDER BY created_at DESC"
+        )?;
+
+        let dicts = stmt.query_map([], |row| {
+            let hash: String = row.get(0)?;
+            let timestamp: i64 = row.get(1)?;
+            let size_bytes: i64 = row.get(2)?;
+            Ok((hash, timestamp as u64, size_bytes as usize))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(dicts)
     }
 }
 

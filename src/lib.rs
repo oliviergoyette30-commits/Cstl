@@ -15,3 +15,4 @@ pub mod obsidian_escalation;
 pub mod emergence;
 pub mod governance;
 pub mod signing;
+pub mod wai_compression;

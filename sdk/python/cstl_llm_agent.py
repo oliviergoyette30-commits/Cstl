@@ -5,6 +5,7 @@ Autonomous agent dialogue with peer-mode self (alice ↔ bob ↔ charlie)
 """
 
 import sys
+import os
 import json
 import socket
 import time
@@ -76,47 +77,44 @@ def load_or_create_keypair(keyfile: Path) -> Tuple[Optional[bytes], str]:
 
 
 def cstl_signing_bytes(version: str, mode: str, meta: dict, intent: dict, relations: list) -> bytes:
-    """Generate canonical CSTL signing bytes (NFC + BTreeMap sort)"""
+    """
+    Generate canonical CSTL signing bytes (Rust/Python byte-for-byte identical).
+    Format: VERSION|v\nMODE|m\nMETA|k=v|k=v|...\nINTENT|k=v|k=v|...\nRELATIONS|...
+    Matches src/server/audit.rs::signing_bytes() exactly.
+    """
     import unicodedata
 
-    # NFC normalization
-    def normalize_value(v):
-        if isinstance(v, str):
-            return unicodedata.normalize('NFC', v)
-        return v
+    # NFC normalization (same as Rust)
+    def nfc(s):
+        return unicodedata.normalize('NFC', str(s))
 
-    # Build canonical representation
-    lines = []
-    lines.append(f"#!CSTL {version} MODE={mode}")
+    canon = []
+    canon.append(f"VERSION|{nfc(version)}")
+    canon.append(f"MODE|{nfc(mode)}")
 
-    # META (sorted)
+    # META (sorted by key, BTreeMap order)
     meta_filtered = {k: v for k, v in meta.items() if k != "PARENT_HASH"}
-    for k in sorted(meta_filtered.keys()):
-        v = normalize_value(meta_filtered[k])
-        if "," in str(v) or "]" in str(v):
-            v = f'"{v}"'
-        lines.append(f"META [{k}={v}]")
+    meta_parts = [f"{nfc(k)}={nfc(v)}" for k, v in sorted(meta_filtered.items())]
+    canon.append("META" + ("|" + "|".join(meta_parts) if meta_parts else ""))
 
     # INTENT (sorted, exclude signature/rotation_signature)
     intent_filtered = {k: v for k, v in intent.items()
                       if k not in ("signature", "rotation_signature")}
-    for k in sorted(intent_filtered.keys()):
-        v = normalize_value(intent_filtered[k])
-        if "," in str(v) or "]" in str(v):
-            v = f'"{v}"'
-        lines.append(f"INTENT_PAYLOAD [{k}={v}]")
+    intent_parts = [f"{nfc(k)}={nfc(v)}" for k, v in sorted(intent_filtered.items())]
+    canon.append("INTENT" + ("|" + "|".join(intent_parts) if intent_parts else ""))
 
-    # RELATIONS
+    # RELATIONS (each relation sorted, then relations list sorted)
+    rel_strings = []
     for rel in relations:
         rel_filtered = {k: v for k, v in rel.items()
                        if k not in ("signature", "rotation_signature")}
-        for k in sorted(rel_filtered.keys()):
-            v = normalize_value(rel_filtered[k])
-            if "," in str(v) or "]" in str(v):
-                v = f'"{v}"'
-            lines.append(f"RELATION [{k}={v}]")
+        rel_parts = [f"{nfc(k)}={nfc(v)}" for k, v in sorted(rel_filtered.items())]
+        rel_strings.append(",".join(rel_parts))
+    rel_strings.sort()
 
-    text = "\n".join(lines)
+    canon.append("RELATIONS" + ("|" + "|".join(rel_strings) if rel_strings else ""))
+
+    text = "\n".join(canon)
     return text.encode("utf-8")
 
 

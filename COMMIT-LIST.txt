@@ -1,0 +1,7 @@
+4c554e8 Add WAI-Absolute performance benchmark demonstrating sub-microsecond decoding
+176a612 Analyse élite multiangle finale — Programmeur/Scientifique/Linguiste
+d728412 Fix Python cstl_llm_agent signing format to match Rust byte-for-byte
+9a91925 WAI Layer 10 - Intégration complète de toutes les tactiques de compression
+331ab74 Analyse complète multi-angle CSTL v5.0.0 en format CSTL
+8e49504 Documentation complète des trois features: B-1 (registre mutable), A (Ed25519), B-2 (agent_register), C (LLM Agent Python)
+90d0b75 Implémentation complète du dictionnaire statique WAI v5.0.0
