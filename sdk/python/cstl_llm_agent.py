@@ -182,7 +182,7 @@ class AnthropicAgentBrain(LLMProvider):
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         try:
             msg = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-3-5-sonnet-20250515",
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -201,7 +201,7 @@ class GeminiAgentBrain(LLMProvider):
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not set")
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-pro")
+        self.model = genai.GenerativeModel("gemini-1.5-pro")
 
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         try:
