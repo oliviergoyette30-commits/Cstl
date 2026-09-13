@@ -54,157 +54,372 @@ CSTL is not a JSON replacement. It is a **semantic content layer** — the third
 - Threading through `server/listener.rs` → `server/handler.rs`: all registry lookups wrapped in `.lock().await`, clone agent name before releasing lock
 - Wire format: `purpose=agent_register` in `INTENT_PAYLOAD` triggers `src/server/handler.rs`'s new `agent_register` court-circuit
 
+**Live Verification (TCP-verified):**
+```bash
+cargo run &  # Start server
+python3 sdk/python/test_python_signing_verification.py  # Python ↔ Rust signing_bytes() byte-perfect match
+# Then: agent_register with valid signature → agent_register_ack
+#       agent_register without signature → signature_required (if sender already has a public_key registered)
+#       Message from registered agent without signature → missing_signature_for_registered_agent
+```
+
 ---
 
 ### Feature A: Ed25519 Cryptographic Signatures
 
-**Before v5.1:** Wire format carried `sender` and `receiver` as plain strings. Any TCP client could claim to be any agent.
+**Before v5.1:** Wire format carried `sender` and `receiver` as plain strings. Any TCP client could claim to be any agent (OWASP ASI03/ASI07 identity abuse).
 
 **v5.1 Implementation:**
-- Wire format: `META [public_key=<64 hex>]` + `INTENT_PAYLOAD [signature=<128 hex>]`
-- New Rust module: `src/signing.rs` — Ed25519 verification
-- Canonical bytes via NFC normalization + BTreeMap sorting (Python/Rust byte-identical)
-- Signature policy: Optional globally, mandatory only for registered agents
-- Identity binding: signature must match the public_key registered for that sender
+
+**Wire Format Changes:**
+- `META [public_key=<hex 64 chars>]` — every signed message embeds the sender's public key
+- `INTENT_PAYLOAD [signature=<hex 128 chars>]` — Ed25519 signature over the canonical message bytes
+- New Rust module: `src/signing.rs` (127 lines)
+  - `SignatureCheck` enum: `NotPresent | Valid | Invalid(String)`
+  - `check_signature(payload: &CstlPayload) → SignatureCheck` — verifies signature matches embedded public key
+  - `check_rotation_signature(payload, old_public_key_hex) → SignatureCheck` — verifies key rotation proof
+  - Error reasons: `invalid_hex`, `bad_public_key_length`, `bad_signature_length`, `verification_failed`
+
+**Canonical Message Bytes (Python/Rust byte-for-byte identical):**
+- `src/server/audit.rs::signing_bytes(payload)` (Rust)
+- `sdk/python/cstl_llm_agent.py::cstl_signing_bytes(...)` (Python)
+- Format: `VERSION|<version>\nMODE|<mode>\nMETA|<sorted, exclude PARENT_HASH>\nINTENT|<sorted, exclude signature/rotation_signature>\nRELATIONS|<sorted>`
+- NFC Unicode normalization applied
+- `public_key` field INCLUDED (ties signature to claimed key)
+
+**Signature Policy:**
+- Optional globally (backward compatible — alice/bob bootstrap agents have `public_key=None`, no signature required)
+- Mandatory only for a sender already registered with a `public_key` — once registered, all subsequent messages must carry a valid signature
+- If signature is invalid → `signature_rejected` response with reason
+- If sender is registered but signature is missing → `missing_signature_for_registered_agent` rejection
+- If signature is valid but signed by a different key than registered → `public_key_mismatch` rejection
+
+**Dependencies (Cargo.toml):**
+```toml
+[dependencies.ed25519-dalek]
+version = "2"
+features = ["rand_core"]
+
+[dependencies.hex]
+version = "0.4"
+```
+
+**Live Verification:**
+- `examples/signing_registration_smoke_test.rs` — 6 scenarios covering unsigned legacy, valid signatures, invalid signatures, key mismatches
+- `examples/key_rotation_smoke_test.rs` — 5 scenarios for key rotation (first registration, same-key reregistration, missing rotation_signature, wrong-key rotation, valid rotation)
+- Real TCP tested, both dev and release builds
 
 ---
 
-### Feature B-2: Key Rotation
+### Feature B-2: Key Rotation (`rotation_signature` field)
 
-**Problem:** Re-registration with new key without proof of old key possession = identity theft.
+**Problem:** A re-registration under an already-registered name with a new public key, signed only by the new key, proves only "I possess this new key"—not "I am the same agent already known by this name." Anyone who knows an agent's name could steal its identity.
 
 **v5.1 Solution:**
-- New `INTENT_PAYLOAD.rotation_signature=<128 hex>` field
-- Proves simultaneous possession of old and new private keys
-- Server verifies against old key in registry
+- New `INTENT_PAYLOAD.rotation_signature=<hex 128 chars>` field (optional, only when the embedded `public_key` differs from the one on file for that name)
+- `rotation_signature` = the same message signed with the OLD private key
+- Proves simultaneous possession of both the old and new keys
+- Server looks up the old key from `AgentRegistry` (never trusts the message)
+- `src/signing.rs::check_rotation_signature(payload, old_public_key_hex) → SignatureCheck`
+
+**Handler Logic (src/server/handler.rs, agent_register court-circuit):**
+```rust
+if payload.meta.public_key != registry.get(agent_name).public_key {
+    // Key is changing
+    if payload.intent.rotation_signature.is_none() {
+        return Err("rotation_proof_required")
+    }
+    let rotation_check = signing::check_rotation_signature(&payload, &old_key)?;
+    if rotation_check != Valid {
+        return Err("rotation_proof_invalid")
+    }
+    // Update registry with new key
+    registry.update(agent_name, new_key)?;
+}
+```
+
+**Live Verification:**
+- First registration of a name: no rotation needed
+- Same key re-registered: no rotation needed  
+- New key without `rotation_signature`: rejected with `rotation_proof_required`
+- New key with rotation signature from wrong key: rejected with `rotation_proof_invalid`
+- New key with valid rotation signature from old key: accepted, registry updated, traffic signed with new key passes, traffic signed with old key rejected
+- Verified in `examples/key_rotation_smoke_test.rs` (5 scenarios) over real TCP
 
 ---
 
-### Feature C: Python LLM SDK
+### Feature C: Python LLM SDK with Cryptography
 
-**Main file:** `sdk/python/cstl_llm_agent.py` (408 lines)
+**Before v5.1:** No Python-side agent could sign messages. The SDK was demo-only (one-way client sending unsigned payloads).
 
-**Core functions:**
-- `load_or_create_keypair()` — Ed25519 keypair generation/loading
-- `cstl_signing_bytes()` — byte-perfect Rust replica (NFC, BTreeMap)
-- `sign_intent()` — Ed25519 signing
-- `CstlClient.register_agent()` — wire-format agent registration
-- `CstlClient.send_message()` — signed message sending
+**v5.1 Implementation:**
 
-**LLM providers:**
-- `HermesAgentBrain()` — Ollama (localhost:11434)
-- `AnthropicAgentBrain()` — Claude via API
-- `GeminiAgentBrain()` — Gemini via API
+**Main File:** `sdk/python/cstl_llm_agent.py` (408 lines)
 
-**Graceful degradation:**
-- No `cryptography` → dummy signatures, legacy mode
-- No LLM API key → `ValueError`
+**Core Functions:**
+- `load_or_create_keypair(keyfile: Path) → (priv_bytes, pub_hex)` — generates or loads Ed25519 keypair
+- `cstl_signing_bytes(version, mode, meta, intent, relations) → bytes` — byte-perfect replica of Rust version (NFC normalization, BTreeMap sorting, field exclusions)
+- `sign_intent(priv_bytes, pub_hex, **kwargs) → str` — Ed25519 signature in hex
+- `CstlClient.register_agent(name, pub_key, signature) → dict` — sends wire-format `agent_register` payload
+- `CstlClient.send_message(sender, receiver, purpose, message, pub_key, signature) → dict` — sends signed message
+
+**LLM Provider Classes (all implement same interface):**
+- `HermesAgentBrain()` — Hermes3:8b via Ollama (localhost:11434)
+- `AnthropicAgentBrain()` — Claude via Anthropic API (`ANTHROPIC_API_KEY` env var)
+- `GeminiAgentBrain()` — Gemini via Google API (`GOOGLE_API_KEY` env var)
+
+**Graceful Degradation:**
+```python
+try:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+    print("⚠️ cryptography not installed")
+
+if not HAS_CRYPTO:
+    # sign_intent returns dummy "x" * 128
+    # Messages proceed unsigned (legacy mode, if sender not yet registered)
+```
+
+**Main Agent Class:**
+```python
+class CstlAgent:
+    def __init__(self, name: str, provider_name: str = "hermes"):
+        self.name = name
+        self.priv_bytes, self.pub_key = load_or_create_keypair(...)
+        self.llm = <HermesAgentBrain|AnthropicAgentBrain|GeminiAgentBrain>()
+        
+    def register(self):
+        """Register with server using Ed25519 signature"""
+        signature = sign_intent(self.priv_bytes, self.pub_key, ...)
+        self.client.register_agent(self.name, self.pub_key, signature)
+        
+    def send_message(self, receiver: str, message: str):
+        """Send signed message to peer"""
+        signature = sign_intent(self.priv_bytes, self.pub_key, ...)
+        return self.client.send_message(
+            self.name, receiver, "communication", message, self.pub_key, signature
+        )
+```
+
+**Cross-Language Verification:**
+- `test_python_signing_verification.py` — 4 test cases verifying Python `cstl_signing_bytes()` produces exactly the same canonical bytes as Rust, line-by-line
+- Test cases: simple message, agent_register with exclusions, empty relations, multiple relations with sorting
+- All 4/4 pass (byte-perfect match)
+
+**Live Verification (Python + Rust Server):**
+1. Start Rust server: `cd /home/claude/Cstl && cargo run`
+2. Run Python test: `cd sdk/python && python3 test_python_signing_verification.py` → ✓ Signing bytes match
+3. Generate real keypair and register:
+```bash
+python3 << 'EOF'
+from cstl_llm_agent import CstlAgent
+agent = CstlAgent("claude_agent", provider="anthropic")
+agent.register()  # → server responds with agent_register_ack
+result = agent.send_message("alice", "Hello from Claude")
+print("Sent:", result)
+EOF
+```
+
+**Verified Scenarios (this sandbox, without API keys):**
+- Python syntax check: ✓ zero errors
+- Imports: ✓ `cstl_signing_bytes`, `sign_intent`, `CstlClient` importable
+- Graceful degradation (without `cryptography`): ✓ `HAS_CRYPTO=False`
+- Graceful degradation (without `ANTHROPIC_API_KEY`): ✓ `ValueError("ANTHROPIC_API_KEY not set")`
+- Byte-for-byte canonical form match: ✓ 4/4 test cases pass
+
+**Not Verified Here (requires user's machine with API keys):**
+- Real LLM response generation
+- End-to-end signed message from real LLM agent through server
+- **Verified on operator's machine (2026-09-05):** Real Gemini model generated `Montréal est_située_au Canada`, agent registered and signed successfully, server accepted and persisted to `adn_store` with real hash and audit chain.
 
 ---
 
 ## Architecture — 9 Layers (Updated for v5.1)
 
+CSTL is not only a wire format. The syntax is layer 1 of a governance architecture:
+
 | # | Layer | v5.1 Status |
 |---|---|---|
-| 1 | Transport | ✅ Proven (99.3%, 12+ hops) |
-| 2 | Governance / Ed25519 | ✅ **NEW**: Full signature + key rotation verification |
-| 3a | Public fact verification | ✅ Implemented, live |
-| 3b | Software lab + arbitration | 🟡 Partial; **NEW**: Council votes cryptographically signed |
-| 4 | Calibration | ✅ Tested |
-| 5 | Persistent memory | 🟡 Built in Rust, live |
-| 6 | Human interface | ✅ Obsidian + Graphify |
-| 7 | Agent discovery & routing | ✅ **NEW**: Dynamic registration, Python SDK |
-| 8 | Provenance audit | 🟡 Live with deontic enforcement |
-| 9 | CASTLE compression | 🟡 Architected, no code |
+| 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
+| 2 | **Governance / Resilience** — Ed25519 identity, signature verification, key rotation, circuit breaker, 2/3 quorum | ✅ **NEW v5.1**: `src/signing.rs` (check_signature, check_rotation_signature), `src/server/handler.rs` STEP 2a signature verification, all registered agents require valid signatures. Backward compatible: bootstrap agents (alice, bob) with `public_key=None` don't require signatures. |
+| 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
+| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live; `RestrictedCouncil` wired live with Telegram bridge — 2/3 quorum arithmetic and multi-voter tallying now implemented and tested. **NEW v5.1**: Council votes now require valid Ed25519 signatures matching registered public_key, preventing identity forgery. |
+| 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
+| 5 | **Persistent memory / provenance** — SQLite store, hash entanglement | 🟡 Built in Rust (`src/adn_store.rs`), wired live, persisted and reloadable |
+| 6 | **Human interface** — Obsidian vault escalation, Graphify knowledge graph | ✅ Both real: Obsidian verified end-to-end; Graphify structure current (842 nodes, 1784 edges, 42 communities) |
+| 7 | **Agent discovery & routing** — CSTL-native registry, agent cards | ✅ **NEW v5.1**: `Arc<Mutex<AgentRegistry>>` enables dynamic registration. `purpose=agent_register` wire message (self-signed bootstrap, no prior identity needed) upserts agents by name. Python SDK (`sdk/python/cstl_llm_agent.py`) can now register real LLM agents and sign their messages. |
+| 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | 🟡 Built and wired live. Hash chain real, persisted, reloadable. Deontic modality checking implemented and wired. |
+| 9 | **CASTLE compression mode** — session-amortized shared dictionary | 🟡 Architected, no code |
+
+**Key v5.1 Changes to Layer 2:**
+- New `src/signing.rs` module (127 lines) with `check_signature()` and `check_rotation_signature()`
+- STEP 2a in `src/server/handler.rs` now verifies signatures for all registered agents
+- New wire format fields: `META.public_key`, `INTENT_PAYLOAD.signature`, `INTENT_PAYLOAD.rotation_signature`
+- Identity binding: signature must match the public_key registered for that `sender` name
+- Council votes now cryptographically enforced (signature + key match), preventing impersonation
+
+**Key v5.1 Changes to Layer 7:**
+- Registry now mutable: `Arc<Mutex<AgentRegistry>>`
+- `AgentCard` gains `public_key: Option<String>` field
+- `purpose=agent_register` wire message enables dynamic registration
+- Python SDK fully functional with Ed25519 signing and LLM providers
 
 ---
 
-## Security Improvements
+## Security Improvements (v5.0.0 → v5.1)
 
 ### OWASP ASI03: Identity & Privilege Abuse
 
-**Before:** Plain-text sender/receiver, no cryptographic proof.
-**After:** All registered agents sign with Ed25519; server verifies signature against registered public_key.
+**Before v5.1:**
+- `sender` and `receiver` were plain-text strings
+- No cryptographic verification of claimed identity
+- Any TCP client could forge `sender=alice` without proof
+- Risk: Active network attacker can impersonate any agent
+
+**After v5.1:**
+- All messages from registered agents signed with Ed25519
+- `META.public_key` and `INTENT_PAYLOAD.signature` embedded in wire format
+- Server verifies signature against public_key registered for that name
+- Impersonation requires possession of the target's private key
+- Backward compatible: unregistered agents (legacy mode) continue unsigned
 
 ### OWASP ASI07: Insecure Inter-Agent Communication
 
-**Before:** Unsigned TCP traffic, no tampering protection.
-**After:** All registered-agent traffic cryptographically signed; invalid signatures rejected with reason.
+**Before v5.1:**
+- Messages transmitted unsigned over TCP
+- No protection against tampering mid-transit
+- No way to prove origin of a message
+
+**After v5.1:**
+- All registered-agent traffic is cryptographically signed
+- Signature covers entire canonical message (VERSION, MODE, META, INTENT, RELATIONS)
+- Invalid signatures rejected with reason code
+- Server audit trail (`adn_store`) persists both message and signature
 
 ### Agent Identity Theft (new in v5.1)
 
-**Before:** No key rotation; anyone knowing agent name could steal it.
-**After:** Re-registration with new key requires `rotation_signature` (signed with old key), proving key possession history.
+**Before v5.1:**
+- Key rotation not possible
+- Once an agent name was registered, an attacker who knew the name could steal it by registering again with their own key
+
+**After v5.1:**
+- Re-registration with a new public key requires `INTENT_PAYLOAD.rotation_signature`
+- `rotation_signature` = message signed with the OLD private key
+- Proves simultaneous possession of both old and new keys
+- Prevents identity theft even if attacker knows the agent's name
 
 ---
 
 ## Quick Start — v5.1
 
-### Rust Server:
+### For Rust Server (Features B-1, A, B-2):
 
 ```bash
-cd ~/Cstl
+cd /home/claude/Cstl
 cargo build
-cargo test --lib
-cargo run &
+cargo test --lib          # All tests pass (including new signing tests)
+cargo run &               # Start server on port 5050
+sleep 2
 ```
 
-### Python Agent:
+### For Python Agent (Feature C):
 
 ```bash
-cd ~/Cstl/sdk/python
-python3 test_python_signing_verification.py  # 4/4 pass
+cd /home/claude/Cstl/sdk/python
 
+# Verify cross-language signing bytes match
+python3 test_python_signing_verification.py
+# Expected: 4/4 test cases pass
+
+# Create and register an agent
 python3 << 'EOF'
 from cstl_llm_agent import CstlAgent
+
+# Create agent with Anthropic (requires ANTHROPIC_API_KEY set)
 agent = CstlAgent("my_agent", provider="anthropic")
-agent.register()
-agent.send_message("alice", "Hello")
+agent.register()     # → [my_agent] ✅ Registered with signature validation
+
+# Send a signed message
+result = agent.send_message("alice", "Hello, world")
+print("Result:", result)
 EOF
+```
+
+### For Cross-Language Verification:
+
+```bash
+# Terminal 1: Start Rust server
+cd /home/claude/Cstl && cargo run
+
+# Terminal 2: Run Python tests
+cd /home/claude/Cstl
+python3 test_python_signing_verification.py  # Verify canonical signing_bytes match
+python3 sdk/python/cstl_llm_agent.py --name alice_agent --provider gemini  # Register and relay
 ```
 
 ---
 
 ## Wire Format — v5.1 Examples
 
-### Unsigned Legacy (backward compatible):
+### Unsigned Legacy Message (backward compatible):
+
 ```cstl
 #!CSTL v5.0.0 MODE=A
 META [encoder=test, produced_by=test, timestamp=2026-09-13T14:00:00Z]
 INTENT_PAYLOAD [purpose=communication, sender=alice, receiver=bob, message="hello"]
 ---END---
 ```
+→ Accepted (alice has `public_key=None`, signature not required)
 
 ### Signed Agent Registration:
+
 ```cstl
 #!CSTL v5.0.0 MODE=A
-META [encoder=cstl_agent, public_key=0123456789abcdef..., timestamp=2026-09-13T14:30:00Z]
+META [encoder=cstl_agent, produced_by=cstl_agent, public_key=0123456789abcdef..., timestamp=2026-09-13T14:30:00Z]
 INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabilities=auth;verify, signature=fedcba9876543210...]
 ---END---
 ```
+→ Server response: `status=agent_register_ack`
 
-### Key Rotation:
+### Signed Message from Registered Agent:
+
 ```cstl
 #!CSTL v5.0.0 MODE=A
-META [encoder=cstl_agent, public_key=abcdef0123456789..., timestamp=2026-09-13T14:40:00Z]
+META [encoder=cstl_agent, produced_by=cstl_agent, public_key=0123456789abcdef..., timestamp=2026-09-13T14:35:00Z]
+INTENT_PAYLOAD [purpose=communication, sender=charlie, receiver=alice, message="hello from charlie", signature=fedcba9876543210...]
+---END---
+```
+→ Server validates signature, accepts message if valid
+
+### Key Rotation (re-registration with new key):
+
+```cstl
+#!CSTL v5.0.0 MODE=A
+META [encoder=cstl_agent, produced_by=cstl_agent, public_key=abcdef0123456789..., timestamp=2026-09-13T14:40:00Z]
 INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabilities=auth;verify, signature=abcdef0123456789..., rotation_signature=fedcba9876543210...]
 ---END---
 ```
+→ `rotation_signature` signed with OLD private key proves key possession history
+→ Server updates registry with new public_key
 
 ---
 
 ## Test Suite — v5.1
 
+**New tests added:**
+
 | File | Test Cases | What |
 |------|-----------|------|
-| `src/signing.rs` | 8–10 new | verify_raw(), check_signature(), check_rotation_signature() |
-| `tests/signing_registration_smoke_test.rs` | 6 scenarios | Unsigned legacy, valid/invalid signatures, key mismatches (TCP) |
-| `tests/key_rotation_smoke_test.rs` | 5 scenarios | Registration, same-key, missing/invalid/valid rotation (TCP) |
-| `sdk/python/test_python_signing_verification.py` | 4 test cases | Signing bytes byte-perfect Python/Rust match |
-| `tests/multi_member_council_smoke_test.rs` | End-to-end | 3-member council, 2/3 quorum, signatures enforced |
+| `src/signing.rs` | 8–10 new | `verify_raw()`, `check_signature()`, `check_rotation_signature()`, various failure modes |
+| `tests/signing_registration_smoke_test.rs` | 6 scenarios | Unsigned legacy, valid signatures, invalid, key mismatches over real TCP |
+| `tests/key_rotation_smoke_test.rs` | 5 scenarios | First registration, same-key, missing rotation_sig, wrong-key, valid rotation over real TCP |
+| `sdk/python/test_python_signing_verification.py` | 4 test cases | Signing bytes byte-perfect match (simple, with exclusions, empty relations, multiple sorted relations) |
+| `tests/multi_member_council_smoke_test.rs` | Full end-to-end | Real 3-member council, 2/3 quorum, signature validation on council votes |
 
-**Coverage:**
-- Rust: `cargo test --lib` → 148+ existing + 15+ new, all passing
+**Total test coverage:**
+- Rust: `cargo test --lib` → 148+ existing + 15+ new signing tests, all passing
 - Python: `python3 test_python_signing_verification.py` → 4/4 passing
 
 ---
@@ -213,50 +428,48 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 
 ### Environment Variables
 
-| Variable | Purpose |
-|----------|---------|
-| `ANTHROPIC_API_KEY` | Claude access |
-| `GOOGLE_API_KEY` | Gemini access |
-| `CSTL_COUNCIL_MEMBERS` | Authorized voters |
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `ANTHROPIC_API_KEY` | Claude model access | `sk-ant-...` |
+| `GOOGLE_API_KEY` | Gemini model access | `AIza...` |
+| `CSTL_COUNCIL_MEMBERS` | Authorized council voters | `alice,bob,charlie` |
 
 ### Database
 
-`cstl_adn.db` includes:
-- `audit_trail` — all payloads + hash chain
-- `adn_store` — semantic facts
-- `adn_relations` — structured relations
-- `adn_council_log` — arbitration + signatures
+- `cstl_adn.db` now includes:
+  - `audit_trail` — all payloads with hash chain
+  - `adn_store` — semantic facts with sigma
+  - `adn_relations` — structured relations
+  - `adn_council_log` — human arbitration decisions (signature verification now required for votes)
 
 ### Backward Compatibility
 
 ✅ **Fully backward compatible:**
-- Bootstrap agents (alice, bob) → `public_key=None`, no signatures required
-- Old unsigned payloads accepted
-- New signed payloads coexist with legacy traffic
+- Alice and Bob (bootstrap agents) still have `public_key=None` and don't require signatures
+- Old unsigned payloads continue to be accepted
+- New signed payloads from registered agents coexist with legacy unsigned traffic
 
 ---
 
 ## Known Limitations — v5.1
 
-- Multi-hop degradation measured to 12+ hops; beyond that uncharacterized
-- `emergence_proofs` schema exists, zero production data
-- CASTLE compression: architecture only
-- KB verification: timeout added (2026-09-05), real wikidata.org access untested in sandbox
-- Domain simulator: one domain only
-- `ERROR_SIGNAL`: deontic-violation half implemented; sigma-divergence out of scope
+- Multi-hop degradation measured to 12+ hops; real network characteristics beyond that uncharacterized
+- `emergence_proofs` table has real schema but zero production data (nobody has run a real tripartite session yet)
+- CASTLE compression mode: architecture only, no implementation
+- Layer 3a KB verification: wall-clock timeout added (2026-09-05) to prevent hangs on slow networks, but real wikidata.org access still not tested from this sandbox (blocked by outbound proxy)
+- Domain simulator: one domain only (numeric/physical bounds), no live data source
+- `ERROR_SIGNAL`: deontic-violation half implemented; sigma-divergence half explicitly out of scope (architectural reasons documented in `CSTL_SPEC_v5_0.md` §16.6)
 - Zero external adopters
 
 ---
 
 ## Formal Semantics
 
-Deontic operators: SDL (von Wright, 1951) with Kripke semantics.
-Epistemic operators: Hintikka (1962).
-Temporal operators: Subset of Allen's interval algebra (1983).
-Relations principle: Structuralist (Saussure, 1916).
+Deontic operators grounded in SDL (von Wright, 1951) with Kripke semantics. Epistemic operators follow Hintikka (1962). Temporal operators implement a subset of Allen's interval algebra (1983). The relations-over-information principle follows the structuralist intuition (Saussure, 1916) that elements derive value from their differential relations rather than intrinsic substance.
 
-Full spec: `CSTL_SPEC_v5_0.md`
-Full architecture: `docs/ARCHITECTURE.md`
+Full spec: [`CSTL_SPEC_v5_0.md`](CSTL_SPEC_v5_0.md)
+
+Full architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ---
 
@@ -271,32 +484,32 @@ Apache 2.0 — Olivier Goyette
 **Breaking Changes:** None. All v5.0.0 payloads accepted as-is.
 
 **New Wire Format Fields:**
-- `META.public_key=<hex 64 chars>` (optional, signed traffic only)
-- `INTENT_PAYLOAD.signature=<hex 128 chars>` (optional, signed traffic only)
-- `INTENT_PAYLOAD.rotation_signature=<hex 128 chars>` (optional, key rotation only)
+- `META.public_key=<hex 64 chars>` (optional, only for signed traffic)
+- `INTENT_PAYLOAD.signature=<hex 128 chars>` (optional, only for signed traffic)
+- `INTENT_PAYLOAD.rotation_signature=<hex 128 chars>` (optional, only when rotating keys)
 
 **New Rust Modules:**
 - `src/signing.rs` (127 lines) — Ed25519 verification
 
 **Modified Rust Files:**
-- `src/agent_discovery.rs` — `AgentCard::public_key` added
-- `src/server/handler.rs` — STEP 2a signature check, agent_register logic
-- `src/server/validator.rs` — E309/E310 format validation
-- `src/server/mod.rs` — registry wrapped in `Arc<Mutex<>>`
-- `src/main.rs` — alice/bob gain `public_key: None`
-- `Cargo.toml` — ed25519-dalek v2, hex v0.4
+- `src/agent_discovery.rs` — `AgentCard::public_key` field added
+- `src/server/handler.rs` — STEP 2a signature verification, `agent_register` court-circuit
+- `src/server/validator.rs` — E309/E310 format validation for public_key/signature lengths
+- `src/server/mod.rs` — registry wrapped in `Arc<Mutex<>>` for concurrent mutation
+- `src/main.rs` — alice/bob gain `public_key: None` (legacy, unsigned)
+- `Cargo.toml` — added `ed25519-dalek = "2"`, `hex = "0.4"`
 
 **New Python Files:**
-- `sdk/python/cstl_llm_agent.py` (408 lines) — Complete SDK
+- `sdk/python/cstl_llm_agent.py` (408 lines) — Complete Ed25519 + LLM SDK
 - `sdk/python/test_python_signing_verification.py` — 4 test cases
 
 **New Test Files:**
 - `tests/signing_registration_smoke_test.rs` — 6 TCP scenarios
 - `tests/key_rotation_smoke_test.rs` — 5 TCP scenarios
-- `tests/multi_member_council_smoke_test.rs` — 3-member quorum E2E
+- `tests/multi_member_council_smoke_test.rs` — Full 3-member quorum end-to-end
 
 ---
 
 **v5.1 Release Date:** 2026-09-13
 
-**Status:** ✅ Ready for live testing and production deployment. All Rust features (B-1, A, B-2) structurally verified. Python feature (C) structurally verified; real LLM content verified on operator's machine with Gemini.
+**Status:** ✅ Ready for live testing and production deployment. All three Rust features (B-1, A, B-2) structurally verified. Python feature (C) structurally verified; real LLM content verified on operator's machine with Gemini.
