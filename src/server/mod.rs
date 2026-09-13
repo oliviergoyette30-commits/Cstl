@@ -14,6 +14,9 @@ pub mod quorum;
 pub mod arbitrage;
 pub mod castle;
 pub mod wai;
+pub mod parser;
+pub mod validator;
+pub mod audit;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -26,6 +29,21 @@ use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
 use crate::obsidian_escalation::ObsidianEscalation;
 use crate::governance::GovernanceTracker;
+
+/// Contexte serveur partagé — regroupe tous les sous-systèmes accessibles
+/// par une connexion (registre, chaîne d'audit, ADN store, conseil, etc.)
+/// en un seul Arc<ServerContext> plutôt que 9 paramètres séparés.
+/// Allége la signature de handle_connection (Couche 7, 2026-09-04).
+pub struct ServerContext {
+    pub agent_registry: Arc<Mutex<AgentRegistry>>,
+    pub chain: Arc<Mutex<audit::HashChain>>,
+    pub kb_verifier: Arc<KbVerifier>,
+    pub adn_store: Arc<Mutex<AdnStore>>,
+    pub restricted_council: Arc<RestrictedCouncil>,
+    pub telegram: Option<Arc<TelegramNotifier>>,
+    pub obsidian: Option<Arc<ObsidianEscalation>>,
+    pub governance: Arc<Mutex<GovernanceTracker>>,
+}
 
 pub struct CstlNativeServer {
     pub port: u16,
@@ -195,14 +213,25 @@ impl CstlNativeServer {
         } else {
             eprintln!("[CSTL-Native Server] Telegram desactive (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents)");
         }
-        
+
         let addr = format!("0.0.0.0:{}", self.port);
         let listener = listener::create_listener(&addr).await?;
-        
+
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
-        
-        listener::accept_connections(listener, self.agent_registry.clone(), self.chain.clone(), self.kb_verifier.clone(), self.adn_store.clone(), self.restricted_council.clone(), self.telegram.clone(), self.obsidian.clone(), self.governance.clone()).await?;
-        
+
+        let ctx = ServerContext {
+            agent_registry: self.agent_registry.clone(),
+            chain: self.chain.clone(),
+            kb_verifier: self.kb_verifier.clone(),
+            adn_store: self.adn_store.clone(),
+            restricted_council: self.restricted_council.clone(),
+            telegram: self.telegram.clone(),
+            obsidian: self.obsidian.clone(),
+            governance: self.governance.clone(),
+        };
+
+        listener::accept_connections(listener, Arc::new(ctx)).await?;
+
         Ok(())
     }
 }
@@ -217,9 +246,3 @@ mod tests {
         assert_eq!(server.port, 5000);
     }
 }
-
-pub mod parser;
-
-pub mod validator;
-
-pub mod audit;
