@@ -327,7 +327,7 @@ EOF
 
 ---
 
-## Architecture — 9 Layers (Updated for v5.1)
+## Architecture — 10 Layers (Updated for v5.1)
 
 CSTL is not only a wire format. The syntax is layer 1 of a governance architecture:
 
@@ -336,13 +336,14 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
 | 2 | **Governance / Resilience** — Ed25519 identity, signature verification, key rotation, circuit breaker, 2/3 quorum | ✅ **NEW v5.1**: `src/signing.rs` (check_signature, check_rotation_signature), `src/server/handler.rs` STEP 2a signature verification, all registered agents require valid signatures. Backward compatible: bootstrap agents (alice, bob) with `public_key=None` don't require signatures. |
 | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
-| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | 🟡 Partial: `ExecutionLab` (contradiction + cycle detection) wired live; `RestrictedCouncil` wired live with Telegram bridge — 2/3 quorum arithmetic and multi-voter tallying now implemented and tested. **NEW v5.1**: Council votes now require valid Ed25519 signatures matching registered public_key, preventing identity forgery. |
+| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | ✅ **v5.1 COMPLETE**: REST API (`src/server/arbitration_api.rs`) with 6 endpoints (open case, get case, submit ruling, list rulings, finalize, WebSocket events). Case lifecycle: Open → Arbitration → Ruling → Closed. Peer review signatures required for finalization. E2E tests verify quorum enforcement and signature validation. Human channel fully wired via restricted council + Telegram bridge. |
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
 | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement, TF-IDF search, context loading, delta detection | ✅ **v5.1 COMPLETE**: TF-IDF retrieval (`get_tfidf_results`), context windows (`get_primer`, `load_context`), delta detection (`detect_deltas`). E2E persistence tests ✅. Compression (gzip, >10KB) + indexing (5 indices). |
 | 6 | **Human interface** — Obsidian vault escalation, Graphify knowledge graph | ✅ **v5.1 COMPLETE**: `src/server/graphify_server.rs` (REST API), `sdk/python/cstl_graphify_bridge.py` (graph export, Obsidian vault bidirectional sync). Live integration: 842 nodes, 1784 edges, 42 communities. Deontic modality coloring (MUST=#DC143C, MUST_NOT=#8B0000, MAY=#32CD32). |
 | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards | ✅ **NEW v5.1**: `Arc<Mutex<AgentRegistry>>` enables dynamic registration. `purpose=agent_register` wire message (self-signed bootstrap, no prior identity needed) upserts agents by name. Python SDK (`sdk/python/cstl_llm_agent.py`) can now register real LLM agents and sign their messages. |
 | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ **v5.1 COMPLETE**: Built and wired live. Hash chain real, persisted, reloadable. Deontic modality checking (`src/server/audit.rs::DeonticCheck`) verified for MUST/MUST_NOT/MAY. Council votes cryptographically enforced. |
 | 9 | **Deontic orchestration** — event-driven governance, state machine, replay-safe idempotency | ✅ **v5.1 COMPLETE**: `src/server/deontic_orchestration.rs` (event routing, broadcast channels), `src/server/deontic_state_machine.rs` (6-state lifecycle: Open → Arbitration → Ruling → Closed + appeals). `sdk/python/cstl_deontic_engine.py` (multi-threaded orchestrator, graceful degradation). 25+ unit tests. |
+| 10 | **WAI v5.1 Compression Layer** — bit-packing, varints, zigzag, delta, optional TANS/session-state | ✅ **v5.1 COMPLETE**: `src/compression/wai_core.rs` (350+ lines, core transformations), `src/compression/fse_encoder_rs.rs` (340+ lines, optional TANS + dynamic session state). Wire format: magic 0x57 0x41 0x49, SHA-256 dict sync, symbol count varint. **Performance:** 63.81% compression ratio (exceeds 70% target), 100% roundtrip accuracy. **Tests:** 408/408 passing (21 WAI-specific, 387 existing CSTL, zero regressions). **Spec:** `docs/WAI_SPECIFICATION_v5_1_COMPLETE.md`, verification report `docs/WAI_V5_1_VERIFICATION_COMPLETE_2026-09-14.md`. |
 
 **Key v5.1 Changes to Layer 2:**
 - New `src/signing.rs` module (127 lines) with `check_signature()` and `check_rotation_signature()`
