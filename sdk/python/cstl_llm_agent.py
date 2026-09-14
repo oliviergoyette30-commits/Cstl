@@ -225,8 +225,8 @@ class CstlClient:
 
         payload = (
             f"#!CSTL v5.0.0 MODE=A\n"
-            f"META [sender={sender}, receiver={receiver}, public_key={pub_key}, timestamp={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}]\n"
-            f"INTENT_PAYLOAD [purpose={purpose}, message={message}, signature={signature}]\n"
+            f"META [encoder=cstl_agent, produced_by=cstl_agent, time.gmtime())}]\n"
+            f"INTENT_PAYLOAD [purpose={purpose}, message=\"{message}\", signature={signature}]\n"
             f"---END---\n"
         )
 
@@ -234,6 +234,7 @@ class CstlClient:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(self.timeout)
             sock.connect((self.host, self.port))
+            print(f"[DEBUG PAYLOAD]\n{payload}\n")
             sock.sendall(payload.encode("utf-8"))
 
             response = sock.recv(4096)
