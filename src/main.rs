@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create registry and register agents
     let mut registry = AgentRegistry::new();
-    
+
     registry.register(AgentCard {
         name: "alice".to_string(),
         version: "5.0.0".to_string(),
@@ -50,8 +50,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("📡 Starting server on port 5050...");
     eprintln!("💬 Ready to receive CSTL payloads\n");
 
-    // Start server
-    server.start().await?;
+    // Couche 5c: Start REST API server on port 8000 in parallel with TCP server
+    // This allows HTTP access to audit trail while TCP server handles CSTL payloads
+    let adn_store_for_rest = server.adn_store.clone();
 
-    Ok(())
+    eprintln!("🌐 Starting REST API server on port 8000...");
+    eprintln!("   GET /health → health check");
+    eprintln!("   GET /audit/{{case_id}} → audit trail JSON");
+    eprintln!("   POST /audit/query → filter audit by date/entity/action");
+    eprintln!("   GET /audit/stats → audit statistics\n");
+
+    let rest_api_handle = tokio::spawn(async move {
+        if let Err(e) = cstl_parser::server::rest_api::start_rest_api(
+            adn_store_for_rest,
+            "127.0.0.1",
+            8000,
+        ).await {
+            eprintln!("❌ REST API server error: {}", e);
+        }
+    });
+
+    // Start TCP server (blocks until shutdown)
+    let tcp_result = server.start().await;
+
+    // Cancel REST API server if TCP server shuts down
+    rest_api_handle.abort();
+
+    tcp_result
 }

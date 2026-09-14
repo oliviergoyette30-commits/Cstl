@@ -21,6 +21,7 @@ use crate::semantic::{is_fipa_performative, negotiation_status_for};
 use super::parser;
 use super::validator;
 use super::ServerContext;
+use super::arbitrage;
 
 /// Cherche `---END---` dans `buf` et retourne l'offset EXCLUSIF juste apres
 /// (et apres le `\n` qui suit immediatement, s'il y en a un) -- c'est-a-dire
@@ -439,6 +440,153 @@ pub async fn handle_connection(
                                     error!("[Handler] detect_emergence failed: {}", e);
                                     "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_failed, detail=internal_error]\n---END---\n".to_string()
                                 }
+                            }
+                        };
+
+                        socket.write_all(response.as_bytes()).await?;
+                        continue;
+                    }
+
+                    // STEP 3b-arbitrage: Arbitration channel (Couche 3b, ExecutionLab)
+                    // — purpose=arbitrage_channel traite les cas d'arbitrage detectes
+                    // par les couches precedentes (contradictions, non-conformite, etc.)
+                    // Ce bloc gère: ouverture de cas, soumission de rulings, finalization
+                    // Court-circuite le reste du pipeline comme council_decision.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("arbitrage_channel") {
+                        let action = payload.intent.get("action").cloned().unwrap_or_default();
+                        let case_id = payload.intent.get("case_id").cloned();
+
+                        let response = match action.as_str() {
+                            "open_case" => {
+                                let source = payload.intent.get("escalation_source").cloned().unwrap_or_default();
+                                let contradiction = payload.intent.get("contradiction_type").cloned().unwrap_or_default();
+                                let description = payload.intent.get("description").cloned().unwrap_or_default();
+
+                                if source.is_empty() || contradiction.is_empty() {
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=missing_required_fields]\n---END---\n".to_string()
+                                } else {
+                                    let contradiction_type = match contradiction.as_str() {
+                                        "mutually_exclusive" => arbitrage::ContradictionType::MutuallyExclusive,
+                                        "logical_break" => arbitrage::ContradictionType::LogicalBreak,
+                                        "refusal_to_comply" => arbitrage::ContradictionType::RefusalToComply,
+                                        "invalid_proof" => arbitrage::ContradictionType::InvalidProof,
+                                        _ => arbitrage::ContradictionType::MutuallyExclusive,
+                                    };
+
+                                    match arbitrage::open_case_async(&ctx.adn_store, source.clone(), contradiction_type, description).await {
+                                        Ok(new_case_id) => {
+                                            info!("[Handler] Arbitrage case opened: {}", new_case_id);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=arbitrage_case_opened, case_id={}, escalation_source={}]\n---END---\n",
+                                                new_case_id, source
+                                            )
+                                        }
+                                        Err(e) => {
+                                            error!("[Handler] Failed to open arbitrage case: {}", e);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=case_open_failed]\n---END---\n"
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            "assign_arbiters" => {
+                                match case_id {
+                                    Some(cid) => {
+                                        let count: usize = payload.intent.get("arbiter_count")
+                                            .and_then(|c| c.parse().ok())
+                                            .unwrap_or(3);
+
+                                        match arbitrage::assign_arbiters_async(&ctx.adn_store, &cid, count).await {
+                                            Ok(assigned) => {
+                                                info!("[Handler] Arbiters assigned to case {}: {:?}", cid, assigned);
+                                                let arbiter_list = assigned.join(";");
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=arbiters_assigned, case_id={}, assigned_arbiters={}]\n---END---\n",
+                                                    cid, arbiter_list
+                                                )
+                                            }
+                                            Err(e) => {
+                                                error!("[Handler] Failed to assign arbiters: {}", e);
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=assignment_failed]\n---END---\n"
+                                                )
+                                            }
+                                        }
+                                    }
+                                    None => {
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=missing_case_id]\n---END---\n".to_string()
+                                    }
+                                }
+                            }
+                            "submit_ruling" => {
+                                let arbiter_id = payload.intent.get("arbiter_id").cloned().unwrap_or_default();
+                                let decision = payload.intent.get("decision").cloned().unwrap_or_default();
+                                let justification = payload.intent.get("justification").cloned().unwrap_or_default();
+                                let signature = payload.meta.get("signature").cloned().unwrap_or_default();
+
+                                match case_id {
+                                    Some(cid) if !arbiter_id.is_empty() => {
+                                        let ruling_id = format!("ruling_{}", uuid::Uuid::new_v4().to_string());
+                                        let ruling = arbitrage::ArbitrationRuling {
+                                            ruling_id,
+                                            case_id: cid.clone(),
+                                            arbiter_id,
+                                            decision,
+                                            justification,
+                                            signature,
+                                            ruled_at: chrono::Utc::now(),
+                                        };
+
+                                        match arbitrage::submit_ruling_async(&ctx.adn_store, ruling).await {
+                                            Ok(_) => {
+                                                info!("[Handler] Ruling submitted on case {}", cid);
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=ruling_submitted, case_id={}]\n---END---\n",
+                                                    cid
+                                                )
+                                            }
+                                            Err(e) => {
+                                                error!("[Handler] Failed to submit ruling: {}", e);
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=ruling_submission_failed]\n---END---\n"
+                                                )
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=missing_case_or_arbiter]\n---END---\n".to_string()
+                                    }
+                                }
+                            }
+                            "finalize_case" => {
+                                match case_id {
+                                    Some(cid) => {
+                                        match arbitrage::finalize_case_async(&ctx.adn_store, &ctx.restricted_council, &cid).await {
+                                            Ok(final_ruling) => {
+                                                info!("[Handler] Case {} finalized", cid);
+                                                let peer_count = final_ruling.peer_reviews.len();
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=case_finalized, case_id={}, decision={}, peer_reviews={}]\n---END---\n",
+                                                    cid, final_ruling.ruling.decision, peer_count
+                                                )
+                                            }
+                                            Err(e) => {
+                                                error!("[Handler] Failed to finalize case: {}", e);
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=finalization_failed, detail={}]\n---END---\n",
+                                                    e.to_string().replace("\"", "\\\"")
+                                                )
+                                            }
+                                        }
+                                    }
+                                    None => {
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=missing_case_id]\n---END---\n".to_string()
+                                    }
+                                }
+                            }
+                            _ => {
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=unknown_action]\n---END---\n".to_string()
                             }
                         };
 

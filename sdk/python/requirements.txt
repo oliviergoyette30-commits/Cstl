@@ -1,0 +1,5 @@
+# Couche 5c: REST API Server for ADN Store Audit Trail
+fastapi==0.115.0
+uvicorn==0.32.0
+pydantic==2.6.0
+python-multipart==0.0.6

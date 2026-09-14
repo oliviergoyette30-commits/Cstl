@@ -168,6 +168,18 @@ version = "0.8"
 # Fixes CVE-2025-53605 (stack overflow via uncontrolled recursion)
 version = "3.7.2"
 
+[dependencies.axum]
+# Web framework for REST API (Layer 5c: FastAPI integration)
+version = "0.7"
+
+[dependencies.tower]
+# Middleware framework for axum
+version = "0.4"
+
+[dependencies.tower-http]
+# Tower HTTP utilities (CORS, tracing)
+version = "0.5"
+
 [dev-dependencies.env_logger]
 # Logger implementation for tests and development
 version = "0.11"

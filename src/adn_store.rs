@@ -221,10 +221,26 @@ impl AdnStore {
                 size_bytes INTEGER NOT NULL,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS deontic_executions (
+                execution_id TEXT PRIMARY KEY,
+                rule_id TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                modality TEXT NOT NULL,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS audit_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                comment TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
             CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);
-            CREATE INDEX IF NOT EXISTS idx_wai_dictionaries_created ON wai_dictionaries(created_at);",
+            CREATE INDEX IF NOT EXISTS idx_wai_dictionaries_created ON wai_dictionaries(created_at);
+            CREATE INDEX IF NOT EXISTS idx_deontic_executions_timestamp ON deontic_executions(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_audit_comments_timestamp ON audit_comments(timestamp);",
         )?;
         // Migration idempotente (2026-09-04, Couche 8: audit deontique
         // historique): `adn_relations` existe deja sur les bases reelles de
@@ -957,6 +973,61 @@ impl AdnStore {
         .collect::<Result<Vec<_>, _>>()?;
 
         Ok(dicts)
+    }
+
+    /// Couche 9: Save deontic execution record
+    pub fn save_deontic_execution(
+        &self,
+        execution: &crate::server::deontic_orchestration::DeonticExecution,
+    ) -> Result<(), rusqlite::Error> {
+        let execution_id = format!(
+            "{}_{}",
+            execution.rule_id,
+            execution.timestamp.timestamp()
+        );
+
+        let modality_str = match execution.modality {
+            crate::server::deontic_orchestration::DeonticModality::Must => "MUST",
+            crate::server::deontic_orchestration::DeonticModality::MustNot => "MUST_NOT",
+            crate::server::deontic_orchestration::DeonticModality::May => "MAY",
+        };
+
+        let result_str = match execution.result {
+            crate::server::deontic_orchestration::ExecutionResult::Success => "Success",
+            crate::server::deontic_orchestration::ExecutionResult::Rejected => "Rejected",
+            crate::server::deontic_orchestration::ExecutionResult::NoMatch => "NoMatch",
+            crate::server::deontic_orchestration::ExecutionResult::Failed => "Failed",
+        };
+
+        self.conn.execute(
+            "INSERT OR IGNORE INTO deontic_executions
+                (execution_id, rule_id, event_id, modality, action, result, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &execution_id,
+                &execution.rule_id,
+                &execution.event_id,
+                modality_str,
+                &execution.action,
+                result_str,
+                execution.timestamp.timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Couche 9: Append audit comment to the trail
+    pub fn append_comment(&self, comment: &str) -> Result<(), rusqlite::Error> {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT INTO audit_comments (comment, timestamp) VALUES (?1, ?2)",
+            params![comment, timestamp],
+        )?;
+        Ok(())
     }
 }
 

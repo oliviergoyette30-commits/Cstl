@@ -1,0 +1,155 @@
+{
+  "nodes": [
+    {
+      "id": "agent_alice",
+      "type": "agent_card",
+      "label": "alice (v5.1.0)",
+      "metadata": {
+        "name": "alice",
+        "version": "5.1.0",
+        "trust_score": 0.95,
+        "public_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "capabilities_count": 2
+      },
+      "timestamp": "2026-09-14T01:10:06.178063"
+    },
+    {
+      "id": "cap_fact_checking",
+      "type": "capability",
+      "label": "fact_checking",
+      "metadata": {
+        "capability_type": "fact_checking"
+      },
+      "timestamp": "2026-09-14T01:10:06.178092"
+    },
+    {
+      "id": "cap_semantic_analysis",
+      "type": "capability",
+      "label": "semantic_analysis",
+      "metadata": {
+        "capability_type": "semantic_analysis"
+      },
+      "timestamp": "2026-09-14T01:10:06.178099"
+    },
+    {
+      "id": "agent_bob",
+      "type": "agent_card",
+      "label": "bob (v5.1.0)",
+      "metadata": {
+        "name": "bob",
+        "version": "5.1.0",
+        "trust_score": 0.87,
+        "public_key": "none",
+        "capabilities_count": 2
+      },
+      "timestamp": "2026-09-14T01:10:06.178104"
+    },
+    {
+      "id": "cap_contradiction_detection",
+      "type": "capability",
+      "label": "contradiction_detection",
+      "metadata": {
+        "capability_type": "contradiction_detection"
+      },
+      "timestamp": "2026-09-14T01:10:06.178136"
+    },
+    {
+      "id": "agent_charlie",
+      "type": "agent_card",
+      "label": "charlie (v5.1.0)",
+      "metadata": {
+        "name": "charlie",
+        "version": "5.1.0",
+        "trust_score": 0.92,
+        "public_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "capabilities_count": 1
+      },
+      "timestamp": "2026-09-14T01:10:06.178142"
+    },
+    {
+      "id": "cap_execution_lab",
+      "type": "capability",
+      "label": "execution_lab",
+      "metadata": {
+        "capability_type": "execution_lab"
+      },
+      "timestamp": "2026-09-14T01:10:06.178145"
+    }
+  ],
+  "edges": [
+    {
+      "source": "agent_alice",
+      "target": "cap_fact_checking",
+      "type": "has_capability",
+      "properties": {
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_alice",
+      "target": "cap_semantic_analysis",
+      "type": "has_capability",
+      "properties": {
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_bob",
+      "target": "cap_fact_checking",
+      "type": "has_capability",
+      "properties": {
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_bob",
+      "target": "cap_contradiction_detection",
+      "type": "has_capability",
+      "properties": {
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_charlie",
+      "target": "cap_execution_lab",
+      "type": "has_capability",
+      "properties": {
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_alice",
+      "target": "agent_bob",
+      "type": "relays_to",
+      "properties": {
+        "purpose": "dialogue_turn",
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_bob",
+      "target": "agent_charlie",
+      "type": "relays_to",
+      "properties": {
+        "purpose": "verification_request",
+        "directional": true
+      }
+    },
+    {
+      "source": "agent_charlie",
+      "target": "agent_alice",
+      "type": "relays_to",
+      "properties": {
+        "purpose": "audit_result",
+        "directional": true
+      }
+    }
+  ],
+  "metadata": {
+    "node_count": 7,
+    "edge_count": 8,
+    "agent_count": 3,
+    "timestamp": "2026-09-14T01:10:06.178181",
+    "version": "5.1.0"
+  }
+}

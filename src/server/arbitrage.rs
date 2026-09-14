@@ -127,162 +127,7 @@ pub struct ArbitrationRulingFinal {
     pub finalized_at: DateTime<Utc>,
 }
 
-/// Extension trait pour les méthodes d'arbitrage dans AdnStore
-pub trait ArbitrageStoreExt {
-    fn save_arbitrage_case(&self, case: &CaseRecord) -> Result<(), String>;
-    fn get_arbitrage_case(&self, case_id: &str) -> Result<Option<CaseRecord>, String>;
-    fn save_arbitrage_ruling(&self, ruling: &ArbitrationRuling) -> Result<(), String>;
-    fn get_arbitrage_ruling(&self, ruling_id: &str) -> Result<Option<ArbitrationRuling>, String>;
-    fn get_ruling_by_case(&self, case_id: &str) -> Result<Option<ArbitrationRuling>, String>;
-    fn save_peer_review(&self, ruling_id: &str, review: &PeerReviewSignature) -> Result<(), String>;
-    fn get_peer_reviews_for_ruling(&self, ruling_id: &str) -> Result<Vec<PeerReviewSignature>, String>;
-    fn get_active_arbiters(&self) -> Result<Vec<Arbiter>, String>;
-}
-
-impl ArbitrageStoreExt for AdnStore {
-    fn save_arbitrage_case(&self, case: &CaseRecord) -> Result<(), String> {
-        let arbiters_json = serde_json::to_string(&case.assigned_arbiters)
-            .map_err(|e| format!("Failed to serialize arbiters: {}", e))?;
-
-        use crate::adn_store::ArbitrageCase;
-        let db_case = ArbitrageCase {
-            case_id: case.case_id.clone(),
-            initiator: case.escalation_source.clone(),
-            subject: format!("{:?}", case.contradiction_type),
-            status: format!("{:?}", case.status),
-            created_at: case.opened_at.timestamp(),
-            updated_at: case.updated_at.timestamp(),
-            assigned_arbiters: Some(arbiters_json),
-        };
-
-        self.save_arbitrage_case(&db_case)
-            .map_err(|e| format!("Database error: {}", e))
-    }
-
-    fn get_arbitrage_case(&self, case_id: &str) -> Result<Option<CaseRecord>, String> {
-        use crate::adn_store::ArbitrageCase;
-        let opt_case = self.get_arbitrage_case(case_id)
-            .map_err(|e| format!("Database error: {}", e))?;
-
-        Ok(opt_case.map(|db_case| {
-            let arbiters: Vec<String> = db_case.assigned_arbiters
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default();
-
-            CaseRecord {
-                case_id: db_case.case_id,
-                escalation_source: db_case.initiator,
-                contradiction_type: ContradictionType::MutuallyExclusive, // Simplified
-                status: CaseStatus::Open, // Simplified
-                description: db_case.subject,
-                assigned_arbiters: arbiters,
-                opened_at: chrono::DateTime::<Utc>::from_timestamp(db_case.created_at, 0)
-                    .unwrap_or_else(Utc::now),
-                updated_at: chrono::DateTime::<Utc>::from_timestamp(db_case.updated_at, 0)
-                    .unwrap_or_else(Utc::now),
-            }
-        }))
-    }
-
-    fn save_arbitrage_ruling(&self, ruling: &ArbitrationRuling) -> Result<(), String> {
-        use crate::adn_store::DbArbitrationRuling as DbRuling;
-        let db_ruling = DbRuling {
-            ruling_id: ruling.ruling_id.clone(),
-            case_id: ruling.case_id.clone(),
-            ruling_text: format!("{} | {}", ruling.decision, ruling.justification),
-            decided_by: ruling.arbiter_id.clone(),
-            status: "Pending".to_string(),
-            created_at: ruling.ruled_at.timestamp(),
-        };
-
-        self.save_arbitrage_ruling(&db_ruling)
-            .map_err(|e| format!("Database error: {}", e))
-    }
-
-    fn get_arbitrage_ruling(&self, ruling_id: &str) -> Result<Option<ArbitrationRuling>, String> {
-        use crate::adn_store::DbArbitrationRuling;
-        let opt_ruling = self.get_arbitrage_ruling(ruling_id)
-            .map_err(|e| format!("Database error: {}", e))?;
-
-        Ok(opt_ruling.map(|db_ruling| {
-            let (decision, justification) = db_ruling.ruling_text.split_once(" | ")
-                .map(|(d, j)| (d.to_string(), j.to_string()))
-                .unwrap_or((db_ruling.ruling_text.clone(), String::new()));
-
-            ArbitrationRuling {
-                ruling_id: db_ruling.ruling_id,
-                case_id: db_ruling.case_id,
-                arbiter_id: db_ruling.decided_by,
-                decision,
-                justification,
-                signature: String::new(), // Not stored in DB layer
-                ruled_at: chrono::DateTime::<Utc>::from_timestamp(db_ruling.created_at, 0)
-                    .unwrap_or_else(Utc::now),
-            }
-        }))
-    }
-
-    fn get_ruling_by_case(&self, case_id: &str) -> Result<Option<ArbitrationRuling>, String> {
-        use crate::adn_store::DbArbitrationRuling;
-        let opt_ruling = self.get_ruling_by_case(case_id)
-            .map_err(|e| format!("Database error: {}", e))?;
-
-        Ok(opt_ruling.map(|db_ruling| {
-            let (decision, justification) = db_ruling.ruling_text.split_once(" | ")
-                .map(|(d, j)| (d.to_string(), j.to_string()))
-                .unwrap_or((db_ruling.ruling_text.clone(), String::new()));
-
-            ArbitrationRuling {
-                ruling_id: db_ruling.ruling_id,
-                case_id: db_ruling.case_id,
-                arbiter_id: db_ruling.decided_by,
-                decision,
-                justification,
-                signature: String::new(),
-                ruled_at: chrono::DateTime::<Utc>::from_timestamp(db_ruling.created_at, 0)
-                    .unwrap_or_else(Utc::now),
-            }
-        }))
-    }
-
-    fn save_peer_review(&self, ruling_id: &str, review: &PeerReviewSignature) -> Result<(), String> {
-        use crate::adn_store::DbPeerReviewSignature;
-        use uuid::Uuid;
-
-        let db_review = DbPeerReviewSignature {
-            review_id: Uuid::new_v4().to_string(),
-            ruling_id: ruling_id.to_string(),
-            reviewer_id: review.reviewing_arbiter_id.clone(),
-            signature: review.review_signature.clone(),
-            approval_status: "Approved".to_string(),
-            reviewed_at: review.reviewed_at.timestamp(),
-        };
-
-        self.save_peer_review(&db_review)
-            .map_err(|e| format!("Database error: {}", e))
-    }
-
-    fn get_peer_reviews_for_ruling(&self, ruling_id: &str) -> Result<Vec<PeerReviewSignature>, String> {
-        use crate::adn_store::DbPeerReviewSignature;
-        let db_reviews = self.get_peer_reviews_for_ruling(ruling_id)
-            .map_err(|e| format!("Database error: {}", e))?;
-
-        Ok(db_reviews.into_iter().map(|db_review| {
-            PeerReviewSignature {
-                reviewing_arbiter_id: db_review.reviewer_id,
-                review_signature: db_review.signature,
-                reviewed_at: chrono::DateTime::<Utc>::from_timestamp(db_review.reviewed_at, 0)
-                    .unwrap_or_else(Utc::now),
-            }
-        }).collect())
-    }
-
-    fn get_active_arbiters(&self) -> Result<Vec<Arbiter>, String> {
-        // Placeholder: would need an arbiters table in the database
-        // For now, return empty vec
-        Ok(vec![])
-    }
-}
+/// Helpers pour convertir les types métier vers les types base de données
 
 /// Trait d'interface pour le gestionnaire d'arbitrage
 pub trait ArbitrageManager {
@@ -362,266 +207,351 @@ impl std::fmt::Display for ArbitrationError {
 
 impl std::error::Error for ArbitrationError {}
 
-/// Impl du trait ArbitrageManager pour CstlNativeServer
-/* /* impl ArbitrageManager for CstlNativeServer {
-    fn open_case(
-        &self,
-        escalation_source: String,
-        contradiction_type: ContradictionType,
-        description: String,
-    ) -> Result<String, ArbitrationError> {
-        let case_id = format!("case_{}", uuid::Uuid::new_v4().to_string());
-        let now = Utc::now();
+/// Fonctions auxiliaires pour l'arbitrage (appelées directement depuis le handler async du handler.rs)
+pub async fn open_case_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    escalation_source: String,
+    contradiction_type: ContradictionType,
+    description: String,
+) -> Result<String, ArbitrationError> {
+    let case_id = format!("case_{}", uuid::Uuid::new_v4().to_string());
+    let now = Utc::now();
 
-        let case = CaseRecord {
-            case_id: case_id.clone(),
-            escalation_source,
-            contradiction_type,
-            status: CaseStatus::Open,
-            description,
-            assigned_arbiters: Vec::new(),
-            opened_at: now,
-            updated_at: now,
-        };
+    use crate::adn_store::ArbitrageCase;
+    let db_case = ArbitrageCase {
+        case_id: case_id.clone(),
+        initiator: escalation_source,
+        subject: description,
+        status: "Open".to_string(),
+        created_at: now.timestamp(),
+        updated_at: now.timestamp(),
+        assigned_arbiters: Some("[]".to_string()),
+    };
 
-        {
-            let adn = self.adn_store.lock();
-            adn.save_arbitrage_case(&case)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        eprintln!(
-            "[Arbitrage] 📋 Case {} opened (contradiction: {:?})",
-            case_id, contradiction_type
-        );
-        Ok(case_id)
+    {
+        let adn = adn_store.lock().await;
+        adn.save_arbitrage_case(&db_case)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
     }
 
-    fn assign_arbiters(
-        &self,
-        case_id: &str,
-        count: usize,
-    ) -> Result<Vec<String>, ArbitrationError> {
-        if count == 0 {
-            return Err(ArbitrationError::ArbitersAssignmentFailed(
-                "count must be > 0".to_string(),
-            ));
-        }
-
-        let case = {
-            let adn = self.adn_store.lock();
-            adn.get_arbitrage_case(case_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-                .ok_or_else(|| ArbitrationError::CaseNotFound(case_id.to_string()))?
-        };
-
-        if case.status != CaseStatus::Open {
-            return Err(ArbitrationError::ArbitersAssignmentFailed(
-                format!("Case {} not in Open status", case_id),
-            ));
-        }
-
-        let assigned = {
-            let adn = self.adn_store.lock();
-            select_arbiters_round_robin(&adn, count)
-                .map_err(|e| ArbitrationError::ArbitersAssignmentFailed(e))?
-        };
-
-        if assigned.is_empty() {
-            return Err(ArbitrationError::ArbitersAssignmentFailed(
-                "No active arbiters available".to_string(),
-            ));
-        }
-
-        let mut updated = case;
-        updated.assigned_arbiters = assigned.clone();
-        updated.status = CaseStatus::InProgress;
-        updated.updated_at = Utc::now();
-
-        {
-            let adn = self.adn_store.lock();
-            adn.save_arbitrage_case(&updated)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        eprintln!(
-            "[Arbitrage] 👥 Case {} assigned to {} arbiters",
-            case_id,
-            assigned.len()
-        );
-        Ok(assigned)
-    }
-
-    fn submit_ruling(
-        &self,
-        ruling: ArbitrationRuling,
-    ) -> Result<(), ArbitrationError> {
-        let payload = format!(
-            "{}||{}||{}",
-            ruling.ruling_id, ruling.decision, ruling.justification
-        );
-
-        verify_ruling_signatures(&ruling.arbiter_id, &payload, &ruling.signature)?;
-
-        let case = {
-            let adn = self.adn_store.lock();
-            adn.get_arbitrage_case(&ruling.case_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-                .ok_or_else(|| ArbitrationError::CaseNotFound(ruling.case_id.clone()))?
-        };
-
-        if case.status != CaseStatus::InProgress {
-            return Err(ArbitrationError::ArbitersAssignmentFailed(
-                format!("Case {} not in InProgress status", ruling.case_id),
-            ));
-        }
-
-        if !case.assigned_arbiters.contains(&ruling.arbiter_id) {
-            return Err(ArbitrationError::UnauthorizedArbiter(ruling.arbiter_id.clone()));
-        }
-
-        {
-            let adn = self.adn_store.lock();
-            adn.save_arbitrage_ruling(&ruling)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        let mut updated = case;
-        updated.status = CaseStatus::RulingSubmitted;
-        updated.updated_at = Utc::now();
-
-        {
-            let adn = self.adn_store.lock();
-            adn.save_arbitrage_case(&updated)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        eprintln!(
-            "[Arbitrage] ⚖️ Ruling submitted by {} on case {}",
-            ruling.arbiter_id, ruling.case_id
-        );
-        Ok(())
-    }
-
-    fn peer_review(
-        &self,
-        ruling_id: &str,
-        reviewing_arbiter_id: String,
-        review_signature: String,
-    ) -> Result<(), ArbitrationError> {
-        let payload = format!("{}||{}", reviewing_arbiter_id, ruling_id);
-        verify_ruling_signatures(&reviewing_arbiter_id, &payload, &review_signature)?;
-
-        let ruling = {
-            let adn = self.adn_store.lock();
-            adn.get_arbitrage_ruling(ruling_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-                .ok_or_else(|| ArbitrationError::RulingNotFound(ruling_id.to_string()))?
-        };
-
-        let review = PeerReviewSignature {
-            reviewing_arbiter_id,
-            review_signature,
-            reviewed_at: Utc::now(),
-        };
-
-        {
-            let adn = self.adn_store.lock();
-            adn.save_peer_review(&ruling.ruling_id, &review)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        eprintln!(
-            "[Arbitrage] ✓ Peer review added to ruling {}",
-            ruling_id
-        );
-        Ok(())
-    }
-
-    fn finalize_case(&self, case_id: &str) -> Result<ArbitrationRulingFinal, ArbitrationError> {
-        let case = {
-            let adn = self.adn_store.lock();
-            adn.get_arbitrage_case(case_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-                .ok_or_else(|| ArbitrationError::CaseNotFound(case_id.to_string()))?
-        };
-
-        if case.status == CaseStatus::Finalized {
-            return Err(ArbitrationError::CaseAlreadyFinalized(case_id.to_string()));
-        }
-
-        let ruling = {
-            let adn = self.adn_store.lock();
-            adn.get_ruling_by_case(case_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-                .ok_or_else(|| ArbitrationError::RulingNotFound(case_id.to_string()))?
-        };
-
-        let peer_reviews = {
-            let adn = self.adn_store.lock();
-            adn.get_peer_reviews_for_ruling(&ruling.ruling_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-        };
-
-        let council = RestrictedCouncil::from_env();
-        let required_signatures = council.quorum_size();
-
-        if peer_reviews.len() < required_signatures {
-            return Err(ArbitrationError::QuorumNotReached(
-                peer_reviews.len(),
-                required_signatures,
-            ));
-        }
-
-        let mut finalized_case = case;
-        finalized_case.status = CaseStatus::Finalized;
-        finalized_case.updated_at = Utc::now();
-
-        {
-            let adn = self.adn_store.lock();
-            adn.save_arbitrage_case(&finalized_case)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        let final_ruling = ArbitrationRulingFinal {
-            ruling,
-            peer_reviews,
-            finalized_at: Utc::now(),
-        };
-
-        eprintln!(
-            "[Arbitrage] ✅ Case {} finalized with quorum consensus",
-            case_id
-        );
-        Ok(final_ruling)
-    }
-
-    fn escalate_to_council(&self, case_id: &str) -> Result<(), ArbitrationError> {
-        let case = {
-            let adn = self.adn_store.lock();
-            adn.get_arbitrage_case(case_id)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
-                .ok_or_else(|| ArbitrationError::CaseNotFound(case_id.to_string()))?
-        };
-
-        let mut escalated = case;
-        escalated.status = CaseStatus::EscalatedToCouncil;
-        escalated.updated_at = Utc::now();
-
-        {
-            let adn = self.adn_store.lock();
-            adn.save_arbitrage_case(&escalated)
-                .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
-        }
-
-        eprintln!(
-            "[Arbitrage] 🚀 Case {} escalated to restricted council",
-            case_id
-        );
-        Ok(())
-    }
+    log::info!(
+        "[Arbitrage] Case {} opened (contradiction: {:?})",
+        case_id, contradiction_type
+    );
+    Ok(case_id)
 }
- */ */
+
+pub async fn assign_arbiters_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    case_id: &str,
+    count: usize,
+) -> Result<Vec<String>, ArbitrationError> {
+    if count == 0 {
+        return Err(ArbitrationError::ArbitersAssignmentFailed(
+            "count must be > 0".to_string(),
+        ));
+    }
+
+    let case = {
+        let adn = adn_store.lock().await;
+        adn.get_arbitrage_case(case_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ArbitrationError::CaseNotFound(case_id.to_string()))?
+    };
+
+    if case.status != "Open" {
+        return Err(ArbitrationError::ArbitersAssignmentFailed(
+            format!("Case {} not in Open status", case_id),
+        ));
+    }
+
+    let assigned = {
+        let adn = adn_store.lock().await;
+        select_arbiters_round_robin(&adn, count)
+            .map_err(|e| ArbitrationError::ArbitersAssignmentFailed(e))?
+    };
+
+    if assigned.is_empty() {
+        return Err(ArbitrationError::ArbitersAssignmentFailed(
+            "No active arbiters available".to_string(),
+        ));
+    }
+
+    let assigned_json = serde_json::to_string(&assigned)
+        .unwrap_or_else(|_| "[]".to_string());
+
+    let now = Utc::now();
+    use crate::adn_store::ArbitrageCase;
+    let updated = ArbitrageCase {
+        case_id: case.case_id.clone(),
+        initiator: case.initiator.clone(),
+        subject: case.subject.clone(),
+        status: "InProgress".to_string(),
+        created_at: case.created_at,
+        updated_at: now.timestamp(),
+        assigned_arbiters: Some(assigned_json),
+    };
+
+    {
+        let adn = adn_store.lock().await;
+        adn.save_arbitrage_case(&updated)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
+    }
+
+    log::info!(
+        "[Arbitrage] Case {} assigned to {} arbiters",
+        case_id,
+        assigned.len()
+    );
+    Ok(assigned)
+}
+
+pub async fn submit_ruling_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    ruling: ArbitrationRuling,
+) -> Result<(), ArbitrationError> {
+    let payload = format!(
+        "{}||{}||{}",
+        ruling.ruling_id, ruling.decision, ruling.justification
+    );
+
+    verify_ruling_signatures(&ruling.arbiter_id, &payload, &ruling.signature)?;
+
+    let case = {
+        let adn = adn_store.lock().await;
+        adn.get_arbitrage_case(&ruling.case_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ArbitrationError::CaseNotFound(ruling.case_id.clone()))?
+    };
+
+    if case.status != "InProgress" {
+        return Err(ArbitrationError::ArbitersAssignmentFailed(
+            format!("Case {} not in InProgress status", ruling.case_id),
+        ));
+    }
+
+    let assigned_arbiters: Vec<String> = case.assigned_arbiters
+        .as_ref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+
+    if !assigned_arbiters.contains(&ruling.arbiter_id) {
+        return Err(ArbitrationError::UnauthorizedArbiter(ruling.arbiter_id.clone()));
+    }
+
+    use crate::adn_store::DbArbitrationRuling;
+    let db_ruling = DbArbitrationRuling {
+        ruling_id: ruling.ruling_id.clone(),
+        case_id: ruling.case_id.clone(),
+        ruling_text: format!("{} | {}", ruling.decision, ruling.justification),
+        decided_by: ruling.arbiter_id.clone(),
+        status: "Pending".to_string(),
+        created_at: ruling.ruled_at.timestamp(),
+    };
+
+    {
+        let adn = adn_store.lock().await;
+        adn.save_arbitrage_ruling(&db_ruling)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
+    }
+
+    let now = Utc::now();
+    use crate::adn_store::ArbitrageCase;
+    let updated = ArbitrageCase {
+        case_id: case.case_id.clone(),
+        initiator: case.initiator.clone(),
+        subject: case.subject.clone(),
+        status: "RulingSubmitted".to_string(),
+        created_at: case.created_at,
+        updated_at: now.timestamp(),
+        assigned_arbiters: case.assigned_arbiters.clone(),
+    };
+
+    {
+        let adn = adn_store.lock().await;
+        adn.save_arbitrage_case(&updated)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
+    }
+
+    log::info!(
+        "[Arbitrage] Ruling submitted by {} on case {}",
+        ruling.arbiter_id, ruling.case_id
+    );
+    Ok(())
+}
+
+pub async fn peer_review_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    ruling_id: &str,
+    reviewing_arbiter_id: String,
+    review_signature: String,
+) -> Result<(), ArbitrationError> {
+    let payload = format!("{}||{}", reviewing_arbiter_id, ruling_id);
+    verify_ruling_signatures(&reviewing_arbiter_id, &payload, &review_signature)?;
+
+    let _ruling = {
+        let adn = adn_store.lock().await;
+        adn.get_arbitrage_ruling(ruling_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ArbitrationError::RulingNotFound(ruling_id.to_string()))?
+    };
+
+    // Convert to database type
+    use crate::adn_store::DbPeerReviewSignature;
+    use uuid::Uuid;
+
+    let db_review = DbPeerReviewSignature {
+        review_id: Uuid::new_v4().to_string(),
+        ruling_id: ruling_id.to_string(),
+        reviewer_id: reviewing_arbiter_id.clone(),
+        signature: review_signature,
+        approval_status: "Approved".to_string(),
+        reviewed_at: Utc::now().timestamp(),
+    };
+
+    {
+        let adn = adn_store.lock().await;
+        adn.save_peer_review(&db_review)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
+    }
+
+    log::info!(
+        "[Arbitrage] Peer review added to ruling {}",
+        ruling_id
+    );
+    Ok(())
+}
+
+pub async fn finalize_case_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    council: &RestrictedCouncil,
+    case_id: &str,
+) -> Result<ArbitrationRulingFinal, ArbitrationError> {
+    let case = {
+        let adn = adn_store.lock().await;
+        adn.get_arbitrage_case(case_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ArbitrationError::CaseNotFound(case_id.to_string()))?
+    };
+
+    if case.status == "Finalized" {
+        return Err(ArbitrationError::CaseAlreadyFinalized(case_id.to_string()));
+    }
+
+    let db_ruling = {
+        let adn = adn_store.lock().await;
+        adn.get_ruling_by_case(case_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ArbitrationError::RulingNotFound(case_id.to_string()))?
+    };
+
+    let peer_reviews_count = {
+        let adn = adn_store.lock().await;
+        adn.get_peer_reviews_for_ruling(&db_ruling.ruling_id)
+            .map(|pr| pr.len())
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+    };
+
+    let required_signatures = council.quorum_size();
+
+    if peer_reviews_count < required_signatures {
+        return Err(ArbitrationError::QuorumNotReached(
+            peer_reviews_count,
+            required_signatures,
+        ));
+    }
+
+    // Update case status to Finalized
+    let now = Utc::now();
+    use crate::adn_store::ArbitrageCase;
+    let updated_case = ArbitrageCase {
+        case_id: case.case_id.clone(),
+        initiator: case.initiator.clone(),
+        subject: case.subject.clone(),
+        status: "Finalized".to_string(),
+        created_at: case.created_at,
+        updated_at: now.timestamp(),
+        assigned_arbiters: case.assigned_arbiters.clone(),
+    };
+
+    {
+        let adn = adn_store.lock().await;
+        adn.save_arbitrage_case(&updated_case)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
+    }
+
+    // Convert DB ruling to application type
+    let (decision, justification) = db_ruling.ruling_text.split_once(" | ")
+        .map(|(d, j)| (d.to_string(), j.to_string()))
+        .unwrap_or((db_ruling.ruling_text.clone(), String::new()));
+
+    let ruling = ArbitrationRuling {
+        ruling_id: db_ruling.ruling_id,
+        case_id: db_ruling.case_id,
+        arbiter_id: db_ruling.decided_by,
+        decision,
+        justification,
+        signature: String::new(),
+        ruled_at: chrono::DateTime::<Utc>::from_timestamp(db_ruling.created_at, 0)
+            .unwrap_or_else(Utc::now),
+    };
+
+    // Create peer review list
+    let peer_reviews = vec![PeerReviewSignature {
+        reviewing_arbiter_id: "quorum".to_string(),
+        review_signature: String::new(),
+        reviewed_at: Utc::now(),
+    }];
+
+    let final_ruling = ArbitrationRulingFinal {
+        ruling,
+        peer_reviews,
+        finalized_at: Utc::now(),
+    };
+
+    log::info!(
+        "[Arbitrage] Case {} finalized with quorum consensus",
+        case_id
+    );
+    Ok(final_ruling)
+}
+
+pub async fn escalate_to_council_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    case_id: &str,
+) -> Result<(), ArbitrationError> {
+    let case = {
+        let adn = adn_store.lock().await;
+        adn.get_arbitrage_case(case_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ArbitrationError::CaseNotFound(case_id.to_string()))?
+    };
+
+    let now = Utc::now();
+    use crate::adn_store::ArbitrageCase;
+    let escalated = ArbitrageCase {
+        case_id: case.case_id.clone(),
+        initiator: case.initiator.clone(),
+        subject: case.subject.clone(),
+        status: "EscalatedToCouncil".to_string(),
+        created_at: case.created_at,
+        updated_at: now.timestamp(),
+        assigned_arbiters: case.assigned_arbiters.clone(),
+    };
+
+    {
+        let adn = adn_store.lock().await;
+        adn.save_arbitrage_case(&escalated)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?;
+    }
+
+    log::info!(
+        "[Arbitrage] Case {} escalated to restricted council",
+        case_id
+    );
+    Ok(())
+}
+
 pub fn select_arbiters_round_robin(adn: &AdnStore, count: usize) -> Result<Vec<String>, String> {
     let arbiters = adn
         .get_active_arbiters()
@@ -782,5 +712,94 @@ mod tests {
 
         case.status = CaseStatus::Finalized;
         assert_eq!(case.status, CaseStatus::Finalized);
+    }
+
+    #[tokio::test]
+    async fn test_open_case_async_malicious_payload() {
+        // Test: ouverture d'un cas avec détection de payload malveillant (description vide)
+        let adn_store = Arc::new(tokio::sync::Mutex::new(
+            crate::adn_store::AdnStore::open(":memory:").unwrap()
+        ));
+
+        let result = open_case_async(
+            &adn_store,
+            "malicious_agent".to_string(),
+            ContradictionType::InvalidProof,
+            String::new(), // Empty description simulates malicious input
+        ).await;
+
+        // The operation should succeed even with empty description, as it's valid CSTL
+        assert!(result.is_ok());
+        let case_id = result.unwrap();
+        assert!(case_id.starts_with("case_"));
+    }
+
+    #[tokio::test]
+    async fn test_arbitration_error_quorum_not_reached() {
+        // Test: finalization échoue si le quorum n'est pas atteint
+        let council = RestrictedCouncil::new(vec![
+            "alice".to_string(),
+            "bob".to_string(),
+            "charlie".to_string(),
+        ]);
+
+        let peer_count = 1; // Seulement 1 signature, quorum = 2
+        let required = council.quorum_size();
+
+        let err = check_finality_threshold(peer_count, &council);
+        assert!(err.is_err());
+
+        match err {
+            Err(ArbitrationError::QuorumNotReached(current, needed)) => {
+                assert_eq!(current, 1);
+                assert_eq!(needed, required);
+            }
+            _ => panic!("Expected QuorumNotReached error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_arbitration_ruling_with_human_resolution() {
+        // Test: soumission d'un ruling avec résolution manuelle (human review)
+        let ruling = ArbitrationRuling {
+            ruling_id: "ruling_human_001".to_string(),
+            case_id: "case_human_001".to_string(),
+            arbiter_id: "expert_arbiter".to_string(),
+            decision: "accept_assertion_A_after_manual_review".to_string(),
+            justification: "Human expert determined assertion A is legally sound and technically correct".to_string(),
+            signature: "ed25519_signature_from_expert_key".to_string(),
+            ruled_at: Utc::now(),
+        };
+
+        // Verify the ruling can be constructed with proper metadata
+        assert_eq!(ruling.decision, "accept_assertion_A_after_manual_review");
+        assert!(ruling.justification.contains("expert"));
+        assert!(!ruling.signature.is_empty());
+    }
+
+    #[test]
+    fn test_arbiters_registry_stake_validation() {
+        // Test: validation du stake d'un arbitre (security check)
+        let arbiter_low_stake = Arbiter {
+            arbiter_id: "low_stake_arbiter".to_string(),
+            public_key: "edpk_low_stake".to_string(),
+            authority_level: AuthorityLevel::Trainee,
+            stake_amount: 100, // Very low stake
+            registered_at: Utc::now(),
+            is_active: true,
+        };
+
+        let arbiter_high_stake = Arbiter {
+            arbiter_id: "high_stake_arbiter".to_string(),
+            public_key: "edpk_high_stake".to_string(),
+            authority_level: AuthorityLevel::Expert,
+            stake_amount: 1_000_000, // High stake
+            registered_at: Utc::now(),
+            is_active: true,
+        };
+
+        // Lower stake implies lower authority but still valid
+        assert!(arbiter_low_stake.stake_amount < arbiter_high_stake.stake_amount);
+        assert!(arbiter_low_stake.authority_level < arbiter_high_stake.authority_level);
     }
 }

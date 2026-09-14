@@ -17,6 +17,10 @@ pub mod wai;
 pub mod parser;
 pub mod validator;
 pub mod audit;
+pub mod tls;
+pub mod rest_api;
+pub mod deontic_orchestration;
+pub mod deontic_state_machine;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
