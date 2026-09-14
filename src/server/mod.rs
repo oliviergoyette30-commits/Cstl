@@ -21,6 +21,7 @@ pub mod tls;
 pub mod rest_api;
 pub mod deontic_orchestration;
 pub mod deontic_state_machine;
+pub mod graphify_server;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;

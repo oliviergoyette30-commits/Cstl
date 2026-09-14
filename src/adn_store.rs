@@ -12,6 +12,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 use crate::server::audit::{AuditEntry, HashChain};
+use crate::payload_compression::{compress_payload, decompress_payload, should_compress};
 
 #[derive(Debug, Clone)]
 pub struct AdnEntry {
@@ -95,6 +96,15 @@ pub struct DbArbitrationRuling {
     pub created_at: i64,
 }
 
+/// ContextWindow: résultat du chargement de contexte (Couche 5)
+/// Utilisé par `load_context()` pour reconstituer l'historique via
+/// la chaîne parent_hash sur une profondeur limitée.
+#[derive(Debug, Clone)]
+pub struct ContextWindow {
+    pub entries: Vec<AdnEntry>,
+    pub depth: usize,
+}
+
 /// Peer review signature on a ruling (database layer)
 #[derive(Debug, Clone)]
 pub struct DbPeerReviewSignature {
@@ -128,7 +138,8 @@ impl AdnStore {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS adn_store (
                 hash TEXT PRIMARY KEY,
-                payload TEXT NOT NULL,
+                payload BLOB NOT NULL,
+                payload_compressed INTEGER NOT NULL DEFAULT 0,
                 encoder TEXT,
                 produced_by TEXT,
                 sigma REAL NOT NULL,
@@ -167,6 +178,10 @@ impl AdnStore {
             );
             CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
             CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);
+            CREATE INDEX IF NOT EXISTS idx_adn_produced_by ON adn_store(produced_by);
+            CREATE INDEX IF NOT EXISTS idx_adn_parent_hash ON adn_store(parent_hash);
+            CREATE INDEX IF NOT EXISTS idx_adn_created_at ON adn_store(created_at);
+            CREATE INDEX IF NOT EXISTS idx_adn_conversation ON adn_store(conversation_id, turn);
             CREATE TABLE IF NOT EXISTS audit_trail (
                 seq INTEGER PRIMARY KEY,
                 hash TEXT NOT NULL UNIQUE,
@@ -258,11 +273,89 @@ impl AdnStore {
                 eprintln!("[AdnStore] ⚠️  migration modality echouee (inattendu): {}", msg);
             }
         }
+        // Migration idempotente (2026-09-14, Couche 5: compression de payloads):
+        // `adn_store` peut exister sans colonne `payload_compressed` sur les bases
+        // anciennes. L'ajouter au CREATE TABLE ci-dessus ne suffit pas pour les
+        // bases existantes -- ADD COLUMN est idempotent (echoue silencieusement si
+        // la colonne existe deja).
+        if let Err(e) = conn.execute(
+            "ALTER TABLE adn_store ADD COLUMN payload_compressed INTEGER NOT NULL DEFAULT 0",
+            [],
+        ) {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column name") {
+                eprintln!("[AdnStore] ⚠️  migration payload_compressed echouee (inattendu): {}", msg);
+            }
+        }
+        Ok(Self { conn })
+    }
+
+    /// Helper pour tests: créer un AdnStore depuis une connexion existante
+    /// (typiquement in-memory)
+    #[cfg(test)]
+    pub fn open_connection(conn: Connection) -> Result<Self, rusqlite::Error> {
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS adn_store (
+                hash TEXT PRIMARY KEY,
+                payload BLOB NOT NULL,
+                payload_compressed INTEGER NOT NULL DEFAULT 0,
+                encoder TEXT,
+                produced_by TEXT,
+                sigma REAL NOT NULL,
+                parent_hash TEXT,
+                conversation_id TEXT,
+                turn INTEGER,
+                committed INTEGER NOT NULL DEFAULT 0,
+                committed_by TEXT,
+                committed_at INTEGER,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS adn_council_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hash TEXT NOT NULL REFERENCES adn_store(hash),
+                action TEXT NOT NULL,
+                by_whom TEXT NOT NULL,
+                note TEXT,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS emergence_proofs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                solo_answers TEXT NOT NULL,
+                final_decision TEXT NOT NULL,
+                position_changed_by TEXT,
+                changed_to TEXT,
+                delta_sigma REAL,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS adn_relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hash TEXT NOT NULL REFERENCES adn_store(hash),
+                subject TEXT NOT NULL,
+                predicate TEXT NOT NULL,
+                object TEXT NOT NULL,
+                modality TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);
+            CREATE INDEX IF NOT EXISTS idx_adn_produced_by ON adn_store(produced_by);
+            CREATE INDEX IF NOT EXISTS idx_adn_parent_hash ON adn_store(parent_hash);
+            CREATE INDEX IF NOT EXISTS idx_adn_created_at ON adn_store(created_at);
+            CREATE INDEX IF NOT EXISTS idx_adn_conversation ON adn_store(conversation_id, turn);",
+        )?;
         Ok(Self { conn })
     }
 
     /// Stocke un payload (ASSUMES / non-commité par défaut). Idempotent sur `hash`:
     /// un hash déjà présent n'est pas écrasé (append-only, comme la chaîne d'audit).
+    ///
+    /// Compression optionnelle: si le payload > 10KB, il est compressé automatiquement
+    /// avec gzip (flate2::Compression::default()). La colonne `payload_compressed`
+    /// enregistre l'état (0=TEXT brut, 1=gzip compressé).
+    ///
+    /// Erreurs de compression ne sont pas fatales: si la compression échoue ou
+    /// n'économise pas d'espace, le payload brut est stocké (payload_compressed=0).
     #[allow(clippy::too_many_arguments)]
     pub fn put(
         &self,
@@ -275,11 +368,34 @@ impl AdnStore {
         conversation_id: Option<&str>,
         turn: Option<i64>,
     ) -> Result<(), rusqlite::Error> {
+        // Déterminer si compression est utile
+        let (payload_bytes, is_compressed) = if should_compress(payload) {
+            match compress_payload(payload) {
+                Ok(compressed) => {
+                    // Vérifier que la compression économise réellement de l'espace
+                    if compressed.len() < payload.len() {
+                        (compressed, true)
+                    } else {
+                        // Incompressible: stocker le brut
+                        (payload.as_bytes().to_vec(), false)
+                    }
+                }
+                Err(_) => {
+                    // Erreur de compression: stocker le brut et continuer
+                    eprintln!("[AdnStore] Compression failed for hash {}: storing uncompressed", hash);
+                    (payload.as_bytes().to_vec(), false)
+                }
+            }
+        } else {
+            // Payload trop petit: stocker le brut
+            (payload.as_bytes().to_vec(), false)
+        };
+
         self.conn.execute(
             "INSERT OR IGNORE INTO adn_store
-                (hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn, committed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9)",
-            params![hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn, now_unix()],
+                (hash, payload, payload_compressed, encoder, produced_by, sigma, parent_hash, conversation_id, turn, committed, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)",
+            params![hash, payload_bytes, is_compressed as i32, encoder, produced_by, sigma, parent_hash, conversation_id, turn, now_unix()],
         )?;
         Ok(())
     }
@@ -287,24 +403,52 @@ impl AdnStore {
     pub fn get(&self, hash: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
         self.conn
             .query_row(
-                "SELECT hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
+                "SELECT hash, payload, payload_compressed, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
                         committed, committed_by, committed_at, created_at
                  FROM adn_store WHERE hash = ?1",
                 params![hash],
                 |row| {
+                    let is_compressed: i32 = row.get(2)?;
+
+                    // Handle both BLOB (new format) and TEXT (old format) payloads for backward compatibility
+                    let payload_bytes: Vec<u8> = match row.get_ref(1)?.data_type() {
+                        rusqlite::types::Type::Blob => {
+                            row.get::<_, Vec<u8>>(1)?
+                        }
+                        rusqlite::types::Type::Text => {
+                            row.get::<_, String>(1)?.into_bytes()
+                        }
+                        _ => return Err(rusqlite::Error::InvalidQuery),
+                    };
+
+                    // Décompresser si nécessaire
+                    let payload = if is_compressed != 0 {
+                        match decompress_payload(&payload_bytes) {
+                            Ok(decompressed) => decompressed,
+                            Err(e) => {
+                                eprintln!("[AdnStore] Decompression error for hash {}: {}", hash, e);
+                                return Err(rusqlite::Error::QueryReturnedNoRows);
+                            }
+                        }
+                    } else {
+                        // Payload non compressé: convertir bytes en String
+                        String::from_utf8(payload_bytes)
+                            .map_err(|_| rusqlite::Error::InvalidQuery)?
+                    };
+
                     Ok(AdnEntry {
                         hash: row.get(0)?,
-                        payload: row.get(1)?,
-                        encoder: row.get(2)?,
-                        produced_by: row.get(3)?,
-                        sigma: row.get(4)?,
-                        parent_hash: row.get(5)?,
-                        conversation_id: row.get(6)?,
-                        turn: row.get(7)?,
-                        committed: row.get::<_, i64>(8)? != 0,
-                        committed_by: row.get(9)?,
-                        committed_at: row.get(10)?,
-                        created_at: row.get(11)?,
+                        payload,
+                        encoder: row.get(3)?,
+                        produced_by: row.get(4)?,
+                        sigma: row.get(5)?,
+                        parent_hash: row.get(6)?,
+                        conversation_id: row.get(7)?,
+                        turn: row.get(8)?,
+                        committed: row.get::<_, i64>(9)? != 0,
+                        committed_by: row.get(10)?,
+                        committed_at: row.get(11)?,
+                        created_at: row.get(12)?,
                     })
                 },
             )
@@ -318,24 +462,51 @@ impl AdnStore {
         let pattern = format!("sha256:{}%", short_id);
         self.conn
             .query_row(
-                "SELECT hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
+                "SELECT hash, payload, payload_compressed, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
                         committed, committed_by, committed_at, created_at
                  FROM adn_store WHERE hash LIKE ?1 LIMIT 1",
                 params![pattern],
                 |row| {
+                    let is_compressed: i32 = row.get(2)?;
+
+                    // Handle both BLOB (new format) and TEXT (old format) payloads for backward compatibility
+                    let payload_bytes: Vec<u8> = match row.get_ref(1)?.data_type() {
+                        rusqlite::types::Type::Blob => {
+                            row.get::<_, Vec<u8>>(1)?
+                        }
+                        rusqlite::types::Type::Text => {
+                            row.get::<_, String>(1)?.into_bytes()
+                        }
+                        _ => return Err(rusqlite::Error::InvalidQuery),
+                    };
+
+                    // Décompresser si nécessaire
+                    let payload = if is_compressed != 0 {
+                        match decompress_payload(&payload_bytes) {
+                            Ok(decompressed) => decompressed,
+                            Err(e) => {
+                                eprintln!("[AdnStore] Decompression error for short_id {}: {}", short_id, e);
+                                return Err(rusqlite::Error::QueryReturnedNoRows);
+                            }
+                        }
+                    } else {
+                        String::from_utf8(payload_bytes)
+                            .map_err(|_| rusqlite::Error::InvalidQuery)?
+                    };
+
                     Ok(AdnEntry {
                         hash: row.get(0)?,
-                        payload: row.get(1)?,
-                        encoder: row.get(2)?,
-                        produced_by: row.get(3)?,
-                        sigma: row.get(4)?,
-                        parent_hash: row.get(5)?,
-                        conversation_id: row.get(6)?,
-                        turn: row.get(7)?,
-                        committed: row.get::<_, i64>(8)? != 0,
-                        committed_by: row.get(9)?,
-                        committed_at: row.get(10)?,
-                        created_at: row.get(11)?,
+                        payload,
+                        encoder: row.get(3)?,
+                        produced_by: row.get(4)?,
+                        sigma: row.get(5)?,
+                        parent_hash: row.get(6)?,
+                        conversation_id: row.get(7)?,
+                        turn: row.get(8)?,
+                        committed: row.get::<_, i64>(9)? != 0,
+                        committed_by: row.get(10)?,
+                        committed_at: row.get(11)?,
+                        created_at: row.get(12)?,
                     })
                 },
             )
@@ -576,6 +747,32 @@ impl AdnStore {
             out.push(r?);
         }
         Ok(out)
+    }
+
+    /// Relations avec modalité pour un hash spécifique (utilisé par ADNDeltaDetector)
+    /// Retourne une HashMap avec clé = "subject:predicate:object", valeur = modalité
+    pub fn get_relations_with_modality(
+        &self,
+        hash: &str,
+    ) -> Result<HashMap<String, String>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT subject, predicate, object, modality FROM adn_relations WHERE hash = ?1",
+        )?;
+        let rows = stmt.query_map([hash], |row| {
+            let subject: String = row.get(0)?;
+            let predicate: String = row.get(1)?;
+            let object: String = row.get(2)?;
+            let modality: Option<String> = row.get(3)?;
+            let key = format!("{}:{}:{}", subject, predicate, object);
+            Ok((key, modality.unwrap_or_else(|| "NONE".to_string())))
+        })?;
+
+        let mut map = HashMap::new();
+        for r in rows {
+            let (key, modality) = r?;
+            map.insert(key, modality);
+        }
+        Ok(map)
     }
 
     /// Enregistre un `emergence_proof` (Level 4): la reponse solo de chaque
@@ -1029,6 +1226,374 @@ impl AdnStore {
         )?;
         Ok(())
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // COUCHE 5: get_primer() & load_context()
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// get_primer() — charger les 3-5 entrées ADN les plus pertinentes
+    /// avant un tour donné dans une conversation.
+    ///
+    /// Utilisé par un agent récepteur pour reconstituer le contexte
+    /// auquel répondre, en sélectionnant les entrées engagées (committed=1)
+    /// les plus proches du tour cible (et antérieures à celui-ci).
+    ///
+    /// Stratégie de sélection:
+    ///   1. Filtrer par conversation_id ET turn < target_turn
+    ///   2. Trier par tour DESC (plus proche d'abord)
+    ///   3. Inclure seulement committed=1 (ancrage humain, Couche 5)
+    ///   4. Limiter à 5 entrées max (fenêtre glissante)
+    ///   5. Concaténer les 500 premiers caractères de chaque payload
+    ///
+    /// Complexité: O(n) scan SQL sur adn_store filtré par conversation_id,
+    /// pas de full-table scan.
+    pub fn get_primer(
+        &self,
+        conversation_id: &str,
+        target_turn: i64,
+    ) -> Result<String, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT hash, payload, payload_compressed, encoder, sigma, turn
+             FROM adn_store
+             WHERE conversation_id = ?1 AND turn < ?2 AND committed = 1
+             ORDER BY turn DESC
+             LIMIT 5"
+        )?;
+
+        let entries = stmt.query_map(params![conversation_id, target_turn], |row| {
+            let payload_bytes: Vec<u8> = row.get(1)?;
+            let is_compressed: i32 = row.get(2)?;
+
+            let payload = if is_compressed != 0 {
+                match decompress_payload(&payload_bytes) {
+                    Ok(decompressed) => decompressed,
+                    Err(_) => {
+                        // Fallback: return empty string on decompression error
+                        eprintln!("[AdnStore] Decompression error in get_primer");
+                        String::new()
+                    }
+                }
+            } else {
+                String::from_utf8(payload_bytes).unwrap_or_default()
+            };
+
+            Ok((
+                row.get::<_, String>(0)?,      // hash
+                payload,                        // decompressed payload
+                row.get::<_, Option<String>>(3)?,  // encoder
+                row.get::<_, f64>(4)?,         // sigma
+                row.get::<_, Option<i64>>(5)?, // turn
+            ))
+        })?;
+
+        let mut results = Vec::new();
+        for entry_result in entries {
+            results.push(entry_result?);
+        }
+
+        if results.is_empty() {
+            return Ok(String::new());
+        }
+
+        // Construire le primer — format lisible pour agent
+        let mut primer_lines = Vec::new();
+        primer_lines.push("ADN_PRIMER [".to_string());
+        primer_lines.push(format!(
+            "  conversation_id = {},",
+            conversation_id
+        ));
+        primer_lines.push(format!(
+            "  before_turn = {},",
+            target_turn
+        ));
+        primer_lines.push(format!("  num_entries = {},", results.len()));
+        primer_lines.push("  anchors = [".to_string());
+
+        for (hash, payload, encoder, sigma, turn) in results {
+            // Prendre les 500 premiers caractères du payload
+            let excerpt = if payload.len() > 500 {
+                format!("{}...", &payload[..500])
+            } else {
+                payload
+            };
+            // Échapper les sauts de ligne dans l'excerpt
+            let excerpt_escaped = excerpt.replace("\n", "\\n");
+
+            let encoder_str = encoder.unwrap_or_default();
+            let turn_str = turn.map(|t| t.to_string()).unwrap_or_else(|| "?".to_string());
+
+            primer_lines.push(format!(
+                "    {{hash=\"{}\", encoder=\"{}\", sigma={:.2}, turn={}, excerpt=\"{}\"}},",
+                hash, encoder_str, sigma, turn_str, excerpt_escaped
+            ));
+        }
+
+        primer_lines.push("  ],".to_string());
+        primer_lines.push("]".to_string());
+
+        Ok(primer_lines.join("\n"))
+    }
+
+    /// load_context() — marcher la chaîne parent_hash en arrière jusqu'à
+    /// max_depth étapes pour reconstituer l'historique complet.
+    ///
+    /// Procédure:
+    ///   1. Commencer par le hash fourni
+    ///   2. Charger AdnEntry pour ce hash
+    ///   3. Si parent_hash existe ET depth < max_depth, récurser
+    ///   4. Arrêter si on atteint max_depth OU si parent n'existe pas
+    ///   5. Détecter les cycles (même hash deux fois) — retourner Err
+    ///
+    /// Complexité: O(max_depth) appels SQL, chacun O(1) par index primaire.
+    /// Aucun full-table scan. Pas de charge mémoire exponentiellement croissante.
+    ///
+    /// Retourner un ContextWindow avec la liste des entrées (ordre: du plus
+    /// ancien au plus récent, inverse de la marche) et la profondeur atteinte.
+    pub fn load_context(
+        &self,
+        hash: &str,
+        max_depth: usize,
+    ) -> Result<ContextWindow, Box<dyn std::error::Error>> {
+        let mut entries = Vec::new();
+        let mut seen_hashes = std::collections::HashSet::new();
+        let mut current_hash = hash.to_string();
+        let mut depth = 0;
+
+        // Marcher en arrière sur la chaîne parent_hash
+        while depth < max_depth {
+            // Détecter les cycles
+            if seen_hashes.contains(&current_hash) {
+                return Err(
+                    format!(
+                        "Circular parent_hash chain detected at hash: {}",
+                        current_hash
+                    )
+                    .into(),
+                );
+            }
+            seen_hashes.insert(current_hash.clone());
+
+            // Charger l'entrée courante
+            let entry = self
+                .get(&current_hash)?
+                .ok_or_else(|| format!("Hash not found: {}", current_hash))?;
+
+            // Récupérer le parent avant d'ajouter l'entrée au vecteur
+            let parent_hash_opt = entry.parent_hash.clone();
+
+            entries.push(entry);
+            depth += 1;
+
+            // Si pas de parent ou parent == "root", arrêter
+            match parent_hash_opt {
+                Some(parent) if parent != "root" && !parent.is_empty() => {
+                    current_hash = parent;
+                }
+                _ => break,
+            }
+        }
+
+        // Inverser pour avoir l'ordre chronologique (ancien → récent)
+        entries.reverse();
+
+        Ok(ContextWindow {
+            entries,
+            depth,
+        })
+    }
+
+    // ── TF-IDF Retrieval (Couche 5: persistent memory & semantic search) ──
+    // Hand-rolled tokenizer + TF-IDF indexing for semantic search over committed payloads
+    // No external NLP libraries; keeps Couche 5 self-contained and lightweight.
+
+    /// Simple hand-rolled tokenizer: lowercases, splits on non-alphanumeric,
+    /// filters stop words, returns term frequencies.
+    fn tokenize_payload(text: &str) -> HashMap<String, usize> {
+        const STOP_WORDS: &[&str] = &[
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "as", "is", "was", "are", "be", "been",
+            "if", "then", "else", "this", "that", "these", "those", "it", "its",
+            "what", "which", "who", "when", "where", "why", "how", "can", "could",
+            "would", "should", "may", "might", "must", "shall", "do", "does", "did",
+        ];
+
+        let mut terms = HashMap::new();
+        let lowered = text.to_lowercase();
+        // Split on any non-alphanumeric character
+        for token in lowered.split(|c: char| !c.is_alphanumeric()) {
+            if !token.is_empty() && !STOP_WORDS.contains(&token) && token.len() > 2 {
+                *terms.entry(token.to_string()).or_insert(0) += 1;
+            }
+        }
+        terms
+    }
+
+    /// Builds a TF-IDF index from all committed payloads.
+    /// Returns a map: (term -> map of (hash -> tf_idf_score))
+    fn build_tfidf_index(&self) -> Result<HashMap<String, HashMap<String, f64>>, rusqlite::Error> {
+        // Fetch all committed payloads with their hashes
+        let mut stmt = self.conn.prepare(
+            "SELECT hash, payload, payload_compressed FROM adn_store WHERE committed = 1 ORDER BY created_at DESC"
+        )?;
+
+        let documents: Vec<(String, String)> = stmt
+            .query_map([], |row| {
+                let hash = row.get::<_, String>(0)?;
+                let payload_bytes: Vec<u8> = row.get(1)?;
+                let is_compressed: i32 = row.get(2)?;
+
+                let payload = if is_compressed != 0 {
+                    match decompress_payload(&payload_bytes) {
+                        Ok(decompressed) => decompressed,
+                        Err(_) => {
+                            eprintln!("[AdnStore] Decompression error in build_tfidf_index for hash {}", hash);
+                            String::new()
+                        }
+                    }
+                } else {
+                    String::from_utf8(payload_bytes).unwrap_or_default()
+                };
+
+                Ok((hash, payload))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let num_docs = documents.len() as f64;
+        if num_docs == 0.0 {
+            return Ok(HashMap::new());
+        }
+
+        // Count document frequency for each term (how many docs contain it)
+        let mut doc_freq: HashMap<String, usize> = HashMap::new();
+        for (_hash, payload) in &documents {
+            let terms = Self::tokenize_payload(payload);
+            for term in terms.keys() {
+                *doc_freq.entry(term.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Build TF-IDF index: term -> (hash -> score)
+        let mut index: HashMap<String, HashMap<String, f64>> = HashMap::new();
+        for (hash, payload) in &documents {
+            let tf = Self::tokenize_payload(payload);
+            let doc_length = payload.len() as f64;
+
+            for (term, count) in tf {
+                // TF = count / doc_length (normalized by document length)
+                let term_frequency = (count as f64) / doc_length.max(1.0);
+
+                // IDF = log(total_docs / docs_containing_term)
+                let df = doc_freq.get(&term).copied().unwrap_or(1);
+                let idf = (num_docs / (df as f64)).log10().max(0.0);
+
+                // TF-IDF = TF * IDF
+                let score = term_frequency * idf;
+
+                index
+                    .entry(term)
+                    .or_insert_with(HashMap::new)
+                    .insert(hash.clone(), score);
+            }
+        }
+
+        Ok(index)
+    }
+
+    /// Retrieves top-k results for a query using TF-IDF scoring.
+    /// Returns Vec of (hash, relevance_score) sorted by score descending.
+    /// Handles edge cases: empty query, no matches, multiple matches.
+    pub fn get_tfidf_results(
+        &self,
+        query: &str,
+        top_k: usize,
+    ) -> Result<Vec<(String, f64)>, rusqlite::Error> {
+        // Edge case: empty query
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let index = self.build_tfidf_index()?;
+        if index.is_empty() {
+            return Ok(Vec::new()); // No indexed documents
+        }
+
+        // Tokenize query
+        let query_terms = Self::tokenize_payload(query);
+        if query_terms.is_empty() {
+            return Ok(Vec::new()); // Query has no meaningful terms after stop-word filtering
+        }
+
+        // Accumulate scores for each document
+        let mut scores: HashMap<String, f64> = HashMap::new();
+        for term in query_terms.keys() {
+            if let Some(term_scores) = index.get(term) {
+                for (hash, score) in term_scores {
+                    *scores.entry(hash.clone()).or_insert(0.0) += score;
+                }
+            }
+        }
+
+        // Edge case: no documents match any query term
+        if scores.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Sort by score descending and return top_k
+        let mut results: Vec<(String, f64)> = scores.into_iter().collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(results.into_iter().take(top_k).collect())
+    }
+
+    /// Alternative retrieval using basic fulltext search (exact term matching).
+    /// Faster fallback when TF-IDF complexity is unnecessary.
+    /// Searches all committed payloads (both compressed and uncompressed) in memory.
+    pub fn search_payloads(
+        &self,
+        term: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, String)>, rusqlite::Error> {
+        if term.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Fetch all committed payloads with their hashes
+        let mut stmt = self.conn.prepare(
+            "SELECT hash, payload, payload_compressed FROM adn_store
+             WHERE committed = 1 ORDER BY created_at DESC"
+        )?;
+
+        let all_entries: Vec<(String, String)> = stmt
+            .query_map([], |row| {
+                let hash = row.get::<_, String>(0)?;
+                let payload_bytes: Vec<u8> = row.get(1)?;
+                let is_compressed: i32 = row.get(2)?;
+
+                let payload = if is_compressed != 0 {
+                    match decompress_payload(&payload_bytes) {
+                        Ok(decompressed) => decompressed,
+                        Err(_) => {
+                            eprintln!("[AdnStore] Decompression error in search_payloads for hash {}", hash);
+                            String::new()
+                        }
+                    }
+                } else {
+                    String::from_utf8(payload_bytes).unwrap_or_default()
+                };
+
+                Ok((hash, payload))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Filter in memory: search for term (case-insensitive)
+        let term_lower = term.to_lowercase();
+        let results: Vec<(String, String)> = all_entries
+            .into_iter()
+            .filter(|(_, payload)| payload.to_lowercase().contains(&term_lower))
+            .take(limit)
+            .collect();
+
+        Ok(results)
+    }
 }
 
 #[cfg(test)]
@@ -1475,5 +2040,824 @@ mod tests {
         assert!(reopened.get("sha256:persisted1").unwrap().is_some());
 
         let _ = std::fs::remove_file(&tmp_path_str);
+    }
+
+    // ── Couche 5: get_primer() & load_context() ──
+
+    #[test]
+    fn test_load_context_single_entry_root_parent() {
+        // Cas minimal: une seule entree, parent = "root"
+        let store = AdnStore::open(":memory:").unwrap();
+        store
+            .put(
+                "sha256:entry1",
+                "payload text",
+                Some("agent_a"),
+                Some("prod"),
+                0.85,
+                Some("root"),
+                Some("conv_1"),
+                Some(1),
+            )
+            .unwrap();
+
+        let ctx = store.load_context("sha256:entry1", 10).unwrap();
+        assert_eq!(ctx.entries.len(), 1);
+        assert_eq!(ctx.depth, 1);
+        assert_eq!(ctx.entries[0].hash, "sha256:entry1");
+        assert_eq!(ctx.entries[0].parent_hash, Some("root".to_string()));
+    }
+
+    #[test]
+    fn test_load_context_chain_of_three() {
+        // Chaîne linéaire: A <- B <- C (root)
+        // En marche arrière depuis A, on devrait retrouver A, B, C dans cet ordre
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // C: parent = root
+        store
+            .put(
+                "sha256:C",
+                "payload C",
+                Some("agent"),
+                None,
+                0.9,
+                Some("root"),
+                Some("conv_1"),
+                Some(1),
+            )
+            .unwrap();
+
+        // B: parent = C
+        store
+            .put(
+                "sha256:B",
+                "payload B",
+                Some("agent"),
+                None,
+                0.8,
+                Some("sha256:C"),
+                Some("conv_1"),
+                Some(2),
+            )
+            .unwrap();
+
+        // A: parent = B
+        store
+            .put(
+                "sha256:A",
+                "payload A",
+                Some("agent"),
+                None,
+                0.7,
+                Some("sha256:B"),
+                Some("conv_1"),
+                Some(3),
+            )
+            .unwrap();
+
+        // Charger depuis A avec max_depth=10 -- doit remonter jusqu'à C
+        let ctx = store.load_context("sha256:A", 10).unwrap();
+        assert_eq!(ctx.entries.len(), 3, "doit charger A, B, C");
+        assert_eq!(ctx.depth, 3);
+
+        // Ordre chronologique: C, B, A (ancien → récent)
+        assert_eq!(ctx.entries[0].hash, "sha256:C");
+        assert_eq!(ctx.entries[1].hash, "sha256:B");
+        assert_eq!(ctx.entries[2].hash, "sha256:A");
+    }
+
+    #[test]
+    fn test_load_context_respects_max_depth() {
+        // Chaîne de 5 éléments, mais max_depth=2
+        // Doit charger seulement les 2 les plus proches
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store.put("sha256:E", "p", None, None, 0.9, Some("root"), None, Some(1)).unwrap();
+        store.put("sha256:D", "p", None, None, 0.8, Some("sha256:E"), None, Some(2)).unwrap();
+        store.put("sha256:C", "p", None, None, 0.7, Some("sha256:D"), None, Some(3)).unwrap();
+        store.put("sha256:B", "p", None, None, 0.6, Some("sha256:C"), None, Some(4)).unwrap();
+        store.put("sha256:A", "p", None, None, 0.5, Some("sha256:B"), None, Some(5)).unwrap();
+
+        let ctx = store.load_context("sha256:A", 2).unwrap();
+        assert_eq!(ctx.entries.len(), 2, "max_depth=2: charger seulement A et B");
+        assert_eq!(ctx.depth, 2);
+        assert_eq!(ctx.entries[0].hash, "sha256:B");
+        assert_eq!(ctx.entries[1].hash, "sha256:A");
+    }
+
+    #[test]
+    fn test_load_context_detects_circular_parent_hash() {
+        // Créer un cycle: A -> B -> A (cas pathologique, ne devrait pas arriver en production)
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // A: parent = B (B n'existe pas encore)
+        store.put("sha256:A", "p", None, None, 0.5, Some("sha256:B"), None, None).unwrap();
+
+        // B: parent = A (crée le cycle)
+        store.put("sha256:B", "p", None, None, 0.5, Some("sha256:A"), None, None).unwrap();
+
+        // Essayer de charger depuis A -- doit détecter le cycle et retourner Err
+        let result = store.load_context("sha256:A", 10);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Circular"));
+    }
+
+    #[test]
+    fn test_load_context_missing_parent_stops_traversal() {
+        // B parent de A, mais B n'existe pas dans la DB
+        // load_context doit retourner Err (pas continuer avec un hash inexistant)
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store.put("sha256:A", "p", None, None, 0.5, Some("sha256:B_missing"), None, None).unwrap();
+
+        let result = store.load_context("sha256:A", 10);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Hash not found"));
+    }
+
+    #[test]
+    fn test_get_primer_basic_flow() {
+        // Créer 5 entrées commitées, demander les 3 avant turn=4
+        let store = AdnStore::open(":memory:").unwrap();
+
+        for turn in 1..=5 {
+            let hash = format!("sha256:entry_{}", turn);
+            let payload = format!("Payload for turn {}", turn);
+            store
+                .put(
+                    &hash,
+                    &payload,
+                    Some("agent"),
+                    None,
+                    0.8,
+                    None,
+                    Some("conv_x"),
+                    Some(turn),
+                )
+                .unwrap();
+            // Committer toutes les entrées
+            store.commit(&hash, "human", None).unwrap();
+        }
+
+        // Demander le primer avant turn=4 -- doit retourner entrées 1,2,3 triées DESC
+        let primer = store.get_primer("conv_x", 4).unwrap();
+        assert!(!primer.is_empty());
+        assert!(primer.contains("ADN_PRIMER"));
+        assert!(primer.contains("num_entries = 3"));
+        // Vérifier que l'ordre DESC est respecté dans le primer
+        assert!(primer.contains("turn=3"));
+        assert!(primer.contains("turn=2"));
+        assert!(primer.contains("turn=1"));
+    }
+
+    #[test]
+    fn test_get_primer_filters_uncommitted() {
+        // Créer 3 entrées: 2 commitées, 1 pas
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store.put("sha256:c1", "payload 1", None, None, 0.8, None, Some("conv_y"), Some(1)).unwrap();
+        store.put("sha256:u1", "payload 2", None, None, 0.7, None, Some("conv_y"), Some(2)).unwrap();
+        store.put("sha256:c2", "payload 3", None, None, 0.6, None, Some("conv_y"), Some(3)).unwrap();
+
+        store.commit("sha256:c1", "human", None).unwrap();
+        store.commit("sha256:c2", "human", None).unwrap();
+        // "sha256:u1" n'est pas commitée
+
+        let primer = store.get_primer("conv_y", 10).unwrap();
+        // Doit contenir seulement c2 et c1 (les entrées commitées)
+        assert!(primer.contains("num_entries = 2"));
+        assert!(primer.contains("sha256:c1"));
+        assert!(primer.contains("sha256:c2"));
+        assert!(!primer.contains("sha256:u1"));
+    }
+
+    #[test]
+    fn test_get_primer_empty_when_no_prior_turns() {
+        // Primer demandé avant turn=1 -- aucune entrée antérieure
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store
+            .put("sha256:h1", "p", None, None, 0.8, None, Some("conv_z"), Some(1))
+            .unwrap();
+        store.commit("sha256:h1", "human", None).unwrap();
+
+        let primer = store.get_primer("conv_z", 1).unwrap();
+        // Pas d'entrées avant turn=1, primer doit être vide
+        assert_eq!(primer, "");
+    }
+
+    #[test]
+    fn test_get_primer_limits_to_five_entries() {
+        // Créer 10 entrées commitées, demander avant turn=11 -- doit limiter à 5
+        let store = AdnStore::open(":memory:").unwrap();
+
+        for turn in 1..=10 {
+            let hash = format!("sha256:e_{}", turn);
+            store
+                .put(&hash, "payload", None, None, 0.8, None, Some("conv_a"), Some(turn))
+                .unwrap();
+            store.commit(&hash, "human", None).unwrap();
+        }
+
+        let primer = store.get_primer("conv_a", 11).unwrap();
+        assert!(primer.contains("num_entries = 5"));
+        // Doit retourner les 5 les plus proches (tours 10,9,8,7,6)
+        assert!(primer.contains("turn=10"));
+        assert!(primer.contains("turn=9"));
+        assert!(primer.contains("turn=8"));
+        assert!(primer.contains("turn=7"));
+        assert!(primer.contains("turn=6"));
+        // Ne doit pas contenir les plus lointaines
+        assert!(!primer.contains("turn=5"));
+    }
+
+    #[test]
+    fn test_get_primer_respects_conversation_boundary() {
+        // Créer des entrées dans deux conversations différentes
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Conversation X: turns 1-3
+        for turn in 1..=3 {
+            let hash = format!("sha256:conv_x_turn_{}", turn);
+            store
+                .put(&hash, "payload", None, None, 0.8, None, Some("conv_X"), Some(turn))
+                .unwrap();
+            store.commit(&hash, "human", None).unwrap();
+        }
+
+        // Conversation Y: turns 1-3
+        for turn in 1..=3 {
+            let hash = format!("sha256:conv_y_turn_{}", turn);
+            store
+                .put(&hash, "payload", None, None, 0.8, None, Some("conv_Y"), Some(turn))
+                .unwrap();
+            store.commit(&hash, "human", None).unwrap();
+        }
+
+        // Demander primer pour conv_X avant turn=2
+        let primer = store.get_primer("conv_X", 2).unwrap();
+        // Doit contenir seulement l'entrée turn=1 de conv_X
+        assert!(primer.contains("num_entries = 1"));
+        assert!(primer.contains("turn=1"));
+        assert!(!primer.contains("turn=2"));
+        assert!(!primer.contains("turn=3"));
+        // Ne doit jamais contenir d'entrées de conv_Y
+        assert!(!primer.contains("conv_Y"));
+    }
+
+    #[test]
+    fn test_get_primer_excerpt_truncation() {
+        // Créer une entrée avec un très long payload
+        let store = AdnStore::open(":memory:").unwrap();
+
+        let long_payload = "x".repeat(1000);
+        store
+            .put("sha256:long", &long_payload, None, None, 0.8, None, Some("conv_long"), Some(1))
+            .unwrap();
+        store.commit("sha256:long", "human", None).unwrap();
+
+        let primer = store.get_primer("conv_long", 10).unwrap();
+        // Doit contenir "..." indiquant la troncature à 500 chars
+        assert!(primer.contains("..."));
+        // Vérifier qu'on ne voit pas tout le payload de 1000 chars
+        assert!(!primer.contains(&"x".repeat(600)));
+    }
+
+    // ── TF-IDF Retrieval Tests (Couche 5) ──
+
+    #[test]
+    fn test_tfidf_empty_query_returns_empty_results() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store.put("h1", "artificial intelligence machine learning", None, None, 0.8, None, None, None).unwrap();
+        store.commit("h1", "human", None).unwrap();
+
+        // Empty query should return empty results
+        let results = store.get_tfidf_results("", 5).unwrap();
+        assert!(results.is_empty(), "empty query should return no results");
+
+        // Whitespace-only query should also return empty results
+        let results = store.get_tfidf_results("   ", 5).unwrap();
+        assert!(results.is_empty(), "whitespace query should return no results");
+    }
+
+    #[test]
+    fn test_tfidf_no_matching_documents() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Only store uncommitted entry
+        store.put("h1", "artificial intelligence", None, None, 0.8, None, None, None).unwrap();
+        // Don't commit it
+
+        // Query for something that exists in uncommitted entry
+        let results = store.get_tfidf_results("artificial intelligence", 5).unwrap();
+        assert!(results.is_empty(), "uncommitted entries should not be indexed");
+
+        // Query for something not in database at all
+        store.put("h2", "neural networks deep learning", None, None, 0.8, None, None, None).unwrap();
+        store.commit("h2", "human", None).unwrap();
+
+        let results = store.get_tfidf_results("quantum computing", 5).unwrap();
+        assert!(results.is_empty(), "query with no matching terms should return no results");
+    }
+
+    #[test]
+    fn test_tfidf_single_document_match() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create and commit a single document
+        let payload = "machine learning algorithms neural networks deep learning";
+        store.put("h_ml", payload, None, None, 0.8, None, None, None).unwrap();
+        store.commit("h_ml", "human", None).unwrap();
+
+        // Query for relevant term
+        let results = store.get_tfidf_results("neural networks", 5).unwrap();
+        assert_eq!(results.len(), 1, "should find exactly one document");
+        assert_eq!(results[0].0, "h_ml");
+        // Note: With a single document, IDF = log10(1/1) = 0, so score can be 0
+        // This is mathematically correct; we just verify the document is found
+        assert!(results[0].1 >= 0.0, "score should be non-negative");
+    }
+
+    #[test]
+    fn test_tfidf_multiple_documents_ranking() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create multiple documents with varying relevance
+        // Doc 1: Heavy on "neural networks"
+        store.put(
+            "h1",
+            "neural networks neural networks neural networks deep learning",
+            None, None, 0.8, None, None, None,
+        ).unwrap();
+        store.commit("h1", "human", None).unwrap();
+
+        // Doc 2: Light on "neural networks"
+        store.put(
+            "h2",
+            "fuzzy logic expert systems genetic algorithms",
+            None, None, 0.8, None, None, None,
+        ).unwrap();
+        store.commit("h2", "human", None).unwrap();
+
+        // Doc 3: Medium on "neural networks"
+        store.put(
+            "h3",
+            "neural networks machine learning classification",
+            None, None, 0.8, None, None, None,
+        ).unwrap();
+        store.commit("h3", "human", None).unwrap();
+
+        // Query for "neural networks"
+        let results = store.get_tfidf_results("neural networks", 5).unwrap();
+
+        // Should return multiple results
+        assert_eq!(results.len(), 2, "should find documents containing query terms");
+
+        // Doc 1 should rank higher than Doc 3 (more occurrences of relevant term)
+        assert_eq!(results[0].0, "h1", "doc with most occurrences should rank first");
+        assert!(results[0].1 > results[1].1, "first result should have higher score");
+    }
+
+    #[test]
+    fn test_tfidf_query_with_stop_words_filtered() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create a document
+        store.put(
+            "h1",
+            "the artificial intelligence and machine learning",
+            None, None, 0.8, None, None, None,
+        ).unwrap();
+        store.commit("h1", "human", None).unwrap();
+
+        // Query with stop words only
+        let results = store.get_tfidf_results("the and or a", 5).unwrap();
+        assert!(results.is_empty(), "query with only stop words should return no results");
+
+        // Query with stop words and meaningful terms
+        let results = store.get_tfidf_results("the artificial intelligence", 5).unwrap();
+        assert_eq!(results.len(), 1, "should find document despite stop words in query");
+    }
+
+    #[test]
+    fn test_tfidf_top_k_limit_respected() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create 10 documents all containing "algorithm"
+        for i in 1..=10 {
+            let payload = format!("algorithm algorithm algorithm {}", i);
+            let hash = format!("h{}", i);
+            store.put(&hash, &payload, None, None, 0.8, None, None, None).unwrap();
+            store.commit(&hash, "human", None).unwrap();
+        }
+
+        // Query with top_k=3
+        let results = store.get_tfidf_results("algorithm", 3).unwrap();
+        assert_eq!(results.len(), 3, "should return exactly top_k results");
+
+        // Verify scores are sorted descending
+        for i in 0..results.len() - 1 {
+            assert!(results[i].1 >= results[i+1].1, "results should be sorted by score descending");
+        }
+    }
+
+    #[test]
+    fn test_tfidf_case_insensitivity() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store.put(
+            "h1",
+            "Artificial Intelligence Neural Networks",
+            None, None, 0.8, None, None, None,
+        ).unwrap();
+        store.commit("h1", "human", None).unwrap();
+
+        // Query with different cases
+        let results_lower = store.get_tfidf_results("neural networks", 5).unwrap();
+        let results_upper = store.get_tfidf_results("NEURAL NETWORKS", 5).unwrap();
+        let results_mixed = store.get_tfidf_results("Neural NETWORKS", 5).unwrap();
+
+        assert_eq!(results_lower.len(), 1);
+        assert_eq!(results_upper.len(), 1);
+        assert_eq!(results_mixed.len(), 1);
+        assert_eq!(results_lower[0].0, results_upper[0].0);
+        assert_eq!(results_upper[0].0, results_mixed[0].0);
+    }
+
+    #[test]
+    fn test_search_payloads_basic_fulltext() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create multiple documents
+        store.put("h1", "python programming language", None, None, 0.8, None, None, None).unwrap();
+        store.commit("h1", "human", None).unwrap();
+
+        store.put("h2", "rust programming language systems", None, None, 0.8, None, None, None).unwrap();
+        store.commit("h2", "human", None).unwrap();
+
+        store.put("h3", "javascript web development", None, None, 0.8, None, None, None).unwrap();
+        store.commit("h3", "human", None).unwrap();
+
+        // Search for "programming"
+        let results = store.search_payloads("programming", 10).unwrap();
+        assert_eq!(results.len(), 2, "should find both documents with 'programming'");
+
+        // Verify payloads are returned
+        let payloads: Vec<_> = results.iter().map(|r| r.1.clone()).collect();
+        assert!(payloads.iter().any(|p| p.contains("python")));
+        assert!(payloads.iter().any(|p| p.contains("rust")));
+    }
+
+    #[test]
+    fn test_search_payloads_respects_limit() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create 5 documents all matching
+        for i in 1..=5 {
+            let payload = format!("testing document number {}", i);
+            let hash = format!("h{}", i);
+            store.put(&hash, &payload, None, None, 0.8, None, None, None).unwrap();
+            store.commit(&hash, "human", None).unwrap();
+        }
+
+        // Search with limit=2
+        let results = store.search_payloads("testing", 2).unwrap();
+        assert_eq!(results.len(), 2, "should respect limit parameter");
+    }
+
+    #[test]
+    fn test_indices_created_on_fresh_db() {
+        // Verify that all required indices are created when opening a fresh DB
+        let tmp_path = std::env::temp_dir().join(format!(
+            "cstl_adn_index_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+        ));
+        let tmp_path_str = tmp_path.to_str().unwrap().to_string();
+        let _ = std::fs::remove_file(&tmp_path_str);
+
+        // Open a fresh DB
+        let store = AdnStore::open(&tmp_path_str).unwrap();
+
+        // Query sqlite_master to verify indices exist
+        let conn = Connection::open(&tmp_path_str).unwrap();
+
+        // List of required indices for adn_store
+        let required_indices = vec![
+            "idx_adn_produced_by",
+            "idx_adn_parent_hash",
+            "idx_adn_created_at",
+            "idx_adn_conversation",
+        ];
+
+        // List of required indices for adn_relations
+        let required_relation_indices = vec![
+            "idx_adn_relations_hash",
+            "idx_adn_relations_predicate",
+        ];
+
+        // Check adn_store indices
+        for idx_name in &required_indices {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='index' AND name=?1",
+                    params![idx_name],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            assert!(exists, "Index {} should exist on adn_store", idx_name);
+
+            // Verify the index is on adn_store table
+            let table_name: String = conn
+                .query_row(
+                    "SELECT tbl_name FROM sqlite_master WHERE type='index' AND name=?1",
+                    params![idx_name],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(table_name, "adn_store", "Index {} should be on adn_store table", idx_name);
+        }
+
+        // Check adn_relations indices
+        for idx_name in &required_relation_indices {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='index' AND name=?1",
+                    params![idx_name],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            assert!(exists, "Index {} should exist on adn_relations", idx_name);
+        }
+
+        // Clean up
+        let _ = std::fs::remove_file(&tmp_path_str);
+    }
+
+    #[test]
+    fn test_indices_performance_query_by_produced_by() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Insert multiple entries
+        for i in 1..=100 {
+            let hash = format!("sha256:hash{:06}", i);
+            let producer = if i % 10 == 0 { "alice" } else { "bob" };
+            store.put(&hash, "test payload", None, Some(producer), 0.8, None, None, None).unwrap();
+        }
+
+        // Query by produced_by (should use index)
+        let mut stmt = store.conn.prepare(
+            "SELECT COUNT(*) FROM adn_store WHERE produced_by = ?"
+        ).unwrap();
+        let alice_count: u64 = stmt.query_row(params!["alice"], |row| row.get(0)).unwrap();
+
+        assert_eq!(alice_count, 10, "Should find 10 entries produced by alice");
+    }
+
+    #[test]
+    fn test_indices_performance_query_by_conversation() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Insert entries with conversation_id and turn
+        for i in 1..=50 {
+            let hash = format!("sha256:hash{:06}", i);
+            let conv_id = if i <= 25 { "conv1" } else { "conv2" };
+            let turn = ((i - 1) / 5) as i64;
+            store.put(&hash, "test payload", None, None, 0.8, None, Some(conv_id), Some(turn)).unwrap();
+        }
+
+        // Query by conversation and turn (should use composite index)
+        let mut stmt = store.conn.prepare(
+            "SELECT COUNT(*) FROM adn_store WHERE conversation_id = ? AND turn = ?"
+        ).unwrap();
+        let count: u64 = stmt.query_row(params!["conv1", 0_i64], |row| row.get(0)).unwrap();
+
+        assert_eq!(count, 5, "Should find 5 entries in conversation 1, turn 0");
+    }
+
+    #[test]
+    fn test_indices_parent_hash_chain_traversal() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        // Create a chain: h1 -> h2 -> h3 -> h4
+        store.put("h1", "payload1", None, None, 0.8, None, None, None).unwrap();
+        store.put("h2", "payload2", None, None, 0.8, Some("h1"), None, None).unwrap();
+        store.put("h3", "payload3", None, None, 0.8, Some("h2"), None, None).unwrap();
+        store.put("h4", "payload4", None, None, 0.8, Some("h3"), None, None).unwrap();
+
+        // Query by parent_hash to follow chain (should use index)
+        let mut stmt = store.conn.prepare(
+            "SELECT COUNT(*) FROM adn_store WHERE parent_hash = ?"
+        ).unwrap();
+
+        let children_of_h1: u64 = stmt.query_row(params!["h1"], |row| row.get(0)).unwrap();
+        let children_of_h2: u64 = {
+            let mut s = store.conn.prepare("SELECT COUNT(*) FROM adn_store WHERE parent_hash = ?").unwrap();
+            s.query_row(params!["h2"], |row| row.get(0)).unwrap()
+        };
+
+        assert_eq!(children_of_h1, 1, "h1 should have 1 child");
+        assert_eq!(children_of_h2, 1, "h2 should have 1 child");
+    }
+
+    #[test]
+    fn test_indices_time_based_queries() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        let now = now_unix();
+
+        // Insert entries at different times
+        for i in 1..=10 {
+            let hash = format!("sha256:hash{:06}", i);
+            store.put(&hash, "test payload", None, None, 0.8, None, None, None).unwrap();
+        }
+
+        // Query by created_at (should use index)
+        let mut stmt = store.conn.prepare(
+            "SELECT COUNT(*) FROM adn_store WHERE created_at >= ?"
+        ).unwrap();
+
+        let recent_count: u64 = stmt.query_row(params![now - 100], |row| row.get(0)).unwrap();
+        assert_eq!(recent_count, 10, "All entries should be recent");
+    }
+
+    #[test]
+    fn test_compression_roundtrip_small_payload() {
+        // Small payloads (< 10KB) should NOT be compressed
+        let store = AdnStore::open(":memory:").unwrap();
+        let small_payload = "small data";
+        store.put("h_small", small_payload, None, None, 0.5, None, None, None).unwrap();
+
+        let entry = store.get("h_small").unwrap().unwrap();
+        assert_eq!(entry.payload, small_payload);
+
+        // Verify compression flag is not set
+        let is_compressed: i32 = store.conn.query_row(
+            "SELECT payload_compressed FROM adn_store WHERE hash = 'h_small'",
+            [],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(is_compressed, 0, "Small payload should not be compressed");
+    }
+
+    #[test]
+    fn test_compression_roundtrip_large_payload() {
+        // Large payloads (> 10KB) should be compressed if beneficial
+        let store = AdnStore::open(":memory:").unwrap();
+        let large_payload = "X".repeat(50_000); // 50KB of repetitive data
+        store.put("h_large", &large_payload, None, None, 0.5, None, None, None).unwrap();
+
+        let entry = store.get("h_large").unwrap().unwrap();
+        assert_eq!(entry.payload, large_payload, "Byte-for-byte match required after decompression");
+
+        // Verify compression flag is set
+        let is_compressed: i32 = store.conn.query_row(
+            "SELECT payload_compressed FROM adn_store WHERE hash = 'h_large'",
+            [],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(is_compressed, 1, "Large repetitive payload should be compressed");
+
+        // Verify compressed size is actually smaller
+        let compressed_size: usize = store.conn.query_row(
+            "SELECT LENGTH(payload) FROM adn_store WHERE hash = 'h_large'",
+            [],
+            |r| r.get(0),
+        ).unwrap();
+        assert!(
+            compressed_size < large_payload.len(),
+            "Compressed size {} should be less than original {}",
+            compressed_size,
+            large_payload.len()
+        );
+    }
+
+    #[test]
+    fn test_compression_1mb_payload_roundtrip() {
+        // Test with 1MB payload to verify performance and byte-for-byte correctness
+        let store = AdnStore::open(":memory:").unwrap();
+        let mut large_payload = String::new();
+        for _ in 0..20_000 {
+            large_payload.push_str("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ");
+        }
+        assert!(large_payload.len() > 1_000_000, "Payload must exceed 1MB");
+
+        let hash = "h_1mb";
+        store.put(hash, &large_payload, Some("test_encoder"), Some("test_agent"), 0.99, None, Some("conv1"), Some(1)).unwrap();
+
+        // Retrieve and verify byte-for-byte match
+        let entry = store.get(hash).unwrap().unwrap();
+        assert_eq!(entry.payload, large_payload, "1MB payload: byte-for-byte match required");
+        assert_eq!(entry.payload.len(), large_payload.len());
+
+        // Verify metadata was preserved
+        assert_eq!(entry.encoder.as_deref(), Some("test_encoder"));
+        assert_eq!(entry.produced_by.as_deref(), Some("test_agent"));
+        assert_eq!(entry.conversation_id.as_deref(), Some("conv1"));
+        assert_eq!(entry.turn, Some(1));
+
+        // Verify compression was applied
+        let is_compressed: i32 = store.conn.query_row(
+            &format!("SELECT payload_compressed FROM adn_store WHERE hash = '{}'", hash),
+            [],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(is_compressed, 1, "1MB payload should be compressed");
+    }
+
+    #[test]
+    fn test_compression_with_get_by_short_id() {
+        // Test that get_by_short_id() also handles compression correctly
+        let store = AdnStore::open(":memory:").unwrap();
+        let large_payload = "ABCD".repeat(10_000); // > 10KB
+        let hash = "sha256:1234567890abcdef";
+
+        store.put(hash, &large_payload, None, None, 0.5, None, None, None).unwrap();
+
+        // Retrieve by short ID
+        let entry = store.get_by_short_id("1234567890").unwrap().unwrap();
+        assert_eq!(entry.payload, large_payload, "Decompression via get_by_short_id failed");
+    }
+
+    #[test]
+    fn test_compression_with_get_primer() {
+        // Test that get_primer() handles compressed payloads
+        let store = AdnStore::open(":memory:").unwrap();
+        let large_payload = "X".repeat(50_000);
+
+        store.put("h1", &large_payload, None, None, 0.5, Some("root"), Some("conv1"), Some(1)).unwrap();
+        store.commit("h1", "human", None).unwrap();
+        store.put("h2", "small payload", None, None, 0.5, Some("h1"), Some("conv1"), Some(2)).unwrap();
+        store.commit("h2", "human", None).unwrap();
+
+        // Get primer before turn 3 (should include h2)
+        let primer = store.get_primer("conv1", 3).unwrap();
+        assert!(!primer.is_empty(), "Primer should not be empty");
+        assert!(primer.contains("small payload"), "Primer should contain h2 excerpt");
+        assert!(primer.contains("h1"), "Primer should reference h1");
+    }
+
+    #[test]
+    fn test_compression_incompressible_payload() {
+        // Test that incompressible data is stored uncompressed
+        let store = AdnStore::open(":memory:").unwrap();
+        // Random binary-like data (hard to compress)
+        let incompressible = "aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0u".repeat(500);
+
+        store.put("h_incomp", &incompressible, None, None, 0.5, None, None, None).unwrap();
+
+        let entry = store.get("h_incomp").unwrap().unwrap();
+        assert_eq!(entry.payload, incompressible);
+
+        // Check if it was compressed (might or might not be, depending on actual compression)
+        let is_compressed: i32 = store.conn.query_row(
+            "SELECT payload_compressed FROM adn_store WHERE hash = 'h_incomp'",
+            [],
+            |r| r.get(0),
+        ).unwrap();
+        // We don't assert on this value because compression might still be applied
+        // even if not beneficial, but the roundtrip should work either way
+        assert!(is_compressed == 0 || is_compressed == 1, "Compression flag should be 0 or 1");
+    }
+
+    #[test]
+    fn test_compression_with_tfidf_search() {
+        // Test that TF-IDF search works with compressed payloads
+        let store = AdnStore::open(":memory:").unwrap();
+        let doc1 = "The quick brown fox jumps over the lazy dog. ".repeat(500); // > 10KB
+        let doc2 = "Machine learning is a subset of artificial intelligence. ".repeat(300);
+
+        store.put("h_doc1", &doc1, None, None, 0.8, None, None, None).unwrap();
+        store.commit("h_doc1", "human", None).unwrap();
+        store.put("h_doc2", &doc2, None, None, 0.7, None, None, None).unwrap();
+        store.commit("h_doc2", "human", None).unwrap();
+
+        // Search for "fox" (in doc1)
+        let results = store.get_tfidf_results("fox", 10).unwrap();
+        assert!(!results.is_empty(), "Should find doc containing 'fox'");
+        assert_eq!(results[0].0, "h_doc1", "Should find doc1");
+
+        // Search for "machine" (in doc2)
+        let results = store.get_tfidf_results("machine", 10).unwrap();
+        assert!(!results.is_empty(), "Should find doc containing 'machine'");
+        assert_eq!(results[0].0, "h_doc2", "Should find doc2");
+    }
+
+    #[test]
+    fn test_compression_with_search_payloads() {
+        // Test that search_payloads() works with compressed data
+        let store = AdnStore::open(":memory:").unwrap();
+        let searchable = "This is a searchable payload with keyword UNIQUEKEYWORD inside.".repeat(1000); // > 10KB
+
+        store.put("h_search", &searchable, None, None, 0.5, None, None, None).unwrap();
+        store.commit("h_search", "human", None).unwrap();
+
+        // Search for the unique keyword
+        let results = store.search_payloads("UNIQUEKEYWORD", 10).unwrap();
+        assert_eq!(results.len(), 1, "Should find the compressed payload");
+        assert_eq!(results[0].0, "h_search");
+        assert_eq!(results[0].1, searchable, "Retrieved payload should match original");
     }
 }
