@@ -1,0 +1,1479 @@
+//! src/adn_store.rs — Couche 5 de l'architecture CSTL (mémoire persistante / provenance)
+//! Port Rust natif de ce que `cstl_adn_store.py` était censé être selon le README.
+//! Constat honnête au moment d'écrire ce module: `cstl_adn_store.py` n'existe nulle
+//! part dans ce repo (vérifié par recherche exhaustive le 2026-09-03) — ce n'est
+//! donc PAS un port d'un fichier réel, c'est une reconstruction en Rust à partir de
+//! la description du README (schéma des 3 tables, sémantique commit/revoke).
+//!
+//! Portée de cette version: schéma SQLite + CRUD + journal du conseil humain.
+//! PAS encore fait (honnête, pas caché): retrieval TF-IDF, get_primer()/load_context(),
+//! ADNDeltaDetector. Ces pièces restent à construire si on en a besoin plus tard.
+
+use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
+use crate::server::audit::{AuditEntry, HashChain};
+
+#[derive(Debug, Clone)]
+pub struct AdnEntry {
+    pub hash: String,
+    pub payload: String,
+    pub encoder: Option<String>,
+    pub produced_by: Option<String>,
+    pub sigma: f64,
+    pub parent_hash: Option<String>,
+    pub conversation_id: Option<String>,
+    pub turn: Option<i64>,
+    pub committed: bool,
+    pub committed_by: Option<String>,
+    pub committed_at: Option<i64>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AdnStats {
+    pub total: u64,
+    pub committed: u64,
+    pub pending: u64,
+}
+
+/// Une ligne de `adn_council_log` — jusqu'ici la table etait ecriture seule
+/// (`commit`/`revoke` y inserent) sans aucun moyen de la relire. Correction
+/// honnete: le journal d'audit humain existait dans la DB mais nulle part
+/// dans le code Rust.
+#[derive(Debug, Clone)]
+pub struct CouncilLogEntry {
+    pub id: i64,
+    pub hash: String,
+    pub action: String,
+    pub by_whom: String,
+    pub note: Option<String>,
+    pub timestamp: i64,
+}
+
+/// Résultat d'un vote de commit à quorum (Couche 2, gouvernance,
+/// `cast_commit_vote`). `quorum_reached` reflète l'état APRES ce vote
+/// (voix distinctes deja comptees, y compris celle-ci).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoteOutcome {
+    pub distinct_voters: usize,
+    pub quorum_size: usize,
+    pub quorum_reached: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmergenceProof {
+    pub id: i64,
+    pub question: String,
+    pub solo_answers: String,
+    pub final_decision: String,
+    pub position_changed_by: Option<String>,
+    pub changed_to: Option<String>,
+    pub delta_sigma: Option<f64>,
+    pub timestamp: i64,
+}
+
+/// Arbitrage case for dispute resolution
+#[derive(Debug, Clone)]
+pub struct ArbitrageCase {
+    pub case_id: String,
+    pub initiator: String,
+    pub subject: String,
+    pub status: String,  // "Open", "Assigned", "Submitted", "PeerReview", "Finalized"
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub assigned_arbiters: Option<String>,
+}
+
+/// Arbitration ruling decision (database layer)
+#[derive(Debug, Clone)]
+pub struct DbArbitrationRuling {
+    pub ruling_id: String,
+    pub case_id: String,
+    pub ruling_text: String,
+    pub decided_by: String,
+    pub status: String,  // "Pending", "Approved", "Rejected", "Finalized"
+    pub created_at: i64,
+}
+
+/// Peer review signature on a ruling (database layer)
+#[derive(Debug, Clone)]
+pub struct DbPeerReviewSignature {
+    pub review_id: String,
+    pub ruling_id: String,
+    pub reviewer_id: String,
+    pub signature: String,
+    pub approval_status: String,  // "Approved", "Rejected", "Abstain"
+    pub reviewed_at: i64,
+}
+
+pub struct AdnStore {
+    conn: Connection,
+}
+
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+impl AdnStore {
+    pub fn open(path: &str) -> Result<Self, rusqlite::Error> {
+        let conn = Connection::open(path)?;
+        // Les FK ne sont PAS appliquees par defaut en SQLite, meme avec la
+        // syntaxe REFERENCES dans le CREATE TABLE -- il faut l'activer
+        // explicitement par connexion. Sans cette ligne, les contraintes
+        // ci-dessous sont silencieusement ignorees.
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS adn_store (
+                hash TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                encoder TEXT,
+                produced_by TEXT,
+                sigma REAL NOT NULL,
+                parent_hash TEXT,
+                conversation_id TEXT,
+                turn INTEGER,
+                committed INTEGER NOT NULL DEFAULT 0,
+                committed_by TEXT,
+                committed_at INTEGER,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS adn_council_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hash TEXT NOT NULL REFERENCES adn_store(hash),
+                action TEXT NOT NULL,
+                by_whom TEXT NOT NULL,
+                note TEXT,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS emergence_proofs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                solo_answers TEXT NOT NULL,
+                final_decision TEXT NOT NULL,
+                position_changed_by TEXT,
+                changed_to TEXT,
+                delta_sigma REAL,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS adn_relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hash TEXT NOT NULL REFERENCES adn_store(hash),
+                subject TEXT NOT NULL,
+                predicate TEXT NOT NULL,
+                object TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
+            CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);
+            CREATE TABLE IF NOT EXISTS audit_trail (
+                seq INTEGER PRIMARY KEY,
+                hash TEXT NOT NULL UNIQUE,
+                parent_hash TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                receiver TEXT NOT NULL,
+                purpose TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS governance_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT NOT NULL,
+                ts INTEGER NOT NULL,
+                inconsistency INTEGER NOT NULL,
+                semantic_warning INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_governance_events_ts ON governance_events(ts);
+            CREATE TABLE IF NOT EXISTS governance_alerts (
+                sender TEXT PRIMARY KEY,
+                last_alert_ts INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS arbitrage_cases (
+                case_id TEXT PRIMARY KEY,
+                initiator TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                assigned_arbiters TEXT
+            );
+            CREATE TABLE IF NOT EXISTS arbitration_rulings (
+                ruling_id TEXT PRIMARY KEY,
+                case_id TEXT NOT NULL UNIQUE,
+                ruling_text TEXT NOT NULL,
+                decided_by TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(case_id) REFERENCES arbitrage_cases(case_id)
+            );
+            CREATE TABLE IF NOT EXISTS peer_review_signatures (
+                review_id TEXT PRIMARY KEY,
+                ruling_id TEXT NOT NULL,
+                reviewer_id TEXT NOT NULL,
+                signature TEXT NOT NULL,
+                approval_status TEXT NOT NULL,
+                reviewed_at INTEGER NOT NULL,
+                FOREIGN KEY(ruling_id) REFERENCES arbitration_rulings(ruling_id)
+            );
+            CREATE TABLE IF NOT EXISTS wai_dictionaries (
+                dictionary_hash TEXT PRIMARY KEY,
+                timestamp INTEGER NOT NULL,
+                symbols_json TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS deontic_executions (
+                execution_id TEXT PRIMARY KEY,
+                rule_id TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                modality TEXT NOT NULL,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS audit_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                comment TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
+            CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
+            CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);
+            CREATE INDEX IF NOT EXISTS idx_wai_dictionaries_created ON wai_dictionaries(created_at);
+            CREATE INDEX IF NOT EXISTS idx_deontic_executions_timestamp ON deontic_executions(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_audit_comments_timestamp ON audit_comments(timestamp);",
+        )?;
+        // Migration idempotente (2026-09-04, Couche 8: audit deontique
+        // historique): `adn_relations` existe deja sur les bases reelles de
+        // production (dont celle de l'utilisateur) SANS colonne `modality` --
+        // l'ajouter au CREATE TABLE ci-dessus ne suffirait pas (IF NOT EXISTS
+        // ne modifie jamais un schema deja present). ADD COLUMN echoue avec
+        // "duplicate column name" sur une base qui l'a deja (execution
+        // repetee de ce open(), ou base neuve creee apres ce fix -- possible
+        // seulement si une version future remet modality dans CREATE TABLE)
+        // -- cette erreur precise est ignoree ; toute AUTRE erreur est
+        // loggee, jamais avalee en silence.
+        if let Err(e) = conn.execute("ALTER TABLE adn_relations ADD COLUMN modality TEXT", []) {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column name") {
+                eprintln!("[AdnStore] ⚠️  migration modality echouee (inattendu): {}", msg);
+            }
+        }
+        Ok(Self { conn })
+    }
+
+    /// Stocke un payload (ASSUMES / non-commité par défaut). Idempotent sur `hash`:
+    /// un hash déjà présent n'est pas écrasé (append-only, comme la chaîne d'audit).
+    #[allow(clippy::too_many_arguments)]
+    pub fn put(
+        &self,
+        hash: &str,
+        payload: &str,
+        encoder: Option<&str>,
+        produced_by: Option<&str>,
+        sigma: f64,
+        parent_hash: Option<&str>,
+        conversation_id: Option<&str>,
+        turn: Option<i64>,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO adn_store
+                (hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn, committed, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9)",
+            params![hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn, now_unix()],
+        )?;
+        Ok(())
+    }
+
+    pub fn get(&self, hash: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
+                        committed, committed_by, committed_at, created_at
+                 FROM adn_store WHERE hash = ?1",
+                params![hash],
+                |row| {
+                    Ok(AdnEntry {
+                        hash: row.get(0)?,
+                        payload: row.get(1)?,
+                        encoder: row.get(2)?,
+                        produced_by: row.get(3)?,
+                        sigma: row.get(4)?,
+                        parent_hash: row.get(5)?,
+                        conversation_id: row.get(6)?,
+                        turn: row.get(7)?,
+                        committed: row.get::<_, i64>(8)? != 0,
+                        committed_by: row.get(9)?,
+                        committed_at: row.get(10)?,
+                        created_at: row.get(11)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Résout un hash court (les 16 premiers caractères hex après "sha256:") en
+    /// entrée complète — utile pour les callback_data Telegram, limités à 64
+    /// octets, bien trop court pour un sha256 complet ("sha256:" + 64 hex).
+    pub fn get_by_short_id(&self, short_id: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
+        let pattern = format!("sha256:{}%", short_id);
+        self.conn
+            .query_row(
+                "SELECT hash, payload, encoder, produced_by, sigma, parent_hash, conversation_id, turn,
+                        committed, committed_by, committed_at, created_at
+                 FROM adn_store WHERE hash LIKE ?1 LIMIT 1",
+                params![pattern],
+                |row| {
+                    Ok(AdnEntry {
+                        hash: row.get(0)?,
+                        payload: row.get(1)?,
+                        encoder: row.get(2)?,
+                        produced_by: row.get(3)?,
+                        sigma: row.get(4)?,
+                        parent_hash: row.get(5)?,
+                        conversation_id: row.get(6)?,
+                        turn: row.get(7)?,
+                        committed: row.get::<_, i64>(8)? != 0,
+                        committed_by: row.get(9)?,
+                        committed_at: row.get(10)?,
+                        created_at: row.get(11)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Retrouve UNE entree de la chaine d'audit (`audit_trail`) par son
+    /// `hash` -- ajoute le 2026-09-06 pour la negociation FIPA minimale
+    /// (voir `server/handler.rs`, bloc `NEGOTIATION`): un `REFUSE` qui
+    /// porte `in_reply_to=<hash>` a besoin de savoir QUEL `purpose` avait
+    /// le payload original (etait-ce bien un `PROPOSE`/`CFP`, ou autre
+    /// chose ?) sans avoir a re-parser tout le payload brut stocke dans
+    /// `adn_store` -- `audit_trail` porte deja `purpose` en colonne depuis
+    /// le debut (voir `save_audit_entry`), seule la lecture cible par hash
+    /// manquait. Aucune migration de schema: la table existe deja.
+    pub fn get_audit_entry(&self, hash: &str) -> Result<Option<AuditEntry>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT seq, hash, parent_hash, sender, receiver, purpose
+                 FROM audit_trail WHERE hash = ?1",
+                params![hash],
+                |row| {
+                    Ok(AuditEntry {
+                        hash: row.get(1)?,
+                        parent_hash: row.get(2)?,
+                        sender: row.get(3)?,
+                        receiver: row.get(4)?,
+                        purpose: row.get(5)?,
+                        seq: row.get(0)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Ancrage humain (RestrictedCouncil). Rien n'est ancré sans ce commit explicite —
+    /// aucune logique de quorum n'appelle encore cette fonction automatiquement:
+    /// le quorum 2/3 humain (RestrictedCouncil) n'est pas construit dans cette passe.
+    pub fn commit(&self, hash: &str, by_whom: &str, note: Option<&str>) -> Result<(), rusqlite::Error> {
+        let now = now_unix();
+        self.conn.execute(
+            "UPDATE adn_store SET committed = 1, committed_by = ?2, committed_at = ?3 WHERE hash = ?1",
+            params![hash, by_whom, now],
+        )?;
+        self.conn.execute(
+            "INSERT INTO adn_council_log (hash, action, by_whom, note, timestamp) VALUES (?1, 'commit', ?2, ?3, ?4)",
+            params![hash, by_whom, note, now],
+        )?;
+        Ok(())
+    }
+
+    /// Résultat d'un vote de commit avec quorum (Couche 2, gouvernance).
+    pub fn cast_commit_vote(
+        &self,
+        hash: &str,
+        by_whom: &str,
+        note: Option<&str>,
+        quorum_size: usize,
+    ) -> Result<VoteOutcome, rusqlite::Error> {
+        let now = now_unix();
+        // On enregistre toujours le vote, quorum atteint ou non -- c'est ce
+        // journal (adn_council_log, colonnes by_whom/timestamp deja
+        // presentes) qui permet de recompter les votants distincts.
+        self.conn.execute(
+            "INSERT INTO adn_council_log (hash, action, by_whom, note, timestamp) VALUES (?1, 'commit', ?2, ?3, ?4)",
+            params![hash, by_whom, note, now],
+        )?;
+        let distinct_voters: i64 = self.conn.query_row(
+            "SELECT COUNT(DISTINCT by_whom) FROM adn_council_log WHERE hash = ?1 AND action = 'commit'",
+            params![hash],
+            |r| r.get(0),
+        )?;
+        let quorum_size = quorum_size.max(1);
+        let distinct_voters = distinct_voters as usize;
+        let quorum_reached = distinct_voters >= quorum_size;
+        if quorum_reached {
+            self.conn.execute(
+                "UPDATE adn_store SET committed = 1, committed_by = ?2, committed_at = ?3 WHERE hash = ?1",
+                params![hash, by_whom, now],
+            )?;
+        }
+        Ok(VoteOutcome { distinct_voters, quorum_size, quorum_reached })
+    }
+
+    pub fn revoke(&self, hash: &str, by_whom: &str, note: Option<&str>) -> Result<(), rusqlite::Error> {
+        let now = now_unix();
+        self.conn.execute(
+            "UPDATE adn_store SET committed = 0, committed_by = NULL, committed_at = NULL WHERE hash = ?1",
+            params![hash],
+        )?;
+        self.conn.execute(
+            "INSERT INTO adn_council_log (hash, action, by_whom, note, timestamp) VALUES (?1, 'revoke', ?2, ?3, ?4)",
+            params![hash, by_whom, note, now],
+        )?;
+        Ok(())
+    }
+
+    /// Journal d'audit complet pour un hash donne (commit/revoke, par qui, quand,
+    /// note eventuelle), du plus ancien au plus recent. Premiere methode de
+    /// lecture pour `adn_council_log` -- avant cette fonction, rien dans le
+    /// code Rust ne pouvait relire ce que `commit()`/`revoke()` y ecrivent.
+    pub fn council_log_for(&self, hash: &str) -> Result<Vec<CouncilLogEntry>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, hash, action, by_whom, note, timestamp
+             FROM adn_council_log WHERE hash = ?1 ORDER BY timestamp ASC",
+        )?;
+        let rows = stmt.query_map(params![hash], |row| {
+            Ok(CouncilLogEntry {
+                id: row.get(0)?,
+                hash: row.get(1)?,
+                action: row.get(2)?,
+                by_whom: row.get(3)?,
+                note: row.get(4)?,
+                timestamp: row.get(5)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    pub fn stats(&self) -> Result<AdnStats, rusqlite::Error> {
+        let total: u64 = self.conn.query_row("SELECT COUNT(*) FROM adn_store", [], |r| r.get(0))?;
+        let committed: u64 =
+            self.conn.query_row("SELECT COUNT(*) FROM adn_store WHERE committed = 1", [], |r| r.get(0))?;
+        Ok(AdnStats { total, committed, pending: total - committed })
+    }
+
+    /// Persiste les relations d'un payload deja stocke (via `put`), pour que
+    /// `ExecutionLab::check_consistency_with_history` puisse les retrouver lors
+    /// d'une requete future. Appelee separement de `put()`: un payload sans
+    /// relations (purpose=council_decision, etc.) n'a rien a inserer ici.
+    /// Persiste aussi `modality` quand le champ est present sur la RELATION
+    /// (`modality=MUST|MUST_NOT|...`, Couche 8 -- audit deontique historique,
+    /// 2026-09-04) -- NULL sinon (l'immense majorite des relations
+    /// factuelles), colonne ajoutee par la migration idempotente dans open().
+    pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
+        for rel in relations {
+            if let (Some(subject), Some(predicate), Some(object)) =
+                (rel.get("subject"), rel.get("type"), rel.get("object"))
+            {
+                self.conn.execute(
+                    "INSERT INTO adn_relations (hash, subject, predicate, object, modality) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![hash, subject, predicate, object, rel.get("modality")],
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Toutes les relations deontiques (modality IS NOT NULL) jamais
+    /// persistees, tous hashes/agents confondus -- l'historique que
+    /// `execution_lab::check_deontic_consistency_with_history` (Couche 8)
+    /// utilise pour detecter une contradiction Axiome D (MUST/MUST_NOT sur
+    /// le meme (subject, object)) qui s'etale sur PLUSIEURS payloads/agents,
+    /// pas seulement a l'interieur d'un seul (deja couvert, bloquant, par
+    /// `server/validator.rs::validate_deontic_constraints`). Meme filtre SQL
+    /// que `relations_for_predicates` (charge seulement ce qui compte, pas
+    /// tout `adn_relations`).
+    pub fn deontic_relations_history(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT subject, predicate, object, modality FROM adn_relations WHERE modality IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            m.insert("modality".to_string(), row.get::<_, String>(3)?);
+            Ok(m)
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Toutes les relations jamais stockees, tous hashes confondus -- l'historique
+    /// complet que la Couche 3b utilise pour detecter des contradictions/cycles
+    /// qui s'etalent sur plusieurs requetes, pas seulement dans un seul payload.
+    /// Conservee telle quelle pour compatibilite (tests existants, usage generique
+    /// hors ExecutionLab si besoin un jour) -- voir `relations_for_predicates` pour
+    /// le chemin utilise reellement par le handler, qui ne charge que ce qui compte.
+    pub fn all_relations(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare("SELECT subject, predicate, object FROM adn_relations")?;
+        let rows = stmt.query_map([], |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            Ok(m)
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Comme `all_relations()`, mais filtre au niveau SQL sur une liste de
+    /// predicats (WHERE predicate IN (...)). Existe pour que
+    /// `ExecutionLab::check_consistency_with_history` (via le handler) ne
+    /// charge que les ~6 predicats dont il se sert reellement
+    /// (`execution_lab::relevant_predicates()`), pas tout ce qui a jamais ete
+    /// stocke dans `adn_relations` -- y compris, une fois le Layer 4
+    /// (hypothesis engine) actif, des relations `ASSUMES`/`DOUBTS` qui ne
+    /// concernent pas du tout la coherence de Couche 3b. Correction honnete:
+    /// ca reste O(relations pertinentes), pas O(1) -- un vrai lookup cible par
+    /// (subject, predicate) demanderait de casser la purete de execution_lab.rs
+    /// (voir le message de commit), pas fait ici volontairement.
+    pub fn relations_for_predicates(
+        &self,
+        predicates: &[&str],
+    ) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        if predicates.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = predicates.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            "SELECT subject, predicate, object FROM adn_relations WHERE predicate IN ({})",
+            placeholders
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            predicates.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            Ok(m)
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Enregistre un `emergence_proof` (Level 4): la reponse solo de chaque
+    /// modele face a une question, la decision collective finale, et si/comment
+    /// une position a change. Portee honnete: aucun code de ce repo ne genere
+    /// ces donnees automatiquement -- le debat multi-modele qui produit
+    /// `solo_answers` se fait aujourd'hui manuellement, hors de ce serveur.
+    /// Cette methode existe pour que la table serve reellement des qu'un vrai
+    /// flux (orchestrateur ou saisie manuelle) l'appelle, plutot que de rester
+    /// un schema sans aucun code Rust autour.
+    #[allow(clippy::too_many_arguments)]
+    pub fn put_emergence_proof(
+        &self,
+        question: &str,
+        solo_answers: &str,
+        final_decision: &str,
+        position_changed_by: Option<&str>,
+        changed_to: Option<&str>,
+        delta_sigma: Option<f64>,
+    ) -> Result<i64, rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO emergence_proofs
+                (question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, now_unix()],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    // ── Chaine d'audit (Couche 5/8) -- fusionnee depuis l'ancien module
+    // `server/audit_store.rs` le 2026-09-04 (item #1 de la liste des choses
+    // a faire): les deux tables (`adn_store`/`adn_relations` ici,
+    // `audit_trail` avant dans un fichier separe) pointaient deja sur le
+    // MEME fichier SQLite via deux `Connection` distinctes -- un vrai risque
+    // (deux connexions non coordonnees vers le meme fichier, deux verrous
+    // `Mutex` en memoire different pour un seul et unique fichier sur
+    // disque), pas seulement de la dette cosmetique. Desormais une seule
+    // `Connection`, un seul schema, un seul `Arc<Mutex<AdnStore>>> cote
+    // serveur (voir `server/mod.rs`).
+
+    /// Sauvegarde une entree de la chaine d'audit (append-only). `INSERT OR
+    /// IGNORE`, pas `INSERT` brut: un payload de contenu identique (meme
+    /// `canonical_hash`) soumis deux fois doit rester idempotent, comme
+    /// `put()` ci-dessus -- `HashChain::append` en memoire ne deduplique pas
+    /// lui-meme (voir server/audit.rs).
+    pub fn save_audit_entry(&self, entry: &AuditEntry) -> Result<(), rusqlite::Error> {
+        let rows_affected = self.conn.execute(
+            "INSERT OR IGNORE INTO audit_trail (seq, hash, parent_hash, sender, receiver, purpose)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            params![
+                entry.seq,
+                &entry.hash,
+                &entry.parent_hash,
+                &entry.sender,
+                &entry.receiver,
+                &entry.purpose,
+            ],
+        )?;
+        if rows_affected > 0 {
+            eprintln!("[AdnStore] Audit persisted seq={}", entry.seq);
+        } else {
+            eprintln!("[AdnStore] Audit seq={} ignore (hash {} deja present)", entry.seq, entry.hash);
+        }
+        Ok(())
+    }
+
+    /// Charge toute la chaine d'audit persistee depuis `audit_trail`, du
+    /// plus ancien au plus recent -- utilise au demarrage du serveur pour
+    /// que `seq`/`parent_hash` survivent a un redemarrage reel (voir
+    /// `server/mod.rs::with_data_path`).
+    pub fn load_chain(&self) -> Result<HashChain, rusqlite::Error> {
+        let mut chain = HashChain::new();
+
+        let mut stmt = self.conn.prepare(
+            "SELECT seq, hash, parent_hash, sender, receiver, purpose
+             FROM audit_trail ORDER BY seq",
+        )?;
+
+        let entries = stmt.query_map([], |row| {
+            Ok(AuditEntry {
+                hash: row.get(1)?,
+                parent_hash: row.get(2)?,
+                sender: row.get(3)?,
+                receiver: row.get(4)?,
+                purpose: row.get(5)?,
+                seq: row.get(0)?,
+            })
+        })?;
+
+        for entry_result in entries {
+            chain.entries.push(entry_result?);
+        }
+
+        eprintln!("[AdnStore] Loaded {} audit entries from disk", chain.len());
+        Ok(chain)
+    }
+
+    pub fn audit_count(&self) -> Result<u64, rusqlite::Error> {
+        self.conn.query_row("SELECT COUNT(*) FROM audit_trail", [], |row| row.get(0))
+    }
+
+    // ── Gouvernance (Couche 2) -- persistance ajoutee le 2026-09-05.
+    // `governance.rs::GovernanceTracker` vivait purement en memoire
+    // (`Arc<Mutex<GovernanceTracker>>` cote serveur, remis a zero a chaque
+    // redemarrage) -- meme fichier/`Connection` que le reste (adn_store/
+    // audit_trail), pas une base separee, coherent avec la fusion du
+    // 2026-09-04. Un evenement = un appel `record()` (un payload traite),
+    // exactement le meme grain que `save_audit_entry` pour l'audit trail --
+    // deja le patron etabli de ce depot pour ce compromis latence/durabilite.
+
+    /// Sauvegarde un evenement de gouvernance (un appel `record()`) pour
+    /// `sender`, et purge dans la meme requete tout ce qui est devenu plus
+    /// vieux que `prune_before` (horodatage unix) -- sans cette purge,
+    /// `governance_events` grossirait sans limite sur un serveur qui tourne
+    /// des mois, alors que le mecanisme lui-meme (fenetre glissante) n'a
+    /// jamais besoin de plus que la plus grande fenetre (`DRIFT_WINDOW`).
+    /// L'appelant (`handler.rs`) calcule `prune_before` a partir des
+    /// constantes de `governance.rs` -- ce module reste agnostique du sens
+    /// de ces fenetres, il ne fait qu'ecrire/purger sur un seuil donne.
+    pub fn save_governance_event(
+        &self,
+        sender: &str,
+        ts: i64,
+        had_inconsistency: bool,
+        had_semantic_warning: bool,
+        prune_before: i64,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO governance_events (sender, ts, inconsistency, semantic_warning) VALUES (?1, ?2, ?3, ?4)",
+            params![sender, ts, had_inconsistency as i64, had_semantic_warning as i64],
+        )?;
+        self.conn.execute("DELETE FROM governance_events WHERE ts < ?1", params![prune_before])?;
+        Ok(())
+    }
+
+    /// Sauvegarde le dernier horodatage d'alerte connu pour `sender` --
+    /// upsert (un seul horodatage par sender a la fois a un sens pour le
+    /// cooldown anti-spam, pas un historique).
+    pub fn save_governance_alert(&self, sender: &str, ts: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO governance_alerts (sender, last_alert_ts) VALUES (?1, ?2)
+             ON CONFLICT(sender) DO UPDATE SET last_alert_ts = excluded.last_alert_ts",
+            params![sender, ts],
+        )?;
+        Ok(())
+    }
+
+    /// Charge tous les evenements de gouvernance dont l'horodatage est
+    /// superieur ou egal a `since` (deja filtre au niveau SQL -- pas la
+    /// peine de rapatrier ce qui est de toute facon hors de la plus grande
+    /// fenetre glissante), du plus ancien au plus recent -- utilise au
+    /// demarrage pour reconstruire `GovernanceTracker` via
+    /// `with_defaults_restored`.
+    pub fn load_governance_events(&self, since: i64) -> Result<Vec<(String, i64, bool, bool)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT sender, ts, inconsistency, semantic_warning FROM governance_events WHERE ts >= ?1 ORDER BY ts ASC",
+        )?;
+        let rows = stmt.query_map(params![since], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)? != 0,
+                row.get::<_, i64>(3)? != 0,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Charge tous les derniers horodatages d'alerte connus, un par sender.
+    pub fn load_governance_alerts(&self) -> Result<Vec<(String, i64)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare("SELECT sender, last_alert_ts FROM governance_alerts")?;
+        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Tous les emergence_proofs enregistres, du plus ancien au plus recent.
+    pub fn get_emergence_proofs(&self) -> Result<Vec<EmergenceProof>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, question, solo_answers, final_decision, position_changed_by, changed_to, delta_sigma, timestamp
+             FROM emergence_proofs ORDER BY timestamp ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(EmergenceProof {
+                id: row.get(0)?,
+                question: row.get(1)?,
+                solo_answers: row.get(2)?,
+                final_decision: row.get(3)?,
+                position_changed_by: row.get(4)?,
+                changed_to: row.get(5)?,
+                delta_sigma: row.get(6)?,
+                timestamp: row.get(7)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PHASE 3: Arbitrage Persistence Methods (Layer 3b)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Save an arbitrage case to the database
+    pub fn save_arbitrage_case(&self, case: &ArbitrageCase) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO arbitrage_cases
+                (case_id, initiator, subject, status, created_at, updated_at, assigned_arbiters)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &case.case_id, &case.initiator, &case.subject, &case.status,
+                &case.created_at, &case.updated_at, &case.assigned_arbiters
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve an arbitrage case by ID
+    pub fn get_arbitrage_case(&self, case_id: &str) -> Result<Option<ArbitrageCase>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT case_id, initiator, subject, status, created_at, updated_at, assigned_arbiters
+                 FROM arbitrage_cases WHERE case_id = ?1",
+                params![case_id],
+                |row| {
+                    Ok(ArbitrageCase {
+                        case_id: row.get(0)?,
+                        initiator: row.get(1)?,
+                        subject: row.get(2)?,
+                        status: row.get(3)?,
+                        created_at: row.get(4)?,
+                        updated_at: row.get(5)?,
+                        assigned_arbiters: row.get(6)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Save an arbitration ruling
+    pub fn save_arbitrage_ruling(&self, ruling: &DbArbitrationRuling) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO arbitration_rulings
+                (ruling_id, case_id, ruling_text, decided_by, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                &ruling.ruling_id, &ruling.case_id, &ruling.ruling_text,
+                &ruling.decided_by, &ruling.status, &ruling.created_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve a ruling by ID
+    pub fn get_arbitrage_ruling(&self, ruling_id: &str) -> Result<Option<DbArbitrationRuling>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT ruling_id, case_id, ruling_text, decided_by, status, created_at
+                 FROM arbitration_rulings WHERE ruling_id = ?1",
+                params![ruling_id],
+                |row| {
+                    Ok(DbArbitrationRuling {
+                        ruling_id: row.get(0)?,
+                        case_id: row.get(1)?,
+                        ruling_text: row.get(2)?,
+                        decided_by: row.get(3)?,
+                        status: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Retrieve ruling by case ID
+    pub fn get_ruling_by_case(&self, case_id: &str) -> Result<Option<DbArbitrationRuling>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT ruling_id, case_id, ruling_text, decided_by, status, created_at
+                 FROM arbitration_rulings WHERE case_id = ?1",
+                params![case_id],
+                |row| {
+                    Ok(DbArbitrationRuling {
+                        ruling_id: row.get(0)?,
+                        case_id: row.get(1)?,
+                        ruling_text: row.get(2)?,
+                        decided_by: row.get(3)?,
+                        status: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Save a peer review signature
+    pub fn save_peer_review(&self, review: &DbPeerReviewSignature) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO peer_review_signatures
+                (review_id, ruling_id, reviewer_id, signature, approval_status, reviewed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                &review.review_id, &review.ruling_id, &review.reviewer_id,
+                &review.signature, &review.approval_status, &review.reviewed_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get all peer reviews for a specific ruling
+    pub fn get_peer_reviews_for_ruling(&self, ruling_id: &str) -> Result<Vec<DbPeerReviewSignature>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT review_id, ruling_id, reviewer_id, signature, approval_status, reviewed_at
+             FROM peer_review_signatures WHERE ruling_id = ?1 ORDER BY reviewed_at"
+        )?;
+        let rows = stmt.query_map(params![ruling_id], |row| {
+            Ok(DbPeerReviewSignature {
+                review_id: row.get(0)?,
+                ruling_id: row.get(1)?,
+                reviewer_id: row.get(2)?,
+                signature: row.get(3)?,
+                approval_status: row.get(4)?,
+                reviewed_at: row.get(5)?,
+            })
+        })?;
+        let mut reviews = Vec::new();
+        for row in rows {
+            reviews.push(row?);
+        }
+        Ok(reviews)
+    }
+
+    /// Get all active arbiters (stub for now, would need an arbiters table)
+    pub fn get_active_arbiters(&self) -> Result<Vec<String>, rusqlite::Error> {
+        // Placeholder: in production, would query from an arbiters table
+        // For now, return empty — integration tests can mock this
+        Ok(Vec::new())
+    }
+
+    /// Save a WAI dictionary version to persistent storage
+    pub fn save_wai_dictionary(
+        &self,
+        dictionary_hash: &str,
+        timestamp: u64,
+        symbols_json: &str,
+        size_bytes: usize,
+    ) -> Result<(), rusqlite::Error> {
+        let created_at = now_unix();
+        self.conn.execute(
+            "INSERT OR IGNORE INTO wai_dictionaries
+             (dictionary_hash, timestamp, symbols_json, size_bytes, created_at)
+             VALUES (?, ?, ?, ?, ?)",
+            params![dictionary_hash, timestamp as i64, symbols_json, size_bytes as i64, created_at],
+        )?;
+        Ok(())
+    }
+
+    /// Load a WAI dictionary version by hash
+    pub fn load_wai_dictionary(&self, dictionary_hash: &str) -> Result<Option<(u64, String, usize)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT timestamp, symbols_json, size_bytes FROM wai_dictionaries WHERE dictionary_hash = ?"
+        )?;
+
+        let result = stmt.query_row([dictionary_hash], |row| {
+            let timestamp: i64 = row.get(0)?;
+            let symbols_json: String = row.get(1)?;
+            let size_bytes: i64 = row.get(2)?;
+            Ok((timestamp as u64, symbols_json, size_bytes as usize))
+        }).optional()?;
+
+        Ok(result)
+    }
+
+    /// Get all WAI dictionaries (for discovery)
+    pub fn list_wai_dictionaries(&self) -> Result<Vec<(String, u64, usize)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT dictionary_hash, timestamp, size_bytes FROM wai_dictionaries ORDER BY created_at DESC"
+        )?;
+
+        let dicts = stmt.query_map([], |row| {
+            let hash: String = row.get(0)?;
+            let timestamp: i64 = row.get(1)?;
+            let size_bytes: i64 = row.get(2)?;
+            Ok((hash, timestamp as u64, size_bytes as usize))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(dicts)
+    }
+
+    /// Couche 9: Save deontic execution record
+    pub fn save_deontic_execution(
+        &self,
+        execution: &crate::server::deontic_orchestration::DeonticExecution,
+    ) -> Result<(), rusqlite::Error> {
+        let execution_id = format!(
+            "{}_{}",
+            execution.rule_id,
+            execution.timestamp.timestamp()
+        );
+
+        let modality_str = match execution.modality {
+            crate::server::deontic_orchestration::DeonticModality::Must => "MUST",
+            crate::server::deontic_orchestration::DeonticModality::MustNot => "MUST_NOT",
+            crate::server::deontic_orchestration::DeonticModality::May => "MAY",
+        };
+
+        let result_str = match execution.result {
+            crate::server::deontic_orchestration::ExecutionResult::Success => "Success",
+            crate::server::deontic_orchestration::ExecutionResult::Rejected => "Rejected",
+            crate::server::deontic_orchestration::ExecutionResult::NoMatch => "NoMatch",
+            crate::server::deontic_orchestration::ExecutionResult::Failed => "Failed",
+        };
+
+        self.conn.execute(
+            "INSERT OR IGNORE INTO deontic_executions
+                (execution_id, rule_id, event_id, modality, action, result, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &execution_id,
+                &execution.rule_id,
+                &execution.event_id,
+                modality_str,
+                &execution.action,
+                result_str,
+                execution.timestamp.timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Couche 9: Append audit comment to the trail
+    pub fn append_comment(&self, comment: &str) -> Result<(), rusqlite::Error> {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT INTO audit_comments (comment, timestamp) VALUES (?1, ?2)",
+            params![comment, timestamp],
+        )?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_put_get_roundtrip() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash1", "payload text", Some("enc"), Some("agent_a"), 0.3, None, None, None).unwrap();
+        let entry = store.get("hash1").unwrap().unwrap();
+        assert_eq!(entry.sigma, 0.3);
+        assert!(!entry.committed);
+    }
+
+    #[test]
+    fn test_commit_flow() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash2", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.commit("hash2", "human_arbiter", Some("quorum reached")).unwrap();
+        let entry = store.get("hash2").unwrap().unwrap();
+        assert!(entry.committed);
+        assert_eq!(entry.committed_by.as_deref(), Some("human_arbiter"));
+    }
+
+    #[test]
+    fn test_cast_commit_vote_quorum_one_matches_legacy_commit_flow() {
+        // quorum_size=1 (config a un seul membre, celle d'aujourd'hui):
+        // un seul vote doit committer immediatement, comme commit().
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q1", "payload", None, None, 0.75, None, None, None).unwrap();
+        let outcome = store.cast_commit_vote("hash_q1", "Olivier", None, 1).unwrap();
+        assert_eq!(outcome.distinct_voters, 1);
+        assert_eq!(outcome.quorum_size, 1);
+        assert!(outcome.quorum_reached);
+        let entry = store.get("hash_q1").unwrap().unwrap();
+        assert!(entry.committed);
+        assert_eq!(entry.committed_by.as_deref(), Some("Olivier"));
+    }
+
+    #[test]
+    fn test_cast_commit_vote_below_quorum_does_not_commit() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q2", "payload", None, None, 0.75, None, None, None).unwrap();
+        let outcome = store.cast_commit_vote("hash_q2", "alice", None, 2).unwrap();
+        assert_eq!(outcome.distinct_voters, 1);
+        assert_eq!(outcome.quorum_size, 2);
+        assert!(!outcome.quorum_reached);
+        let entry = store.get("hash_q2").unwrap().unwrap();
+        assert!(!entry.committed, "un seul votant sur quorum=2 ne doit pas committer");
+    }
+
+    #[test]
+    fn test_cast_commit_vote_second_distinct_voter_reaches_quorum() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q3", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.cast_commit_vote("hash_q3", "alice", None, 2).unwrap();
+        let outcome = store.cast_commit_vote("hash_q3", "bob", None, 2).unwrap();
+        assert_eq!(outcome.distinct_voters, 2);
+        assert!(outcome.quorum_reached);
+        let entry = store.get("hash_q3").unwrap().unwrap();
+        assert!(entry.committed);
+        assert_eq!(entry.committed_by.as_deref(), Some("bob"));
+    }
+
+    #[test]
+    fn test_cast_commit_vote_repeat_voter_does_not_fake_quorum() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_q4", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.cast_commit_vote("hash_q4", "alice", None, 2).unwrap();
+        let outcome = store.cast_commit_vote("hash_q4", "alice", None, 2).unwrap();
+        assert_eq!(outcome.distinct_voters, 1, "COUNT DISTINCT: 2 votes du meme membre = 1 votant");
+        assert!(!outcome.quorum_reached);
+        let entry = store.get("hash_q4").unwrap().unwrap();
+        assert!(!entry.committed);
+    }
+
+    #[test]
+    fn test_put_is_idempotent_append_only() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash3", "v1", None, None, 0.3, None, None, None).unwrap();
+        store.put("hash3", "v2_should_be_ignored", None, None, 0.9, None, None, None).unwrap();
+        let entry = store.get("hash3").unwrap().unwrap();
+        assert_eq!(entry.payload, "v1");
+    }
+
+    #[test]
+    fn test_get_by_short_id() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("sha256:abcdef0123456789fedcba", "payload", None, None, 0.5, None, None, None).unwrap();
+        let entry = store.get_by_short_id("abcdef0123456789").unwrap().unwrap();
+        assert_eq!(entry.hash, "sha256:abcdef0123456789fedcba");
+    }
+
+    #[test]
+    fn test_stats() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("a", "p", None, None, 0.3, None, None, None).unwrap();
+        store.put("b", "p", None, None, 0.3, None, None, None).unwrap();
+        store.commit("a", "human", None).unwrap();
+        let stats = store.stats().unwrap();
+        assert_eq!(stats.total, 2);
+        assert_eq!(stats.committed, 1);
+        assert_eq!(stats.pending, 1);
+    }
+
+    #[test]
+    fn test_council_log_for_empty_when_never_committed() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_x", "p", None, None, 0.3, None, None, None).unwrap();
+        assert!(store.council_log_for("hash_x").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_council_log_for_records_commit_then_revoke_in_order() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_y", "p", None, None, 0.3, None, None, None).unwrap();
+        store.commit("hash_y", "alice", Some("quorum ok")).unwrap();
+        store.revoke("hash_y", "bob", Some("erreur")).unwrap();
+
+        let log = store.council_log_for("hash_y").unwrap();
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].action, "commit");
+        assert_eq!(log[0].by_whom, "alice");
+        assert_eq!(log[0].note.as_deref(), Some("quorum ok"));
+        assert_eq!(log[1].action, "revoke");
+        assert_eq!(log[1].by_whom, "bob");
+    }
+
+    #[test]
+    fn test_council_log_for_is_scoped_to_its_hash() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_z1", "p", None, None, 0.3, None, None, None).unwrap();
+        store.put("hash_z2", "p", None, None, 0.3, None, None, None).unwrap();
+        store.commit("hash_z1", "alice", None).unwrap();
+        store.commit("hash_z2", "bob", None).unwrap();
+
+        let log = store.council_log_for("hash_z1").unwrap();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].by_whom, "alice");
+    }
+
+    #[test]
+    fn test_put_relations_rejects_orphan_hash_via_foreign_key() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "A".to_string());
+        rel.insert("type".to_string(), "part_of".to_string());
+        rel.insert("object".to_string(), "B".to_string());
+        // "hash_never_stored" n'a jamais ete put() dans adn_store -- la FK
+        // doit refuser l'insertion plutot que la laisser passer en silence.
+        let result = store.put_relations("hash_never_stored", &[rel]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_relations_for_predicates_filters_at_sql_level() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h1", "p", None, None, 0.3, None, None, None).unwrap();
+        let mut born = HashMap::new();
+        born.insert("subject".to_string(), "Marie Curie".to_string());
+        born.insert("type".to_string(), "born_in".to_string());
+        born.insert("object".to_string(), "Warsaw".to_string());
+        let mut assumes = HashMap::new();
+        assumes.insert("subject".to_string(), "X".to_string());
+        assumes.insert("type".to_string(), "ASSUMES".to_string());
+        assumes.insert("object".to_string(), "Y".to_string());
+        store.put_relations("h1", &[born, assumes]).unwrap();
+
+        // all_relations() voit tout, y compris ASSUMES.
+        assert_eq!(store.all_relations().unwrap().len(), 2);
+
+        // relations_for_predicates ne renvoie que ce qui est demande.
+        let filtered = store.relations_for_predicates(&["born_in", "died_in"]).unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].get("type").map(String::as_str), Some("born_in"));
+    }
+
+    #[test]
+    fn test_relations_for_predicates_empty_list_returns_nothing() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h1", "p", None, None, 0.3, None, None, None).unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "A".to_string());
+        rel.insert("type".to_string(), "born_in".to_string());
+        rel.insert("object".to_string(), "B".to_string());
+        store.put_relations("h1", &[rel]).unwrap();
+
+        assert!(store.relations_for_predicates(&[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_put_relations_and_all_relations_roundtrip() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_a", "payload", None, None, 0.3, None, None, None).unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "Marie Curie".to_string());
+        rel.insert("type".to_string(), "born_in".to_string());
+        rel.insert("object".to_string(), "Warsaw".to_string());
+        store.put_relations("hash_a", &[rel]).unwrap();
+
+        let all = store.all_relations().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].get("subject").map(String::as_str), Some("Marie Curie"));
+        assert_eq!(all[0].get("object").map(String::as_str), Some("Warsaw"));
+    }
+
+    #[test]
+    fn test_all_relations_accumulates_across_multiple_put_relations_calls() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_1", "payload", None, None, 0.3, None, None, None).unwrap();
+        store.put("hash_2", "payload", None, None, 0.3, None, None, None).unwrap();
+        let mut rel1 = HashMap::new();
+        rel1.insert("subject".to_string(), "A".to_string());
+        rel1.insert("type".to_string(), "part_of".to_string());
+        rel1.insert("object".to_string(), "B".to_string());
+        store.put_relations("hash_1", &[rel1]).unwrap();
+
+        let mut rel2 = HashMap::new();
+        rel2.insert("subject".to_string(), "B".to_string());
+        rel2.insert("type".to_string(), "part_of".to_string());
+        rel2.insert("object".to_string(), "C".to_string());
+        store.put_relations("hash_2", &[rel2]).unwrap();
+
+        let all = store.all_relations().unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_put_and_get_emergence_proof_roundtrip() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let id = store
+            .put_emergence_proof(
+                "Is the sky blue?",
+                r#"{"claude":"yes","gpt":"yes","gemini":"mostly"}"#,
+                "yes",
+                Some("gemini"),
+                Some("yes"),
+                Some(0.12),
+            )
+            .unwrap();
+        assert!(id > 0);
+
+        let all = store.get_emergence_proofs().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].question, "Is the sky blue?");
+        assert_eq!(all[0].position_changed_by.as_deref(), Some("gemini"));
+        assert_eq!(all[0].delta_sigma, Some(0.12));
+    }
+
+    #[test]
+    fn test_emergence_proof_without_position_change() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store
+            .put_emergence_proof(
+                "2+2?",
+                r#"{"claude":"4","gpt":"4"}"#,
+                "4",
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let all = store.get_emergence_proofs().unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(all[0].position_changed_by.is_none());
+        assert!(all[0].delta_sigma.is_none());
+    }
+
+    // ── modality (Couche 8, audit deontique historique, 2026-09-04) ──
+
+    fn deontic_relation(subject: &str, object: &str, modality: &str) -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        m.insert("subject".to_string(), subject.to_string());
+        m.insert("type".to_string(), "PERFORM".to_string());
+        m.insert("object".to_string(), object.to_string());
+        m.insert("modality".to_string(), modality.to_string());
+        m
+    }
+
+    #[test]
+    fn test_put_relations_persists_and_roundtrips_modality() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h1", "payload", None, None, 0.75, None, None, None).unwrap();
+        store.put_relations("h1", &[deontic_relation("agent_x", "delete_prod_db", "MUST_NOT")]).unwrap();
+
+        let history = store.deontic_relations_history().unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].get("subject").map(String::as_str), Some("agent_x"));
+        assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST_NOT"));
+    }
+
+    #[test]
+    fn test_factual_relations_without_modality_excluded_from_deontic_history() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("h2", "payload", None, None, 0.75, None, None, None).unwrap();
+        let mut factual = HashMap::new();
+        factual.insert("subject".to_string(), "alice".to_string());
+        factual.insert("type".to_string(), "born_in".to_string());
+        factual.insert("object".to_string(), "quebec".to_string());
+        store.put_relations("h2", &[factual]).unwrap();
+
+        let history = store.deontic_relations_history().unwrap();
+        assert!(history.is_empty(), "une relation factuelle (sans modality) ne doit jamais apparaitre dans l'historique deontique");
+    }
+
+    #[test]
+    fn test_open_migrates_real_file_with_old_schema_missing_modality_column() {
+        // Simule EXACTEMENT l'etat d'une vraie base de production existante
+        // (dont celle de l'utilisateur): adn_relations deja cree, SANS
+        // colonne modality, AVANT ce fix -- via une Connection brute, pas
+        // AdnStore::open() (qui appliquerait deja la migration). Confirme
+        // que la migration idempotente dans open() gere ce cas reel sans
+        // paniquer ni perdre les donnees deja presentes.
+        let tmp_path = std::env::temp_dir().join(format!(
+            "cstl_adn_store_migration_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+        ));
+        let tmp_path_str = tmp_path.to_str().unwrap().to_string();
+        let _ = std::fs::remove_file(&tmp_path_str);
+
+        {
+            // Ancien schema, sans modality -- exactement ce que ce depot
+            // produisait avant ce fix.
+            let raw = Connection::open(&tmp_path_str).unwrap();
+            raw.execute_batch(
+                "CREATE TABLE adn_store (
+                    hash TEXT PRIMARY KEY, payload TEXT NOT NULL, encoder TEXT,
+                    produced_by TEXT, sigma REAL NOT NULL, parent_hash TEXT,
+                    conversation_id TEXT, turn INTEGER, committed INTEGER NOT NULL DEFAULT 0,
+                    committed_by TEXT, committed_at INTEGER, created_at INTEGER NOT NULL
+                );
+                CREATE TABLE adn_relations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hash TEXT NOT NULL REFERENCES adn_store(hash),
+                    subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL
+                );",
+            ).unwrap();
+            raw.execute(
+                "INSERT INTO adn_store (hash, payload, sigma, created_at) VALUES ('h_old', 'p', 0.5, 0)",
+                [],
+            ).unwrap();
+            raw.execute(
+                "INSERT INTO adn_relations (hash, subject, predicate, object) VALUES ('h_old', 'paris', 'part_of', 'france')",
+                [],
+            ).unwrap();
+        }
+
+        // Rouvre via AdnStore::open() -- ne doit PAS paniquer, et doit avoir
+        // migre la colonne modality (NULL pour la ligne pre-existante).
+        let store = AdnStore::open(&tmp_path_str).unwrap();
+        let old_entry = store.get("h_old").unwrap();
+        assert!(old_entry.is_some(), "les donnees pre-existantes doivent survivre a la migration");
+
+        // put_relations avec modality doit maintenant fonctionner sur ce
+        // meme fichier migre.
+        store.put("h_new", "p2", None, None, 0.5, None, None, None).unwrap();
+        store.put_relations("h_new", &[deontic_relation("agent_x", "delete_prod_db", "MUST")]).unwrap();
+        let history = store.deontic_relations_history().unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].get("modality").map(String::as_str), Some("MUST"));
+
+        let _ = std::fs::remove_file(&tmp_path_str);
+    }
+
+    // ── Chaine d'audit fusionnee (ex server/audit_store.rs) ──
+
+    #[test]
+    fn test_audit_persist_and_load() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let entry = AuditEntry {
+            hash: "sha256:abc123".to_string(),
+            parent_hash: "root".to_string(),
+            sender: "alice".to_string(),
+            receiver: "bob".to_string(),
+            purpose: "test".to_string(),
+            seq: 0,
+        };
+        store.save_audit_entry(&entry).unwrap();
+        assert_eq!(store.audit_count().unwrap(), 1);
+        let chain = store.load_chain().unwrap();
+        assert_eq!(chain.len(), 1);
+        assert_eq!(chain.entries[0].hash, "sha256:abc123");
+    }
+
+    #[test]
+    fn test_audit_save_is_idempotent_on_duplicate_hash() {
+        let store = AdnStore::open(":memory:").unwrap();
+        let entry1 = AuditEntry {
+            hash: "sha256:dup".to_string(), parent_hash: "root".to_string(),
+            sender: "alice".to_string(), receiver: "bob".to_string(),
+            purpose: "test".to_string(), seq: 0,
+        };
+        let entry2 = AuditEntry {
+            hash: "sha256:dup".to_string(), parent_hash: "sha256:dup".to_string(),
+            sender: "alice".to_string(), receiver: "bob".to_string(),
+            purpose: "test".to_string(), seq: 1,
+        };
+        store.save_audit_entry(&entry1).unwrap();
+        store.save_audit_entry(&entry2).unwrap(); // ne doit pas retourner Err
+        assert_eq!(store.audit_count().unwrap(), 1, "le second save (hash duplique) doit etre ignore, pas ajoute");
+    }
+
+    #[test]
+    fn test_audit_persistence_survives_reopen_on_real_file_and_shares_adn_store_data() {
+        // Verifie a la fois la survie au redemarrage (deja teste avant la
+        // fusion) ET la vraie raison d'etre de cette fusion: audit_trail et
+        // adn_store/adn_relations vivent maintenant dans LE MEME fichier ET
+        // la MEME Connection -- put() et save_audit_entry() sur la meme
+        // instance doivent cohabiter sans se marcher dessus.
+        let tmp_path = std::env::temp_dir().join(format!(
+            "cstl_adn_store_audit_merge_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+        ));
+        let tmp_path_str = tmp_path.to_str().unwrap().to_string();
+        let _ = std::fs::remove_file(&tmp_path_str);
+
+        {
+            let store = AdnStore::open(&tmp_path_str).unwrap();
+            store.put("sha256:persisted1", "payload", None, None, 0.5, None, None, None).unwrap();
+            store.save_audit_entry(&AuditEntry {
+                hash: "sha256:persisted1".to_string(), parent_hash: "root".to_string(),
+                sender: "alice".to_string(), receiver: "bob".to_string(),
+                purpose: "test".to_string(), seq: 0,
+            }).unwrap();
+            store.save_audit_entry(&AuditEntry {
+                hash: "sha256:persisted2".to_string(), parent_hash: "sha256:persisted1".to_string(),
+                sender: "bob".to_string(), receiver: "alice".to_string(),
+                purpose: "test".to_string(), seq: 1,
+            }).unwrap();
+            // `store` sort de portee ici -- simule un redemarrage complet.
+        }
+
+        let reopened = AdnStore::open(&tmp_path_str).unwrap();
+        let chain = reopened.load_chain().unwrap();
+        assert_eq!(chain.len(), 2, "les 2 entrees du 'run precedent' doivent survivre a la reouverture");
+        assert_eq!(chain.entries[0].hash, "sha256:persisted1");
+        assert_eq!(chain.entries[1].parent_hash, "sha256:persisted1");
+        assert!(chain.verify_integrity().is_ok());
+        // Le payload adn_store du meme run precedent doit lui aussi survivre
+        // -- meme fichier, une seule Connection.
+        assert!(reopened.get("sha256:persisted1").unwrap().is_some());
+
+        let _ = std::fs::remove_file(&tmp_path_str);
+    }
+}

@@ -136,6 +136,67 @@ def sign_intent(priv_bytes: Optional[bytes], pub_hex: str, **kwargs) -> str:
     return sig_bytes.hex()
 
 
+def verify_signature(payload: dict, public_key_hex: str, signature_hex: str) -> bool:
+    """
+    Verify CSTL payload signature with Ed25519 (Couche 7 v5.2).
+
+    Reproduces Rust src/signing.rs::verify_raw() exactly:
+    - Decodes hex public key (32 bytes) and signature (64 bytes)
+    - Canonicalizes payload using signing_bytes()
+    - Verifies Ed25519 signature
+
+    Args:
+        payload: dict with version, mode, meta, intent, relations
+        public_key_hex: hex-encoded 32-byte Ed25519 public key (64 chars)
+        signature_hex: hex-encoded 64-byte signature (128 chars)
+
+    Returns:
+        True if signature is valid, False otherwise
+
+    Raises:
+        ValueError: if key or signature hex is invalid
+    """
+    if not HAS_CRYPTO:
+        raise ImportError("cryptography not installed")
+
+    # Decode public key (32 bytes = 64 hex chars)
+    try:
+        pub_bytes = bytes.fromhex(public_key_hex)
+        if len(pub_bytes) != 32:
+            raise ValueError(f"bad_public_key_length: expected 32 bytes, got {len(pub_bytes)}")
+    except ValueError as e:
+        if "invalid_hex" in str(e).lower():
+            raise ValueError("invalid_hex")
+        raise ValueError("invalid_hex")
+
+    # Decode signature (64 bytes = 128 hex chars)
+    try:
+        sig_bytes = bytes.fromhex(signature_hex)
+        if len(sig_bytes) != 64:
+            raise ValueError(f"bad_signature_length: expected 64 bytes, got {len(sig_bytes)}")
+    except ValueError as e:
+        if "invalid_hex" in str(e).lower():
+            raise ValueError("invalid_hex")
+        raise ValueError("invalid_hex")
+
+    # Canonicalize payload exactly like Rust signing_bytes()
+    message = cstl_signing_bytes(
+        payload.get("version", "v5.0.0"),
+        payload.get("mode", "A"),
+        payload.get("meta", {}),
+        payload.get("intent", {}),
+        payload.get("relations", [])
+    )
+
+    # Verify signature
+    try:
+        pub_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        pub_key.verify(sig_bytes, message)
+        return True
+    except Exception:
+        return False
+
+
 # ============================================================================
 # LLM Provider Interface
 # ============================================================================
@@ -149,9 +210,17 @@ class HermesAgentBrain(LLMProvider):
     """Hermes3:8b via Ollama (localhost:11434)"""
 
     def __init__(self):
-        if not HAS_OLLAMA:
-            raise ImportError("pip3 install ollama")
         self.client = ollama.Client(host="http://localhost:11434")
+
+    @classmethod
+    def from_env(cls) -> Optional['HermesAgentBrain']:
+        """Return HermesAgentBrain if ollama package available, else None."""
+        if not HAS_OLLAMA:
+            return None
+        try:
+            return cls()
+        except Exception:
+            return None
 
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         try:
@@ -169,13 +238,29 @@ class HermesAgentBrain(LLMProvider):
 class AnthropicAgentBrain(LLMProvider):
     """Claude via Anthropic API"""
 
-    def __init__(self):
+    def __init__(self, api_key: str):
+        self.client = anthropic.Anthropic(api_key=api_key)
+
+    @classmethod
+    def from_env(cls) -> Optional['AnthropicAgentBrain']:
+        """
+        Return AnthropicAgentBrain instance if both `anthropic` package
+        and ANTHROPIC_API_KEY are available, else None.
+
+        Dégradation propre (même pattern que Rust TelegramNotifier::from_env) —
+        le serveur continue sans agent Anthropic si la dépendance ou clé manquent.
+        """
         if not HAS_ANTHROPIC:
-            raise ImportError("pip3 install anthropic")
+            return None
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-        self.client = anthropic.Anthropic(api_key=api_key)
+            return None
+
+        try:
+            return cls(api_key)
+        except Exception:
+            return None
 
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         try:
@@ -192,14 +277,24 @@ class AnthropicAgentBrain(LLMProvider):
 class GeminiAgentBrain(LLMProvider):
     """Gemini via Google API"""
 
-    def __init__(self):
-        if not HAS_GEMINI:
-            raise ImportError("pip3 install google-generativeai")
-        api_key = os.environ.get("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY not set")
+    def __init__(self, api_key: str):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-1.5-pro")
+
+    @classmethod
+    def from_env(cls) -> Optional['GeminiAgentBrain']:
+        """Return GeminiAgentBrain if genai package and GOOGLE_API_KEY available, else None."""
+        if not HAS_GEMINI:
+            return None
+
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            return cls(api_key)
+        except Exception:
+            return None
 
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         try:
@@ -225,8 +320,8 @@ class CstlClient:
 
         payload = (
             f"#!CSTL v5.0.0 MODE=A\n"
-            f"META [encoder=cstl_agent, produced_by=cstl_agent, time.gmtime())}]\n"
-            f"INTENT_PAYLOAD [purpose={purpose}, message=\"{message}\", signature={signature}]\n"
+            f"META [sender={sender}, receiver={receiver}, public_key={pub_key}, timestamp={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}]\n"
+            f"INTENT_PAYLOAD [purpose={purpose}, message={message}, signature={signature}]\n"
             f"---END---\n"
         )
 
@@ -234,7 +329,6 @@ class CstlClient:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(self.timeout)
             sock.connect((self.host, self.port))
-            print(f"[DEBUG PAYLOAD]\n{payload}\n")
             sock.sendall(payload.encode("utf-8"))
 
             response = sock.recv(4096)
@@ -288,14 +382,22 @@ class CstlAgent:
         else:
             self.priv_bytes, self.pub_key = None, "a" * 64
 
-        # Initialize LLM provider
+        # Initialize LLM provider with from_env() pattern
         provider_name = provider_name.lower()
+        self.llm = None
+
         if provider_name == "hermes":
-            self.llm = HermesAgentBrain()
+            self.llm = HermesAgentBrain.from_env()
+            if not self.llm:
+                raise ImportError("Hermes unavailable: pip3 install ollama")
         elif provider_name == "anthropic":
-            self.llm = AnthropicAgentBrain()
+            self.llm = AnthropicAgentBrain.from_env()
+            if not self.llm:
+                raise ImportError("Anthropic unavailable: pip3 install anthropic && export ANTHROPIC_API_KEY")
         elif provider_name == "gemini":
-            self.llm = GeminiAgentBrain()
+            self.llm = GeminiAgentBrain.from_env()
+            if not self.llm:
+                raise ImportError("Gemini unavailable: pip3 install google-generativeai && export GOOGLE_API_KEY")
         else:
             raise ValueError(f"Unknown provider: {provider_name}")
 
