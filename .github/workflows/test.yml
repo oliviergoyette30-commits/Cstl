@@ -17,8 +17,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Check Cargo.lock
+        run: cargo update --dry-run
+
       - name: Run tests
-        run: cargo test --lib --verbose
+        run: cargo test --lib --verbose 2>&1 | tee test-output.log
 
       - name: Build release
         run: cargo build --release --verbose
@@ -32,6 +35,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: rustsec/audit-check-action@v1
+      - uses: rustsec/audit-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
