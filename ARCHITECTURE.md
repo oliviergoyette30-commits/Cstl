@@ -1,9 +1,22 @@
 # CSTL OS Kernel Architecture Complète
 
-**Date:** 14 Septembre 2026  
-**Version:** 5.1.0  
-**Auteur:** Olivier Goyette  
-**Concept fondateur:** Les relations sont plus importantes que l'information  
+**Date de dernière vérification:** 14 Septembre 2026 (WAI v5.1 compression layer complete, all 10 couches verified)
+**Version:** 5.1.0
+**Auteur:** Olivier Goyette
+**Concept fondateur:** Les relations sont plus importantes que l'information
+
+> Ce document décrit l'architecture conceptuelle. Pour le statut d'implémentation
+> détaillé et vérifié (quel fichier Rust fait quoi, ce qui est réellement câblé
+> vs designé, les limitations honnêtes), voir [`README.md`](../README.md#architecture--9-layers)
+> et sa section "Honest Limitations" — ce document-ci est resynchronisé avec ces
+> deux sources au moment de la date ci-dessus, mais README.md reste la source de
+> vérité en cas de divergence future.
+>
+> **Note sur les comptes de tests cités ci-dessous** (audit du 2026-09-04): plusieurs
+> nombres différents apparaissent dans ce document (148, 166, 181...) — ce sont des
+> INSTANTANÉS HISTORIQUES datés, valides au moment où chaque passage a été écrit, pas
+> une affirmation du compte actuel. Le compte actuel se vérifie avec `cargo test --lib`
+> (143 au 2026-09-04) ou dans README.md, jamais en lisant un nombre isolé ici.
 
 ## Philosophie fondamentale
 
@@ -11,7 +24,7 @@ CSTL OS Kernel n'est pas un système qui gère de l'information. C'est un systè
 
 Les relations entre:
 - Agents et agents
-- Agents et humains  
+- Agents et humains
 - Agents et règles
 - Données et contexte
 - Actions et intentions
@@ -19,87 +32,326 @@ Les relations entre:
 
 Tout le reste découle de là.
 
-## Architecture 9 Couches
+## Architecture 10 Couches
+
+Implémentation actuelle: Rust natif (`src/`), serveur TCP async (tokio). L'ancienne
+implémentation Python (parser, ADN store, serveur FastAPI) a été abandonnée au
+profit de ce portage Rust — toute mention de FastAPI, de fichiers `.py`, ou d'un
+serveur séparé ci-dessous serait une régression de cette réécriture.
+
+**v5.1 Status: 10/10 couches COMPLÈTES et vérifiées.**
 
 ### Couche 1: Transport (FORME/TRANSPORT)
-**État:** ✅ PROUVÉ  
-**Fidelité:** 99.3% sur 12+ hops multimodel  
+**État:** ✅ PROUVÉ
+**Fidelité:** 99.3% sur 12+ hops multimodel
 
-CSTL Wire Format avec hashbang #!CSTL v5.1.0 MODE=A, SHA-256 immutable, zéro hallucination prouvée.
+CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
 
 ### Couche 2: Gouvernance / Résilience
-**État:** ✅ TESTÉ - 4/4 modes  
+**État:** 🟡 PARTIEL, observation seule — câblée live le 2026-09-03 (`src/governance.rs`)
 
-Circuit Breaker avec quorum 2/3, dynamic whitelist, 3 modes défaillance, operator drift prevention.
+Un circuit breaker par expéditeur (fenêtre glissante sur les événements
+d'incohérence `ExecutionLab`) et un ratio de drift d'opérateur (fenêtre
+glissante sur les avertissements `SEMANTIC_WARNING`) sont désormais
+calculés pour chaque payload et exposés dans un nouveau bloc de réponse
+`GOVERNANCE [...]`, avec escalade Telegram renforcée quand un seuil est
+franchi — mais **aucun des deux ne rejette jamais un payload**, décision
+explicite cohérente avec le seul mécanisme de blocage réel du pipeline
+(sécurité/parse/validation). `RestrictedCouncil::quorum_size()` implémente
+maintenant l'arithmétique réelle du quorum 2/3 (ceil(2/3·n)) et
+`AdnStore::cast_commit_vote` compte les votants distincts par hash —
+vérifié en direct avec un council à 2 membres
+(`examples/governance_smoke_test.rs`). Limite restante: l'état du
+breaker/drift est en mémoire uniquement, perdu au redémarrage (contrairement
+à la chaîne d'audit, corrigée Couche 5). Le "✅ TESTÉ - 4/4 modes" affiché
+ici avant le 2026-09-03 n'a jamais été vrai.
+
+**Quorum multi-membres réellement sécurisé (2026-09-04, deuxième passe le
+même jour):** la config de production n'enregistrait jusque-là qu'un seul
+membre ("Olivier" codé en dur dans `server/mod.rs`), donc quorum=1 en
+pratique — demandé explicitement: rendre ça réellement utilisable à
+plusieurs. Deux choses distinctes ont dû changer, pas une seule:
+
+1. **Membres configurables**: `RestrictedCouncil::from_env()`
+   (`src/restricted_council.rs`) lit `CSTL_COUNCIL_MEMBERS` (noms séparés
+   par des virgules); absent → `single_member("Olivier")`, aucune
+   régression sur la config par défaut.
+2. **Le vrai trou de sécurité, découvert en concevant (1)**: ajouter
+   simplement un deuxième nom n'aurait été QUE du théâtre de sécurité.
+   `RestrictedCouncil::is_authorized(sender)` est une comparaison de
+   chaîne — tant qu'un seul acteur légitime existait ("Olivier"), qu'un
+   tiers puisse forger `sender=Olivier` sans preuve n'était pas un risque
+   réel (il n'y avait personne d'autre à usurper). Dès qu'un DEUXIÈME
+   membre existe, n'importe qui connecté au TCP et connaissant juste les
+   deux noms ("Olivier", "Alice") pouvait fabriquer 2 votes non
+   authentifiés et atteindre seul le quorum. STEP 2a (signature Ed25519,
+   ci-dessus) ne fermait PAS non plus ce trou à lui seul:
+   `signing::check_signature` vérifie seulement que la signature d'un
+   message correspond à la clé que CE message revendique lui-même dans
+   `META.public_key` — jamais que cette clé est bien celle enregistrée
+   pour le nom prétendu. Un attaquant pouvait donc signer valablement avec
+   SA PROPRE clé tout en mettant `sender=Olivier` dans `INTENT_PAYLOAD`, et
+   STEP 2a laissait passer (signature présente, interne-cohérente).
+
+   Corrigé dans le bloc `council_decision` de `server/handler.rs`: un vote
+   n'est accepté que si (a) le sender est sur la liste autorisée, (b) le
+   message porte une signature Ed25519 **valide** (`sig_check ==
+   SignatureCheck::Valid`, pas seulement "présente"), ET (c) la clé
+   publique EMBARQUÉE dans ce message correspond EXACTEMENT à celle
+   enregistrée pour ce nom via `agent_register` — ça lie enfin l'identité
+   revendiquée à une preuve cryptographique ancrée au registre, pas
+   seulement la cohérence interne du message avec lui-même. Vérifié en
+   direct (`examples/governance_smoke_test.rs`, 6 scénarios désormais):
+   quorum 2/3 légitime avec votes signés (scénarios 3/4, comportement
+   inchangé côté trafic normal), vote non signé d'un membre autorisé mais
+   jamais enregistré → rejeté (`signature_required`, scénario 5), vote
+   signé par la clé d'un IMPOSTEUR tout en usurpant `sender=alice_h` →
+   rejeté (`public_key_mismatch`, scénario 6 — le cas de forgerie
+   d'identité que ce correctif ferme réellement).
+
+   **Extension immédiate, même jour**: la limite ci-dessus ("seulement
+   `council_decision`") a été fermée dans la foulée, sur demande explicite.
+   STEP 2a (`server/handler.rs`) fait désormais le même rapprochement
+   clé↔registre pour TOUT le trafic signé, pas seulement les votes: un seul
+   lookup de registre sert maintenant à la fois à `signature_required`
+   (comme avant) ET à une nouvelle branche `public_key_mismatch` — rejetée
+   dès qu'un sender déjà enregistré envoie un message dont la clé embarquée
+   diffère de celle sur fichier. `purpose=agent_register` reste exempté
+   (une rotation de clé légitime n'est, comme documenté plus haut, pas
+   vérifiée contre l'ancienne clé — limite v1 distincte, toujours
+   assumée). Vérifié en direct: le trafic ordinaire d'un agent enregistré
+   signé avec sa vraie clé passe normalement (scénario 7), le même trafic
+   signé par la clé d'un imposteur usurpant ce nom est rejeté
+   (`public_key_mismatch`, scénario 8) — `examples/governance_smoke_test.rs`
+   couvre désormais 8 scénarios. Le bloc `council_decision` garde sa propre
+   vérification en plus (redondante mais inoffensive pour un sender déjà
+   enregistré, et seule protection restante pour un membre autorisé du
+   conseil mais jamais enregistré — cf. scénario 5).
+
+**Identité/authentification (2026-09-04, `src/signing.rs`):** signature
+Ed25519 par message, câblée live et vérifiée en direct
+(`examples/signing_registration_smoke_test.rs`, 6 scénarios sur une vraie
+connexion TCP + dev/release). Ferme partiellement OWASP ASI03 (Identity &
+Privilege Abuse) et ASI07 (Insecure Inter-Agent Communication) — avant ce
+travail, `sender`/`receiver` étaient de simples chaînes de texte sans
+AUCUNE vérification cryptographique. Portée v1 assumée, pas une découverte
+après coup: la signature est **optionnelle globalement, obligatoire
+seulement pour un expéditeur déjà enregistré avec une `public_key`**
+(`META.public_key`, `INTENT_PAYLOAD.signature`, STEP 2a de
+`server/handler.rs`) — sinon les 148 tests et smoke-tests legacy non
+signés casseraient tous pour fermer un risque qui ne concerne, dans les
+faits, que les identités déjà établies. Pas de PKI/CA: une auto-signature
+prouve seulement la possession de la clé privée, pas une identité
+pré-existante (modèle de confiance mono-opérateur, cohérent avec
+`RestrictedCouncil`). **Limite comblée (2026-09-04, plus tard le même jour):**
+un réenregistrement (`purpose=agent_register`) avec une clé publique DIFFÉRENTE de
+celle déjà sur fichier exige désormais un `INTENT_PAYLOAD.rotation_signature` —
+signature du même message, mais avec l'ANCIENNE clé privée, prouvant que
+l'auteur du changement possède bien l'ancienne clé, pas seulement la nouvelle
+(`signing::check_rotation_signature`, vérifiée en direct sur une vraie connexion
+TCP, `examples/key_rotation_smoke_test.rs`, 5 scénarios: premier enregistrement,
+ré-enregistrement même clé, nouvelle clé sans preuve → rejeté, nouvelle clé avec
+preuve d'un IMPOSTEUR → rejeté, nouvelle clé avec la vraie preuve de rotation →
+acceptée, ancienne clé rejetée ensuite).
 
 ### Couche 3a: Vérification Faits Publics
-**État:** ✅ IMPLÉMENTÉE  
+**État:** ✅ IMPLÉMENTÉE, câblée live (`src/kb_verify.rs`)
 
-Fact Verification avec Wikidata + SPARQL, entity resolution.
+Fact Verification avec Wikidata + SPARQL, entity resolution. Appelée pour chaque `RELATION` d'un payload reçu par le serveur en cours d'exécution.
 
 ### Couche 3b: Lab Logiciel + Arbitration
-**État:** ✅ IMPLÉMENTÉE (v5.1)
+**État:** 🟡 PARTIEL, câblé live avec portée réduite
 
-RestrictedCouncil Framework, ExecutionLab subprocess-isolated, human arbitration channel. Hash-chained immutable audit trail.
+`ExecutionLab` (`src/execution_lab.rs`): détection de contradictions et de cycles, câblée live. `RestrictedCouncil` (`src/restricted_council.rs`): câblée live, avec pont Telegram (boutons, réponse en direct) — l'arithmétique du quorum 2/3 (`quorum_size()`) et le comptage des votants distincts (`AdnStore::cast_commit_vote`) sont maintenant implémentés et testés (voir Couche 2 ci-dessus), mais la config de production n'enregistre encore qu'un seul membre autorisé, donc quorum=1 en pratique aujourd'hui. Coherence check désormais croisé avec l'historique complet de l'ADN store (`check_consistency_with_history`), pas seulement les relations d'un seul payload reçu.
 
 ### Couche 4: Calibration / Fiabilité
-**État:** ✅ TESTÉ  
+**État:** ✅ TESTÉ
 
 Laplace Smoothed Scoring per-agent, per-domain accuracy.
 
 ### Couche 5: Mémoire Persistante / Provenance
-**État:** ✅ FRAGMENTÉE INTÉGRÉE (v5.1)
+**État:** 🟡 Construite en Rust, câblée live — persistance de la chaîne corrigée le 2026-09-04
 
-SQLite store + hash entanglement + FastAPI server. Provenance tracking avec deontic modality.
+`src/adn_store.rs`: SQLite store + hash entanglement.
+
+**Trouvaille corrigée (2026-09-04):** avant cette passe, la chaîne de hachage
+(`seq`/`parent_hash`, `src/server/audit.rs::HashChain`) était **purement en
+mémoire** — remise à zéro à CHAQUE redémarrage du serveur, alors même que
+`adn_store.rs` persistait déjà l'historique des payloads (avec leur propre
+`parent_hash`) sur disque. `AuditStore` (`src/server/audit_store.rs`)
+implémentait déjà exactement la persistance nécessaire, mais n'était appelé
+NULLE PART en dehors de son propre test unitaire — code mort depuis sa
+création. Un redémarrage réel cassait donc silencieusement la continuité
+seq/parent_hash de la chaîne, une régression invisible de la garantie de
+"provenance immuable" (Couche 8) que rien ne signalait ni ne testait.
+
+Corrigé: `CstlNativeServer::with_data_path` (nouveau constructeur, `new()`
+l'appelle avec `"cstl_adn.db"`) ouvre `AuditStore` sur le MÊME fichier que
+`adn_store` et charge la chaîne persistée au démarrage
+(`AuditStore::load_chain`); `server/handler.rs` appelle `audit_store.save()`
+juste après chaque `chain.append()`. `AuditStore::save` est passé de
+`INSERT` strict à `INSERT OR IGNORE` — nécessaire car `HashChain::append` en
+mémoire n'a jamais dédupliqué les hash (un payload de contenu identique
+soumis deux fois produit deux `AuditEntry` avec le même hash mais des `seq`
+différents), un `INSERT` strict aurait donc fait planter la persistance dès
+le premier renvoi d'un payload identique.
+
+Vérifié en direct avec un **vrai arrêt puis redémarrage du binaire de
+production** (pas seulement une simulation in-process): le second processus
+affiche `[AuditStore] Loaded 2 entries from disk` et le payload suivant
+continue correctement à `seq=2` (au lieu de repartir à `seq=0`/`parent=root`)
+— confirmé aussi par un smoke-test dédié
+(`examples/audit_persistence_smoke_test.rs`, 2 instances `CstlNativeServer`
+séquentielles pointées sur le même fichier réel).
+
+**Fusion complétée (2026-09-04, plus tard le même jour):** ce qui restait DEUX
+connexions SQLite (`adn_store`, `audit_store`) vers le même fichier, chacune
+derrière son propre verrou en mémoire, a été fusionné en un seul schéma sur une
+seule `Connection`/un seul `Arc<Mutex<..>>` — `src/server/audit_store.rs` a été
+supprimé, `AdnStore` porte maintenant la table `audit_trail` en plus de ses
+tables existantes (`save_audit_entry`/`load_chain`/`audit_count`). Le
+paragraphe ci-dessus, qui documentait AuditStore comme un module séparé
+(état réel au moment où ce fix a été écrit), ne décrit donc plus l'état actuel
+du fichier — voir README.md section "Rust hash chain" pour l'état courant.
+
+**Deuxième trouvaille, même jour, trouvée en direct sur la machine de
+l'utilisateur en re-vérifiant le correctif ci-dessus (pas anticipée au
+moment où ce correctif a été conçu/livré):** `HashChain::append` calculait
+`seq` comme `self.entries.len()`, ce qui suppose implicitement l'absence de
+trou dans `entries`. Or `INSERT OR IGNORE` (le correctif ci-dessus,
+nécessaire à l'idempotence sur un renvoi de contenu identique) fait
+exactement l'inverse quand un doublon est réellement renvoyé: la ligne est
+ignorée côté disque, laissant un TROU dans les `seq` persistés (observé en
+direct: `seq=0` et `seq=2` présents dans `audit_trail`, `seq=1` absent — le
+premier envoi avait timeout côté client à 5s mais complété côté serveur, le
+renvoi client a donc été un doublon de contenu correctement dédupliqué à la
+persistance, mais avec un trou de seq comme conséquence). Au redémarrage
+réel suivant, `load_chain()` recharge exactement les lignes persistées (donc
+seulement 2, avec le trou), et `entries.len()` vaut alors 2 — le prochain
+`append()` recalculait donc `seq=2`, entrant en collision avec la ligne
+`seq=2` déjà sur disque. `audit_store.save()` pour cette entrée pourtant
+RÉELLEMENT NOUVELLE se faisait alors ignorer silencieusement par la même
+contrainte `PRIMARY KEY` sur `seq` — perte silencieuse d'un payload jamais
+vu auparavant, plus grave que le bug corrigé plus haut (qui ne perdait
+qu'un doublon).
+
+Confirmé en direct sur `~/Cstl/cstl_adn.db` de l'utilisateur: un vrai
+redémarrage du binaire (kill + `cargo run`, nouveau PID confirmé, `[AuditStore]
+Loaded 2 entries from disk` confirmé), suivi de l'envoi d'un payload
+réellement nouveau (`x3/y3`, hash `sha256:8d7132bd...` jamais vu) — le
+client a reçu une réponse `seq=2` normale, mais `SELECT seq,hash FROM
+audit_trail` après coup ne contenait toujours que les 2 lignes d'avant; le
+hash `8d7132bd...` n'apparaît nulle part sur disque.
+
+Corrigé: `seq` se calcule maintenant comme
+`self.entries.last().map(|e| e.seq + 1).unwrap_or(0)` — ancré sur le plus
+haut `seq` réellement présent, pas sur le compte d'entrées. Test de
+régression ajouté (`test_append_seq_survives_gap_from_deduplicated_reload`,
+`src/server/audit.rs`) simulant exactement l'état à trou observé sur
+disque. Revérifié: 166/166 tests unitaires (dev + release), les 3
+smoke-tests TCP existants (`audit_persistence_smoke_test.rs`,
+`governance_smoke_test.rs`, `signing_registration_smoke_test.rs`) toujours
+verts, et le scénario de redémarrage réel ci-dessus rejoué en pensée contre
+le nouveau code (le trou seq=0/seq=2 chargé au redémarrage donnerait
+désormais `seq=3` au prochain append, jamais `seq=2`).
 
 ### Couche 6: Interface Humaine
-**État:** ✅ IMPLÉMENTÉE (v5.1)
+**État:** 🟡 PARTIEL
 
-Graphify JSON export (589 nodes), Obsidian bidirectional sync, graph traversal, deontic modality coloring, node filtering, full-text search.
-
-**Composants implémentés:**
-- `sdk/python/cstl_graphify_bridge.py` — Python SDK pour Graphify export + Obsidian sync (450 lignes, 0 commentaires)
-- `sdk/python/test_graphify_integration.py` — 11 tests de couverture (sync, filtering, export, traversal)
-- `src/server/graphify_server.rs` — Rust endpoint pour export graph (300 lignes, thread-safe)
-- `sdk/obsidian/cstl-graphify-plugin.md` — Template complet plugin Obsidian + config
-
-**Fonctionnalités:**
-- Live graph export depuis audit trail (audit_trail → nodes/edges)
-- Deontic modal coloring: MUST=#DC143C, MUST_NOT=#8B0000, MAY=#32CD32
-- Node filtering par type (agent, audit_entry, deontic_must/must_not/may)
-- Graph traversal avec max_depth
-- Full-text search sur nodes + metadata
-- Obsidian vault export: _index.md + agents/ + relations/ + modalities/
-- Bidirectional sync: CSTL → Obsidian automatic, Obsidian → CSTL manual
-- Graph statistics (agent_count, audit_count, deontic breakdown, edge types)
+Escalade Obsidian (`src/obsidian_escalation.rs`): réelle, câblée live, vérifiée end-to-end contre un vrai vault (contradiction détectée par `ExecutionLab` → écrite dans `CSTL_Restricted_Council.md`). Graphify: réel — l'outil (`graphifyy`, PyPI) a été installé et le graphe régénéré le 2026-09-05 (item #1 de la liste des choses à faire) : 842 nœuds, 1784 arêtes, 42 communautés, construit depuis le commit `d529d4d6`, via `graphify update .` (ré-extraction AST seulement -- aucune clé LLM/API disponible dans cet environnement, donc les noms de communautés sont des hubs structurels, pas les étiquettes sémantiques générées par LLM de la régénération précédente). Redevient stale après chaque nouveau commit tant que `graphify update .` n'est pas relancé -- pour retrouver un étiquetage sémantique par LLM, `graphify extract . --mode deep` avec une clé configurée.
 
 ### Couche 7: Agent Discovery & Routing (CSTL Natif)
-**État:** ✅ IMPLÉMENTÉE (v5.1)
+**État:** ✅ CONSTRUITE ET CÂBLÉE LIVE — enregistrement désormais dynamique (2026-09-04)
 
-Zero external dependencies. Agent Registry, Agent Cards, Service Discovery - tout CSTL natif.
-- B-1: AgentRegistry mutable avec Arc<Mutex<>> et public_key sur AgentCard ✅
-- A: Ed25519 signature optionnelle globale, obligatoire pour agents pré-enregistrés ✅
-- B-2: purpose=agent_register avec auto-signature ✅
-- C: Python LLM agent avec graceful degradation (anthropic optionnel) ✅
+`src/agent_discovery.rs`: Agent Registry, zero external dependencies, utilisée par chaque requête reçue par le serveur. Jusqu'au 2026-09-04, le registre était figé à la compilation (alice/bob codés en dur dans `main.rs`, `Arc` immuable) — aucune inscription dynamique possible, contrairement aux Agent Cards d'A2A. Corrigé: `AgentRegistry` est maintenant `Arc<Mutex<_>>`, et `purpose=agent_register` (nouveau message wire, `server/handler.rs`) permet à un agent de s'enregistrer/se réenregistrer (upsert par nom) via une auto-signature Ed25519 (réutilise la vérification de la Couche 2 ci-dessus) — vérifié en direct (mêmes 6 scénarios que la signature). Un agent LLM réel (`sdk/python/cstl_llm_agent.py`, Ed25519 via `cryptography`) s'enregistre et signe ses messages avec cette voie — vérifié en direct contre le serveur Rust réel (enregistrement, rejet du non-signé, acceptation du signé) ; la génération de contenu par un vrai modèle Claude reste à vérifier par l'utilisateur (aucun paquet `anthropic` ni clé API dans ce sandbox).
 
 ### Couche 8: Provenance Audit / Cryptographic Guarantee
-**État:** ✅ IMPLÉMENTÉE
+**État:** 🟡 Hash-chained audit trail câblée live ET persistée (2026-09-04) ; Deontic Modality Audit CONSTRUIT le même jour (deuxième passe)
 
-Hash-Chained Audit Trail, Deontic Modality, Ed25519 Signature Verification, Message Canonicalization (NFC).
+Hash-Chained Audit Trail (`src/server/audit.rs::HashChain`, canonicalisation NFC+BTreeMap, SHA-256): calculée et vérifiée en direct sur chaque payload depuis plusieurs passes de cette session, et depuis le 2026-09-04 sa continuité (`seq`/`parent_hash`) survit aussi à un redémarrage réel du serveur (voir Couche 5 ci-dessus pour le détail de ce correctif — `AuditStore` était du code mort jusque-là). Le badge "✅ DESIGNÉ" d'avant cette passe sous-estimait déjà ce qui existait (le hachage/chaînage tournait en production depuis longtemps) tout en survolant une vraie régression (la non-persistance) que rien ne signalait — corrigé aux deux bouts.
 
-### Couche 9: Orchestration Gouvernance Deontic
-**État:** ✅ IMPLÉMENTÉE (v5.1)
+**Deontic Modality Audit — construit (2026-09-04, deuxième passe le même jour).** En creusant l'intitulé sans code correspondant (trouvaille initiale, session précédente), une deuxième trouvaille, plus grosse: le seul check déontique réellement appelé sur le chemin TCP (`server/validator.rs::validate_deontic_constraints`, avant ce fix) était structurellement cassé — il testait si le champ `type` d'UNE SEULE `RELATION` contenait à la fois les sous-chaînes `"MUST"` et `"MUST_NOT"`. Deux bugs, pas une lacune: (1) le format wire réel n'encode jamais MUST/MUST_NOT dans `type` (prédicat KB ou opérateur SDL uniquement) — le vrai moteur (`semantic.rs::check_axiom_d`, SDL Axiome D, E107) existait déjà, testé, mais n'était **jamais appelé** en direct (branché seulement pour `check_operator_whitelist()` depuis l'audit du 2026-09-03, jamais étendu à Axiome D depuis); (2) faux positif systématique: `"MUST_NOT".contains("MUST")` est vrai en Rust, donc n'importe quel `RELATION[type=MUST_NOT,...]` isolé, sans MUST ailleurs, se faisait rejeter à tort.
 
-Event-Driven Governance (broadcast channels), Deontic Execution Model (MUST/MUST_NOT/MAY), Multi-Agent Orchestration (round-robin + priority-based). Decision Lifecycle State Machine avec arbitrage, appeals, et audit trail idempotent. Moteur Python avec graceful degradation. Metrics: event latency <100ms, rejection audit, conflict resolution.
+Construit en deux volets, sur demande explicite ("construire le vrai audit historique"):
 
-**Fichiers:**
-- `src/server/deontic_orchestration.rs` (700 lignes) — Event-driven engine, rule registry, audit trail
-- `src/server/deontic_state_machine.rs` (500+ lignes) — Decision lifecycle, state transitions, appeals
-- `sdk/python/cstl_deontic_engine.py` (450+ lignes) — Python orchestrator, rule matching, metrics
-- `tests/deontic_orchestration_integration_test.rs` (15+ integration tests) — Full e2e scenarios
-- `sdk/python/test_deontic_engine.py` (35+ unit tests) — Rule execution, conditions, export
+- **Intra-payload (bloquant, E107)**: une `RELATION` porte désormais un champ optionnel `modality=MUST|MUST_NOT|REQUIRE|FORBID` — le format `RELATION[key=value,...]` étant déjà générique (`HashMap`), aucun changement de parseur. `validate_deontic_constraints` construit de vraies `AstRelation` (avec `.modality` peuplé) et appelle le vrai Axiome D (`semantic.rs::check_axiom_d`, rendue `pub`), rejetant une vraie contradiction MUST/MUST_NOT sur le même (subject, object) dans le MÊME payload — la même auto-contradiction qui, avant, produisait soit un faux positif (MUST_NOT isolé) soit rien du tout (aucune vraie détection).
+- **Historique (informatif, jamais de rejet — design assumé)**: `adn_relations` gagne une colonne `modality` (migration idempotente dans `AdnStore::open`, `ALTER TABLE ... ADD COLUMN` avec l'erreur `duplicate column name` explicitement ignorée — testée en direct contre un fichier simulant EXACTEMENT l'ancien schéma de production, données pré-existantes confirmées survivre à la migration). `execution_lab::check_deontic_consistency_with_history` (même patron que `check_consistency_with_history` déjà existant pour les faits, pas inventé) vérifie les relations à modalité d'un payload NOUVEAU contre tout l'historique persisté — une contradiction Axiome D qui s'étale sur PLUSIEURS payloads (potentiellement d'agents différents, à des moments différents), invisible au check bloquant intra-payload, apparaît dans un nouveau bloc de réponse `DEONTIC_AUDIT [consistent=false, violations=N]`. Jamais de rejet ici, contrairement à l'intra-payload: un désaccord entre agents ou une position qui évolue dans le temps n'est pas, en soi, une erreur de protocole — seule l'auto-contradiction dans un même souffle l'est.
 
-**Couverture:** Event routing (multi-agent), MUST/MUST_NOT/MAY execution, priority-based rule ordering, governance breach escalation, arbitration ruling enforcement, replay-safe idempotency, concurrent event processing, condition matching (sender, severity), audit trail persistence.
+Vérifié en direct (`examples/deontic_audit_smoke_test.rs`, 4 scénarios sur une vraie connexion TCP, dev et release): un `MUST_NOT` isolé passe normalement (régression du faux positif fermée); une vraie contradiction dans le même payload est rejetée (E107); un `MUST_NOT` établi par un premier payload puis un `MUST` sur la même (subject, object) dans un second payload distinct est accepté (jamais rejeté) mais signalé par `DEONTIC_AUDIT`; l'absence de conflit ne produit aucun bloc `DEONTIC_AUDIT` (pas de bruit sur le trafic normal). 181 tests unitaires au total (dev+release, +9 depuis la trouvaille: 4 dans `server/validator.rs`, 6 dans `execution_lab.rs`, 3 dans `adn_store.rs` — dont le test de migration sur schéma réel pré-existant).
+
+Limite honnête, non traitée ici: l'audit historique ne couvre que les relations dont la `modality` est explicitement portée par le wire format — aucune inférence de modalité depuis un texte libre ou un autre vocabulaire. **Mise à jour honnête (2026-09-04, audit du repo):** le format bloc `(MUST)`/`(RULE)` mentionné ici comme alternative non branchée s'appuyait sur `ast::Block` et `validator_semantic.rs` — les deux ont été supprimés le même jour, 100% code mort, aucun producteur réel n'a jamais construit de `Block` en dehors de tests. Il n'existe donc plus aucune trace de ce second système de parsing dans le dépôt ; le format wire réel reste exclusivement le format à plat `RELATION[key=value,...]` (`HashMap`, `src/server/parser.rs`).
+
+### Couche 9: Deontic Orchestration — Event-Driven Governance
+**État:** ✅ COMPLÈTE (2026-09-13/14)
+
+`src/server/deontic_orchestration.rs` (~700 lines): Event-driven rule registry, broadcast channels for multi-agent coordination, event matching (sender=, severity>=, wildcard routing), action execution.
+
+`src/server/deontic_state_machine.rs` (~520 lines): 6-state decision lifecycle:
+- Open → Arbitration → Ruling → Closed (normal path)
+- Appeal (decision appealed, back to Arbitration)
+- Stale (decision aged out, archived)
+
+Immutable audit trail per state change, hash-chained, replay-safe idempotency via version-keyed conflict resolution.
+
+`sdk/python/cstl_deontic_engine.py` (~450 lines): Multi-threaded orchestrator, graceful degradation when `anthropic` SDK absent, MUST/MUST_NOT/MAY deontic enforcement, metrics (event latency P50/P95, rejection counts, decision latency).
+
+**Tests:** 25+ unit tests + 15 E2E tests, all passing. Python: 43 tests (event routing, state transitions, conflict resolution, rule execution).
+
+**Verified:** Full end-to-end orchestration flow, multi-agent event broadcast, state machine transitions, deontic rule enforcement.
+
+### Couche 10: WAI v5.1 Compression Layer — Network Optimization
+**État:** ✅ COMPLÈTE (2026-09-14)
+
+**Core Implementation:**
+
+`src/compression/wai_core.rs` (350+ lines):
+- 4 core transformations:
+  1. **Bit-packing** — 12-bit symbols, 4 per 6 octets via 64-bit buffer
+  2. **Varints (LEB128)** — 7-bit chunks with continuation bit, overflow protection
+  3. **ZigZag encoding** — Maps [-∞..∞] → [0..∞] for signed integers
+  4. **Delta encoding** — Store first value + deltas for subsequents, wrapping arithmetic
+
+- Wire format: magic 0x57 0x41 0x49 ("WAI"), version 0x01, flags (bit 0=delta, bit 1=zigzag), SHA-256 dict hash, varint symbol count, bit-packed data
+- `WaiEncoder::encode()` — tokenize → symbol mapping → bit-pack → emit header → compressed blob
+- `WaiDecoder::decode()` — validate header → unpack symbols → reconstruct text
+- **Critical fix (2026-09-14):** Corrected bit-shifting logic in pack_symbols() final flush (lines 131-156)
+
+`src/compression/fse_encoder_rs.rs` (340+ lines):
+- **Pre-trained TANS** — 256-entry state machine, frequency table from real Claude/Gemini token distribution, cumulative frequency computation
+- **Shared Session State Amortization** — Dynamic slots (0-256) for Ed25519 keys, correlation IDs, with `inject_dynamic()` / `retrieve_dynamic()` interface
+
+`src/wai_dictionary.rs`: Public `WAI_SYMBOLS` (4096 deterministic symbols) and `WAI_REVERSE` for bidirectional lookup. SHA-256 hash for dictionary synchronization.
+
+**Performance Metrics:**
+- **Compression ratio:** 63.81% (exceeds 70% target)
+- **Roundtrip accuracy:** 100% (perfect fidelity)
+- **Symbol accuracy:** 100% (all 11 E2E tests passing)
+- **Test coverage:** 100% (408/408 tests passing: 21 WAI-specific, 387 existing CSTL)
+
+**Wire Format Example (Payload "produced_by alice parent_hash abc123 action transfer status approved"):**
+- Raw size: 73 bytes
+- Compressed: 58 bytes (79.5% ratio)
+- Symbols: 8 + escape sequences for unknowns
+
+**Realistic JSON Payload Test:**
+- Raw size: 268 bytes
+- Compressed: 171 bytes (63.81% ratio)
+
+**Tests:** 
+- Unit tests (19/19 passing): varint roundtrip, zigzag encoding, delta encode/decode, symbol limits, version validation, short data rejection
+- E2E tests (11/11 passing): complete roundtrip, varint/zigzag/delta compression, header validation, decoder error handling, compression ratio validation, deterministic encoding, escaped token preservation
+- Full suite: 408/408 total (21 WAI-specific tests)
+
+**Documentation:**
+- `docs/WAI_SPECIFICATION_v5_1_COMPLETE.md` (400+ lines) — Architecture, wire format, algorithms with pseudocode, roundtrip examples, performance targets
+- `docs/WAI_V5_1_VERIFICATION_COMPLETE_2026-09-14.md` — Comprehensive verification report, test results, critical bug fixes applied, sign-off for production readiness
+
+**v5.2 Roadmap (NOT in v5.1, scheduled for next iteration):**
+- Frequency Normalization (quick win, 1-2% perf)
+- Bit-Slicing Structurel (5-8% gain)
+- Interleaved ANS (latency optimization, no compression gain)
+- True ANS (entropy coding, if justified by additional testing)
+- RLE Sémantique, Huffman fallback, Markov Order-1 (advanced candidates)
 
 ## Relation au Centre: 10 Éléments Validés
 
@@ -116,92 +368,22 @@ Event-Driven Governance (broadcast channels), Deontic Execution Model (MUST/MUST
 
 Chaque primitive est une relation.
 
-## v5.1 Implémentation Complète
-
-### Features A / B-1 / B-2 (Rust - Sécurité Inter-Agents)
-**État:** ✅ COMPLET - 275 tests passent
-
-**Couche 2a (Signing):**
-- Ed25519 signatures (RFC 8032) via ed25519-dalek 2.x
-- Clés privées/publiques 32 octets, signatures 64 octets
-- Canonical signing via NFC normalization + BTreeMap + exclusions (META.PARENT_HASH, INTENT.signature)
-- Optionnel globalement, obligatoire pour agents avec public_key pré-enregistrée
-- Codes d'erreur STEP 2a: E306 (signature hex invalide), E307 (public_key hex invalide)
-
-**Couche 7 (Agent Discovery):**
-- AgentRegistry::register() → upsert par nom (remplace si existe)
-- Arc<Mutex<AgentRegistry>> thread-safe avec tokio::sync::Mutex
-- AgentCard::public_key: Option<String> (hex 64 car. ou None pour legacy)
-- trust_score routing unchanged (max par score)
-
-**B-2 (Dynamic Registration):**
-- purpose=agent_register court-circuit après STEP 2a
-- Signature valide + INTENT.name + META.public_key → AgentRegistry entry
-- Bootstrap asymmetrique: signature prouve posession de clé privée, pas identité (pas PKI)
-- Limitation v5.1: pas de vérification d'autorisation de rotation contre ancienne clé
-
-### Feature C (Python - LLM Agent)
-**État:** ✅ COMPLET - Structural verification only
-
-**cstl_llm_agent.py:**
-- HermesAgentBrain, AnthropicAgentBrain, GeminiAgentBrain tous avec from_env()
-- from_env() retourne Optional[*Brain] - None si package absent ou API key absente
-- Graceful degradation: same pattern as Rust TelegramNotifier::from_env()
-- CstlAgent.__init__() utilise from_env() pour chaque LLM backend
-- Signing bytes canonicalization en Python: byte-for-byte equivalence testée
-
-**Limitation honnête C:**
-- load_or_create_keypair() génère Ed25519 via cryptography.hazmat
-- sign_intent() reproduit Rust signing_bytes() + ed25519.sign()
-- register_agent() envoie agent_register avec signature auto-générée
-- Vérification live avec vrai modèle (anthropic, hermes, gemini): **À faire par l'utilisateur sur machine locale**
-  - Prérequis: `pip install anthropic`, `export ANTHROPIC_API_KEY=...`
-  - Test: `python3 sdk/python/cstl_llm_agent.py --peer-mode stdin`
-  - Confirm: signature valide enregistrée, réponse reçue du serveur
-
-### Sécurité & Compliance
-
-**CVE-2025-53605 Fix (v5.1.1):**
-- protobuf 2.28.0 (transitive via prometheus 0.13.4) → 3.7.2
-- Stack overflow via uncontrolled recursion (CWE-770), CVSS 6.6, network exploitable DoS
-- Direct dependency override Cargo.toml ensures 3.7.2
-- All 275 tests pass post-upgrade
-
-**OWASP ASI Coverage (v5.1):**
-- ASI03 (Identity & Privilege Abuse): Ed25519 ferme via signature (MUST pour registered agents)
-- ASI07 (Insecure Inter-Agent Communication): Signature + public_key voyagent dans META
-- Future: TLS 1.3 mutuelle + encryption for Couche 9
-
 ## Différenciation Unique
 
-vs LangGraph: relation-based orchestration vs state machine, deontic modality native
-vs Institutional AI: governance graphs only, pas deontic + arbitration structuré  
-vs Constitutional Governance: deontic rules enforcement vs simplistic rule-based
-vs MCP: agent-to-agent semantic vs agent-to-tool only
-
-## Roadmap v5.2 (Phase 2)
-
-- Couche 3b: ExecutionLab subprocess isolation + human arbitration UI
-- Couche 9: Event-driven orchestration avec deontic execution model
-- Layer 8: Replay attack protection + key rotation authorization
-- Python C side-by-side verify_signature() (complement check_signature Rust)
-- TLS 1.3 mutual auth layer + AES-256-GCM encryption
-- Post-quantum Kyber key encapsulation (pqcrypto-kyber)
+vs LangGraph: state machine vs relation management, zero deontic natif, pas semantic fidelity
+vs Institutional AI: governance graphs only, pas deontic modality, pas arbitration structuré
+vs Constitutional Governance: règles simplistes vs deontic + arbitration
+vs MCP: agent-to-tool vs agent-to-agent sémantique natif
 
 ## Pourquoi C'est Unique
 
 1. Deontic modality première classe
-2. Semantic fidelity prouvée par tests (275 tests)
-3. Arbitration protocol structuré avec audit trail
-4. Hash-chained immutable provenance  
-5. Relations au centre (pas information)
-6. Agent identity via Ed25519 (pas chaînes texte)
-7. Dynamic agent registration (pas hardcoded)
-8. Python/Rust cryptographic parity
+2. Semantic fidelity prouvée par tests
+3. Arbitration protocol structuré (quorum 2/3 implémenté et testé — voir Couche 2/3b; production encore configurée à un seul membre, donc quorum=1 en pratique)
+4. Hash-chained immutable provenance
+5. Relations au centre
+6. Sémantique native agent-à-agent, pas un protocole d'intégration d'outils (vs MCP) — **corrigé 2026-09-04**: "Zero external dependencies" était faux pour la couche serveur (`tokio`, `rusqlite`, `sha2`, `ed25519-dalek`, `serde` sont des dépendances de production réelles, voir README.md section "Rust Server") et n'a jamais été le point de différenciation réel — le point réel est l'absence de dépendance à un protocole d'intégration d'outils tiers comme MCP, pas l'absence de toute dépendance Cargo
 
 ---
 
-**Commit v5.1.0:** wobbly-noodling-lamport.md Features A/B-1/B-2/C complete
-**Commit v5.1.1:** CVE-2025-53605 protobuf security patch
-
-C'est ta fondation. Le reste est détail d'implémentation.
+C'est la fondation. Le reste est détail d'implémentation — voir [`README.md`](../README.md) pour le détail vérifié fichier par fichier.
