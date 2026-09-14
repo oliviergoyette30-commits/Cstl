@@ -17,6 +17,7 @@ pub mod emergence;
 pub mod governance;
 pub mod signing;
 pub mod wai_compression;
+pub mod wai_dictionary;
 pub mod compression_pipeline;
 pub mod compression;
 pub mod payload_compression;

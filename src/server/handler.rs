@@ -225,7 +225,7 @@ pub async fn handle_connection(
                     // comparaison de cle) au lieu de deux lookups separes comme avant.
                     let embedded_pubkey = payload.meta.get("public_key").cloned();
                     let registered_pubkey_for_sender = {
-                        let reg = ctx.agent_registry.lock().await;
+                        let reg = ctx.agent_registry.read().await;  // STEP 2a: lecture seule, 100+ msg/sec
                         reg.agents.iter().find(|a| a.name == sig_sender).and_then(|a| a.public_key.clone())
                     };
                     let signature_required = registered_pubkey_for_sender.is_some();
@@ -301,7 +301,7 @@ pub async fn handle_connection(
                         // lui-meme.
                         let embedded_pubkey = payload.meta.get("public_key").cloned();
                         let registered_pubkey = {
-                            let reg = ctx.agent_registry.lock().await;
+                            let reg = ctx.agent_registry.read().await;  // council_decision: lecture seule
                             reg.agents.iter().find(|a| a.name == sender).and_then(|a| a.public_key.clone())
                         };
                         let council_auth_failure: Option<&'static str> = if !ctx.restricted_council.is_authorized(&sender) {
@@ -632,7 +632,7 @@ pub async fn handle_connection(
                             match &sig_check {
                                 SignatureCheck::Valid => {
                                     let existing_pubkey = {
-                                        let reg = ctx.agent_registry.lock().await;
+                                        let reg = ctx.agent_registry.read().await;  // agent_register: lookup existant, lecture seule
                                         reg.agents.iter().find(|a| a.name == name).and_then(|a| a.public_key.clone())
                                     };
                                     let is_rotation = matches!(&existing_pubkey, Some(old) if Some(old) != public_key.as_ref());
@@ -662,7 +662,7 @@ pub async fn handle_connection(
                                             trust_score,
                                             public_key: public_key.clone(),
                                         };
-                                        ctx.agent_registry.lock().await.register(card);
+                                        ctx.agent_registry.write().await.register(card);  // agent_register: écriture
                                         if is_rotation {
                                             info!("[Handler] agent_register: '{}' -- key rotation proven, key updated (trust_score={})", name, trust_score);
                                         } else {
@@ -1378,7 +1378,7 @@ pub async fn handle_connection(
                     // du lock pour ne jamais tenir le MutexGuard pendant le
                     // write_all().await qui suit.
                     let routed_agent_name = {
-                        let reg = ctx.agent_registry.lock().await;
+                        let reg = ctx.agent_registry.read().await;  // routing: lookup agent, lecture seule
                         reg.route("communication").map(|a| a.name.clone())
                     };
                     if let Some(agent_name) = routed_agent_name {

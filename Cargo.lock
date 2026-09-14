@@ -592,6 +592,7 @@ dependencies = [
  "flate2",
  "governor",
  "hex",
+ "lazy_static",
  "log",
  "notify",
  "parking_lot",

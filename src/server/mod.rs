@@ -24,7 +24,7 @@ pub mod deontic_state_machine;
 pub mod graphify_server;
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use serde_json;
 
 use crate::agent_discovery::AgentRegistry;
@@ -40,7 +40,7 @@ use crate::governance::GovernanceTracker;
 /// en un seul Arc<ServerContext> plutôt que 9 paramètres séparés.
 /// Allége la signature de handle_connection (Couche 7, 2026-09-04).
 pub struct ServerContext {
-    pub agent_registry: Arc<Mutex<AgentRegistry>>,
+    pub agent_registry: Arc<RwLock<AgentRegistry>>,
     pub chain: Arc<Mutex<audit::HashChain>>,
     pub kb_verifier: Arc<KbVerifier>,
     pub adn_store: Arc<Mutex<AdnStore>>,
@@ -55,8 +55,10 @@ pub struct CstlNativeServer {
     /// Mutable derriere un verrou depuis l'ajout de purpose=agent_register
     /// (2026-09-04) -- avant ca, le registre etait fige a la compilation
     /// (alice/bob en dur dans main.rs), aucun agent ne pouvait s'inscrire
-    /// au runtime.
-    pub agent_registry: Arc<Mutex<AgentRegistry>>,
+    /// au runtime. Upgrade 2026-09-14: RwLock au lieu de Mutex pour
+    /// concurrence lecture massale (STEP 2a verifies la signature sur CHAQUE
+    /// message, jamais en écriture -- RwLock permet N lectures simultanees).
+    pub agent_registry: Arc<RwLock<AgentRegistry>>,
     /// Seede depuis `adn_store` au demarrage (voir `with_data_path`) --
     /// avant le 2026-09-04, toujours vide a la construction (HashChain::new()),
     /// meme quand la base SQLite avait deja de l'historique sur disque.
@@ -178,7 +180,7 @@ impl CstlNativeServer {
         let adn_store_arc = Arc::new(Mutex::new(adn_store));
         Ok(CstlNativeServer {
             port,
-            agent_registry: Arc::new(Mutex::new(AgentRegistry::new())),
+            agent_registry: Arc::new(RwLock::new(AgentRegistry::new())),
             chain: Arc::new(Mutex::new(chain)),
             kb_verifier: Arc::new(KbVerifier::new()),
             adn_store: adn_store_arc,
