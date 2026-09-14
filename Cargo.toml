@@ -163,9 +163,11 @@ version = "6"
 # Needed by ed25519-dalek for SigningKey::generate
 version = "0.8"
 
+[dependencies.protobuf]
+# Direct dependency to override transitive prometheus -> protobuf v2.28.0
+# Fixes CVE-2025-53605 (stack overflow via uncontrolled recursion)
+version = "3.7.2"
+
 [dev-dependencies.env_logger]
 # Logger implementation for tests and development
 version = "0.11"
-
-[dependencies.protobuf]
-version = "3.7.2"
