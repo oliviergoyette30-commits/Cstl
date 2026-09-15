@@ -122,6 +122,25 @@ impl SigmaCalibrator {
     /// - agent_sigma: what the agent reported
     /// - agent_name: identity for lookup
     /// Returns adjusted sigma accounting for agent's historical accuracy
+    ///
+    /// Avant ce correctif (2026-09-15), cette fonction ignorait completement
+    /// `confidence_margin()`/`is_converged()` -- deux methodes definies et
+    /// testees en isolation mais jamais appelees hors de leurs propres tests
+    /// (confirme par grep sur tout src/). Consequence: un agent avec 1 seul
+    /// echantillon produisait un sigma_effective traite par governance.rs
+    /// avec exactement la meme autorite qu'un agent avec 500 echantillons.
+    /// Un seul verdict malchanceux (ou une seule confirmation KB chanceuse,
+    /// voir STEP 3b-verdict dans handler.rs) pouvait faire basculer
+    /// accuracy_score de 0.5 a 0.7 ou 0.3, et ce chiffre bruyant etait
+    /// immediatement pris au pied de la lettre.
+    ///
+    /// Fix: le blend brut (accuracy vs agent_sigma) est maintenant attenue
+    /// vers 0.5 (neutre) proportionnellement a `confidence_margin()` --
+    /// 1.0 (incertitude max, ~1 echantillon) jusqu'a ~0.0 (converge,
+    /// 50+ echantillons a alpha=0.2, voir `is_converged()`). Un agent tout
+    /// juste rencontre reste donc proche de 0.5 meme si son premier verdict
+    /// est extreme; sa confiance calibree ne devient significative qu'apres
+    /// avoir accumule assez d'echantillons pour que le margin retombe.
     pub fn compute_effective_sigma(&mut self, agent_name: &str, agent_sigma: f64) -> f64 {
         // Get or create calibration (starts at neutral 0.5)
         let calibration = self.get_or_create_calibration(agent_name.to_string(), 0.5);
@@ -134,13 +153,18 @@ impl SigmaCalibrator {
         let accuracy = calibration.score();
 
         // Linear interpolation:
-        // effective = agent_sigma * accuracy + (1 - agent_sigma) * (1 - accuracy)
+        // raw = agent_sigma * accuracy + (1 - agent_sigma) * (1 - accuracy)
         // This gives:
         //   - When agent_sigma=0.9 and accuracy=1.0 → 0.9 (trust the agent)
         //   - When agent_sigma=0.9 and accuracy=0.0 → 0.1 (invert)
         //   - When agent_sigma=0.9 and accuracy=0.5 → 0.5 (maximum uncertainty)
+        let raw_effective = (agent_sigma * accuracy) + ((1.0 - agent_sigma) * (1.0 - accuracy));
 
-        let effective = (agent_sigma * accuracy) + ((1.0 - agent_sigma) * (1.0 - accuracy));
+        // Attenuation par meta-incertitude: peu d'echantillons -> tire vers 0.5,
+        // independamment de ce que raw_effective affirme.
+        let margin = calibration.confidence_margin();
+        let effective = (raw_effective * (1.0 - margin)) + (0.5 * margin);
+
         effective.clamp(0.0, 1.0)
     }
 
@@ -198,14 +222,45 @@ mod tests {
         let sigma1 = calibrator.compute_effective_sigma("agent_a", 0.9);
         assert_eq!(sigma1, 0.5, "Unknown agent with neutral accuracy should give 0.5");
 
-        // Simulate the agent being correct 10 times
-        for _ in 0..10 {
+        // Simulate the agent being correct many times -- au-dela du seuil de
+        // convergence (50+ echantillons a alpha=0.2, voir is_converged())
+        // pour que confidence_margin() soit faible et laisse le blend brut
+        // s'exprimer presque pleinement. 10 echantillons ne suffit plus
+        // depuis l'attenuation par meta-incertitude (2026-09-15): a 11
+        // echantillons, confidence_margin ~0.30, donc ~30% du resultat est
+        // encore tire vers 0.5 peu importe l'accuracy mesuree.
+        for _ in 0..60 {
             calibrator.observe_verdict("agent_a", true);
         }
 
         // Now high sigma should be trusted
         let sigma2 = calibrator.compute_effective_sigma("agent_a", 0.9);
-        assert!(sigma2 > 0.8, "After proving accuracy, 0.9 sigma should be trusted, got {}", sigma2);
+        assert!(sigma2 > 0.8, "After proving accuracy over enough samples, 0.9 sigma should be trusted, got {}", sigma2);
+    }
+
+    #[test]
+    fn test_sigma_calibrator_attenuates_low_sample_count() {
+        // Coeur du correctif 2026-09-15: avant, un SEUL verdict extreme
+        // pouvait faire basculer sigma_effective aussi loin que l'accuracy
+        // brute le permettait. Maintenant, peu d'echantillons = grande
+        // confidence_margin = resultat tire vers 0.5, meme si le premier
+        // verdict est parfait.
+        let mut calibrator = SigmaCalibrator::new(0.2);
+
+        // Un seul verdict correct -- accuracy monte a 0.6 (alpha=0.2 depuis
+        // 0.5), mais avec sample_count=2, confidence_margin = 1/sqrt(2) ~ 0.71
+        calibrator.observe_verdict("agent_new", true);
+        let sigma = calibrator.compute_effective_sigma("agent_new", 0.95);
+
+        // raw_effective serait ~0.6 (accuracy=0.6, agent_sigma=0.95 ->
+        // 0.95*0.6 + 0.05*0.4 = 0.57+0.02=0.59), mais avec margin~0.71 le
+        // resultat doit rester proche de 0.5, loin de agent_sigma=0.95.
+        assert!(
+            sigma < 0.65,
+            "Avec un seul echantillon, sigma_effective doit rester pres du neutre (0.5), got {}",
+            sigma
+        );
+        assert!(sigma > 0.5, "Le signal positif doit quand meme tirer legerement au-dessus de 0.5, got {}", sigma);
     }
 
     #[test]

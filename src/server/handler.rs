@@ -819,6 +819,50 @@ pub async fn handle_connection(
                     // stable d'un run a l'autre independamment de la latence reseau.
                     verification_results.sort_by_key(|(idx, ..)| *idx);
 
+                    // STEP 3b-verdict: Pont KB verification -> calibration sigma (Couche 5).
+                    // Avant ce pont, kb_verifier.verify_relation() etait "PUREMENT
+                    // INFORMATIVE" (voir commentaire STEP 3b ci-dessus) et
+                    // sigma_calibrator.observe_verdict() n'etait JAMAIS appele en
+                    // production (confirme par grep sur tout src/) -- le calibrateur
+                    // EWMA restait fige a 0.5 (neutre) pour tous les agents, quelle
+                    // que soit leur historique reel de veracite. Les deux systemes
+                    // (verification factuelle Wikidata et calibration de confiance)
+                    // existaient cote a cote sans jamais se parler.
+                    //
+                    // Limite honnete assumee ici: VerificationResult::verified n'a
+                    // que deux valeurs possibles (src/kb_verify.rs) --
+                    // "confirmed_external_source" ou "unchallenged_unproven". Il
+                    // n'existe PAS de statut "refuted" -- Wikidata ne dement jamais
+                    // activement une relation, il echoue seulement a la confirmer
+                    // (absence de propriete, timeout, chaine non trouvee). Traiter
+                    // "unchallenged_unproven" comme is_correct=false serait une
+                    // fausse deduction (absence de preuve != preuve du faux) et
+                    // punirait un agent pour des relations simplement non couvertes
+                    // par Wikidata (KB incomplete, pas agent malhonnete). Ce pont
+                    // n'alimente donc QUE le signal positif pour l'instant: seule
+                    // une confirmation externe fait bouger l'EWMA. Consequence
+                    // assumee: un agent qui hallucine des relations non verifiables
+                    // (ni confirmees ni refutables) n'est PAS penalise par ce canal
+                    // -- seul governance.rs (drift/breaker sur d'autres signaux)
+                    // peut encore le detecter. Fermer ce trou necessiterait un vrai
+                    // statut "refuted" cote kb_verify.rs (hors scope de ce pont).
+                    let verdict_sender = payload.intent.get("sender").cloned();
+                    if let Some(sender) = verdict_sender.as_deref().filter(|s| !s.is_empty()) {
+                        let confirmed_count = verification_results.iter()
+                            .filter(|(.., result)| result.verified == "confirmed_external_source")
+                            .count();
+                        if confirmed_count > 0 {
+                            let mut calibrator = ctx.sigma_calibrator.lock().await;
+                            for _ in 0..confirmed_count {
+                                calibrator.observe_verdict(sender, true);
+                            }
+                            debug!(
+                                "[Handler] sigma_calibrator: {} verdict(s) positif(s) observe(s) pour sender={} (source=kb_verify confirmed_external_source)",
+                                confirmed_count, sender
+                            );
+                        }
+                    }
+
                     let mut verification_lines = String::new();
                     for (_idx, subject, predicate, object, result) in verification_results {
                         verification_lines.push_str(&format!(
