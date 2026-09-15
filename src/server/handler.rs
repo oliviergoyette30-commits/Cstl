@@ -1101,7 +1101,56 @@ pub async fn handle_connection(
                         }
                     }
 
-                    // STEP 3d: Memoire persistante (Couche 5, ADN store) — le payload est
+                    // STEP 3d-sigma: Calibration EWMA (Couche 5, Double Livre v5.2, 2026-09-15)
+                    // — calcule server_sigma_effective via blend de agent_sigma (brut du payload)
+                    // et de la precision historique de l'expediteur (EWMA, alpha=0.2).
+                    // Cree un EvaluatedPayload (Layer 2) avec snapshot governace + verdicts,
+                    // sans jamais modifier le payload Layer 1 (immutable, signe).
+                    let agent_sigma: f64 = payload.meta.get("sigma")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.5);  // Neutre si absent
+                    let sigma_sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                    let server_sigma_effective = {
+                        ctx.sigma_calibrator.lock().await.compute_effective_sigma(&sigma_sender, agent_sigma)
+                    };
+                    info!(
+                        "[Handler] Sigma calibration: sender={} agent_sigma={:.3} server_sigma_effective={:.3}",
+                        sigma_sender, agent_sigma, server_sigma_effective
+                    );
+
+                    // Crée EvaluatedPayload avec snapshot gouvernance (Layer 2 metadata, immuable)
+                    let evaluated_payload = {
+                        let mut ep = super::evaluated_payload::EvaluatedPayload::new(
+                            payload.clone(),
+                            entry.hash.clone(),
+                            server_sigma_effective,
+                            1.0,  // agent_trust_snapshot: on obtient la vraie valeur lors du prochain verdict
+                        );
+
+                        // Ajoute snapshot gouvernance (Couche 4 state)
+                        if !gov_state.circuit_open || gov_state.breaker_trips > 0 || gov_state.drift_flagged {
+                            let gov_snapshot = super::evaluated_payload::GovernanceSnapshot {
+                                sender: governance_sender.clone(),
+                                breaker_trips: gov_state.breaker_trips,
+                                circuit_state: if gov_state.circuit_open { "open".to_string() } else { "closed".to_string() },
+                                drift_ratio: gov_state.drift_ratio,
+                                drift_flagged: gov_state.drift_flagged,
+                                semantic_warnings_count: semantic_warnings.len() as u32,
+                            };
+                            ep = ep.with_governance_snapshot(gov_snapshot);
+                        }
+
+                        // Ajoute parent_hash pour auditabilite
+                        ep = ep.with_parent_hash(entry.parent_hash.clone());
+                        ep
+                    };
+
+                    let sigma_calibration_line = format!(
+                        "SIGMA_CALIBRATION [agent_sigma={:.3}, server_sigma_effective={:.3}, agent_trust_snapshot={:.3}]\n",
+                        agent_sigma, server_sigma_effective, 1.0
+                    );
+
+                    // STEP 3e: Memoire persistante (Couche 5, ADN store) — le payload est
                     // stocke (ASSUMES, non-commite) avec le sigma qu'ExecutionLab vient de
                     // calculer. Rien n'est ancre (committed) ici: aucun RestrictedCouncil
                     // (quorum humain 2/3) n'existe encore pour faire ce commit.
@@ -1404,6 +1453,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1418,6 +1468,7 @@ pub async fn handle_connection(
                             priority_line,
                             semantic_warning_lines,
                             governance_line,
+                            sigma_calibration_line,
                             guardrail_report_lines,
                             scope_lock_line,
                             error_signal_lines,

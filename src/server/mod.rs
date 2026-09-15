@@ -35,6 +35,7 @@ use crate::restricted_council::RestrictedCouncil;
 use crate::telegram_council::TelegramNotifier;
 use crate::obsidian_escalation::ObsidianEscalation;
 use crate::governance::GovernanceTracker;
+use crate::calibration::SigmaCalibrator;
 
 /// Contexte serveur partagé — regroupe tous les sous-systèmes accessibles
 /// par une connexion (registre, chaîne d'audit, ADN store, conseil, etc.)
@@ -49,6 +50,10 @@ pub struct ServerContext {
     pub telegram: Option<Arc<TelegramNotifier>>,
     pub obsidian: Option<Arc<ObsidianEscalation>>,
     pub governance: Arc<Mutex<GovernanceTracker>>,
+    /// Couche 5 (calibration sigma, Double Livre v5.2) -- EWMA per-agent
+    /// pour standardiser sigma entre les backends LLM (Claude/Gemini/Hermes).
+    /// Alpha = 0.2 pour adaptation rapide (~50 message effective window).
+    pub sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
 }
 
 pub struct CstlNativeServer {
@@ -90,6 +95,10 @@ pub struct CstlNativeServer {
     /// ca, toujours reconstruit vide (`with_defaults()`), meme quand la
     /// base SQLite avait deja de l'historique de breaker/drift sur disque.
     pub governance: Arc<Mutex<GovernanceTracker>>,
+    /// Couche 5 (calibration sigma, Double Livre v5.2) -- EWMA per-agent
+    /// pour standardiser sigma entre les backends LLM (Claude/Gemini/Hermes).
+    /// Alpha = 0.2 pour adaptation rapide (~50 message effective window).
+    pub sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
     /// Couche 10 (WAI) -- Registre de dictionnaires pour compression reseau
     /// statique. Le dictionnaire v5.0.0 est charge au demarrage et partage
     /// par tous les agents sur le meme serveur.
@@ -161,6 +170,10 @@ impl CstlNativeServer {
             .map_err(|e| format!("impossible de charger les alertes de gouvernance persistees depuis '{data_path}': {e}"))?;
         let governance = GovernanceTracker::with_defaults_restored(&governance_events, &governance_alerts);
 
+        // Initialise SigmaCalibrator pour standardisation EWMA inter-LLM
+        // (Couche 5, Double Livre v5.2). Alpha = 0.2 pour adaptation rapide.
+        let sigma_calibrator = SigmaCalibrator::new(0.2);
+
         // Initialise le registre WAI avec le dictionnaire statique v5.0.0
         let mut wai_registry = wai::DictionaryRegistry::new("cstl-v5.0.0".to_string());
         let standard_dict = wai::DictionaryVersion::new_standard_cstl_v5_0_0();
@@ -203,6 +216,7 @@ impl CstlNativeServer {
             // propre, le serveur marche pareil sans escalade Obsidian.
             obsidian: ObsidianEscalation::from_env().map(Arc::new),
             governance: Arc::new(Mutex::new(governance)),
+            sigma_calibrator: Arc::new(Mutex::new(sigma_calibrator)),
             wai_registry: Arc::new(wai_registry),
         })
     }
@@ -236,6 +250,7 @@ impl CstlNativeServer {
             telegram: self.telegram.clone(),
             obsidian: self.obsidian.clone(),
             governance: self.governance.clone(),
+            sigma_calibrator: self.sigma_calibrator.clone(),
         };
 
         listener::accept_connections(listener, Arc::new(ctx)).await?;
