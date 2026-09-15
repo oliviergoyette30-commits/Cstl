@@ -22,6 +22,7 @@ pub mod rest_api;
 pub mod deontic_orchestration;
 pub mod deontic_state_machine;
 pub mod graphify_server;
+pub mod evaluated_payload;
 
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};

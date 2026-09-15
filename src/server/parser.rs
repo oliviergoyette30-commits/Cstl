@@ -1,7 +1,8 @@
 /// CSTL Payload Parser
 use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CstlPayload {
     pub version: String,
     pub mode: String,

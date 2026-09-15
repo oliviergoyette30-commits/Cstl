@@ -21,3 +21,4 @@ pub mod wai_dictionary;
 pub mod compression_pipeline;
 pub mod compression;
 pub mod payload_compression;
+pub mod calibration;
