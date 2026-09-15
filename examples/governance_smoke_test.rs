@@ -60,7 +60,7 @@ use rand::rngs::OsRng;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 async fn send(port: u16, payload: &str) -> String {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).await.expect("connect");
@@ -198,7 +198,7 @@ fn make_test_server(port: u16, council: RestrictedCouncil, council_members: &[(&
             public_key: Some(pubkey_hex.to_string()),
         });
     }
-    server.agent_registry = Arc::new(Mutex::new(registry));
+    server.agent_registry = Arc::new(RwLock::new(registry));
     server.restricted_council = Arc::new(council);
     server
 }

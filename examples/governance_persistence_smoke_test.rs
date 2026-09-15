@@ -41,7 +41,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 async fn register_router(server: &CstlNativeServer, name: &str) {
-    let mut reg = server.agent_registry.lock().await;
+    let mut reg = server.agent_registry.write().await;
     reg.register(AgentCard {
         name: name.to_string(),
         version: "5.0.0".to_string(),
