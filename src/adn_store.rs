@@ -257,6 +257,163 @@ impl AdnStore {
             CREATE INDEX IF NOT EXISTS idx_deontic_executions_timestamp ON deontic_executions(timestamp);
             CREATE INDEX IF NOT EXISTS idx_audit_comments_timestamp ON audit_comments(timestamp);",
         )?;
+        // migrations/005_adn_sigma_audit_log_v5_2.sql -- cablage 2026-09-15.
+        // Ce fichier existait depuis la session precedente mais n'etait
+        // JAMAIS execute nulle part (confirme par grep: zero reference dans
+        // tout src/ avant ce commit) -- les tables qu'il decrit
+        // (adn_sigma_audit_log et consorts) etaient documentees ailleurs
+        // comme "Double Livre v5.2 COMPLETE" alors qu'elles n'existaient
+        // dans AUCUNE vraie base SQLite.
+        //
+        // Deuxieme trouvaille en cablant ce fichier: il n'aurait de toute
+        // facon pas pu s'executer tel quel contre SQLite. Verifie en direct
+        // (python3 sqlite3.executescript sur le fichier original): erreur de
+        // syntaxe immediate. Le fichier est ecrit en dialecte PostgreSQL pur
+        // malgre son commentaire d'en-tete ("Compatibility: PostgreSQL 12+,
+        // SQLite 3.28+") -- UUID/gen_random_uuid() (type et fonction
+        // inexistants en SQLite), TIMESTAMPTZ (idem), BIGSERIAL (idem),
+        // CREATE RULE ... DO INSTEAD (syntaxe Postgres, SQLite n'a que les
+        // TRIGGER), STDDEV() dans la vue de monitoring (pas une fonction
+        // agregee native SQLite), et des casts ::NUMERIC (syntaxe Postgres).
+        // Le schema ci-dessous reprend la meme structure (memes colonnes,
+        // memes contraintes CHECK, memes index) traduite en dialecte SQLite
+        // reel, alignee sur les conventions deja en place dans ce fichier
+        // (timestamp en INTEGER epoch Unix, pas TIMESTAMPTZ; ids generes
+        // cote Rust en TEXT, pas UUID auto-genere par le moteur).
+        //
+        // Omission assumee: la vue `adn_sigma_audit_summary` du fichier
+        // original calculait STDDEV(sigma_effective_server) -- non
+        // reproductible sans extension SQLite. Omise ici plutot que
+        // silencieusement fausse; a calculer cote Rust si necessaire
+        // (adn_sigma_divergence_stats stocke deja sigma_stddev par agent
+        // pour cet usage, alimentee separement).
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS adn_sigma_audit_log (
+                payload_hash_sha256 TEXT NOT NULL,
+                agent_name TEXT NOT NULL,
+                payload_hash_parent TEXT,
+                agent_trust_score_at_time REAL NOT NULL CHECK (agent_trust_score_at_time >= 0.0 AND agent_trust_score_at_time <= 1.0),
+                sigma_provided_by_agent REAL NOT NULL CHECK (sigma_provided_by_agent >= 0.0 AND sigma_provided_by_agent <= 1.0),
+                sigma_effective_server REAL NOT NULL CHECK (sigma_effective_server >= 0.0 AND sigma_effective_server <= 1.0),
+                accuracy_ewma_score REAL NOT NULL CHECK (accuracy_ewma_score >= 0.0 AND accuracy_ewma_score <= 1.0),
+                ewma_sample_count INTEGER NOT NULL DEFAULT 1 CHECK (ewma_sample_count >= 1),
+                ewma_alpha REAL NOT NULL DEFAULT 0.2 CHECK (ewma_alpha > 0.0 AND ewma_alpha <= 1.0),
+                is_correct_verdict INTEGER,
+                verdict_source TEXT,
+                verdict_confidence REAL CHECK (verdict_confidence IS NULL OR (verdict_confidence >= 0.0 AND verdict_confidence <= 1.0)),
+                evaluated_payload_json TEXT NOT NULL,
+                timestamp_utc INTEGER NOT NULL,
+                evaluation_version TEXT NOT NULL DEFAULT 'v5.2',
+                governance_breaker_trips_at_time INTEGER,
+                governance_circuit_state_at_time TEXT,
+                governance_drift_ratio_at_time REAL CHECK (governance_drift_ratio_at_time IS NULL OR (governance_drift_ratio_at_time >= 0.0 AND governance_drift_ratio_at_time <= 1.0)),
+                PRIMARY KEY (payload_hash_sha256, agent_name, timestamp_utc)
+            );
+            CREATE INDEX IF NOT EXISTS idx_sigma_audit_agent_timestamp
+                ON adn_sigma_audit_log (agent_name, timestamp_utc DESC);
+            CREATE INDEX IF NOT EXISTS idx_sigma_audit_parent_chain
+                ON adn_sigma_audit_log (payload_hash_parent)
+                WHERE payload_hash_parent IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_sigma_audit_verdict_pending
+                ON adn_sigma_audit_log (payload_hash_sha256)
+                WHERE is_correct_verdict IS NULL;
+            CREATE INDEX IF NOT EXISTS idx_sigma_audit_convergence_scan
+                ON adn_sigma_audit_log (agent_name, ewma_sample_count DESC);
+
+            CREATE TABLE IF NOT EXISTS adn_sigma_divergence_stats (
+                agent_name TEXT PRIMARY KEY,
+                sigma_mean REAL NOT NULL DEFAULT 0.5,
+                sigma_stddev REAL NOT NULL DEFAULT 0.0,
+                sigma_min REAL NOT NULL DEFAULT 0.0,
+                sigma_max REAL NOT NULL DEFAULT 1.0,
+                sample_count INTEGER NOT NULL DEFAULT 0,
+                updated_at_utc INTEGER NOT NULL,
+                stddev_alert_threshold_exceeded INTEGER NOT NULL DEFAULT 0,
+                convergence_status TEXT NOT NULL DEFAULT 'unknown'
+            );
+
+            CREATE TABLE IF NOT EXISTS adn_sigma_verdict_correlation (
+                correlation_id TEXT PRIMARY KEY,
+                payload_hash_sha256 TEXT NOT NULL,
+                agent_name TEXT NOT NULL,
+                server_sigma_predicted REAL NOT NULL CHECK (server_sigma_predicted >= 0.0 AND server_sigma_predicted <= 1.0),
+                agent_trust_predicted REAL NOT NULL CHECK (agent_trust_predicted >= 0.0 AND agent_trust_predicted <= 1.0),
+                is_correct_actual INTEGER NOT NULL,
+                verdict_source TEXT,
+                verdict_arrival_delay_seconds INTEGER,
+                prediction_error REAL,
+                recorded_at_utc INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sigma_verdict_correlation_agent
+                ON adn_sigma_verdict_correlation (agent_name);
+            CREATE INDEX IF NOT EXISTS idx_sigma_prediction_error
+                ON adn_sigma_verdict_correlation (prediction_error DESC);
+
+            CREATE TABLE IF NOT EXISTS adn_sigma_gossip_telemetry (
+                telemetry_id TEXT PRIMARY KEY,
+                source_agent TEXT NOT NULL,
+                receiving_agent TEXT,
+                agent_name TEXT NOT NULL,
+                sigma_distribution_mean REAL NOT NULL,
+                sigma_distribution_stddev REAL NOT NULL,
+                sample_size INTEGER NOT NULL CHECK (sample_size > 0),
+                message_signature_valid INTEGER,
+                signature_verification_error TEXT,
+                consensus_votes_for INTEGER NOT NULL DEFAULT 0,
+                consensus_votes_against INTEGER NOT NULL DEFAULT 0,
+                quorum_threshold_met INTEGER NOT NULL DEFAULT 0,
+                received_at_utc INTEGER NOT NULL,
+                latency_milliseconds INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_sigma_gossip_source_agent
+                ON adn_sigma_gossip_telemetry (source_agent, received_at_utc DESC);
+            CREATE INDEX IF NOT EXISTS idx_sigma_gossip_consensus
+                ON adn_sigma_gossip_telemetry (quorum_threshold_met)
+                WHERE quorum_threshold_met = 1;
+
+            CREATE TABLE IF NOT EXISTS adn_sigma_audit_log_changelog (
+                changelog_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+                payload_hash_sha256 TEXT,
+                agent_name TEXT,
+                old_values TEXT,
+                new_values TEXT,
+                modified_by TEXT,
+                modified_at_utc INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS adn_sigma_audit_log_archive (
+                payload_hash_sha256 TEXT NOT NULL,
+                agent_name TEXT NOT NULL,
+                payload_hash_parent TEXT,
+                agent_trust_score_at_time REAL NOT NULL,
+                sigma_provided_by_agent REAL NOT NULL,
+                sigma_effective_server REAL NOT NULL,
+                accuracy_ewma_score REAL NOT NULL,
+                ewma_sample_count INTEGER NOT NULL,
+                ewma_alpha REAL NOT NULL,
+                is_correct_verdict INTEGER,
+                verdict_source TEXT,
+                verdict_confidence REAL,
+                evaluated_payload_json TEXT NOT NULL,
+                timestamp_utc INTEGER NOT NULL,
+                evaluation_version TEXT,
+                governance_breaker_trips_at_time INTEGER,
+                governance_circuit_state_at_time TEXT,
+                governance_drift_ratio_at_time REAL,
+                archived_at_utc INTEGER NOT NULL,
+                archive_year INTEGER NOT NULL,
+                PRIMARY KEY (archive_year, payload_hash_sha256, agent_name)
+            );
+            CREATE INDEX IF NOT EXISTS idx_sigma_archive_by_year
+                ON adn_sigma_audit_log_archive (archive_year DESC);
+
+            CREATE TRIGGER IF NOT EXISTS trg_adn_sigma_audit_log_no_delete
+                BEFORE DELETE ON adn_sigma_audit_log
+            BEGIN
+                SELECT RAISE(ABORT, 'Direct deletion from adn_sigma_audit_log is prohibited. Use archive strategy.');
+            END;",
+        )?;
         // Migration idempotente (2026-09-04, Couche 8: audit deontique
         // historique): `adn_relations` existe deja sur les bases reelles de
         // production (dont celle de l'utilisateur) SANS colonne `modality` --
@@ -1599,6 +1756,78 @@ impl AdnStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_migration_005_sigma_tables_exist_and_accept_writes() {
+        // Verifie que le cablage de migrations/005 (2026-09-15) cree
+        // reellement des tables fonctionnelles, pas seulement un CREATE
+        // TABLE qui ne plante pas silencieusement. Sans ce test, `open()`
+        // pourrait accepter un schema invalide (SQLite differe la
+        // validation de certaines erreurs a l'ecriture, pas a la creation).
+        let store = AdnStore::open(":memory:").unwrap();
+        store.conn.execute(
+            "INSERT INTO adn_sigma_audit_log
+                (payload_hash_sha256, agent_name, agent_trust_score_at_time,
+                 sigma_provided_by_agent, sigma_effective_server, accuracy_ewma_score,
+                 evaluated_payload_json, timestamp_utc)
+             VALUES ('sha256:test', 'agent_a', 0.5, 0.9, 0.6, 0.5, '{}', 1234567890)",
+            [],
+        ).expect("insert dans adn_sigma_audit_log doit reussir avec des valeurs valides");
+
+        let count: i64 = store.conn.query_row(
+            "SELECT COUNT(*) FROM adn_sigma_audit_log WHERE agent_name = 'agent_a'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_migration_005_check_constraint_rejects_out_of_range_sigma() {
+        // La contrainte CHECK (0.0 <= x <= 1.0) doit etre reellement
+        // appliquee par SQLite, pas juste presente dans le texte du schema.
+        let store = AdnStore::open(":memory:").unwrap();
+        let result = store.conn.execute(
+            "INSERT INTO adn_sigma_audit_log
+                (payload_hash_sha256, agent_name, agent_trust_score_at_time,
+                 sigma_provided_by_agent, sigma_effective_server, accuracy_ewma_score,
+                 evaluated_payload_json, timestamp_utc)
+             VALUES ('sha256:bad', 'agent_b', 0.5, 1.5, 0.5, 0.5, '{}', 1234567890)",
+            [],
+        );
+        assert!(result.is_err(), "sigma_provided_by_agent=1.5 doit violer la contrainte CHECK <= 1.0");
+    }
+
+    #[test]
+    fn test_migration_005_delete_trigger_blocks_direct_deletion() {
+        // Traduction du CREATE RULE ... DO INSTEAD RAISE EXCEPTION original
+        // (syntaxe PostgreSQL, absente de SQLite) en TRIGGER BEFORE DELETE.
+        // Verifie que la traduction preserve le comportement voulu:
+        // suppression directe bloquee, doit passer par une strategie
+        // d'archivage (adn_sigma_audit_log_archive).
+        let store = AdnStore::open(":memory:").unwrap();
+        store.conn.execute(
+            "INSERT INTO adn_sigma_audit_log
+                (payload_hash_sha256, agent_name, agent_trust_score_at_time,
+                 sigma_provided_by_agent, sigma_effective_server, accuracy_ewma_score,
+                 evaluated_payload_json, timestamp_utc)
+             VALUES ('sha256:nodelete', 'agent_c', 0.5, 0.5, 0.5, 0.5, '{}', 1234567890)",
+            [],
+        ).unwrap();
+
+        let result = store.conn.execute(
+            "DELETE FROM adn_sigma_audit_log WHERE payload_hash_sha256 = 'sha256:nodelete'",
+            [],
+        );
+        assert!(result.is_err(), "DELETE direct doit etre bloque par le trigger");
+
+        let count: i64 = store.conn.query_row(
+            "SELECT COUNT(*) FROM adn_sigma_audit_log WHERE payload_hash_sha256 = 'sha256:nodelete'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(count, 1, "la ligne doit survivre a la tentative de DELETE");
+    }
 
     #[test]
     fn test_put_get_roundtrip() {
