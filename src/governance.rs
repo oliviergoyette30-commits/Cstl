@@ -86,10 +86,13 @@ pub struct GovernanceState {
 
 struct SenderWindow {
     /// Horodatages des événements d'incohérence dans la fenêtre du breaker.
-    inconsistency_events: Vec<Instant>,
-    /// (horodatage, avait_un_semantic_warning) pour chaque payload observé,
+    /// (horodatage, poids_confiance_sigma_effective)
+    /// Poids = sigma_effective (0.0..1.0), ou 1.0 si non fourni (legacy).
+    inconsistency_events: Vec<(Instant, f64)>,
+    /// (horodatage, avait_un_semantic_warning, poids_sigma) pour chaque payload observé,
     /// dans la fenêtre de drift.
-    drift_samples: Vec<(Instant, bool)>,
+    /// Poids = sigma_effective (0.0..1.0), ou 1.0 si non fourni (legacy).
+    drift_samples: Vec<(Instant, bool, f64)>,
     last_alert: Option<Instant>,
 }
 
@@ -192,9 +195,9 @@ impl GovernanceTracker {
         let instant = Self::instant_for(ts_unix);
         let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
         if had_inconsistency {
-            window.inconsistency_events.push(instant);
+            window.inconsistency_events.push((instant, 1.0));  // Poids legacy = 1.0
         }
-        window.drift_samples.push((instant, had_semantic_warning));
+        window.drift_samples.push((instant, had_semantic_warning, 1.0));  // Poids legacy = 1.0
     }
 
     /// Rejoue le dernier horodatage d'alerte connu pour `sender` -- pour que
@@ -211,7 +214,10 @@ impl GovernanceTracker {
     /// payload) et retourne l'état de gouvernance à jour pour cet
     /// expéditeur. Ne bloque jamais rien — c'est à l'appelant (handler.rs)
     /// de décider quoi faire de `should_alert`.
-    pub fn record(&mut self, sender: &str, reasons: &[EventReason]) -> GovernanceState {
+    ///
+    /// Paramètre optionnel `server_sigma_effective` (Couche 5, Double Livre v5.2):
+    /// pondère l'importance de chaque événement par la confiance du serveur.
+    pub fn record(&mut self, sender: &str, reasons: &[EventReason], server_sigma_effective: Option<f64>) -> GovernanceState {
         let now = Instant::now();
         let breaker_window = self.breaker_window;
         let breaker_threshold = self.breaker_threshold;
@@ -220,24 +226,34 @@ impl GovernanceTracker {
         let drift_ratio_threshold = self.drift_ratio_threshold;
         let alert_cooldown = self.alert_cooldown;
 
+        // Poids de confiance par sigma: si sigma absent/None, défaut 1.0 (legacy)
+        let sigma_weight = server_sigma_effective.unwrap_or(1.0).clamp(0.0, 1.0);
+
         let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
 
         if reasons.contains(&EventReason::Inconsistency) {
-            window.inconsistency_events.push(now);
+            window.inconsistency_events.push((now, sigma_weight));
         }
-        window.inconsistency_events.retain(|t| now.duration_since(*t) <= breaker_window);
+        window.inconsistency_events.retain(|(t, _)| now.duration_since(*t) <= breaker_window);
 
         let had_semantic_warning = reasons.contains(&EventReason::SemanticWarning);
-        window.drift_samples.push((now, had_semantic_warning));
-        window.drift_samples.retain(|(t, _)| now.duration_since(*t) <= drift_window);
+        window.drift_samples.push((now, had_semantic_warning, sigma_weight));
+        window.drift_samples.retain(|(t, _, _)| now.duration_since(*t) <= drift_window);
 
-        let breaker_trips = window.inconsistency_events.len() as u32;
-        let circuit_open = breaker_trips >= breaker_threshold;
+        // breaker_trips: somme des poids sigma au lieu de simple compte
+        let breaker_trips_weighted: f64 = window.inconsistency_events.iter().map(|(_, w)| w).sum();
+        let breaker_trips = breaker_trips_weighted as u32;  // Conversion pour affichage (compatible legacy)
+        let circuit_open = breaker_trips_weighted >= breaker_threshold as f64;
 
+        // drift_ratio: moyenne pondérée (poids avec warnings / poids total)
+        let total_weight: f64 = window.drift_samples.iter().map(|(_, _, w)| w).sum();
+        let warned_weight: f64 = window.drift_samples.iter()
+            .filter(|(_, had_warning, _)| *had_warning)
+            .map(|(_, _, w)| w)
+            .sum();
         let total_samples = window.drift_samples.len() as u32;
-        let warned_samples = window.drift_samples.iter().filter(|(_, w)| *w).count() as u32;
-        let drift_ratio = if total_samples > 0 {
-            warned_samples as f64 / total_samples as f64
+        let drift_ratio = if total_weight > 0.0 {
+            warned_weight / total_weight
         } else {
             0.0
         };
@@ -273,7 +289,7 @@ mod tests {
     #[test]
     fn test_normal_payload_no_reasons_leaves_circuit_closed() {
         let mut t = tracker_for_tests();
-        let state = t.record("alice", &[]);
+        let state = t.record("alice", &[], None);
         assert!(!state.circuit_open);
         assert_eq!(state.breaker_trips, 0);
         assert!(!state.should_alert);
@@ -282,8 +298,8 @@ mod tests {
     #[test]
     fn test_breaker_trips_below_threshold_stays_closed() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::Inconsistency]);
-        let state = t.record("alice", &[EventReason::Inconsistency]);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        let state = t.record("alice", &[EventReason::Inconsistency], None);
         assert_eq!(state.breaker_trips, 2);
         assert!(!state.circuit_open);
     }
@@ -291,9 +307,9 @@ mod tests {
     #[test]
     fn test_breaker_opens_at_threshold_but_never_blocks() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
-        let state = t.record("alice", &[EventReason::Inconsistency]);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        let state = t.record("alice", &[EventReason::Inconsistency], None);
         assert_eq!(state.breaker_trips, 3);
         assert!(state.circuit_open);
         // "should_alert" est un signal d'escalade, pas un rejet — le
@@ -304,11 +320,11 @@ mod tests {
     #[test]
     fn test_breaker_resets_after_window_elapses() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
         std::thread::sleep(ms(250)); // > breaker_window (200ms)
-        let state = t.record("alice", &[]);
+        let state = t.record("alice", &[], None);
         assert_eq!(state.breaker_trips, 0);
         assert!(!state.circuit_open);
     }
@@ -316,10 +332,10 @@ mod tests {
     #[test]
     fn test_breaker_is_isolated_per_sender() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
-        let bob_state = t.record("bob", &[]);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        let bob_state = t.record("bob", &[], None);
         assert_eq!(bob_state.breaker_trips, 0);
         assert!(!bob_state.circuit_open);
     }
@@ -328,17 +344,17 @@ mod tests {
     fn test_drift_ratio_ignored_below_min_samples() {
         let mut t = tracker_for_tests();
         // drift_min_samples=3 dans tracker_for_tests()
-        t.record("alice", &[EventReason::SemanticWarning]);
-        let state = t.record("alice", &[EventReason::SemanticWarning]);
+        t.record("alice", &[EventReason::SemanticWarning], None);
+        let state = t.record("alice", &[EventReason::SemanticWarning], None);
         assert!(!state.drift_flagged, "seulement 2 échantillons, min_samples=3");
     }
 
     #[test]
     fn test_drift_flagged_once_ratio_and_min_samples_met() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::SemanticWarning]);
-        t.record("alice", &[EventReason::SemanticWarning]);
-        let state = t.record("alice", &[EventReason::SemanticWarning]);
+        t.record("alice", &[EventReason::SemanticWarning], None);
+        t.record("alice", &[EventReason::SemanticWarning], None);
+        let state = t.record("alice", &[EventReason::SemanticWarning], None);
         assert_eq!(state.drift_ratio, 1.0);
         assert!(state.drift_flagged);
     }
@@ -346,9 +362,9 @@ mod tests {
     #[test]
     fn test_drift_ratio_below_threshold_not_flagged() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[]);
-        t.record("alice", &[]);
-        let state = t.record("alice", &[EventReason::SemanticWarning]);
+        t.record("alice", &[], None);
+        t.record("alice", &[], None);
+        let state = t.record("alice", &[EventReason::SemanticWarning], None);
         assert!(state.drift_ratio < 0.5);
         assert!(!state.drift_flagged);
     }
@@ -356,12 +372,12 @@ mod tests {
     #[test]
     fn test_alert_cooldown_debounces_repeated_alerts() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
-        let first = t.record("alice", &[EventReason::Inconsistency]);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        let first = t.record("alice", &[EventReason::Inconsistency], None);
         assert!(first.should_alert);
         // Immédiatement après: circuit toujours ouvert mais cooldown actif.
-        let second = t.record("alice", &[EventReason::Inconsistency]);
+        let second = t.record("alice", &[EventReason::Inconsistency], None);
         assert!(second.circuit_open);
         assert!(!second.should_alert, "cooldown pas encore ecoule");
     }
@@ -369,12 +385,12 @@ mod tests {
     #[test]
     fn test_alert_fires_again_after_cooldown_elapses() {
         let mut t = tracker_for_tests();
-        t.record("alice", &[EventReason::Inconsistency]);
-        t.record("alice", &[EventReason::Inconsistency]);
-        let first = t.record("alice", &[EventReason::Inconsistency]);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        t.record("alice", &[EventReason::Inconsistency], None);
+        let first = t.record("alice", &[EventReason::Inconsistency], None);
         assert!(first.should_alert);
         std::thread::sleep(ms(150)); // > alert_cooldown (100ms)
-        let later = t.record("alice", &[EventReason::Inconsistency]);
+        let later = t.record("alice", &[EventReason::Inconsistency], None);
         assert!(later.circuit_open);
         assert!(later.should_alert, "cooldown ecoule, une nouvelle alerte doit pouvoir partir");
     }

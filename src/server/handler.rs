@@ -1020,6 +1020,22 @@ pub async fn handle_connection(
                         }
                     }
 
+                    // STEP 3d-sigma-prep: Calibration EWMA pre-governance (Couche 5, Double Livre v5.2, 2026-09-15)
+                    // Calcul early de server_sigma_effective AVANT décision gouvernance, pour pondérer
+                    // l'importance des événements par confiance. Reordering nécessaire: sigma doit
+                    // éclairer les décisions de breaker et drift, pas les suivre.
+                    let agent_sigma: f64 = payload.meta.get("sigma")
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.5);  // Neutre si absent
+                    let sigma_sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                    let server_sigma_effective = {
+                        ctx.sigma_calibrator.lock().await.compute_effective_sigma(&sigma_sender, agent_sigma)
+                    };
+                    info!(
+                        "[Handler] Sigma calibration (prep): sender={} agent_sigma={:.3} server_sigma_effective={:.3}",
+                        sigma_sender, agent_sigma, server_sigma_effective
+                    );
+
                     // STEP 3c-governance: Couche 2 (gouvernance/resilience) — circuit
                     // breaker + drift d'operateur, observation seule (src/governance.rs).
                     // Avant cette etape, la Couche 2 etait completement vide (aucun
@@ -1040,7 +1056,7 @@ pub async fn handle_connection(
                         governance_reasons.push(crate::governance::EventReason::SemanticWarning);
                     }
                     let gov_state = {
-                        ctx.governance.lock().await.record(&governance_sender, &governance_reasons)
+                        ctx.governance.lock().await.record(&governance_sender, &governance_reasons, Some(server_sigma_effective))
                     };
                     // Persistance (2026-09-05): meme grain que l'audit trail
                     // (un evenement par payload, via save_audit_entry
@@ -1101,22 +1117,10 @@ pub async fn handle_connection(
                         }
                     }
 
-                    // STEP 3d-sigma: Calibration EWMA (Couche 5, Double Livre v5.2, 2026-09-15)
-                    // — calcule server_sigma_effective via blend de agent_sigma (brut du payload)
-                    // et de la precision historique de l'expediteur (EWMA, alpha=0.2).
-                    // Cree un EvaluatedPayload (Layer 2) avec snapshot governace + verdicts,
-                    // sans jamais modifier le payload Layer 1 (immutable, signe).
-                    let agent_sigma: f64 = payload.meta.get("sigma")
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(0.5);  // Neutre si absent
-                    let sigma_sender = payload.intent.get("sender").cloned().unwrap_or_default();
-                    let server_sigma_effective = {
-                        ctx.sigma_calibrator.lock().await.compute_effective_sigma(&sigma_sender, agent_sigma)
-                    };
-                    info!(
-                        "[Handler] Sigma calibration: sender={} agent_sigma={:.3} server_sigma_effective={:.3}",
-                        sigma_sender, agent_sigma, server_sigma_effective
-                    );
+                    // STEP 3d-sigma: Wrapper EvaluatedPayload (Couche 5, Double Livre v5.2, 2026-09-15)
+                    // Sigma effectif DEJA calcule en STEP 3d-sigma-prep (avant gouvernance).
+                    // Ici: crée EvaluatedPayload (Layer 2 wrapper) avec snapshot gouvernance + verdicts,
+                    // sans jamais modifier le payload Layer 1 (immutable, signe, cryptographiquement garanti).
 
                     // Crée EvaluatedPayload avec snapshot gouvernance (Layer 2 metadata, immuable)
                     let evaluated_payload = {
