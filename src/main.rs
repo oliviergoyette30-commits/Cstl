@@ -4,7 +4,7 @@
 use cstl_parser::server::CstlNativeServer;
 use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
     };
-    server.agent_registry = Arc::new(Mutex::new(registry));
+    server.agent_registry = Arc::new(RwLock::new(registry));
 
     eprintln!("📡 Starting server on port 5050...");
     eprintln!("💬 Ready to receive CSTL payloads\n");
