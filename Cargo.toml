@@ -148,7 +148,9 @@ version = "6"
 
 [dependencies.prometheus]
 # Prometheus metrics client
-version = "0.13"
+# Upgraded from 0.13 to 0.14 to resolve CVE-2025-53605 (protobuf v2.28.0 transitive dep)
+# v0.14+ uses protobuf v3.7.2 which has the uncontrolled recursion fix
+version = "0.14"
 
 [dependencies.governor]
 # Rate limiting
