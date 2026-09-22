@@ -465,6 +465,29 @@ impl AdnStore {
                 }
             }
         }
+        // Migration idempotente (2026-09-22): table `arbiters` -- n'existait
+        // pas du tout avant. `AdnStore::get_active_arbiters()` etait un stub
+        // qui renvoyait toujours Vec::new(), et `arbitrage::verify_ruling_signatures`
+        // ne verifiait meme pas la longueur/le format de la signature (juste
+        // non-vide). Sans registre de cles publiques, aucune verification
+        // Ed25519 reelle n'etait possible pour un ruling d'arbitrage -- le
+        // meme trou que celui deja ferme pour les agents (`AgentRegistry` +
+        // `purpose=agent_register` + `signing.rs`), jamais construit ici.
+        // CREATE TABLE (pas ALTER) est correct: c'est une table neuve, pas
+        // l'ajout d'une colonne a une table deja en production.
+        if let Err(e) = conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS arbiters (
+                arbiter_id TEXT PRIMARY KEY,
+                public_key TEXT NOT NULL,
+                authority_level TEXT NOT NULL,
+                stake_amount INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                registered_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_arbiters_active ON arbiters(is_active);",
+        ) {
+            eprintln!("[AdnStore] ⚠️  migration table arbiters echouee (inattendu): {}", e);
+        }
         // Migration idempotente (2026-09-14, Couche 5: compression de payloads):
         // `adn_store` peut exister sans colonne `payload_compressed` sur les bases
         // anciennes. L'ajouter au CREATE TABLE ci-dessus ne suffit pas pour les
@@ -538,6 +561,15 @@ impl AdnStore {
             );
             CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
             CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);
+            CREATE TABLE IF NOT EXISTS arbiters (
+                arbiter_id TEXT PRIMARY KEY,
+                public_key TEXT NOT NULL,
+                authority_level TEXT NOT NULL,
+                stake_amount INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                registered_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_arbiters_active ON arbiters(is_active);
             CREATE INDEX IF NOT EXISTS idx_adn_produced_by ON adn_store(produced_by);
             CREATE INDEX IF NOT EXISTS idx_adn_parent_hash ON adn_store(parent_hash);
             CREATE INDEX IF NOT EXISTS idx_adn_created_at ON adn_store(created_at);
@@ -1384,11 +1416,60 @@ impl AdnStore {
         Ok(reviews)
     }
 
-    /// Get all active arbiters (stub for now, would need an arbiters table)
+    /// Enregistre (ou met a jour) un arbitre -- table `arbiters` creee par la
+    /// migration idempotente dans `open()`. Upsert par `arbiter_id`: un
+    /// second `arbiter_register` avec le meme id rafraichit la cle/le stake/
+    /// le statut (meme philosophie que `AgentRegistry::register`, pas de
+    /// preuve de rotation demandee en v1 -- limite assumee, documentee au
+    /// point d'appel dans handler.rs).
+    pub fn save_arbiter(
+        &self,
+        arbiter_id: &str,
+        public_key: &str,
+        authority_level: &str,
+        stake_amount: i64,
+        is_active: bool,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO arbiters (arbiter_id, public_key, authority_level, stake_amount, is_active, registered_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(arbiter_id) DO UPDATE SET
+                public_key = excluded.public_key,
+                authority_level = excluded.authority_level,
+                stake_amount = excluded.stake_amount,
+                is_active = excluded.is_active",
+            params![arbiter_id, public_key, authority_level, stake_amount, is_active as i32, now_unix()],
+        )?;
+        Ok(())
+    }
+
+    /// Cle publique hex d'un arbitre actif -- source de verite pour
+    /// `arbitrage::verify_ruling_signatures`, JAMAIS le message lui-meme (qui
+    /// pourrait mentir). None si l'arbitre n'existe pas ou est desactive.
+    pub fn get_arbiter_public_key(&self, arbiter_id: &str) -> Result<Option<String>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT public_key FROM arbiters WHERE arbiter_id = ?1 AND is_active = 1",
+                params![arbiter_id],
+                |row| row.get(0),
+            )
+            .optional()
+    }
+
+    /// Tous les arbitres actifs -- remplace l'ancien stub qui renvoyait
+    /// toujours une liste vide (2026-09-22: table `arbiters` n'existait pas
+    /// du tout avant cette migration, donc `select_arbiters_round_robin`
+    /// echouait systematiquement avec "No active arbiters registered", peu
+    /// importe combien d'arbitres avaient ete "enregistres" -- aucun ne
+    /// l'etait jamais vraiment, faute de table).
     pub fn get_active_arbiters(&self) -> Result<Vec<String>, rusqlite::Error> {
-        // Placeholder: in production, would query from an arbiters table
-        // For now, return empty — integration tests can mock this
-        Ok(Vec::new())
+        let mut stmt = self.conn.prepare("SELECT arbiter_id FROM arbiters WHERE is_active = 1")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     /// Save a WAI dictionary version to persistent storage

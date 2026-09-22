@@ -315,7 +315,7 @@ pub async fn submit_ruling_async(
         ruling.ruling_id, ruling.decision, ruling.justification
     );
 
-    verify_ruling_signatures(&ruling.arbiter_id, &payload, &ruling.signature)?;
+    verify_ruling_signatures(adn_store, &ruling.arbiter_id, &payload, &ruling.signature).await?;
 
     let case = {
         let adn = adn_store.lock().await;
@@ -387,7 +387,7 @@ pub async fn peer_review_async(
     review_signature: String,
 ) -> Result<(), ArbitrationError> {
     let payload = format!("{}||{}", reviewing_arbiter_id, ruling_id);
-    verify_ruling_signatures(&reviewing_arbiter_id, &payload, &review_signature)?;
+    verify_ruling_signatures(adn_store, &reviewing_arbiter_id, &payload, &review_signature).await?;
 
     let _ruling = {
         let adn = adn_store.lock().await;
@@ -571,7 +571,26 @@ pub fn select_arbiters_round_robin(adn: &AdnStore, count: usize) -> Result<Vec<S
     Ok(selected)
 }
 
-pub fn verify_ruling_signatures(
+/// Verification Ed25519 REELLE, contre la cle publique enregistree pour cet
+/// arbitre -- jamais une cle que le message lui-meme revendiquerait.
+///
+/// Avant ce fix (2026-09-22): cette fonction ne verifiait que la
+/// non-vacuite des 3 chaines -- n'importe quel `signature="x"` passait, peu
+/// importe l'arbitre ou le contenu du ruling. Elle etait nommee "verify"
+/// mais ne verifiait rien. Impossible de la corriger avant maintenant: il
+/// n'existait aucun registre d'ou tirer la cle publique d'un arbitre
+/// (`AdnStore::get_active_arbiters` etait un stub renvoyant toujours
+/// `Vec::new()`, `Arbiter { public_key, .. }` n'etait jamais construite en
+/// dehors des tests). Voir `adn_store.rs::save_arbiter`/`get_arbiter_public_key`
+/// (table `arbiters`, migration 2026-09-22) et `register_arbiter_async`
+/// ci-dessous pour le cote enregistrement.
+///
+/// `ArbiterNotFound` si l'arbitre n'est pas enregistre (ou desactive) --
+/// distinct de `InvalidSignature` pour que l'appelant sache si le probleme
+/// est "personne ne connait cet arbitre" vs "la signature ne correspond
+/// pas".
+pub async fn verify_ruling_signatures(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
     arbiter_id: &str,
     payload: &str,
     signature: &str,
@@ -579,7 +598,45 @@ pub fn verify_ruling_signatures(
     if arbiter_id.is_empty() || payload.is_empty() || signature.is_empty() {
         return Err(ArbitrationError::InvalidSignature);
     }
-    Ok(())
+
+    let public_key_hex = {
+        let adn = adn_store.lock().await;
+        adn.get_arbiter_public_key(arbiter_id)
+            .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))?
+    };
+    let public_key_hex = public_key_hex
+        .ok_or_else(|| ArbitrationError::ArbiterNotFound(arbiter_id.to_string()))?;
+
+    match crate::signing::verify_raw(payload.as_bytes(), &public_key_hex, signature) {
+        crate::signing::SignatureCheck::Valid => Ok(()),
+        _ => Err(ArbitrationError::InvalidSignature),
+    }
+}
+
+/// Enregistre un arbitre avec sa cle publique Ed25519. Portee v1, meme
+/// limite assumee que `purpose=agent_register` avant sa correction de
+/// rotation (2026-09-04): un ré-enregistrement avec une NOUVELLE cle pour
+/// le meme `arbiter_id` n'exige PAS de preuve de possession de l'ancienne
+/// cle -- quiconque connait juste l'id peut voler l'identite d'un arbitre
+/// deja enregistre en le re-enregistrant avec sa propre cle. Documente,
+/// pas corrige ici (hors scope du fix demande: "le 1" = rendre la
+/// verification reelle, pas fermer la rotation) -- meme muster que
+/// `restricted_council` ailleurs dans ce depot pour une limite v1 assumee.
+pub async fn register_arbiter_async(
+    adn_store: &Arc<tokio::sync::Mutex<crate::adn_store::AdnStore>>,
+    arbiter_id: &str,
+    public_key_hex: &str,
+    authority_level: AuthorityLevel,
+    stake_amount: u64,
+) -> Result<(), ArbitrationError> {
+    let level_str = match authority_level {
+        AuthorityLevel::Trainee => "trainee",
+        AuthorityLevel::Senior => "senior",
+        AuthorityLevel::Expert => "expert",
+    };
+    let adn = adn_store.lock().await;
+    adn.save_arbiter(arbiter_id, public_key_hex, level_str, stake_amount as i64, true)
+        .map_err(|e| ArbitrationError::DatabaseError(e.to_string()))
 }
 
 pub fn check_finality_threshold(
@@ -673,10 +730,70 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_verify_ruling_signatures_invalid_empty() {
-        let result = verify_ruling_signatures("", "payload", "sig");
+    #[tokio::test]
+    async fn test_verify_ruling_signatures_invalid_empty() {
+        let adn_store = Arc::new(Mutex::new(
+            crate::adn_store::AdnStore::open(":memory:").unwrap(),
+        ));
+        let result = verify_ruling_signatures(&adn_store, "", "payload", "sig").await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_verify_ruling_signatures_unregistered_arbiter_rejected() {
+        let adn_store = Arc::new(Mutex::new(
+            crate::adn_store::AdnStore::open(":memory:").unwrap(),
+        ));
+        // Aucun arbiter_register n'a jamais ete fait pour "ghost" -- meme
+        // avec une signature de longueur/format parfaits, il n'y a aucune
+        // cle publique enregistree contre laquelle verifier.
+        let fake_sig = "a1".repeat(64);
+        let result = verify_ruling_signatures(&adn_store, "ghost", "some_payload", &fake_sig).await;
+        assert!(matches!(result, Err(ArbitrationError::ArbiterNotFound(_))));
+    }
+
+    /// Le test qui aurait echoue avant ce fix: avant, `signature="anything_non_empty"`
+    /// passait pour N'IMPORTE QUEL arbitre. Maintenant, une vraie paire de
+    /// cles Ed25519 est necessaire et la signature doit reellement
+    /// correspondre au payload signe avec la cle privee de CET arbitre.
+    #[tokio::test]
+    async fn test_verify_ruling_signatures_real_ed25519_roundtrip() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
+
+        let adn_store = Arc::new(Mutex::new(
+            crate::adn_store::AdnStore::open(":memory:").unwrap(),
+        ));
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let public_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
+
+        register_arbiter_async(&adn_store, "arbiter_alice", &public_key_hex, AuthorityLevel::Senior, 100_000)
+            .await
+            .unwrap();
+
+        let payload = "ruling_001||accept_assertion_A||justification texte";
+        let signature = signing_key.sign(payload.as_bytes());
+        let signature_hex = hex::encode(signature.to_bytes());
+
+        // Signature valide, du bon arbitre, sur le bon payload -> accepte.
+        let ok = verify_ruling_signatures(&adn_store, "arbiter_alice", payload, &signature_hex).await;
+        assert!(ok.is_ok(), "expected valid signature to verify, got {:?}", ok);
+
+        // Meme signature, mais payload different (ruling falsifie) -> rejete.
+        let tampered = verify_ruling_signatures(
+            &adn_store, "arbiter_alice", "ruling_001||accept_assertion_B||justification texte", &signature_hex,
+        ).await;
+        assert!(tampered.is_err(), "tampered payload must not verify");
+
+        // Meme signature valide, mais attribuee a un AUTRE arbitre enregistre
+        // avec une cle differente -> rejete (usurpation d'identite).
+        let other_key = SigningKey::generate(&mut OsRng);
+        let other_key_hex = hex::encode(other_key.verifying_key().to_bytes());
+        register_arbiter_async(&adn_store, "arbiter_bob", &other_key_hex, AuthorityLevel::Trainee, 0)
+            .await
+            .unwrap();
+        let impersonation = verify_ruling_signatures(&adn_store, "arbiter_bob", payload, &signature_hex).await;
+        assert!(impersonation.is_err(), "alice's signature must not verify under bob's key");
     }
 
     #[test]

@@ -52,7 +52,14 @@ fn decode_hex_fixed<const N: usize>(hex_str: &str) -> Result<[u8; N], &'static s
 /// 2026-09-04 (Couche 7, item #1 de la liste des choses a faire) pour que
 /// les deux appelants partagent EXACTEMENT la meme logique de decodage/
 /// verification plutot que de la dupliquer avec un risque de divergence.
-fn verify_raw(message: &[u8], public_key_hex: &str, signature_hex: &str) -> SignatureCheck {
+/// `pub(crate)` depuis 2026-09-22: `arbitrage::verify_ruling_signatures`
+/// signe un message qui n'est PAS un `CstlPayload` (juste
+/// `ruling_id||decision||justification`), donc `check_signature` ne
+/// s'applique pas directement -- mais le decodage hex + la verification
+/// Ed25519 elle-meme sont identiques, pas de raison d'en ecrire une
+/// troisieme implementation (la premiere etait `quorum.rs`, deja
+/// independante de celle-ci et jamais appelee en production).
+pub(crate) fn verify_raw(message: &[u8], public_key_hex: &str, signature_hex: &str) -> SignatureCheck {
     let public_key_bytes: [u8; 32] = match decode_hex_fixed(public_key_hex) {
         Ok(b) => b,
         Err("invalid_hex") => return SignatureCheck::Invalid("invalid_hex".to_string()),

@@ -209,6 +209,15 @@ pub async fn handle_connection(
                     let sig_check = signing::check_signature(&payload);
                     let sig_sender = payload.intent.get("sender").cloned().unwrap_or_default();
                     let is_agent_register = payload.intent.get("purpose").map(String::as_str) == Some("agent_register");
+                    // arbiter_register (2026-09-22) a exactement le meme besoin
+                    // d'exemption que agent_register et pour la meme raison: son
+                    // propre bloc plus bas gere sig_check avec des messages
+                    // specifiques (self_signature_required, etc.), et son identite
+                    // (arbiter_id) n'a de toute facon aucun rapport avec
+                    // ctx.agent_registry (espace d'identite different) -- la
+                    // comparaison embedded_pubkey vs registered_pubkey_for_sender
+                    // ci-dessous n'a pas de sens ici.
+                    let is_arbiter_register = payload.intent.get("purpose").map(String::as_str) == Some("arbiter_register");
                     // Trouvaille du 2026-09-04 (deuxieme passe, apres le durcissement de
                     // council_decision): `signing::check_signature` ne verifie QUE la
                     // coherence interne d'un message avec la cle QU'IL revendique
@@ -242,7 +251,7 @@ pub async fn handle_connection(
                     // jamais une (re)inscription legitime: un agent qui fait tourner sa
                     // cle via un NOUVEL agent_register n'est jamais intercepte ici, quelle
                     // que soit l'ancienne cle enregistree.
-                    let sig_rejection: Option<&'static str> = if is_agent_register {
+                    let sig_rejection: Option<&'static str> = if is_agent_register || is_arbiter_register {
                         None
                     } else {
                         match &sig_check {
@@ -439,6 +448,71 @@ pub async fn handle_connection(
                                     // sqlite interne loggee cote serveur, jamais renvoyee brute au client.
                                     error!("[Handler] detect_emergence failed: {}", e);
                                     "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=detect_emergence_failed, detail=internal_error]\n---END---\n".to_string()
+                                }
+                            }
+                        };
+
+                        socket.write_all(response.as_bytes()).await?;
+                        continue;
+                    }
+
+                    // purpose=arbiter_register (2026-09-22, meme patron que B-2
+                    // agent_register): reutilise sig_check deja calcule en STEP 2a.
+                    // L'auto-signature prouve seulement "je possede cette cle
+                    // privee", pas "je suis un arbitre legitime" -- pas de PKI/CA,
+                    // meme modele de confiance mono-operateur que le reste du
+                    // depot. Limite v1 assumee et documentee dans
+                    // arbitrage::register_arbiter_async: pas de preuve de
+                    // rotation exigee (contrairement a agent_register, corrige
+                    // pour les agents le 2026-09-04) -- un ré-enregistrement du
+                    // meme arbiter_id avec une NOUVELLE cle n'est pas bloque ici.
+                    // Avant ce fix: aucun chemin n'existait pour enregistrer un
+                    // arbitre du tout (`Arbiter{public_key,..}` n'etait construite
+                    // qu'en test), donc `arbitrage::verify_ruling_signatures`
+                    // n'avait jamais de cle a verifier -- seule la non-vacuite des
+                    // chaines etait testee.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("arbiter_register") {
+                        let arbiter_id = payload.intent.get("arbiter_id").cloned().unwrap_or_default();
+                        let public_key = payload.meta.get("public_key").cloned();
+                        let authority_level = match payload.intent.get("authority_level").map(String::as_str) {
+                            Some("expert") => arbitrage::AuthorityLevel::Expert,
+                            Some("senior") => arbitrage::AuthorityLevel::Senior,
+                            _ => arbitrage::AuthorityLevel::Trainee,
+                        };
+                        let stake_amount: u64 = payload.intent.get("stake_amount")
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0);
+
+                        let response = if arbiter_id.is_empty() || public_key.is_none() {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbiter_register_rejected, reason=missing_arbiter_id_or_public_key]\n---END---\n".to_string()
+                        } else {
+                            match &sig_check {
+                                SignatureCheck::Valid => {
+                                    let pk = public_key.clone().unwrap();
+                                    match arbitrage::register_arbiter_async(&ctx.adn_store, &arbiter_id, &pk, authority_level, stake_amount).await {
+                                        Ok(()) => {
+                                            info!("[Handler] arbiter_register: '{}' registered (authority_level set, stake={})", arbiter_id, stake_amount);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=arbiter_register_ack, arbiter_id={}]\n---END---\n",
+                                                arbiter_id
+                                            )
+                                        }
+                                        Err(e) => {
+                                            error!("[Handler] arbiter_register failed for '{}': {}", arbiter_id, e);
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbiter_register_rejected, reason=storage_failed]\n---END---\n".to_string()
+                                        }
+                                    }
+                                }
+                                SignatureCheck::Invalid(detail) => {
+                                    error!("[Handler] arbiter_register rejected for '{}': invalid signature ({})", arbiter_id, detail);
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbiter_register_rejected, reason=signature_invalid, detail={}]\n---END---\n",
+                                        detail
+                                    )
+                                }
+                                SignatureCheck::NotPresent => {
+                                    error!("[Handler] arbiter_register rejected for '{}': missing signature (self-signature required)", arbiter_id);
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbiter_register_rejected, reason=self_signature_required]\n---END---\n".to_string()
                                 }
                             }
                         };
