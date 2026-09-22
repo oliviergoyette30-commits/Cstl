@@ -25,10 +25,12 @@ pub struct CstlPayload {
     /// Avertissements de parsing non fatals -- ex. bloc DEFINE avec crochets
     /// malformes, silencieusement ignore avant ce fix (R7, §19 : "dropped +
     /// warning" -- seul "dropped" existait). Ajoute le 2026-09-05 aux cotes
-    /// de `defines`. Ne couvre PAS (encore) les blocs RELATION malformes,
-    /// qui gardent leur comportement historique de drop silencieux
-    /// (`if let Ok(...) = parse_block(...)` plus bas) -- hors du perimetre
-    /// de R7, qui ne mentionne que DEFINE.
+    /// de `defines`. Etendu le 2026-09-22 a RELATION/GUARDRAIL_REPORT/
+    /// SCOPE_LOCK/ERROR_SIGNAL, qui partageaient le meme drop silencieux que
+    /// R7 avait corrige pour DEFINE seul (trouvaille en verifiant une
+    /// analyse externe du meme fichier) -- desormais un bloc malforme de
+    /// n'importe lequel de ces 5 types produit un avertissement ici plutot
+    /// que de disparaitre sans trace.
     pub parse_warnings: Vec<String>,
     /// Blocs `GUARDRAIL_REPORT [status=..., reason=..., ...]` -- ajoutes le
     /// 2026-09-08 pour porter en Rust les 4 blocs valides EMPIRIQUEMENT en
@@ -191,32 +193,42 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                 match block_name.as_str() {
                     "META" => payload.meta = parse_block(&current_block)?,
                     "INTENT_PAYLOAD" => payload.intent = parse_block(&current_block)?,
-                    "RELATION" => {
-                        if let Ok(relation) = parse_block(&current_block) {
-                            payload.relations.push(relation);
-                        }
-                    }
+                    // Meme correctif 2026-09-22 qu'aux deux autres dispatchs
+                    // de ce fichier (voir le commentaire complet plus bas,
+                    // pres de `else if in_block && line.contains(']')`) --
+                    // ce chemin-ci gere le cas ou un bloc RELATION/etc. n'est
+                    // jamais ferme mais qu'un NOUVEAU bloc demarre quand meme
+                    // avant ---END---.
+                    "RELATION" => match parse_block(&current_block) {
+                        Ok(relation) => payload.relations.push(relation),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "RELATION mal formee ignoree (bloc suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
                     "DEFINE" => match parse_define_block(&current_block) {
                         Ok(def) => payload.defines.push(def),
                         Err(e) => payload.parse_warnings.push(format!(
                             "R7: bloc DEFINE mal forme ignore -- {}", e
                         )),
                     },
-                    "GUARDRAIL_REPORT" => {
-                        if let Ok(report) = parse_block(&current_block) {
-                            payload.guardrail_reports.push(report);
-                        }
-                    }
-                    "SCOPE_LOCK" => {
-                        if let Ok(lock) = parse_block(&current_block) {
-                            record_scope_lock(&mut payload, lock);
-                        }
-                    }
-                    "ERROR_SIGNAL" => {
-                        if let Ok(req) = parse_block(&current_block) {
-                            record_error_signal_request(&mut payload, req);
-                        }
-                    }
+                    "GUARDRAIL_REPORT" => match parse_block(&current_block) {
+                        Ok(report) => payload.guardrail_reports.push(report),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "GUARDRAIL_REPORT mal forme ignore (bloc suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "SCOPE_LOCK" => match parse_block(&current_block) {
+                        Ok(lock) => record_scope_lock(&mut payload, lock),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "SCOPE_LOCK mal forme ignore (bloc suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "ERROR_SIGNAL" => match parse_block(&current_block) {
+                        Ok(req) => record_error_signal_request(&mut payload, req),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "ERROR_SIGNAL mal forme ignore (bloc suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
                     _ => {}
                 }
             }
@@ -239,32 +251,41 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                 match block_name.as_str() {
                     "META" => payload.meta = parse_block(&current_block)?,
                     "INTENT_PAYLOAD" => payload.intent = parse_block(&current_block)?,
-                    "RELATION" => {
-                        if let Ok(relation) = parse_block(&current_block) {
-                            payload.relations.push(relation);
-                        }
-                    }
+                    // Meme correctif 2026-09-22 -- ce chemin-ci est le PLUS
+                    // FREQUENT en pratique: le cas d'un bloc complet sur sa
+                    // propre ligne, ex. "RELATION [type=X, subject=Y,
+                    // object=Z]", qui est la forme la plus courante dans les
+                    // payloads reels/exemples de ce depot.
+                    "RELATION" => match parse_block(&current_block) {
+                        Ok(relation) => payload.relations.push(relation),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "RELATION mal formee ignoree -- {}", e
+                        )),
+                    },
                     "DEFINE" => match parse_define_block(&current_block) {
                         Ok(def) => payload.defines.push(def),
                         Err(e) => payload.parse_warnings.push(format!(
                             "R7: bloc DEFINE mal forme ignore -- {}", e
                         )),
                     },
-                    "GUARDRAIL_REPORT" => {
-                        if let Ok(report) = parse_block(&current_block) {
-                            payload.guardrail_reports.push(report);
-                        }
-                    }
-                    "SCOPE_LOCK" => {
-                        if let Ok(lock) = parse_block(&current_block) {
-                            record_scope_lock(&mut payload, lock);
-                        }
-                    }
-                    "ERROR_SIGNAL" => {
-                        if let Ok(req) = parse_block(&current_block) {
-                            record_error_signal_request(&mut payload, req);
-                        }
-                    }
+                    "GUARDRAIL_REPORT" => match parse_block(&current_block) {
+                        Ok(report) => payload.guardrail_reports.push(report),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "GUARDRAIL_REPORT mal forme ignore -- {}", e
+                        )),
+                    },
+                    "SCOPE_LOCK" => match parse_block(&current_block) {
+                        Ok(lock) => record_scope_lock(&mut payload, lock),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "SCOPE_LOCK mal forme ignore -- {}", e
+                        )),
+                    },
+                    "ERROR_SIGNAL" => match parse_block(&current_block) {
+                        Ok(req) => record_error_signal_request(&mut payload, req),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "ERROR_SIGNAL mal forme ignore -- {}", e
+                        )),
+                    },
                     _ => {}
                 }
                 in_block = false;
@@ -278,32 +299,51 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
             match block_name.as_str() {
                 "META" => payload.meta = parse_block(&current_block)?,
                 "INTENT_PAYLOAD" => payload.intent = parse_block(&current_block)?,
-                "RELATION" => {
-                    if let Ok(relation) = parse_block(&current_block) {
-                        payload.relations.push(relation);
-                    }
-                }
+                // Correctif 2026-09-22: RELATION/GUARDRAIL_REPORT/SCOPE_LOCK/
+                // ERROR_SIGNAL partageaient jusqu'ici le meme defaut que R7
+                // (§19) avait deja corrige pour DEFINE seul -- `if let
+                // Ok(...) = parse_block(...) { ... }` sans branche `Err`:
+                // un bloc malforme (crochet manquant en cours de bloc,
+                // separateur casse, etc.) disparaissait du modele SANS
+                // AUCUN avertissement, meme pas un "dropped" detectable,
+                // alors que le payload dans son ensemble pouvait quand meme
+                // etre accepte. Trouvaille en direct (audit + verification
+                // croisee avec une analyse Gemini du meme fichier,
+                // 2026-09-22): pour un protocole qui revendique une
+                // communication lossless, une RELATION qui s'evapore sans
+                // trace est un vrai defaut, pas cosmetique. Meme remede que
+                // R7 pour DEFINE: pousser dans `parse_warnings` au lieu
+                // d'ignorer, pour les 4 blocs qui partageaient le trou.
+                "RELATION" => match parse_block(&current_block) {
+                    Ok(relation) => payload.relations.push(relation),
+                    Err(e) => payload.parse_warnings.push(format!(
+                        "RELATION mal formee ignoree -- {}", e
+                    )),
+                },
                 "DEFINE" => match parse_define_block(&current_block) {
                     Ok(def) => payload.defines.push(def),
                     Err(e) => payload.parse_warnings.push(format!(
                         "R7: bloc DEFINE mal forme ignore -- {}", e
                     )),
                 },
-                "GUARDRAIL_REPORT" => {
-                    if let Ok(report) = parse_block(&current_block) {
-                        payload.guardrail_reports.push(report);
-                    }
-                }
-                "SCOPE_LOCK" => {
-                    if let Ok(lock) = parse_block(&current_block) {
-                        record_scope_lock(&mut payload, lock);
-                    }
-                }
-                "ERROR_SIGNAL" => {
-                    if let Ok(req) = parse_block(&current_block) {
-                        record_error_signal_request(&mut payload, req);
-                    }
-                }
+                "GUARDRAIL_REPORT" => match parse_block(&current_block) {
+                    Ok(report) => payload.guardrail_reports.push(report),
+                    Err(e) => payload.parse_warnings.push(format!(
+                        "GUARDRAIL_REPORT mal forme ignore -- {}", e
+                    )),
+                },
+                "SCOPE_LOCK" => match parse_block(&current_block) {
+                    Ok(lock) => record_scope_lock(&mut payload, lock),
+                    Err(e) => payload.parse_warnings.push(format!(
+                        "SCOPE_LOCK mal forme ignore -- {}", e
+                    )),
+                },
+                "ERROR_SIGNAL" => match parse_block(&current_block) {
+                    Ok(req) => record_error_signal_request(&mut payload, req),
+                    Err(e) => payload.parse_warnings.push(format!(
+                        "ERROR_SIGNAL mal forme ignore -- {}", e
+                    )),
+                },
                 _ => {}
             }
             in_block = false;
@@ -314,23 +354,61 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         }
     }
 
-    // R7 (suite) : un bloc DEFINE dont le crochet ouvrant n'est JAMAIS ferme
-    // avant ---END--- (ex. "DEFINE patient AS human [id=e001" sans "]" nulle
-    // part ensuite) ne declenche jamais la branche `line.contains(']')`
+    // R7 (suite) : un bloc dont le crochet ouvrant n'est JAMAIS ferme avant
+    // ---END--- (ex. "DEFINE patient AS human [id=e001" sans "]" nulle part
+    // ensuite) ne declenche jamais la branche `line.contains(']')`
     // ci-dessus -- avant ce fix, il restait accumule dans `current_block`
     // jusqu'a la fin de la boucle puis etait perdu SANS AUCUN avertissement
     // (silencieux, pas meme un "dropped" detectable). C'est le cas le plus
     // litteral de "crochets malformes" vise par R7 (§19). Flush explicite ici
-    // -- uniquement pour DEFINE (hors perimetre pour META/INTENT_PAYLOAD/
-    // RELATION, qui gardent leur comportement historique : `?` propage une
-    // erreur dure pour META/INTENT, drop silencieux pour RELATION).
-    if block_name == "DEFINE" && !current_block.is_empty() {
-        match parse_define_block(&current_block) {
-            Ok(def) => payload.defines.push(def),
-            Err(e) => payload.parse_warnings.push(format!(
-                "R7: bloc DEFINE mal forme ignore (jamais ferme avant ---END---) -- {}", e
-            )),
+    // -- a l'origine seulement pour DEFINE ; etendu le 2026-09-22 a
+    // RELATION/GUARDRAIL_REPORT/SCOPE_LOCK/ERROR_SIGNAL en meme temps que le
+    // fix du drop silencieux ci-dessus, pour couvrir les deux formes du meme
+    // trou plutot qu'une seule. META/INTENT_PAYLOAD restent hors perimetre:
+    // `?` y propage deja une erreur dure (payload entier rejete), donc pas
+    // de perte silencieuse possible pour ces deux blocs.
+    match block_name.as_str() {
+        "DEFINE" if !current_block.is_empty() => {
+            match parse_define_block(&current_block) {
+                Ok(def) => payload.defines.push(def),
+                Err(e) => payload.parse_warnings.push(format!(
+                    "R7: bloc DEFINE mal forme ignore (jamais ferme avant ---END---) -- {}", e
+                )),
+            }
         }
+        "RELATION" if !current_block.is_empty() => {
+            match parse_block(&current_block) {
+                Ok(relation) => payload.relations.push(relation),
+                Err(e) => payload.parse_warnings.push(format!(
+                    "RELATION mal formee ignoree (jamais fermee avant ---END---) -- {}", e
+                )),
+            }
+        }
+        "GUARDRAIL_REPORT" if !current_block.is_empty() => {
+            match parse_block(&current_block) {
+                Ok(report) => payload.guardrail_reports.push(report),
+                Err(e) => payload.parse_warnings.push(format!(
+                    "GUARDRAIL_REPORT mal forme ignore (jamais ferme avant ---END---) -- {}", e
+                )),
+            }
+        }
+        "SCOPE_LOCK" if !current_block.is_empty() => {
+            match parse_block(&current_block) {
+                Ok(lock) => record_scope_lock(&mut payload, lock),
+                Err(e) => payload.parse_warnings.push(format!(
+                    "SCOPE_LOCK mal forme ignore (jamais ferme avant ---END---) -- {}", e
+                )),
+            }
+        }
+        "ERROR_SIGNAL" if !current_block.is_empty() => {
+            match parse_block(&current_block) {
+                Ok(req) => record_error_signal_request(&mut payload, req),
+                Err(e) => payload.parse_warnings.push(format!(
+                    "ERROR_SIGNAL mal forme ignore (jamais ferme avant ---END---) -- {}", e
+                )),
+            }
+        }
+        _ => {}
     }
 
     eprintln!("[Parser] Parsed CSTL v{} MODE={}", payload.version, payload.mode);
@@ -613,6 +691,80 @@ DEFINE patient AS human [id=e001]
 ---END---"#;
 
         let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.parse_warnings.is_empty());
+    }
+
+    // ── Correctif 2026-09-22 : RELATION/GUARDRAIL_REPORT/SCOPE_LOCK/
+    // ERROR_SIGNAL partageaient le meme drop silencieux que R7 avait deja
+    // corrige pour DEFINE. Trois formes distinctes du meme trou existaient
+    // dans ce fichier (dispatch triplique) -- un test par forme. ──
+
+    #[test]
+    fn test_relation_single_line_malformed_field_dropped_with_warning() {
+        // Bloc complet sur sa propre ligne (la forme la PLUS FREQUENTE en
+        // pratique) mais avec un fragment sans '=' a l'interieur des
+        // crochets -- avant ce fix: la relation entiere disparaissait du
+        // modele sans aucune trace, meme si le reste du payload etait
+        // accepte normalement.
+        let payload_str = "#!CSTL v5.0.0 MODE=A\n\
+            META [encoder=Agent_CLAUDE, produced_by=Claude]\n\
+            INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]\n\
+            RELATION [type=EQUALS, subject=e001, badfield_no_equals]\n\
+            ---END---";
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.relations.is_empty(), "une RELATION mal formee ne doit pas etre enregistree");
+        assert!(payload.parse_warnings.iter().any(|w| w.contains("RELATION")),
+                "un avertissement est attendu pour la RELATION mal formee: {:?}", payload.parse_warnings);
+    }
+
+    #[test]
+    fn test_relation_never_closed_bracket_dropped_with_warning() {
+        // Meme cas que test_r7_define_never_closed_bracket_dropped_with_warning
+        // mais pour RELATION: crochet jamais ferme avant ---END---.
+        let payload_str = "#!CSTL v5.0.0 MODE=A\n\
+            META [encoder=Agent_CLAUDE, produced_by=Claude]\n\
+            INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]\n\
+            RELATION [type=EQUALS, subject=e001\n\
+            ---END---";
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.relations.is_empty());
+        assert!(payload.parse_warnings.iter().any(|w| w.contains("RELATION") && w.contains("jamais fermee")),
+                "un avertissement 'jamais fermee' est attendu: {:?}", payload.parse_warnings);
+    }
+
+    #[test]
+    fn test_relation_unclosed_then_new_block_starts_dropped_with_warning() {
+        // Troisieme forme du meme trou: un bloc RELATION jamais ferme, mais
+        // suivi immediatement d'un NOUVEAU bloc (ici une seconde RELATION
+        // valide) avant ---END---, plutot que du crochet manquant jusqu'a la
+        // toute fin du payload.
+        let payload_str = "#!CSTL v5.0.0 MODE=A\n\
+            META [encoder=Agent_CLAUDE, produced_by=Claude]\n\
+            INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]\n\
+            RELATION [type=EQUALS, subject=e001\n\
+            RELATION [type=EQUALS, subject=e002, object=e002]\n\
+            ---END---";
+
+        let payload = parse_payload(payload_str).unwrap();
+        // Seule la seconde RELATION (bien formee) doit survivre.
+        assert_eq!(payload.relations.len(), 1);
+        assert_eq!(payload.relations[0].get("subject"), Some(&"e002".to_string()));
+        assert!(payload.parse_warnings.iter().any(|w| w.contains("RELATION")),
+                "un avertissement est attendu pour la premiere RELATION jamais fermee: {:?}", payload.parse_warnings);
+    }
+
+    #[test]
+    fn test_relation_clean_produces_no_warning() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+RELATION [type=EQUALS, subject=e001, object=e002]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert_eq!(payload.relations.len(), 1);
         assert!(payload.parse_warnings.is_empty());
     }
 
