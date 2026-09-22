@@ -430,6 +430,41 @@ impl AdnStore {
                 eprintln!("[AdnStore] ⚠️  migration modality echouee (inattendu): {}", msg);
             }
         }
+        // Migration idempotente (2026-09-22): les 9 attributs autorises sur une
+        // RELATION (spec CSTL_SPEC_v5_0.md §13, theoreme k=9 -- sigma/tau/layer/
+        // weight/id/coref_with + cles custom) existent bel et bien dans
+        // `parser.rs::CstlPayload.relations` (Vec<HashMap<String,String>>, tout est
+        // present) et sont couverts par la signature Ed25519 + le hash-chain
+        // (canonical_hash/signing_bytes operent sur le payload JSON complet). Mais
+        // `put_relations()` ne persistait historiquement QUE subject/predicate/
+        // object/modality dans `adn_relations` -- les 5 autres attributs etaient
+        // silencieusement jetes a l'INSERT, jamais retrouvables via
+        // all_relations()/relations_for_predicates() une fois le payload d'origine
+        // hors de portee. Constat de l'utilisateur (2026-09-22): une relation qui
+        // porte ses 9 attributs est bien plus dure a usurper qu'un triplet nu
+        // subject/predicate/object -- exactement la surface perdue ici. Cette
+        // migration ajoute les colonnes manquantes ; `extra_attrs` recoit en JSON
+        // toute cle hors de l'ensemble fixe (domaines sectoriels, futurs attributs)
+        // pour rester extensible sans nouvelle migration a chaque nouvelle cle.
+        for (col, decl) in [
+            ("sigma", "REAL"),
+            ("tau", "TEXT"),
+            ("layer", "TEXT"),
+            ("weight", "TEXT"),
+            ("rel_id", "TEXT"),
+            ("coref_with", "TEXT"),
+            ("extra_attrs", "TEXT"),
+        ] {
+            if let Err(e) = conn.execute(
+                &format!("ALTER TABLE adn_relations ADD COLUMN {} {}", col, decl),
+                [],
+            ) {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column name") {
+                    eprintln!("[AdnStore] ⚠️  migration adn_relations.{} echouee (inattendu): {}", col, msg);
+                }
+            }
+        }
         // Migration idempotente (2026-09-14, Couche 5: compression de payloads):
         // `adn_store` peut exister sans colonne `payload_compressed` sur les bases
         // anciennes. L'ajouter au CREATE TABLE ci-dessus ne suffit pas pour les
@@ -492,7 +527,14 @@ impl AdnStore {
                 subject TEXT NOT NULL,
                 predicate TEXT NOT NULL,
                 object TEXT NOT NULL,
-                modality TEXT
+                modality TEXT,
+                sigma REAL,
+                tau TEXT,
+                layer TEXT,
+                weight TEXT,
+                rel_id TEXT,
+                coref_with TEXT,
+                extra_attrs TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_adn_relations_hash ON adn_relations(hash);
             CREATE INDEX IF NOT EXISTS idx_adn_relations_predicate ON adn_relations(predicate);
@@ -803,17 +845,88 @@ impl AdnStore {
     /// 2026-09-04) -- NULL sinon (l'immense majorite des relations
     /// factuelles), colonne ajoutee par la migration idempotente dans open().
     pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
+        // Les cles fixes du theoreme k=9 (spec §13: sigma/tau/layer/weight/id/
+        // coref_with, symboles compacts σ/τ/δ/ω/ι acceptes en entree par le
+        // parser mais toujours normalises sous leur nom long dans le HashMap --
+        // voir parser.rs) sont persistees dans leurs propres colonnes. Tout le
+        // reste (subject/type/object/modality deja geres a part, plus les cles
+        // custom hors ontologie) va dans `extra_attrs` en JSON -- extensible
+        // sans nouvelle migration a chaque nouvelle cle.
+        const FIXED_KEYS: &[&str] = &[
+            "subject", "type", "object", "modality",
+            "sigma", "tau", "layer", "weight", "id", "coref_with",
+        ];
         for rel in relations {
             if let (Some(subject), Some(predicate), Some(object)) =
                 (rel.get("subject"), rel.get("type"), rel.get("object"))
             {
+                let extra: HashMap<&String, &String> = rel
+                    .iter()
+                    .filter(|(k, _)| !FIXED_KEYS.contains(&k.as_str()))
+                    .collect();
+                let extra_json = if extra.is_empty() {
+                    None
+                } else {
+                    serde_json::to_string(&extra).ok()
+                };
                 self.conn.execute(
-                    "INSERT INTO adn_relations (hash, subject, predicate, object, modality) VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![hash, subject, predicate, object, rel.get("modality")],
+                    "INSERT INTO adn_relations
+                        (hash, subject, predicate, object, modality, sigma, tau, layer, weight, rel_id, coref_with, extra_attrs)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                    params![
+                        hash, subject, predicate, object,
+                        rel.get("modality"),
+                        rel.get("sigma").and_then(|s| s.parse::<f64>().ok()),
+                        rel.get("tau"),
+                        rel.get("layer"),
+                        rel.get("weight"),
+                        rel.get("id"),
+                        rel.get("coref_with"),
+                        extra_json,
+                    ],
                 )?;
             }
         }
         Ok(())
+    }
+
+    /// Comme `all_relations()`, mais preserve les 9 attributs (sigma/tau/layer/
+    /// weight/id/coref_with + `extra_attrs` custom) au lieu du seul triplet
+    /// sujet/predicat/objet. A utiliser des qu'un appelant a besoin de la
+    /// relation complete telle qu'attestee dans le payload signe d'origine --
+    /// `all_relations()` reste volontairement inchangee (compat descendante,
+    /// callers existants qui ne veulent que le triplet).
+    pub fn all_relations_full(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT subject, predicate, object, modality, sigma, tau, layer, weight, rel_id, coref_with, extra_attrs
+             FROM adn_relations",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let mut m = HashMap::new();
+            m.insert("subject".to_string(), row.get::<_, String>(0)?);
+            m.insert("type".to_string(), row.get::<_, String>(1)?);
+            m.insert("object".to_string(), row.get::<_, String>(2)?);
+            if let Some(v) = row.get::<_, Option<String>>(3)? { m.insert("modality".to_string(), v); }
+            if let Some(v) = row.get::<_, Option<f64>>(4)? { m.insert("sigma".to_string(), v.to_string()); }
+            if let Some(v) = row.get::<_, Option<String>>(5)? { m.insert("tau".to_string(), v); }
+            if let Some(v) = row.get::<_, Option<String>>(6)? { m.insert("layer".to_string(), v); }
+            if let Some(v) = row.get::<_, Option<String>>(7)? { m.insert("weight".to_string(), v); }
+            if let Some(v) = row.get::<_, Option<String>>(8)? { m.insert("id".to_string(), v); }
+            if let Some(v) = row.get::<_, Option<String>>(9)? { m.insert("coref_with".to_string(), v); }
+            let extra_json: Option<String> = row.get(10)?;
+            Ok((m, extra_json))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (mut m, extra_json) = r?;
+            if let Some(json) = extra_json {
+                if let Ok(extra) = serde_json::from_str::<HashMap<String, String>>(&json) {
+                    m.extend(extra);
+                }
+            }
+            out.push(m);
+        }
+        Ok(out)
     }
 
     /// Toutes les relations deontiques (modality IS NOT NULL) jamais
@@ -2028,6 +2141,69 @@ mod tests {
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].get("subject").map(String::as_str), Some("Marie Curie"));
         assert_eq!(all[0].get("object").map(String::as_str), Some("Warsaw"));
+    }
+
+    /// Verifie le constat de l'utilisateur (2026-09-22): une RELATION avec ses
+    /// 9 attributs (theoreme k=9, spec §13) doit rester la meme relation avec
+    /// les memes 9 attributs apres un aller-retour dans `adn_relations` --
+    /// pas juste son triplet subject/predicate/object. Avant l'ajout des
+    /// colonnes sigma/tau/layer/weight/rel_id/coref_with/extra_attrs, ce test
+    /// echouait : `put_relations` ne retenait que 4 des ~9 attributs possibles,
+    /// silencieusement. C'est exactement la surface qui rend une relation
+    /// falsifiable une fois sortie du payload signe -- moins d'attributs a
+    /// reproduire pour usurper une relation plausible.
+    #[test]
+    fn test_relation_full_attribute_set_survives_adn_roundtrip() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_full", "payload", None, None, 0.3, None, None, None).unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "e001".to_string());
+        rel.insert("type".to_string(), "CAUSES".to_string());
+        rel.insert("object".to_string(), "e002".to_string());
+        rel.insert("modality".to_string(), "MUST".to_string());
+        rel.insert("sigma".to_string(), "0.87".to_string());
+        rel.insert("tau".to_string(), "future".to_string());
+        rel.insert("layer".to_string(), "deep".to_string());
+        rel.insert("weight".to_string(), "positive".to_string());
+        rel.insert("id".to_string(), "r42".to_string());
+        rel.insert("coref_with".to_string(), "e001".to_string());
+        rel.insert("domain_specific_attr".to_string(), "custom_val".to_string());
+        store.put_relations("hash_full", &[rel]).unwrap();
+
+        let all = store.all_relations_full().unwrap();
+        assert_eq!(all.len(), 1);
+        let r = &all[0];
+        assert_eq!(r.get("subject").map(String::as_str), Some("e001"));
+        assert_eq!(r.get("type").map(String::as_str), Some("CAUSES"));
+        assert_eq!(r.get("object").map(String::as_str), Some("e002"));
+        assert_eq!(r.get("modality").map(String::as_str), Some("MUST"));
+        assert_eq!(r.get("sigma").map(String::as_str), Some("0.87"));
+        assert_eq!(r.get("tau").map(String::as_str), Some("future"));
+        assert_eq!(r.get("layer").map(String::as_str), Some("deep"));
+        assert_eq!(r.get("weight").map(String::as_str), Some("positive"));
+        assert_eq!(r.get("id").map(String::as_str), Some("r42"));
+        assert_eq!(r.get("coref_with").map(String::as_str), Some("e001"));
+        assert_eq!(r.get("domain_specific_attr").map(String::as_str), Some("custom_val"));
+    }
+
+    /// `all_relations()` (le chemin existant, non modifie) doit continuer a ne
+    /// renvoyer que le triplet -- garantit que l'extension n'a pas casse la
+    /// compatibilite descendante des callers qui ne veulent pas des 9 attributs.
+    #[test]
+    fn test_all_relations_unchanged_still_returns_triplet_only() {
+        let store = AdnStore::open(":memory:").unwrap();
+        store.put("hash_triplet", "payload", None, None, 0.3, None, None, None).unwrap();
+        let mut rel = HashMap::new();
+        rel.insert("subject".to_string(), "e001".to_string());
+        rel.insert("type".to_string(), "CAUSES".to_string());
+        rel.insert("object".to_string(), "e002".to_string());
+        rel.insert("sigma".to_string(), "0.87".to_string());
+        store.put_relations("hash_triplet", &[rel]).unwrap();
+
+        let all = store.all_relations().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].len(), 3);
+        assert!(!all[0].contains_key("sigma"));
     }
 
     #[test]
