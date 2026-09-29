@@ -41,6 +41,7 @@ fn mk_base_payload() -> CstlPayload {
         guardrail_reports: vec![],
         scope_lock: None,
         error_signal_request: None,
+        uncertainty: vec![],
         raw: String::new(),
     }
 }

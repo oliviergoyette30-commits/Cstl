@@ -71,6 +71,22 @@ pub struct Cycle {
     pub path: Vec<String>,
 }
 
+/// Contradiction épistémique (2026-09-23, code E703) : `(sujet) POSITIF
+/// (objet)` établi par l'historique, puis `(sujet) NEGATIF (objet)` — même
+/// paire (sujet, objet) — affirmé par le payload NOUVEAU, ou l'inverse.
+/// Champ séparé de `Contradiction` (FUNCTIONAL_PREDICATES) plutôt que
+/// réutilisé : `Contradiction` représente "deux OBJETS différents pour le
+/// même (sujet, prédicat)" (né une seule fois, une seule capitale) — la
+/// forme antonyme est différente ("deux PRÉDICATS opposés pour le même
+/// (sujet, objet)"), les champs ne correspondraient pas proprement.
+#[derive(Debug, Clone)]
+pub struct EpistemicContradiction {
+    pub subject: String,
+    pub object: String,
+    pub positive_operator: String,
+    pub negative_operator: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ConsistencyReport {
     pub consistent: bool,
@@ -88,6 +104,13 @@ pub struct ConsistencyReport {
     /// la question posée est différente: pas "ce fait contredit-il un autre
     /// fait?" mais "cette valeur peut-elle exister dans le monde physique?".
     pub implausibilities: Vec<crate::domain_simulator::Implausibility>,
+    /// Contradictions épistémiques cross-historique (2026-09-23, E703) —
+    /// voir `EpistemicContradiction`. Extension de `check_epistemic_antonym_
+    /// consistency` (`semantic.rs`, intra-payload seulement) à tout
+    /// l'historique de l'ADN store, même politique que `contradictions`
+    /// ci-dessus (FUNCTIONAL_PREDICATES) : une contradiction n'est rapportée
+    /// que si le payload NOUVEAU contredit une position déjà établie.
+    pub epistemic_contradictions: Vec<EpistemicContradiction>,
 }
 
 impl ConsistencyReport {
@@ -256,6 +279,15 @@ pub fn relevant_predicates() -> Vec<&'static str> {
         .chain(TEMPORAL_PREDICATES.iter())
         .copied()
         .chain(crate::domain_simulator::relevant_predicates())
+        .chain(
+            // 2026-09-23 — EPISTEMIC_ANTONYMS (semantic.rs), nécessaires
+            // pour que `check_epistemic_consistency_with_history` reçoive
+            // bien BELIEVES/DISBELIEVES depuis l'ADN store, pas seulement
+            // les prédicats déjà listés ci-dessus.
+            crate::semantic::EPISTEMIC_ANTONYMS
+                .iter()
+                .flat_map(|(positive, negative)| [*positive, *negative]),
+        )
         .collect()
 }
 
@@ -378,16 +410,85 @@ pub fn check_consistency_with_history(
     let implausibilities = crate::domain_simulator::check_domain_plausibility(new_relations, history_relations)
         .violations;
 
+    let epistemic_contradictions =
+        find_epistemic_contradictions(new_relations, history_relations);
+
     ConsistencyReport {
         consistent: contradictions.is_empty()
             && cycles.is_empty()
             && temporal_cycles.is_empty()
-            && implausibilities.is_empty(),
+            && implausibilities.is_empty()
+            && epistemic_contradictions.is_empty(),
         contradictions,
         cycles,
         temporal_cycles,
         implausibilities,
+        epistemic_contradictions,
     }
+}
+
+/// Trouvaille du 2026-09-23 (`cstl_comprehension_test.py`, item `edge_001`) —
+/// même patron que le bloc `FUNCTIONAL_PREDICATES` au début de
+/// `check_consistency_with_history` ci-dessus (position établie depuis
+/// l'historique, mise à jour par le nouveau payload, contradiction rapportée
+/// SEULEMENT quand une relation du nouveau payload contredit une position
+/// déjà établie), mais pour les paires antonymes (`EPISTEMIC_ANTONYMS`,
+/// `semantic.rs`) plutôt que pour "au plus un objet par (sujet, prédicat)":
+/// ici la clé est (sujet, objet), et la contradiction est "polarité opposée
+/// pour la MÊME paire", pas "objet différent".
+fn find_epistemic_contradictions(
+    new_relations: &[HashMap<String, String>],
+    history_relations: &[HashMap<String, String>],
+) -> Vec<EpistemicContradiction> {
+    use crate::semantic::EPISTEMIC_ANTONYMS;
+
+    let mut contradictions = Vec::new();
+
+    for (positive, negative) in EPISTEMIC_ANTONYMS {
+        // true = polarité positive (`positive`) établie pour cette paire,
+        // false = polarité négative (`negative`) établie.
+        let mut established: HashMap<(String, String), bool> = HashMap::new();
+
+        let record = |rel: &HashMap<String, String>,
+                           established: &mut HashMap<(String, String), bool>,
+                           contradictions: &mut Vec<EpistemicContradiction>,
+                           report_contradictions: bool| {
+            let (Some(subject), Some(predicate), Some(object)) =
+                (rel.get("subject"), rel.get("type"), rel.get("object"))
+            else { return };
+            let is_positive = predicate == positive;
+            let is_negative = predicate == negative;
+            if !is_positive && !is_negative {
+                return;
+            }
+            let key = (subject.clone(), object.clone());
+            match established.get(&key) {
+                Some(&prev_positive) if prev_positive != is_positive => {
+                    if report_contradictions {
+                        contradictions.push(EpistemicContradiction {
+                            subject: subject.clone(),
+                            object: object.clone(),
+                            positive_operator: positive.to_string(),
+                            negative_operator: negative.to_string(),
+                        });
+                    }
+                }
+                Some(_) => {}
+                None => {
+                    established.insert(key, is_positive);
+                }
+            }
+        };
+
+        for rel in history_relations {
+            record(rel, &mut established, &mut contradictions, false);
+        }
+        for rel in new_relations {
+            record(rel, &mut established, &mut contradictions, true);
+        }
+    }
+
+    contradictions
 }
 
 /// Une violation de l'Axiome D SDL (¬(MUST p ∧ MUST_NOT p)) detectee entre
@@ -500,19 +601,81 @@ mod tests {
     }
 
     #[test]
-    fn test_relevant_predicates_contains_all_eight_and_nothing_else() {
+    fn test_relevant_predicates_contains_all_ten_and_nothing_else() {
         // 8 predicats "coherence" (execution_lab historique) + 7 predicats
         // "plausibilite" (domain_simulator, 2026-09-08: 5 bornes numeriques
-        // + birth_year + death_year) -- voir domain_simulator::
-        // relevant_predicates pour le detail de ces 7.
+        // + birth_year + death_year) + 2 predicats "antonymes epistemiques"
+        // (semantic::EPISTEMIC_ANTONYMS, 2026-09-23: BELIEVES/DISBELIEVES) --
+        // voir domain_simulator::relevant_predicates pour le detail des 7.
         let preds = relevant_predicates();
-        assert_eq!(preds.len(), 15);
-        for p in ["born_in", "died_in", "spouse", "capital_of", "part_of", "located_in", "BEFORE", "AFTER"] {
+        assert_eq!(preds.len(), 17);
+        for p in ["born_in", "died_in", "spouse", "capital_of", "part_of", "located_in", "BEFORE", "AFTER",
+                  "BELIEVES", "DISBELIEVES"] {
             assert!(preds.contains(&p), "predicat manquant: {p}");
         }
         for p in crate::domain_simulator::relevant_predicates() {
             assert!(preds.contains(&p), "predicat domain_simulator manquant: {p}");
         }
+    }
+
+    // ── Contradictions epistemiques cross-historique (2026-09-23, E703) ──
+
+    #[test]
+    fn test_epistemic_contradiction_across_history_detected() {
+        // (alice) BELIEVES (X) etabli par l'historique, (alice) DISBELIEVES
+        // (X) affirme par le payload NOUVEAU -- exactement le cas qu'E703
+        // intra-payload (semantic.rs) ne peut PAS voir, puisque les deux
+        // moities sont dans des payloads differents.
+        let history = vec![rel("alice", "BELIEVES", "bob_left_early")];
+        let new_relations = vec![rel("alice", "DISBELIEVES", "bob_left_early")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(!report.consistent);
+        assert_eq!(report.epistemic_contradictions.len(), 1);
+        assert_eq!(report.sigma_adjustment(), 0.09);
+    }
+
+    #[test]
+    fn test_epistemic_contradiction_within_same_new_payload_also_detected() {
+        // Les deux moities dans le MEME payload nouveau (aucun historique) --
+        // detecte aussi, en plus (pas a la place) du check intra-payload E703
+        // de semantic.rs.
+        let new_relations = vec![
+            rel("alice", "BELIEVES", "bob_left_early"),
+            rel("alice", "DISBELIEVES", "bob_left_early"),
+        ];
+        let report = check_consistency_with_history(&new_relations, &[]);
+        assert_eq!(report.epistemic_contradictions.len(), 1);
+    }
+
+    #[test]
+    fn test_epistemic_no_contradiction_different_subject() {
+        let history = vec![rel("alice", "BELIEVES", "bob_left_early")];
+        let new_relations = vec![rel("carla", "DISBELIEVES", "bob_left_early")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(report.epistemic_contradictions.is_empty());
+    }
+
+    #[test]
+    fn test_epistemic_no_contradiction_different_object() {
+        let history = vec![rel("alice", "BELIEVES", "bob_left_early")];
+        let new_relations = vec![rel("alice", "DISBELIEVES", "carla_arrived_late")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(report.epistemic_contradictions.is_empty());
+    }
+
+    #[test]
+    fn test_epistemic_repeated_history_contradiction_not_reflagged() {
+        // Deux entrees de l'HISTORIQUE qui se contredisaient deja entre
+        // elles ne sont jamais re-signalees ici -- meme politique que
+        // FUNCTIONAL_PREDICATES (voir doc de check_consistency_with_history).
+        let history = vec![
+            rel("alice", "BELIEVES", "bob_left_early"),
+            rel("alice", "DISBELIEVES", "bob_left_early"),
+        ];
+        let new_relations = vec![rel("alice", "KNOWS", "unrelated_fact")];
+        let report = check_consistency_with_history(&new_relations, &history);
+        assert!(report.epistemic_contradictions.is_empty(),
+                "une contradiction deja entierement dans l'historique ne doit pas etre re-signalee");
     }
 
     // ── Integration avec domain_simulator (2026-09-08) ──

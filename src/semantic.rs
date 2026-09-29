@@ -26,16 +26,42 @@ use crate::ast::Relation;
 /// ici, seul consommateur reel restant.
 pub const DEPRECATED_OPERATORS: &[&str] = &["MUTUAL"];
 
-const OFFICIAL_OPERATORS: &[&str] = &[
+/// `pub(crate)` depuis 2026-09-29 (Couche 5, compression structurelle) :
+/// `compression::structural` importe cette liste directement pour sa table
+/// d'opcodes plutot que de la dupliquer -- meme raison que
+/// `parser::VALID_CONSTRAINT_MODALITIES`/`VALID_UNCERTAINTY_STATUSES`.
+pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
     "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
     "INTENT", "MAINTAIN", "TRANSFORM", "RESIST", "AMP", "INH",
     "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
     "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
     "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES",
     "COMPARES", "ENTAILS", "CONTRADICTS",
-    "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS",
+    "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
     "BEFORE", "AFTER", "DURING",
 ];
+
+/// Antonyme officiel de `BELIEVES` (2026-09-23) -- trouvaille du test de
+/// comprehension AI-to-AI (`cstl_comprehension_test.py`, item edge_001,
+/// "Alice does not believe Bob left early"): avant ce fix, aucun antonyme
+/// n'existait pour BELIEVES/KNOWS/ASSUMES dans OFFICIAL_OPERATORS, donc
+/// l'encodeur a improvise "DISBELIEVES" -- un mot qui PASSAIT quand meme
+/// (check_operator_whitelist n'est qu'un avertissement, jamais bloquant),
+/// mais que ni ce module ni ExecutionLab ne reconnaissaient comme lie a
+/// BELIEVES. Resultat mesure : un agent qui repond a "le texte affirme-t-il,
+/// comme fait independant, que Bob N'EST PAS parti tot" a repondu "no" (une
+/// hallucination) au lieu de "unknown" -- conflation croyance/fait que la
+/// verification de coherence deterministe aurait du pouvoir signaler mais
+/// ne pouvait pas, faute de connaitre l'antonyme. Portee volontairement
+/// minimale : seul BELIEVES a un antonyme officiel pour l'instant (c'est le
+/// seul cas mesure empiriquement) -- KNOWS et ASSUMES n'en ont pas encore,
+/// pas oublie, juste non mesure.
+/// `pub` depuis le 2026-09-23 (extension a l'historique, voir
+/// `execution_lab.rs::check_epistemic_consistency_with_history`) --
+/// reutilisee telle quelle plutot que dupliquee, pour que les deux checks
+/// (intra-payload E703 ici, et l'equivalent cross-historique la-bas) ne
+/// puissent jamais diverger sur la liste des antonymes reconnus.
+pub const EPISTEMIC_ANTONYMS: &[(&str, &str)] = &[("BELIEVES", "DISBELIEVES")];
 
 /// Performatifs FIPA-ACL (Foundation for Intelligent Physical Agents,
 /// Agent Communication Language) -- ajoutes le 2026-09-06, en reponse a une
@@ -221,8 +247,8 @@ impl<'a> SemanticValidator<'a> {
     /// l'audit multi-angle du 2026-09-03.
     ///
     /// `pub` depuis le 2026-09-04 (item #2 de la liste des choses a faire,
-    /// trouvaille annexe en supprimant le systeme Block/AST mort): ces 11
-    /// checks (E108/E109/E701/W502/W503/R9/R10/W602/W603/W604/W605)
+    /// trouvaille annexe en supprimant le systeme Block/AST mort): ces checks
+    /// (E108/E109/E701/E703/W502/W503/R9/R10/W602/W603/W604/W605)
     /// operent tous sur `Relation` (jamais sur `Block`, contrairement a ce
     /// qui a ete retire), donc branchables sans dependre d'un parser Block
     /// qui n'a jamais existe -- mais ils etaient testes ici depuis des mois
@@ -230,7 +256,7 @@ impl<'a> SemanticValidator<'a> {
     /// `server/validator.rs::check_extended_semantic_diagnostics`, meme
     /// politique qu'`check_operator_whitelist` (avertissement seul, jamais
     /// un rejet -- ces checks n'ont jamais ete conçus ni testes comme des
-    /// motifs de rejet d'un payload en production).
+    /// motifs de rejet d'un payload en production). E703 ajoute le 2026-09-23.
     pub fn check_additional_diagnostics(&self) -> Vec<SemanticError> {
         let mut errors = Vec::new();
         errors.extend(self.check_temporal_contradiction());
@@ -244,6 +270,7 @@ impl<'a> SemanticValidator<'a> {
         errors.extend(self.check_knows_calibration());
         errors.extend(self.check_doubts_calibration());
         errors.extend(self.check_temporal_pair_consistency());
+        errors.extend(self.check_epistemic_antonym_consistency());
         errors
     }
 
@@ -557,6 +584,42 @@ impl<'a> SemanticValidator<'a> {
                     ),
                     line: *line,
                 });
+            }
+        }
+        errors
+    }
+
+    /// E703 (2026-09-23) — même patron que E701 (`check_temporal_pair_consistency`)
+    /// mais pour les antonymes épistémiques (`EPISTEMIC_ANTONYMS`) plutôt que
+    /// temporels : (sujet) BELIEVES (objet) ET (sujet) DISBELIEVES (objet)
+    /// déclarés pour LA MÊME paire dans le MÊME payload est une contradiction
+    /// directe — exactement le trou trouvé le 2026-09-23 (voir commentaire de
+    /// `EPISTEMIC_ANTONYMS`) : avant ce check, rien ne reliait ces deux
+    /// opérateurs, donc une telle contradiction passait inaperçue même quand
+    /// les DEUX relations étaient présentes explicitement dans le payload.
+    fn check_epistemic_antonym_consistency(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for (positive, negative) in EPISTEMIC_ANTONYMS {
+            let mut positive_pairs: Vec<(String, String, usize)> = Vec::new();
+            let mut negative_pairs: Vec<(String, String)> = Vec::new();
+            for r in self.relations() {
+                if &r.operator == positive {
+                    positive_pairs.push((r.subject.clone(), r.object.clone(), r.line));
+                } else if &r.operator == negative {
+                    negative_pairs.push((r.subject.clone(), r.object.clone()));
+                }
+            }
+            for (s, o, line) in &positive_pairs {
+                if negative_pairs.iter().any(|(x, y)| x == s && y == o) {
+                    errors.push(SemanticError {
+                        code: "E703".to_string(),
+                        message: format!(
+                            "({}) declared both {} and {} ({}) — epistemic contradiction",
+                            s, positive, negative, o
+                        ),
+                        line: *line,
+                    });
+                }
             }
         }
         errors
@@ -900,6 +963,50 @@ mod tests {
         ];
         let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "E109"));
+    }
+
+    #[test]
+    fn test_epistemic_antonym_violation_detected() {
+        // Trouvaille du 2026-09-23 (cstl_comprehension_test.py, item edge_001):
+        // avant ce fix, BELIEVES et DISBELIEVES sur le meme (sujet, objet)
+        // ne declenchaient rien -- aucun lien entre les deux operateurs.
+        let data = vec![
+            rel("alice", "BELIEVES", "bob_left_early", 0.80, "n", None),
+            rel("alice", "DISBELIEVES", "bob_left_early", 0.80, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E703"),
+                "BELIEVES et DISBELIEVES sur le meme (sujet, objet) doit etre detecte");
+    }
+
+    #[test]
+    fn test_epistemic_antonym_different_subjects_no_violation() {
+        let data = vec![
+            rel("alice", "BELIEVES", "bob_left_early", 0.80, "n", None),
+            rel("carla", "DISBELIEVES", "bob_left_early", 0.80, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E703"));
+    }
+
+    #[test]
+    fn test_epistemic_antonym_different_objects_no_violation() {
+        let data = vec![
+            rel("alice", "BELIEVES", "bob_left_early", 0.80, "n", None),
+            rel("alice", "DISBELIEVES", "carla_arrived_late", 0.80, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E703"));
+    }
+
+    #[test]
+    fn test_disbelieves_passes_whitelist() {
+        // DISBELIEVES est maintenant officiel (2026-09-23) -- avant ce fix,
+        // il passait quand meme (E101 est un warning, jamais bloquant), mais
+        // ce test verifie explicitement qu'il ne genere plus AUCUN warning.
+        let data = vec![rel("alice", "DISBELIEVES", "bob_left_early", 0.80, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E101"));
     }
 
     #[test]

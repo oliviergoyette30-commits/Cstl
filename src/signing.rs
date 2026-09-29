@@ -163,6 +163,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         }
     }

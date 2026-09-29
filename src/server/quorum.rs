@@ -15,14 +15,10 @@
 //! - Circuit breaker activates after N failed rounds or >30% member health degradation
 //! - Immutable vote ledger persisted to SQLite + audit trail
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use hex;
-use std::collections::HashMap;
-use std::error::Error;
 
 // ============================================================================
 // STRUCTS

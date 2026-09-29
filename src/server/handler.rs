@@ -184,6 +184,13 @@ pub async fn handle_connection(
                     // (detecte seulement dans les RELATION structurees de ce
                     // payload, jamais dans le texte libre d'une reponse tierce).
                     semantic_warnings.extend(validator::check_scope_lock_drift(&payload));
+                    // W608 (2026-09-23) : entite DEFINE jamais referencee par
+                    // aucune RELATION de ce payload -- voir
+                    // validator::check_orphaned_entities pour la trouvaille
+                    // (cstl_legal_test.py, legal_003 : sujet mal cable sur
+                    // une entite au lieu d'une autre, l'entite visee restant
+                    // orpheline). Meme politique : avertissement seul.
+                    semantic_warnings.extend(validator::check_orphaned_entities(&payload));
                     // R7 (parser.rs) : un bloc DEFINE mal forme (en-tete ou
                     // crochets) est deja "dropped" par le parser -- on
                     // remonte aussi l'avertissement au client plutot que de
@@ -969,9 +976,10 @@ pub async fn handle_connection(
                     let consistency = execution_lab::check_consistency_with_history(&payload.relations, &history_relations);
                     let sigma = consistency.sigma_adjustment();
                     info!(
-                        "[Handler] ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} implausibilities={} -> sigma={}",
+                        "[Handler] ExecutionLab: consistent={} contradictions={} cycles={} temporal_cycles={} implausibilities={} epistemic_contradictions={} -> sigma={}",
                         consistency.consistent, consistency.contradictions.len(), consistency.cycles.len(),
-                        consistency.temporal_cycles.len(), consistency.implausibilities.len(), sigma
+                        consistency.temporal_cycles.len(), consistency.implausibilities.len(),
+                        consistency.epistemic_contradictions.len(), sigma
                     );
 
                     // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
@@ -1241,7 +1249,7 @@ pub async fn handle_connection(
                     // sans jamais modifier le payload Layer 1 (immutable, signe, cryptographiquement garanti).
 
                     // Crée EvaluatedPayload avec snapshot gouvernance (Layer 2 metadata, immuable)
-                    let evaluated_payload = {
+                    let _evaluated_payload = {
                         let mut ep = super::evaluated_payload::EvaluatedPayload::new(
                             payload.clone(),
                             entry.hash.clone(),
@@ -1363,6 +1371,24 @@ pub async fn handle_connection(
                             .join("; ");
                         format!(
                             "SEMANTIC_WARNING [detail=domain_simulator: implausible value(s) ({})]\n",
+                            details
+                        )
+                    };
+                    // Ligne dediee pour les contradictions epistemiques cross-historique
+                    // (E703, 2026-09-23, execution_lab::find_epistemic_contradictions) --
+                    // meme principe que temporal_cycle_line/implausibility_line
+                    // ci-dessus: absente quand rien n'a ete detecte.
+                    let epistemic_contradiction_line = if consistency.epistemic_contradictions.is_empty() {
+                        String::new()
+                    } else {
+                        let details = consistency.epistemic_contradictions.iter()
+                            .map(|ec| format!(
+                                "{} {}/{} ({})", ec.subject, ec.positive_operator, ec.negative_operator, ec.object
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        format!(
+                            "SEMANTIC_WARNING [detail=E703: epistemic contradiction ({})]\n",
                             details
                         )
                     };
@@ -1576,6 +1602,7 @@ pub async fn handle_connection(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1584,6 +1611,7 @@ pub async fn handle_connection(
                             consistency_line,
                             temporal_cycle_line,
                             implausibility_line,
+                            epistemic_contradiction_line,
                             deontic_audit_line,
                             performative_line,
                             negotiation_line,

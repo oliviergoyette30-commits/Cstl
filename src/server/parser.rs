@@ -56,6 +56,22 @@ pub struct CstlPayload {
     /// "le dernier gagne" (ambigu : lequel des deux scopes le client
     /// voulait-il vraiment verrouiller ?).
     pub scope_lock: Option<HashMap<String, String>>,
+    /// Blocs `UNCERTAINTY [identifiant STATUT [sigma=...]]` (spec §8) --
+    /// implemente le 2026-09-27 (voir la note de statut historique retiree
+    /// du §7/§8/§10 : ce bloc, comme RELATIONS/CONSTRAINTS, n'etait
+    /// jusqu'ici JAMAIS parse -- zero test dans le depot ne l'exercait).
+    /// Chaque entree : "identifier" (l'id DEFINE ou RELATION concerne),
+    /// "status" (un de ESTIMATED/INFERRED/UNKNOWN/MEASURED, valide a
+    /// l'analyse -- un statut hors de cette liste rejette la LIGNE, pas tout
+    /// le payload, meme politique R7 que les autres blocs), plus "sigma" si
+    /// present. Contrairement a RELATIONS/CONSTRAINTS, UNCERTAINTY n'a pas
+    /// d'equivalent "forme plate" existant vers lequel desucrer -- c'est un
+    /// concept nouveau pour le moteur (statut epistemique sur UN identifiant,
+    /// pas une relation binaire), d'ou un champ dedie plutot qu'une reduction
+    /// vers `relations`. Non branche a `semantic.rs` par ce commit -- stocke
+    /// et expose fidelement, l'exploitation semantique (ex. Axiome D
+    /// tolerant sur un fait marque UNKNOWN) reste a construire separement.
+    pub uncertainty: Vec<HashMap<String, String>>,
     /// Bloc `ERROR_SIGNAL [role=REQUEST]` -- ajoute le 2026-09-08 aux cotes de
     /// EXECUTION_TRACE (voir CSTL_SPEC_v5_0.md §16.6, session tripartite du
     /// 22 mai 2026). Contrairement a `EXECUTION_TRACE` (jamais envoye par le
@@ -133,6 +149,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         guardrail_reports: Vec::new(),
         scope_lock: None,
         error_signal_request: None,
+        uncertainty: Vec::new(),
         raw: raw.to_string(),
     };
 
@@ -163,7 +180,57 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     let mut current_block = String::new();
     let mut block_name = String::new();
 
+    // Conteneurs RELATIONS/CONSTRAINTS/UNCERTAINTY (spec §7/§8/§10, forme
+    // bloc multi-ligne) -- implemente le 2026-09-27. Distinct de la machine a
+    // etats `in_block`/`current_block` ci-dessus (qui gere un SEUL
+    // enregistrement "NOM [cle=valeur,...]" par bloc) : un conteneur
+    // enveloppe PLUSIEURS lignes internes de grammaire differente
+    // (`(sujet) OPERATEUR objet`, pas `cle=valeur`). Forme supportee :
+    // multi-ligne uniquement -- une ligne d'ouverture exactement
+    // "RELATIONS [" / "CONSTRAINTS [" / "UNCERTAINTY [" (apres trim), zero ou
+    // plusieurs lignes internes, une ligne de fermeture exactement "]"
+    // (apres trim). La forme compacte sur une seule ligne
+    // ("RELATIONS [ (a) OP b ]") n'est PAS geree par ce commit -- aucun
+    // exemple de la spec ni du depot ne l'utilise, portee volontairement
+    // limitee au cas reellement documente et teste.
+    let mut in_container: Option<&'static str> = None;
+
     for line in raw.lines().skip(1) {
+        let trimmed_line = line.trim();
+
+        if let Some(container) = in_container {
+            if trimmed_line == "]" {
+                in_container = None;
+            } else if !trimmed_line.is_empty() {
+                let parsed = match container {
+                    "RELATIONS" => parse_relations_line(trimmed_line)
+                        .map(|m| { payload.relations.push(m); }),
+                    "CONSTRAINTS" => parse_constraints_line(trimmed_line)
+                        .map(|m| { payload.relations.push(m); }),
+                    "UNCERTAINTY" => parse_uncertainty_line(trimmed_line)
+                        .map(|m| { payload.uncertainty.push(m); }),
+                    _ => unreachable!("in_container n'est jamais qu'une de ces 3 valeurs"),
+                };
+                if let Err(e) = parsed {
+                    payload.parse_warnings.push(format!(
+                        "{}: ligne ignoree -- {}", container, e
+                    ));
+                }
+            }
+            continue;
+        }
+
+        if trimmed_line == "RELATIONS [" || trimmed_line == "CONSTRAINTS [" || trimmed_line == "UNCERTAINTY [" {
+            in_container = Some(if trimmed_line.starts_with("RELATIONS") {
+                "RELATIONS"
+            } else if trimmed_line.starts_with("CONSTRAINTS") {
+                "CONSTRAINTS"
+            } else {
+                "UNCERTAINTY"
+            });
+            continue;
+        }
+
         // Check if line starts a new block
         let is_meta = line.starts_with("META [");
         let is_intent = line.starts_with("INTENT_PAYLOAD [");
@@ -417,6 +484,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     eprintln!("[Parser] RELATIONS: {} blocks", payload.relations.len());
     eprintln!("[Parser] DEFINE: {} blocks ({} avertissement(s) R7)", payload.defines.len(), payload.parse_warnings.len());
     eprintln!("[Parser] GUARDRAIL_REPORT: {} blocks, SCOPE_LOCK: {}, ERROR_SIGNAL_REQUEST: {}", payload.guardrail_reports.len(), payload.scope_lock.is_some(), payload.error_signal_request.is_some());
+    eprintln!("[Parser] UNCERTAINTY: {} entries", payload.uncertainty.len());
 
     Ok(payload)
 }
@@ -488,6 +556,173 @@ fn split_top_level_commas(content: &str) -> Vec<&str> {
     }
     parts.push(&content[start..]);
     parts
+}
+
+/// Extrait le groupe delimite (parentheses ou crochets) en TETE de ligne
+/// (apres avoir retire les espaces de debut) -- utilise pour le sujet des
+/// lignes RELATIONS (`(sujet) ...`) et la modalite des lignes CONSTRAINTS
+/// (`(MUST) ...` ou `[MUST] ...`). Retourne (contenu_du_groupe, reste_apres).
+fn take_leading_group(line: &str) -> Option<(String, String)> {
+    let line = line.trim_start();
+    let (open, close) = if line.starts_with('(') {
+        ('(', ')')
+    } else if line.starts_with('[') {
+        ('[', ']')
+    } else {
+        return None;
+    };
+    let _ = open;
+    let end = line.find(close)?;
+    let inner = line[1..end].trim().to_string();
+    let rest = line[end + 1..].to_string();
+    Some((inner, rest))
+}
+
+/// Extrait le groupe crochets FINAL d'une ligne (les attributs optionnels
+/// `[id=..., ...]` en fin de ligne RELATIONS/CONSTRAINTS/UNCERTAINTY),
+/// retourne (ce_qui_precede, attrs). Reutilise `split_top_level_commas` --
+/// meme regle que `parse_block` pour les virgules a l'interieur de guillemets.
+fn take_trailing_attrs(rest: &str) -> Result<(String, HashMap<String, String>), ParseError> {
+    let trimmed = rest.trim_end();
+    if let (Some(start), Some(end)) = (trimmed.rfind('['), trimmed.rfind(']')) {
+        if end > start {
+            let before = trimmed[..start].to_string();
+            let content = &trimmed[start + 1..end];
+            let mut map = HashMap::new();
+            for pair in split_top_level_commas(content) {
+                let pair = pair.trim();
+                if pair.is_empty() {
+                    continue;
+                }
+                match pair.split_once('=') {
+                    Some((k, v)) => {
+                        map.insert(k.trim().to_string(), v.trim().trim_matches('"').to_string());
+                    }
+                    None => {
+                        return Err(ParseError::MalformedBlock(format!(
+                            "attribut sans '=': {:?}", pair
+                        )));
+                    }
+                }
+            }
+            return Ok((before, map));
+        }
+    }
+    Ok((trimmed.to_string(), HashMap::new()))
+}
+
+/// Ligne interieure d'un bloc `RELATIONS [...]` (spec §10, forme bloc) :
+/// `(sujet) OPERATEUR objet [attrs]`. Desucre vers EXACTEMENT le meme
+/// HashMap plat qu'une ligne `RELATION [type=,subject=,object=,...]` --
+/// aucune duplication de logique semantique, E101/E107/etc. traitent les
+/// deux formes de facon strictement identique en aval.
+fn parse_relations_line(line: &str) -> Result<HashMap<String, String>, ParseError> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Err(ParseError::MalformedBlock("ligne vide".to_string()));
+    }
+    let (subject, rest) = take_leading_group(trimmed).ok_or_else(|| {
+        ParseError::MalformedBlock(format!(
+            "ligne RELATIONS sans sujet entre parentheses -- attendu '(sujet) OPERATEUR objet': {:?}",
+            trimmed
+        ))
+    })?;
+    let (before_attrs, attrs) = take_trailing_attrs(&rest)?;
+    let tokens: Vec<&str> = before_attrs.split_whitespace().collect();
+    if tokens.len() != 2 {
+        return Err(ParseError::MalformedBlock(format!(
+            "ligne RELATIONS invalide (attendu '(sujet) OPERATEUR objet', {} token(s) trouve(s) apres le sujet): {:?}",
+            tokens.len(), trimmed
+        )));
+    }
+    let mut map = attrs;
+    map.insert("type".to_string(), tokens[0].to_string());
+    map.insert("subject".to_string(), subject);
+    map.insert("object".to_string(), tokens[1].to_string());
+    Ok(map)
+}
+
+/// `pub(crate)` depuis 2026-09-29 (Couche 5, compression structurelle) :
+/// `compression::structural` importe cette liste directement plutot que de
+/// la dupliquer, pour que la table d'opcodes de la Couche 1 ne puisse
+/// jamais diverger silencieusement de ce que le parser accepte reellement.
+pub(crate) const VALID_CONSTRAINT_MODALITIES: &[&str] = &[
+    "MUST", "MUST_NOT", "NOT", "MAY", "SHOULD", "IF", "IFF", "UNLESS", "REQUIRE", "FORBID",
+];
+
+/// Ligne interieure d'un bloc `CONSTRAINTS [...]` (spec §7) : forme paren
+/// `(MODALITE) sujet OPERATEUR objet [attrs]` ou forme crochet
+/// `[MODALITE] sujet OPERATEUR objet [attrs]` (retrocompat v4.x, les deux
+/// acceptees a egalite -- spec §7). Desucre vers une RELATION plate avec
+/// `modality=<MODALITE>` en attribut -- c'est EXACTEMENT l'attribut que
+/// `semantic.rs::SemanticValidator` (FORBIDDEN_MODALITIES/REQUIRED_MODALITIES,
+/// Axiome D/E107) lit deja sur une RELATION [type=...] plate ordinaire :
+/// zero nouveau code semantique requis, seulement un nouveau chemin de
+/// syntaxe vers la meme donnee.
+fn parse_constraints_line(line: &str) -> Result<HashMap<String, String>, ParseError> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Err(ParseError::MalformedBlock("ligne vide".to_string()));
+    }
+    let (modality, rest) = take_leading_group(trimmed).ok_or_else(|| {
+        ParseError::MalformedBlock(format!(
+            "ligne CONSTRAINTS sans modalite entre ( ) ou [ ] -- attendu '(MODALITE) sujet OPERATEUR objet': {:?}",
+            trimmed
+        ))
+    })?;
+    if !VALID_CONSTRAINT_MODALITIES.contains(&modality.as_str()) {
+        return Err(ParseError::MalformedBlock(format!(
+            "modalite CONSTRAINTS inconnue {:?} (attendu une de {:?}, spec §7)",
+            modality, VALID_CONSTRAINT_MODALITIES
+        )));
+    }
+    let (before_attrs, attrs) = take_trailing_attrs(&rest)?;
+    let tokens: Vec<&str> = before_attrs.split_whitespace().collect();
+    if tokens.len() != 3 {
+        return Err(ParseError::MalformedBlock(format!(
+            "ligne CONSTRAINTS invalide (attendu '(MODALITE) sujet OPERATEUR objet', {} token(s) trouve(s) apres la modalite): {:?}",
+            tokens.len(), trimmed
+        )));
+    }
+    let mut map = attrs;
+    map.insert("subject".to_string(), tokens[0].to_string());
+    map.insert("type".to_string(), tokens[1].to_string());
+    map.insert("object".to_string(), tokens[2].to_string());
+    map.insert("modality".to_string(), modality);
+    Ok(map)
+}
+
+/// `pub(crate)` depuis 2026-09-29, meme raison que `VALID_CONSTRAINT_MODALITIES`
+/// ci-dessus.
+pub(crate) const VALID_UNCERTAINTY_STATUSES: &[&str] = &["ESTIMATED", "INFERRED", "UNKNOWN", "MEASURED"];
+
+/// Ligne interieure d'un bloc `UNCERTAINTY [...]` (spec §8) :
+/// `identifiant STATUT [sigma=...]`. Pas de forme plate existante vers
+/// laquelle desucrer (voir doc de `CstlPayload::uncertainty`) -- stockee
+/// dans son propre vecteur.
+fn parse_uncertainty_line(line: &str) -> Result<HashMap<String, String>, ParseError> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Err(ParseError::MalformedBlock("ligne vide".to_string()));
+    }
+    let (before_attrs, attrs) = take_trailing_attrs(trimmed)?;
+    let tokens: Vec<&str> = before_attrs.split_whitespace().collect();
+    if tokens.len() != 2 {
+        return Err(ParseError::MalformedBlock(format!(
+            "ligne UNCERTAINTY invalide (attendu 'identifiant STATUT'): {:?}",
+            trimmed
+        )));
+    }
+    if !VALID_UNCERTAINTY_STATUSES.contains(&tokens[1]) {
+        return Err(ParseError::MalformedBlock(format!(
+            "statut UNCERTAINTY inconnu {:?} (attendu un de {:?}, spec §8)",
+            tokens[1], VALID_UNCERTAINTY_STATUSES
+        )));
+    }
+    let mut map = attrs;
+    map.insert("identifier".to_string(), tokens[0].to_string());
+    map.insert("status".to_string(), tokens[1].to_string());
+    Ok(map)
 }
 
 fn parse_block(block: &str) -> Result<HashMap<String, String>, ParseError> {

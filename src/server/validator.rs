@@ -520,6 +520,65 @@ pub fn check_scope_lock_drift(payload: &CstlPayload) -> Vec<String> {
     warnings
 }
 
+/// W608 -- entite DEFINE jamais referencee par aucune RELATION de ce
+/// payload (intra-payload, meme portee que R8/W607). Trouvaille du
+/// 2026-09-23 (cstl_legal_test.py, item legal_003, "This agreement
+/// terminates automatically if either party is acquired by a competitor."):
+/// l'encodeur LLM a defini `Agreement AS Contract [id=e004]` puis a
+/// construit la relation de terminaison sur `e001` (Party) au lieu de
+/// `e004` -- une erreur de binding de sujet qui rend le payload
+/// objectivement incomplet (l'entite au coeur de la question -- "est-ce
+/// que l'ACCORD se termine" -- n'est reliee a AUCUNE relation). Un DEFINE
+/// orphelin de ce genre est un signal fort qu'un sujet/objet a ete mal
+/// cable, exactement le type de faute que R8 (coref_with orphelin)
+/// detecte deja dans le sens inverse (relation -> id inexistant) ; ici
+/// c'est l'id qui existe mais n'est jamais utilise.
+///
+/// Le format tolere deux facons de referencer une entite dans une
+/// RELATION -- par son `name` (ex. `subject=Tenant`) ou par son `id`
+/// (ex. `subject=e001`), les deux formes coexistant deja dans les
+/// payloads reels de cette session -- donc une entite compte comme
+/// "referencee" si SON NOM OU SON ID apparait comme subject/object
+/// d'au moins une RELATION.
+///
+/// Avertissement seul, jamais un rejet -- meme politique que R8/W607 : un
+/// DEFINE inutilise peut etre legitime (contexte pose pour une future
+/// RELATION, entite nommee sans besoin de relation explicite).
+pub fn check_orphaned_entities(payload: &CstlPayload) -> Vec<String> {
+    if payload.defines.is_empty() || payload.relations.is_empty() {
+        return Vec::new();
+    }
+
+    let mut referenced: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for r in &payload.relations {
+        if let Some(s) = r.get("subject") {
+            referenced.insert(s.as_str());
+        }
+        if let Some(o) = r.get("object") {
+            referenced.insert(o.as_str());
+        }
+    }
+
+    payload.defines.iter()
+        .filter_map(|d| {
+            let name = d.get("name").map(String::as_str);
+            let id = d.get("id").map(String::as_str);
+            let is_referenced = name.map_or(false, |n| referenced.contains(n))
+                || id.map_or(false, |i| referenced.contains(i));
+            if is_referenced {
+                None
+            } else {
+                Some(format!(
+                    "W608: DEFINE {} AS {} [id={}] n'est reference par aucune RELATION de ce payload (subject/object mal cable ?)",
+                    name.unwrap_or("?"),
+                    d.get("entity_type").map(String::as_str).unwrap_or("?"),
+                    id.unwrap_or("?"),
+                ))
+            }
+        })
+        .collect()
+}
+
 /// Trouvaille du 2026-09-04 (creusee en cherchant "Deontic Modality Audit",
 /// intitule sans code correspondant dans docs/ARCHITECTURE.md Couche 8):
 /// cette fonction, AVANT ce fix, verifiait si le champ `type` d'UNE SEULE
@@ -605,6 +664,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
 
@@ -626,6 +686,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
 
@@ -652,6 +713,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
 
@@ -688,6 +750,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -707,6 +770,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -726,6 +790,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -745,6 +810,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         };
         let warnings = check_sdl_operator_whitelist(&payload);
@@ -779,6 +845,7 @@ mod tests {
             guardrail_reports: vec![],
             scope_lock: None,
             error_signal_request: None,
+            uncertainty: vec![],
             raw: String::new(),
         }
     }
@@ -891,6 +958,77 @@ mod tests {
         ]);
         let warnings = check_coref_with_references(&payload);
         assert!(warnings.is_empty());
+    }
+
+    // ── check_orphaned_entities (W608, 2026-09-23) -- trouvaille
+    // cstl_legal_test.py/legal_003: sujet mal cable (Party au lieu
+    // d'Agreement), l'entite visee par la question ("l'accord se
+    // termine-t-il ?") reste orpheline, aucune RELATION ne la touche.
+
+    #[test]
+    fn test_w608_all_entities_referenced_no_warning() {
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "Tenant"), ("type", "MUST"), ("object", "Rent")]),
+        ]);
+        payload.defines = vec![
+            define(&[("name", "Tenant"), ("entity_type", "Party"), ("id", "e001")]),
+            define(&[("name", "Rent"), ("entity_type", "Obligation"), ("id", "e002")]),
+        ];
+        let warnings = check_orphaned_entities(&payload);
+        assert!(warnings.is_empty(), "toutes les entites sont referencees, pas de warning attendu: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_w608_orphaned_entity_by_id_warns() {
+        // Reproduit exactement legal_003 : Agreement (e004) defini mais
+        // jamais utilise -- la RELATION porte sur e001 (Party) a la place.
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "e001"), ("type", "TERMINATES_IF"), ("object", "e003")]),
+            relation(&[("subject", "e003"), ("type", "REQUIRES"), ("object", "e002")]),
+        ]);
+        payload.defines = vec![
+            define(&[("name", "Party"), ("entity_type", "Entity"), ("id", "e001")]),
+            define(&[("name", "Competitor"), ("entity_type", "Entity"), ("id", "e002")]),
+            define(&[("name", "Acquisition"), ("entity_type", "Event"), ("id", "e003")]),
+            define(&[("name", "Agreement"), ("entity_type", "Contract"), ("id", "e004")]),
+        ];
+        let warnings = check_orphaned_entities(&payload);
+        assert!(warnings.iter().any(|w| w.starts_with("W608:") && w.contains("e004") && w.contains("Agreement")),
+                "Agreement (e004) jamais reference doit warner W608: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_w608_referenced_by_name_not_id_no_warning() {
+        // Le format tolere subject/object par nom (voir legal_001) -- une
+        // entite referencee par son NAME plutot que son ID ne doit pas
+        // warner a tort.
+        let mut payload = payload_with(vec![
+            relation(&[("subject", "Tenant"), ("type", "MUST"), ("object", "Rent")]),
+        ]);
+        payload.defines = vec![
+            define(&[("name", "Tenant"), ("entity_type", "Party"), ("id", "e001")]),
+            define(&[("name", "Rent"), ("entity_type", "Obligation"), ("id", "e002")]),
+        ];
+        let warnings = check_orphaned_entities(&payload);
+        assert!(warnings.is_empty(), "reference par name doit compter comme referencee: {:?}", warnings);
+    }
+
+    #[test]
+    fn test_w608_no_relations_no_warning() {
+        // Chemin rapide : aucune RELATION dans le payload -> pas de base de
+        // comparaison, aucun avertissement (evite un faux positif massif
+        // sur tout payload DEFINE-seul, ex. contexte pose sans relation).
+        let mut payload = payload_with(vec![]);
+        payload.defines = vec![define(&[("name", "Tenant"), ("entity_type", "Party"), ("id", "e001")])];
+        assert!(check_orphaned_entities(&payload).is_empty());
+    }
+
+    #[test]
+    fn test_w608_no_defines_no_warning() {
+        let payload = payload_with(vec![
+            relation(&[("subject", "alice"), ("type", "born_in"), ("object", "quebec")]),
+        ]);
+        assert!(check_orphaned_entities(&payload).is_empty());
     }
 
     // ── INTENT_PAYLOAD.priority (E311, CSTL_SPEC_v5_0.md §6) ──

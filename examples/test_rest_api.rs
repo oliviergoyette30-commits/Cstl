@@ -2,7 +2,7 @@
 //! This tests compilation of the REST API module independently
 
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 use cstl_parser::adn_store::AdnStore;
 use cstl_parser::server::rest_api;
 

@@ -239,6 +239,23 @@ avec warning R5. La liste est exhaustive pour les clés sans warning.
 
 ## 7. Bloc CONSTRAINTS — modalités déontiques
 
+> **✅ STATUT D'IMPLÉMENTATION (mise à jour 2026-09-27)** — ce bloc, comme
+> `RELATIONS` (§10) et `UNCERTAINTY` (§8), a été implémenté côté Rust le
+> 2026-09-27 (`server/parser.rs::parse_constraints_line`), après avoir été
+> documenté comme non-parsé du 2026-09-23 au 2026-09-26 (voir historique
+> dans `examples/relations_block_syntax_gap_smoke_test.rs`). Chaque ligne
+> `(MODALITÉ) sujet OPÉRATEUR objet [attrs]` ou `[MODALITÉ] sujet OPÉRATEUR
+> objet [attrs]` est désucrée vers une `RELATION` plate avec
+> `modality=<MODALITÉ>` — exactement l'attribut déjà lu par
+> `semantic.rs::SemanticValidator` (`FORBIDDEN_MODALITIES`/
+> `REQUIRED_MODALITIES`, Axiome D/E107), donc aucune duplication de logique
+> sémantique. Une modalité hors de la liste des 10 ci-dessous rejette LA
+> LIGNE (avec avertissement dans `parse_warnings`), pas tout le payload.
+> **Portée assumée : forme multi-ligne uniquement** — ligne d'ouverture
+> exacte `CONSTRAINTS [`, lignes internes, ligne de fermeture exacte `]`. La
+> forme compacte sur une seule ligne n'est pas gérée (aucun exemple du
+> dépôt ne l'utilise).
+
 ```ebnf
 constraints     ::= "CONSTRAINTS" "[" constraint_line* "]" ;
 constraint_line ::= paren_form | bracket_form ;
@@ -259,6 +276,21 @@ la forme canonique v5.0 ; `[MUST]` est conservée pour rétrocompatibilité v4.x
 ---
 
 ## 8. Bloc UNCERTAINTY — statuts épistémiques
+
+> **✅ STATUT D'IMPLÉMENTATION (mise à jour 2026-09-27)** — implémenté côté
+> Rust le 2026-09-27 (`server/parser.rs::parse_uncertainty_line`), voir la
+> note identique au §7 pour l'historique. Contrairement à `RELATIONS`/
+> `CONSTRAINTS`, ce bloc n'a pas de forme plate préexistante vers laquelle
+> désucrer — chaque ligne `identifiant STATUT [sigma=...]` est stockée
+> fidèlement dans un nouveau champ dédié, `CstlPayload::uncertainty` (`Vec`
+> de `HashMap<String,String>`, mêmes clés que les lignes : `identifier`,
+> `status`, `sigma` si présent). Un `STATUT` hors de la liste des 4
+> ci-dessous rejette la ligne (avertissement), pas tout le payload.
+> **Honnêteté sur la portée** : ce champ est parsé et exposé fidèlement,
+> mais n'est PAS encore branché sur `semantic.rs` — aucun check sémantique
+> n'en tient compte aujourd'hui (par exemple, un fait marqué `UNKNOWN` n'est
+> pas traité différemment d'un fait certain par l'Axiome D). Câbler cette
+> exploitation reste un travail séparé, non fait ici.
 
 ```ebnf
 uncertainty_block ::= "UNCERTAINTY" "[" uncertainty_item* "]" ;
@@ -307,7 +339,27 @@ Type hors de cette liste → **warning R5**. Le type inconnu est accepté avec w
 
 ## 10. Bloc RELATIONS — graphe sémantique
 
-**Total : 36 opérateurs officiels** (21 core v4 + 15 v5.0).
+**Total : 37 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
+ajouté le 2026-09-23, antonyme de `BELIEVES` — voir §16.4, code E703, pour
+pourquoi. Note : §21/§22 ci-dessous, écrits avant cet ajout, couvrent encore
+les 36 opérateurs d'origine et n'incluent pas d'exemple `DISBELIEVES`).
+
+> **✅ STATUT D'IMPLÉMENTATION (mise à jour 2026-09-27)** — la divergence
+> spec/moteur découverte et documentée le 2026-09-23 (voir
+> `examples/relations_block_syntax_gap_smoke_test.rs`, qui sert maintenant
+> de garde-fou de régression dans l'autre sens) a été comblée le 2026-09-27.
+> `server/parser.rs::parse_relations_line` reconnaît maintenant la forme
+> **bloc** ci-dessous et désucre chaque ligne interne vers EXACTEMENT la
+> même `RELATION` plate que la forme singulière historique
+> (`RELATION [type=<op>, subject=<s>, object=<o>, ...]`) — les deux formes
+> alimentent le même `payload.relations`, donc `E101`/`E107`/`E110`/
+> `E701`–`E703`/`R8`/`W601`–`W608` etc. les valident de façon strictement
+> identique, sans duplication de logique. **Portée assumée : forme
+> multi-ligne uniquement** — ligne d'ouverture exacte `RELATIONS [`, lignes
+> internes `(sujet) OPÉRATEUR objet [attrs]`, ligne de fermeture exacte `]`.
+> La forme compacte sur une seule ligne n'est pas gérée (aucun exemple du
+> dépôt ne l'utilise). `CONSTRAINTS` et `UNCERTAINTY` (§7/§8) ont reçu le
+> même traitement le même jour.
 
 ```ebnf
 relations_block ::= "RELATIONS" "[" relation_line* "]" ;
@@ -446,6 +498,31 @@ Les deux formes (compacte et verbeuse) DOIVENT être supportées par le parser.
 
 `coref_with=eXXX` référence une entité définie dans un DEFINE antérieur.
 Utilisé pour la validation cross-bloc (R8).
+
+### 13.1 Convention `value=` — préserver une donnée littérale (2026-09-23)
+
+Trouvaille `cstl_legal_test.py`/`legal_001` ("The tenant must pay rent by
+the 5th of each month.") : l'encodeur a produit `DEFINE PaymentDeadline AS
+Temporal [id=e003]` — l'entité type existe, mais AUCUNE valeur concrète
+("5", "chaque mois") n'y est attachée. Le décodeur, recevant seulement une
+entité `Temporal` sans contenu, ne pouvait objectivement pas confirmer "par
+le 5 du mois" — pas un trou de compréhension, une perte d'information à
+l'encodage. La grammaire `attribute ::= ... | identifier "=" value`
+(ci-dessus) permet déjà d'attacher n'importe quelle paire clé/valeur à un
+DEFINE — aucun changement de parseur requis. Convention recommandée pour
+tout encodeur (humain ou LLM) : quand une entité porte une donnée concrète
+du texte source (date, montant, nombre, nom propre), l'attacher
+explicitement plutôt que de la laisser implicite dans le seul nom de
+l'entité :
+
+```
+DEFINE PaymentDeadline AS Temporal [id=e003, value="5th of each month", day=5, period=monthly]
+```
+
+Non normatif (pas de nouveau code d'erreur associé — un DEFINE sans valeur
+concrète reste valide), documenté ici pour que les futurs prompts
+d'encodage sachent qu'une valeur explicite est disponible et attendue
+quand le texte source en contient une.
 
 ---
 
@@ -640,6 +717,8 @@ seul). Voir §19 pour l'historique complet de sa reconstruction.
 | W604 | warning | `KNOWS` avec σ < 0.8 |
 | W605 | warning | `DOUBTS` avec σ > 0.5 |
 | E702 | warning | **`src/execution_lab.rs`, pas `semantic.rs`** — cycle temporel : une CHAÎNE de relations `BEFORE`/`AFTER` sur PLUSIEURS paires de sujets qui revient sur son point de départ (ex. A BEFORE B, B BEFORE C, C BEFORE A). `BEFORE`/`AFTER` sont normalisés en une seule direction avant construction du graphe (A BEFORE B ⟺ B AFTER A), réutilise le même algorithme de détection de cycle par backtracking (`dfs_find_cycle`) que les cycles `part_of`/`located_in`. Vérifié contre le payload courant ET tout l'historique de l'ADN store, via `check_consistency_with_history` (`ConsistencyReport.temporal_cycles`), même politique que le cycle `part_of`/`located_in` (voir README.md, section "Future Architecture — Level 4"). **Ajouté le 2026-09-05**, distinct d'E701 ci-dessus (E701 = incohérence PAIRWISE, même paire, même payload ; E702 = cycle sur PLUSIEURS paires, potentiellement réparties entre payloads) |
+| W608 | warning | **`server/validator.rs::check_orphaned_entities`, ajouté le 2026-09-23**, même famille que R8 (compare `defines` et `relations`, intra-payload). Une entité `DEFINE` (par `name` OU par `id`, les deux formes coexistant dans les payloads réels) qui n'apparaît comme `subject`/`object` d'AUCUNE `RELATION` de ce payload. Trouvaille `cstl_legal_test.py`/`legal_003` ("This agreement terminates automatically if either party is acquired by a competitor") : l'encodeur a défini `Agreement AS Contract [id=e004]` mais câblé `TERMINATES_IF` sur `e001` (Party) au lieu de `e004` — `Agreement`, l'entité visée par la question posée, restait orpheline, invisible sans ce check. Signal de qualité (sujet/objet probablement mal câblé), pas une contradiction structurelle — avertissement seul, comme R8/W607 |
+| E703 | warning | **Ajouté le 2026-09-23, deux parties.** (1) `semantic.rs::check_epistemic_antonym_consistency` — même patron qu'E701, intra-payload : `(sujet) BELIEVES (objet)` ET `(sujet) DISBELIEVES (objet)` déclarés pour la MÊME paire dans le MÊME payload. (2) `execution_lab.rs::find_epistemic_contradictions` (appelé depuis `check_consistency_with_history`) — extension à TOUT l'historique de l'ADN store, même patron que `FUNCTIONAL_PREDICATES` (contradiction rapportée seulement quand le payload NOUVEAU contredit une position déjà établie ; les deux parties se recoupent volontairement sur le cas intra-payload, sans conflit — même politique que les autres checks dupliqués intra/historique de ce document). Antonymes reconnus : `semantic::EPISTEMIC_ANTONYMS`, un seul couple pour l'instant (`BELIEVES`/`DISBELIEVES`), partagé (pas dupliqué) entre les deux parties. Trouvaille du test de compréhension AI-to-AI (`cstl_comprehension_test.py`, item `edge_001`, "Alice does not believe Bob left early") : `OFFICIAL_OPERATORS` n'avait aucun antonyme pour `BELIEVES`/`KNOWS`/`ASSUMES` avant ce fix, donc un encodeur improvisait librement (`DISBELIEVES` observé en pratique) — un mot qui passait la whitelist (E101, avertissement seul) mais que rien ne reliait à `BELIEVES`, ni dans le même payload ni à travers l'historique, rendant cette classe de contradiction invisible même quand les deux relations étaient explicitement présentes. `DISBELIEVES` est maintenant dans `OFFICIAL_OPERATORS`. Portée volontairement minimale : `KNOWS`/`ASSUMES` n'ont pas encore d'antonyme officiel, faute de cas mesuré empiriquement pour eux |
 
 Codes de validation structurelle/format (`src/server/validator.rs`, distinct de
 `semantic.rs`) : `E301`–`E307`, `E309`, `E310` (E308 a existé puis a été retiré —
@@ -1050,9 +1129,12 @@ même raison (code mort, zéro appelant réel).
   réel de la grammaire §9, une ligne plate par entité, pas un bloc `RELATIONS[...]`
   multi-lignes ni un arbre).
 - Validation structurelle/format : `server::validator::validate_payload(payload:
-  &CstlPayload) -> ValidationResult` (codes E301–E310, voir §16.4).
+  &CstlPayload) -> ValidationResult` (codes E301–E310, voir §16.4). Ce même
+  fichier (`server/validator.rs`, pas `semantic.rs`) porte aussi R8 et W608 —
+  les deux seuls checks qui comparent `defines` et `relations` entre eux
+  (`SemanticValidator` ne connaît que `Relation`, jamais `defines`).
 - Validation sémantique : `semantic::SemanticValidator::validate()` (codes E101,
-  E107–E109, E701, W502–W605, R9, R10, voir §16.4).
+  E107–E109, E701, E703, W502–W605, R9, R10, voir §16.4).
 - Hachage canonique et chaîne d'audit : `server::audit::canonical_hash()` /
   `HashChain` (SHA-256, via la crate `sha2` — voir la note "pas zéro dépendance"
   ci-dessous).
@@ -1092,6 +1174,15 @@ code auquel le rattacher.
 ---
 
 ## 21. Payload de référence — couverture complète 36 opérateurs
+
+> **⚠️ Ce payload utilise `RELATIONS [...]`/`CONSTRAINTS [...]`/
+> `UNCERTAINTY [...]` (forme bloc) — voir l'avertissement de statut
+> d'implémentation au §10 : ces trois blocs ne sont PAS reconnus par le
+> parser Rust réel. Ce payload est une référence de VOCABULAIRE (tous les
+> opérateurs, tous les types, toutes les modalités) — pas un exemple de
+> payload qui produirait `relations` non-vides une fois passé au vrai
+> moteur. Pour un payload réellement traité, reformuler chaque relation en
+> `RELATION [type=..., subject=..., object=...]` plat.**
 
 Ce payload couvre tous les opérateurs, tous les types DEFINE, toutes les
 modalités, tous les statuts UNCERTAINTY, tous les attributs.
@@ -1264,18 +1355,149 @@ DECISION: example_decision [sigma=0.88]
 
 ---
 
-## 24. Éléments hors scope (v5.0)
+## 24. Modes simulation `■` et archéologique `«` — spécification de design (2026-09-23)
+
+**Statut : design uniquement, rien d'implémenté.** Cette section formalise une
+discussion architecturale tenue le 2026-09-23, née d'une question simple —
+CSTL étant une compression avec perte, comment répondre à une demande d'audit
+qui exige de savoir exactement ce qui a été dit à l'origine? Les deux noms de
+mode existaient déjà en §24 (hors scope) sans contenu ; ce qui suit leur en
+donne un. Rien ici n'a de test, de `cargo build` ou de vérification empirique
+derrière — contrairement au reste de ce document, qui documente ce qui existe
+réellement. À traiter comme une spec à implémenter, pas comme un statut.
+
+### 24.1 Pourquoi deux modes, pas un compromis
+
+Un compromis unique entre exactitude et coût de stockage n'a pas de sens ici :
+les deux usages ont des exigences incompatibles. Un audit légal/réglementaire
+veut le texte source exact, pas une approximation plausible — "reconstruction
+plausible du sens" ne tient pas devant un tribunal ou un régulateur qui
+demande le texte original. À l'inverse, un usage opérationnel courant (un
+agent qui veut juste retrouver le sens général d'un échange passé) n'a pas
+besoin de payer le coût de stockage d'une reconstruction byte-exacte. D'où la
+séparation stricte :
+
+- **Mode archéologique (`«`)** — reconstruction byte-exacte, via le
+  mécanisme de trace (§24.2). Pour audit, litige, conformité réglementaire.
+- **Mode simulation (`■`)** — reconstruction approximative, via un LLM qui
+  décode le payload CSTL seul (aveugle au texte original), sans aucun
+  stockage de trace. Pour usage opérationnel, jamais présenté comme preuve.
+
+### 24.2 Mode archéologique — mécanisme de trace
+
+**Principe** : CSTL, étant une compression avec perte, ne peut pas être
+inversé exactement sans bits additionnels stockés quelque part (nécessité
+information-théorique, pas une lacune de design). La "trace" est ce bit
+additionnel : le résidu — tout ce que l'encodage CSTL a retiré du texte
+original (articles, ponctuation, tournures de phrase, tout ce qui n'est pas
+capturé par DEFINE/RELATIONS) — stocké séparément, récupérable sur demande.
+
+**Séparation du hash** : la trace porte son propre `residual_hash`, distinct
+du hash canonique du CSTL déjà en production (`canonical_hash`,
+`server/audit.rs`). Décision explicite : ne pas redéfinir le hash primaire
+pour y inclure le résidu — ça risquerait de casser la chaîne
+PARENT_HASH/Ed25519 déjà vérifiée en production. Un `residual_hash` séparé,
+lié au `canonical_hash` du CSTL associé, donne l'intégrité indépendamment
+vérifiable dans les deux sens sans toucher au mécanisme existant.
+
+**Compression** : le résidu est compressé via WAI/FSE-tANS (`src/compression/`),
+réutilisation du composant déjà vérifié en direct cette session
+(`cargo test`, 63.81% de ratio réel sur payload CSTL structuré). Le résidu
+étant du texte libre plutôt que du CSTL structuré, ce ratio précis ne se
+transpose pas nécessairement tel quel (entropie différente) — **non mesuré
+empiriquement à ce jour**. Le seuil de succès retenu n'est cependant pas
+"atteindre 63.81%" mais simplement "compressé plus petit que brut", ce
+qu'un entropy coder générique atteint de façon quasi certaine sur du texte
+naturel — donc le choix de réutiliser WAI/FSE-tANS tient même sans ce chiffre.
+
+**Stockage et cycle de vie, trois paliers** :
+
+1. **Serveur (0–6 mois)** — trace stockée centralement, même infrastructure
+   que `adn_store`/`audit_trail` (`src/adn_store.rs`). Export à la demande
+   possible vers un disque personnel à tout moment durant cette fenêtre, à
+   l'initiative du propriétaire du message original (autorisation vérifiée
+   via la même clé publique que la signature Ed25519 du message — voir plan
+   en cours d'implémentation, `src/signing.rs` — pas de droit d'export sur
+   la trace d'un autre agent). Les 6 mois ancrent sur le minimum réglementaire
+   EU AI Act Article 26(6) (rétention des logs générés automatiquement par un
+   système à haut risque, sauf durée plus longue exigée ailleurs) — CSTL/
+   CASTLE n'est pas nécessairement classifié "haut risque" sous ce règlement,
+   mais c'est un repère externe défendable plutôt qu'un chiffre arbitraire.
+2. **Transition à 6 mois** — migration, pas suppression pure : la copie
+   serveur est purgée, mais le contenu passe en archive disque plutôt que
+   d'être perdu. Cet événement DOIT être un événement signé dans la chaîne
+   d'audit ("trace migrée le [date] selon politique de rétention X") — sinon
+   une trace absente du serveur après 6 mois est indistinguable entre
+   "archivée selon la politique" et "supprimée pour cacher quelque chose".
+3. **Disque (6 mois à 5 ou 10 ans, au choix du client)** — archive long
+   terme, hors coût opérationnel serveur continu, durée configurable par
+   déploiement/client.
+4. **Effacement final** — au terme choisi. Même exigence qu'à l'étape 2 :
+   événement signé dans la chaîne d'audit, pas une suppression silencieuse.
+
+### 24.3 Mode simulation — confiance déclarée, deux niveaux
+
+Aucun stockage requis. Une reconstruction en langage naturel, générée par un
+LLM à partir du payload CSTL seul (aveugle au texte original — même patron
+que `kappa_generate_real.py::reconstruct_from_cstl`), porte deux champs de
+confiance distincts, à des granularités différentes :
+
+- **`CONFIDENCE_KAPPA`** — fiabilité de la méthode en général, constante au
+  niveau du protocole. Valeur actuelle mesurée : κ=0.6296 (Fleiss, triple
+  juge réel GPT/Gemini/Mistral, `kappa_results_real.json`, 2026-09-22) —
+  zone CONDITIONAL (entre 0.40 et 0.70), pas PUBLISHABLE. À remesurer si le
+  protocole κ est rejoué.
+- **`CONFIDENCE_SIGMA`** — fiabilité de CETTE reconstruction précise.
+  Décision de design : ne pas inventer un mécanisme séparé, réutiliser le
+  pattern "Double Livre" déjà câblé et testé (`src/calibration/ewma.rs`,
+  `SigmaCalibrator`) — `agent_sigma` déclaré séparé de
+  `server_sigma_effective` calibré par EWMA contre des verdicts observés
+  (`observe_verdict`). Le verdict `is_correct` alimentant la calibration,
+  **quand une trace est encore disponible** pour ce message (fenêtre des 6
+  premiers mois, §24.2), est la comparaison directe entre la reconstruction
+  mode-simulation et le texte exact restitué par le mode archéologique — un
+  signal de vérité beaucoup plus fort qu'un simple check structurel de
+  couverture des entités/relations (qui rate les erreurs de négation/portée,
+  comme les items split `edge_001`/`complex_003` du test κ réel). Quand
+  aucune trace n'est disponible (déjà migrée en archive disque, ou jamais
+  générée), retomber sur le check structurel seul comme proxy plus faible.
+  Coût : comparer systématiquement chaque message avec trace vivante revient
+  à un appel LLM de reconstruction par message, potentiellement gratuit si
+  la comparaison a lieu côté agent récepteur (qui décode de toute façon le
+  CSTL pour son propre usage) plutôt que côté serveur pour chaque message
+  transitant — **non tranché**, dépend du choix final serveur-central vs
+  propagé (voir 24.2, sujet encore ouvert quant au ratio coût/bénéfice d'une
+  comparaison systématique vs échantillonnée).
+
+### 24.4 Ce que ça règle, ce que ça ne règle pas
+
+Réglé par ce design : la contradiction "CSTL est une compression avec perte,
+comment prouver ce qui a été dit exactement" (mode archéologique + trace) ;
+la confusion entre confiance mesurée en labo (κ, statique, 20 items) et
+confiance en conditions réelles par agent (sigma, calibré en continu) ; la
+croissance illimitée du stockage de trace (rétention bornée à trois paliers).
+
+Pas réglé, à trancher avant implémentation : stockage centralisé serveur
+seul vs propagation répliquée à chaque agent du réseau (§24.2 — la
+compression WAI rend la réplication abordable mais la décision finale reste
+ouverte) ; fréquence de la comparaison trace-vs-simulation pour la
+calibration sigma (systématique, opportuniste, ou échantillonnée) ; mesure
+empirique réelle du ratio de compression WAI/FSE-tANS sur du résidu en
+langage naturel plutôt que sur du CSTL structuré.
+
+---
+
+## 25. Éléments hors scope (v5.0)
 
 - CASTLE mode réseau (modes B/C, dictionnaire partagé)
 - Mode binaire
 - Bloc `SELF_DECLARE`
 - Mode delta-payload ADN
-- Modes simulation `■` et archéologique `«`
 - Recherche sémantique par embeddings dans l'ADN store
 
 ---
 
-## 25. Bibliographie
+## 26. Bibliographie
 
 - Allen, J.F. (1983). Maintaining knowledge about temporal intervals. *CACM*, 26(11), 832–843.
 - Fagin, R., Halpern, J.Y., Moses, Y., & Vardi, M.Y. (1995). *Reasoning about Knowledge*. MIT Press.

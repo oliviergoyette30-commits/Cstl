@@ -165,7 +165,7 @@ fn tokenize_json(input: &str) -> Vec<Token> {
                 let mut literal = String::new();
                 while let Some(&ch) = chars.peek() {
                     match ch {
-                        '0'..='9' | '-' | '.' | 'e' | 'E' | 't' | 'r' | 'u' | 'e' | 'f' | 'a'
+                        '0'..='9' | '-' | '.' | 'e' | 'E' | 't' | 'r' | 'u' | 'f' | 'a'
                         | 'l' | 's' | 'n' => {
                             literal.push(ch);
                             chars.next();

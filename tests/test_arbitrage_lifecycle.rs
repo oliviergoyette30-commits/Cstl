@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod arbitrage_comprehensive_tests {
     use chrono::Utc;
-    use crate::server::arbitrage::*;
-    use crate::restricted_council::RestrictedCouncil;
+    use cstl_parser::server::arbitrage::*;
+    use cstl_parser::restricted_council::RestrictedCouncil;
 
     // Unit tests for core structs
     #[test]
@@ -155,16 +155,46 @@ mod arbitrage_comprehensive_tests {
         assert!(msg.contains("not authorized"));
     }
 
-    // Helper function tests
-    #[test]
-    fn test_verify_ruling_signatures_valid() {
-        let result = verify_ruling_signatures("arbiter_1", "payload", "signature");
-        assert!(result.is_ok());
+    // Helper function tests -- reecrits (2026-09-29) pour la vraie
+    // verification Ed25519 (voir `src/server/arbitrage.rs::
+    // verify_ruling_signatures`, deja corrigee plus tot cette session).
+    // Avant ce fix, ce fichier appelait encore l'ancienne signature a 3
+    // arguments, synchrone, qui acceptait N'IMPORTE QUELLE chaine non
+    // vide comme "signature valide" -- ne compilait plus du tout contre
+    // l'implementation reelle (4 arguments, async, verification
+    // cryptographique contre une cle enregistree dans l'AdnStore).
+    #[tokio::test]
+    async fn test_verify_ruling_signatures_valid() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let adn_store = Arc::new(Mutex::new(
+            cstl_parser::adn_store::AdnStore::open(":memory:").unwrap(),
+        ));
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let public_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
+        register_arbiter_async(&adn_store, "arbiter_1", &public_key_hex, AuthorityLevel::Senior, 100_000)
+            .await
+            .unwrap();
+
+        let payload = "payload";
+        let signature_hex = hex::encode(signing_key.sign(payload.as_bytes()).to_bytes());
+
+        let result = verify_ruling_signatures(&adn_store, "arbiter_1", payload, &signature_hex).await;
+        assert!(result.is_ok(), "vraie signature Ed25519 d'un arbitre enregistre doit passer: {:?}", result);
     }
 
-    #[test]
-    fn test_verify_ruling_signatures_empty_arbiter() {
-        let result = verify_ruling_signatures("", "payload", "signature");
+    #[tokio::test]
+    async fn test_verify_ruling_signatures_empty_arbiter() {
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let adn_store = Arc::new(Mutex::new(
+            cstl_parser::adn_store::AdnStore::open(":memory:").unwrap(),
+        ));
+        let result = verify_ruling_signatures(&adn_store, "", "payload", "signature").await;
         assert!(result.is_err());
     }
 

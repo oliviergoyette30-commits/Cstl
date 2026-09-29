@@ -16,14 +16,11 @@
 //! - Les arbitres en peer review doivent correspondre aux clés publiques enregistrées
 //! - Finality requiert quorum_size() signatures distinctes de la RestrictedCouncil
 
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::restricted_council::RestrictedCouncil;
 use crate::adn_store::AdnStore;
-use crate::server::CstlNativeServer;
 
 /// Niveaux d'autorité pour les arbitres (hiérarchie de décision)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -654,6 +651,7 @@ pub fn check_finality_threshold(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::sync::Mutex;
 
     #[test]
     fn test_arbiter_creation() {

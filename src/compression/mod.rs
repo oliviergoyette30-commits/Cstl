@@ -1,8 +1,20 @@
 pub mod fse;
 pub mod wai_core;
 pub mod fse_encoder_rs;
+pub mod structural;
+pub mod order1_rans;
+pub mod stable_dictionary;
+pub mod text_dictionary;
+pub mod variable_delta;
+pub mod master;
 
 pub use fse::FSEEncoder;
 pub use wai_core::{WaiEncoder, WaiDecoder, WaiCoreError};
 pub use wai_core::{encode_varint, decode_varint, zigzag_encode, zigzag_decode, delta_encode, delta_decode};
 pub use fse_encoder_rs::{FseEncoder, FseEncoderError, PretrainedTans, SharedSessionState};
+pub use structural::{encode_structural, decode_structural, StructuralError, StructuralStreams};
+pub use order1_rans::{Order1Error, PretrainedOrder1Table};
+pub use stable_dictionary::{encode_stable, decode_stable, StableDictError, STABLE_DICTIONARY_VERSION};
+pub use text_dictionary::{encode_text, decode_text, TextDictError, TEXT_DICTIONARY_VERSION};
+pub use variable_delta::{encode_variable, decode_variable, VariableDeltaError};
+pub use master::{master_compress, master_decompress, MasterError};

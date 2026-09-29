@@ -100,7 +100,7 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
     // sans ca, un payload normal recoit "purpose=error, status=no_agent" et
     // n'a jamais de hash a extraire, meme s'il a bien ete persiste plus haut
     // dans le pipeline (STEP 3d, avant le routage).
-    server.agent_registry.lock().await.register(AgentCard {
+    server.agent_registry.write().await.register(AgentCard {
         name: "TestRouter".to_string(),
         version: "test".to_string(),
         capabilities: vec!["communication".to_string()],
@@ -108,19 +108,23 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
         public_key: None,
     });
 
+    // Depuis la fusion des 9 arguments separes en un seul
+    // `Arc<ServerContext>` (Couche 7, 2026-09-04) -- voir `server/mod.rs::
+    // CstlNativeServer::start` pour la construction canonique reprise ici.
+    let ctx = std::sync::Arc::new(cstl_parser::server::ServerContext {
+        agent_registry: server.agent_registry,
+        chain: server.chain,
+        kb_verifier: server.kb_verifier,
+        adn_store: server.adn_store,
+        restricted_council: server.restricted_council,
+        telegram: server.telegram,
+        obsidian: server.obsidian,
+        governance: server.governance,
+        sigma_calibrator: server.sigma_calibrator,
+    });
+
     tokio::spawn(async move {
-        let _ = listener::accept_connections(
-            tcp_listener,
-            server.agent_registry,
-            server.chain,
-            server.kb_verifier,
-            server.adn_store,
-            server.restricted_council,
-            server.telegram,
-            server.obsidian,
-            server.governance,
-        )
-        .await;
+        let _ = listener::accept_connections(tcp_listener, ctx).await;
     });
 
     // -- 1) Reponse SOLO de Agent_CLAUDE : "option_C" (va diverger du trio) --

@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod quorum_tests {
-    use super::super::*;
+    use cstl_parser::server::quorum::*;
 
     fn create_test_member(id: &str, suffix: &str) -> QuorumMember {
         QuorumMember::new(
