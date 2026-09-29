@@ -1330,6 +1330,24 @@ pub async fn handle_connection(
                             error!("[Handler] adn_store.put_relations failed: {}", e);
                         }
 
+                        // Master Compresseur 4-flux (Couche 1, branche ici le 2026-09-29):
+                        // compresse defines/relations/uncertainty et persiste le resultat a
+                        // cote du payload texte en Couche 5. N'affecte PAS le wire format --
+                        // ce que les agents envoient/recoivent sur le TCP reste du texte CSTL
+                        // brut inchange, aucune rupture de compatibilite avec le SDK Python ni
+                        // les agents existants. Echec non-fatal, meme raisonnement que
+                        // put_evaluation ci-dessus: une compression manquante ne doit jamais
+                        // faire echouer le stockage du payload Layer 1.
+                        if let Err(e) = ctx.adn_store.lock().await.put_master_compressed(
+                            &entry.hash,
+                            &payload.defines,
+                            &payload.relations,
+                            &payload.uncertainty,
+                            raw_payload.len(),
+                        ) {
+                            error!("[Handler] adn_store.put_master_compressed failed: {}", e);
+                        }
+
                         // STEP 3e: Notification RestrictedCouncil (portee reduite v1) —
                         // pousse un message Telegram plutot que d'attendre que le
                         // membre autorise pense a interroger l'ADN store lui-meme.

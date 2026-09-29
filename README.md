@@ -362,7 +362,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 
 ## Master Compressor — 4-Stream Structural Compression (post-v5.1, `src/compression/master.rs`)
 
-A newer, separate compression path (not yet wired into `server/handler.rs`'s live TCP pipeline — see Known Limitations) that splits a CSTL payload's `defines`/`relations`/`uncertainty` fields into 4 independent byte streams before encoding, instead of running everything through one adaptive table:
+A separate compression path that splits a CSTL payload's `defines`/`relations`/`uncertainty` fields into 4 independent byte streams before encoding, instead of running everything through one adaptive table. **Wired into `server/handler.rs`'s live pipeline** (2026-09-29) — but as a Couche 5 (persistent storage) addition, not a wire-protocol change: every payload processed by the live TCP server now also gets its `defines`/`relations`/`uncertainty` compressed via `AdnStore::put_master_compressed` and stored alongside the raw text in a new `master_compressed` SQLite table (`hash`, `compressed`, `reference_payload_text_len`, `compressed_len`). The TCP wire format itself is untouched — every agent (Python SDK, existing tests, anything already speaking CSTL) still sends and receives plain CSTL text exactly as before; nothing about compatibility changed. Verified live against the real running server (not just `cargo test`): two real payloads sent over real TCP via `sdk/python/cstl_client.py`, read back directly from the resulting `cstl_adn.db` — `311→47 bytes` and `217→32 bytes` measured on real traffic, not synthetic test fixtures.
 
 | Stream | Content | Encoding |
 |---|---|---|
@@ -588,7 +588,7 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 - Multi-hop degradation measured to 12+ hops; real network characteristics beyond that uncharacterized
 - `emergence_proofs` table has real schema but zero production data (nobody has run a real tripartite session yet)
 - CASTLE compression mode: architecture only, no implementation
-- Master Compressor (`src/compression/master.rs`, 4-stream) is implemented and tested in isolation but **not wired into `server/handler.rs`'s live request pipeline** — it does not currently affect what goes over the wire
+- Master Compressor (`src/compression/master.rs`, 4-stream) is wired into `server/handler.rs`'s live pipeline as of 2026-09-29, but only at the storage layer (Couche 5) — it compresses `defines`/`relations`/`uncertainty` into `master_compressed` alongside the raw payload. It does **not** affect the TCP wire format: nothing sent or received by an agent uses this encoding, only what the server stores locally does
 - Layer 3a KB verification: wall-clock timeout added (2026-09-05) to prevent hangs on slow networks, but real wikidata.org access still not tested from this sandbox (blocked by outbound proxy)
 - Domain simulator: one domain only (numeric/physical bounds), no live data source
 - `ERROR_SIGNAL`: deontic-violation half implemented; sigma-divergence half explicitly out of scope (architectural reasons documented in `CSTL_SPEC_v5_0.md` §16.6)

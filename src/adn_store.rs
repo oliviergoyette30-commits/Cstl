@@ -30,6 +30,20 @@ pub struct AdnEntry {
     pub created_at: i64,
 }
 
+/// Une ligne de `master_compressed` (Couche 5) -- sortie de
+/// `compression::master::master_compress` sur `defines`/`relations`/
+/// `uncertainty`, stockee a cote du payload texte (jamais a sa place: le
+/// payload Layer 1 dans `adn_store` reste la source de verite, ceci n'est
+/// qu'une compression additionnelle des trois champs structures).
+#[derive(Debug, Clone)]
+pub struct MasterCompressedRow {
+    pub hash: String,
+    pub compressed: Vec<u8>,
+    pub reference_payload_text_len: i64,
+    pub compressed_len: i64,
+    pub created_at: i64,
+}
+
 /// Une ligne de `governance_evaluations` (Couche 5, Double Livre v5.2) --
 /// le snapshot Layer 2 (mutable, jamais signe) que `handler.rs` calcule
 /// pour chaque payload evalue: sigma effectif serveur, trust snapshot de
@@ -275,6 +289,13 @@ impl AdnStore {
                 parent_payload_hash TEXT,
                 governance_snapshot_json TEXT,
                 evaluated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS master_compressed (
+                hash TEXT PRIMARY KEY REFERENCES adn_store(hash),
+                compressed BLOB NOT NULL,
+                reference_payload_text_len INTEGER NOT NULL,
+                compressed_len INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
@@ -608,6 +629,13 @@ impl AdnStore {
                 parent_payload_hash TEXT,
                 governance_snapshot_json TEXT,
                 evaluated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS master_compressed (
+                hash TEXT PRIMARY KEY REFERENCES adn_store(hash),
+                compressed BLOB NOT NULL,
+                reference_payload_text_len INTEGER NOT NULL,
+                compressed_len INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
             );",
         )?;
         Ok(Self { conn })
@@ -718,6 +746,63 @@ impl AdnStore {
                         parent_payload_hash: row.get(3)?,
                         governance_snapshot_json: row.get(4)?,
                         evaluated_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Compresse et persiste `defines`/`relations`/`uncertainty` via le
+    /// Master Compresseur 4-flux (`compression::master::master_compress`,
+    /// Couche 1). Branche ici, pas sur le fil TCP: le wire format CSTL
+    /// reste du texte brut inchange pour tous les agents existants
+    /// (Python SDK, tests, tout ce qui parle deja CSTL) -- seul le
+    /// stockage Couche 5 gagne cette compression additionnelle, sans
+    /// aucune rupture de compatibilite. FK sur adn_store(hash), meme
+    /// contrainte que `put_evaluation`.
+    ///
+    /// `reference_payload_text_len` est fourni par l'appelant (longueur du
+    /// texte CSTL brut de ce payload, avant toute compression) plutot que
+    /// recalcule ici, pour que le ratio rapporte par `get_master_compressed`
+    /// compare contre ce que l'agent a reellement envoye sur le fil, pas
+    /// contre une reserialisation JSON synthetique.
+    pub fn put_master_compressed(
+        &self,
+        hash: &str,
+        defines: &[HashMap<String, String>],
+        relations: &[HashMap<String, String>],
+        uncertainty: &[HashMap<String, String>],
+        reference_payload_text_len: usize,
+    ) -> Result<(), rusqlite::Error> {
+        let compressed = crate::compression::master::master_compress(defines, relations, uncertainty)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e.to_string()))))?;
+        let compressed_len = compressed.len() as i64;
+        self.conn.execute(
+            "INSERT OR IGNORE INTO master_compressed
+                (hash, compressed, reference_payload_text_len, compressed_len, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![hash, compressed, reference_payload_text_len as i64, compressed_len, now_unix()],
+        )?;
+        Ok(())
+    }
+
+    /// Relit une ligne `master_compressed` par hash (metadonnees + octets
+    /// compresses bruts -- decompresser avec
+    /// `compression::master::master_decompress` retourne le triple
+    /// `(defines, relations, uncertainty)` d'origine).
+    pub fn get_master_compressed(&self, hash: &str) -> Result<Option<MasterCompressedRow>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT hash, compressed, reference_payload_text_len, compressed_len, created_at
+                 FROM master_compressed WHERE hash = ?1",
+                params![hash],
+                |row| {
+                    Ok(MasterCompressedRow {
+                        hash: row.get(0)?,
+                        compressed: row.get(1)?,
+                        reference_payload_text_len: row.get(2)?,
+                        compressed_len: row.get(3)?,
+                        created_at: row.get(4)?,
                     })
                 },
             )
@@ -2043,6 +2128,50 @@ impl AdnStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_put_master_compressed_roundtrip_and_fk_enforcement() {
+        // Branchement Couche 5 du Master Compresseur (2026-09-29): verifie
+        // que le stockage compresse d'un triple defines/relations/
+        // uncertainty se decompresse en bytes identiques a l'original, et
+        // que la contrainte FK sur adn_store(hash) est vraiment appliquee.
+        use crate::compression::master::master_decompress;
+
+        let store = AdnStore::open(":memory:").unwrap();
+
+        let mut define = HashMap::new();
+        define.insert("name".to_string(), "Tenant".to_string());
+        define.insert("entity_type".to_string(), "Party".to_string());
+        define.insert("id".to_string(), "e001".to_string());
+        let defines = vec![define];
+
+        let mut relation = HashMap::new();
+        relation.insert("type".to_string(), "PERFORM".to_string());
+        relation.insert("subject".to_string(), "Tenant".to_string());
+        relation.insert("object".to_string(), "Rent".to_string());
+        relation.insert("id".to_string(), "r001".to_string());
+        let relations = vec![relation];
+
+        let uncertainty: Vec<HashMap<String, String>> = vec![];
+
+        let fk_result = store.put_master_compressed("sha256:orphan", &defines, &relations, &uncertainty, 42);
+        assert!(fk_result.is_err(), "put_master_compressed sur un hash jamais stocke dans adn_store doit echouer (FK)");
+
+        store.put("sha256:real", "payload text placeholder", None, None, 0.5, None, None, None).unwrap();
+        store.put_master_compressed("sha256:real", &defines, &relations, &uncertainty, 226)
+            .expect("put_master_compressed doit reussir une fois le hash present dans adn_store");
+
+        let row = store.get_master_compressed("sha256:real").unwrap().expect("ligne doit etre relisible");
+        assert_eq!(row.reference_payload_text_len, 226);
+        assert_eq!(row.compressed_len, row.compressed.len() as i64);
+
+        let (d, r, u) = master_decompress(&row.compressed).expect("decompression doit reussir sur ce qu'on vient de stocker");
+        assert_eq!(d, defines);
+        assert_eq!(r, relations);
+        assert_eq!(u, uncertainty);
+
+        assert!(store.get_master_compressed("sha256:does_not_exist").unwrap().is_none());
+    }
 
     #[test]
     fn test_put_evaluation_roundtrip_and_fk_enforcement() {
