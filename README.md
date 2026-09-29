@@ -360,6 +360,29 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 
 ---
 
+## Master Compressor — 4-Stream Structural Compression (post-v5.1, `src/compression/master.rs`)
+
+A newer, separate compression path (not yet wired into `server/handler.rs`'s live TCP pipeline — see Known Limitations) that splits a CSTL payload's `defines`/`relations`/`uncertainty` fields into 4 independent byte streams before encoding, instead of running everything through one adaptive table:
+
+| Stream | Content | Encoding |
+|---|---|---|
+| `stable` | Closed-vocabulary opcodes | Pre-trained, versioned order-1 table (`stable_dictionary.rs`), zero transmission — only `[version][mode]` travels |
+| `text` | Raw UTF-8 of interned strings (open vocabulary, letter-statistics-shareable) | Same pre-trained-table approach (`text_dictionary.rs`) |
+| `ids` | Prefix+digit identifiers (`relations.id`, `uncertainty.identifier`, e.g. `r001`, `e047`) | Prefix + delta-zigzag-varint against the last value seen for that prefix **within the same message** (`structural.rs::try_parse_id`) — no cross-message or session state |
+| `variable` | Message-local counts/lengths/indices (never shareable across messages) | Delta + zigzag + varint, table-free (`variable_delta.rs`), replacing an earlier per-context rANS table that cost more than it saved on small messages |
+
+Both dictionary streams (`stable`, `text`) size-guard their mode choice: the pretrained/entropy-coded path is only used `if body.len() < stream.len()`, otherwise the stream falls back to raw bytes — verified live on a 3-byte message where the pretrained path would have cost 6 bytes and raw+header costs 5.
+
+**Measured, live** (`cargo test --lib compression::master`, not asserted):
+- Small reference payload: 119 bytes via the 4-stream master compressor vs. 393 bytes via the earlier single-stream/single-table approach vs. 226 bytes as raw CSTL text (52.7% of raw text, 30.3% of the old approach)
+- Larger reference corpus: 377 bytes vs. 1220 bytes as raw CSTL text (30.9%)
+
+**Explicitly rejected after live testing**, not just discussed: merging `stable` and `text` into one shared dictionary — measured to produce `UnknownSlot`/`UnknownContext` failures neither dictionary alone had, because the two vocabularies' training contexts don't compose even though their raw byte ranges rarely collide.
+
+**Deliberately out of scope for this component**: a closed word-level dictionary for common CSTL vocabulary (needs real traffic data, not fabricated word lists) and an ID fast-path for `defines.id` (lives in generic extras, not yet targeted).
+
+---
+
 ## Security Improvements (v5.0.0 → v5.1)
 
 ### OWASP ASI03: Identity & Privilege Abuse
@@ -563,6 +586,7 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 - Multi-hop degradation measured to 12+ hops; real network characteristics beyond that uncharacterized
 - `emergence_proofs` table has real schema but zero production data (nobody has run a real tripartite session yet)
 - CASTLE compression mode: architecture only, no implementation
+- Master Compressor (`src/compression/master.rs`, 4-stream) is implemented and tested in isolation but **not wired into `server/handler.rs`'s live request pipeline** — it does not currently affect what goes over the wire
 - Layer 3a KB verification: wall-clock timeout added (2026-09-05) to prevent hangs on slow networks, but real wikidata.org access still not tested from this sandbox (blocked by outbound proxy)
 - Domain simulator: one domain only (numeric/physical bounds), no live data source
 - `ERROR_SIGNAL`: deontic-violation half implemented; sigma-divergence half explicitly out of scope (architectural reasons documented in `CSTL_SPEC_v5_0.md` §16.6)
