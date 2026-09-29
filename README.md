@@ -379,7 +379,9 @@ Both dictionary streams (`stable`, `text`) size-guard their mode choice: the pre
 
 **Explicitly rejected after live testing**, not just discussed: merging `stable` and `text` into one shared dictionary — measured to produce `UnknownSlot`/`UnknownContext` failures neither dictionary alone had, because the two vocabularies' training contexts don't compose even though their raw byte ranges rarely collide.
 
-**Deliberately out of scope for this component**: a closed word-level dictionary for common CSTL vocabulary (needs real traffic data, not fabricated word lists) and an ID fast-path for `defines.id` (lives in generic extras, not yet targeted).
+**ID fast-path coverage**: `relations.id`, `uncertainty.identifier`, and `defines.id` (added 2026-09-29 — `id` isn't a dedicated `defines` field, it lives in the generic `extras` map alongside any other key; the encoder now special-cases it out of that map when present and numeric-shaped).
+
+**Deliberately out of scope for this component**: a closed word-level dictionary for common CSTL vocabulary (needs real traffic data, not fabricated word lists).
 
 ---
 

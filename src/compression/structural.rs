@@ -265,15 +265,38 @@ pub fn encode_structural(
     let mut ids = Vec::new();
     let mut id_last: HashMap<String, i64> = HashMap::new();
 
-    // --- DEFINES (entierement variable -- aucun champ a vocabulaire ferme) ---
+    // --- DEFINES (name/entity_type toujours variable ; id, quand present,
+    // beneficie du meme fast-path prefix+delta que relations.id et
+    // uncertainty.identifier -- portee etendue le 2026-09-29, `id` vivait
+    // avant cela dans les extras generiques comme n'importe quelle autre
+    // cle, sans aucune compression specifique) ---
     variable.extend_from_slice(&encode_varint(defines.len() as u32));
     for d in defines {
         let name_idx = table.intern(d.get("name").map(String::as_str).unwrap_or(""));
         let type_idx = table.intern(d.get("entity_type").map(String::as_str).unwrap_or(""));
         variable.extend_from_slice(&encode_varint(name_idx));
         variable.extend_from_slice(&encode_varint(type_idx));
+
+        match d.get("id").filter(|v| !v.is_empty()) {
+            Some(id_val) => {
+                stable.push(1); // has_id_extra
+                match try_parse_id(id_val) {
+                    Some((prefix, width, value)) => {
+                        stable.push(1); // id_is_numeric
+                        encode_id_entry(&mut ids, &mut id_last, prefix, width, value);
+                    }
+                    None => {
+                        stable.push(0); // id_is_numeric
+                        let idx = table.intern(id_val);
+                        variable.extend_from_slice(&encode_varint(idx));
+                    }
+                }
+            }
+            None => stable.push(0), // has_id_extra
+        }
+
         let mut extras: Vec<(&String, &String)> = d.iter()
-            .filter(|(k, _)| k.as_str() != "name" && k.as_str() != "entity_type")
+            .filter(|(k, _)| k.as_str() != "name" && k.as_str() != "entity_type" && k.as_str() != "id")
             .collect();
         extras.sort_by(|a, b| a.0.cmp(b.0));
         variable.extend_from_slice(&encode_varint(extras.len() as u32));
@@ -419,6 +442,19 @@ pub fn decode_structural(streams: &StructuralStreams) -> Result<DecodedTriple, S
         let mut map = HashMap::new();
         map.insert("name".to_string(), read_string(&table, name_idx)?.to_string());
         map.insert("entity_type".to_string(), read_string(&table, type_idx)?.to_string());
+
+        let has_id_extra = read_byte(stable, &mut spos, "defines: has_id_extra")?;
+        if has_id_extra == 1 {
+            let id_is_numeric = read_byte(stable, &mut spos, "defines: id_is_numeric")?;
+            let id_str = if id_is_numeric == 1 {
+                decode_id_entry(ids, &mut ipos, &mut id_last)?
+            } else {
+                let idx = read_varint(variable, &mut vpos, "defines: id fallback")?;
+                read_string(&table, idx)?.to_string()
+            };
+            map.insert("id".to_string(), id_str);
+        }
+
         let extra_count = read_varint(variable, &mut vpos, "defines: extras compte")?;
         for _ in 0..extra_count {
             let k_idx = read_varint(variable, &mut vpos, "defines: extra key")?;
@@ -533,15 +569,55 @@ mod tests {
     }
 
     #[test]
-    fn test_defines_roundtrip_all_in_variable_stream() {
+    fn test_defines_roundtrip_no_id_stable_has_only_flags() {
+        // Depuis l'ajout du fast-path defines.id (2026-09-29), `stable`
+        // n'est plus vide meme sans id: chaque define ecrit un octet
+        // has_id_extra=0. C'est un octet fixe par entree (pas un opcode
+        // variable), donc toujours 1 octet par define ici.
+        let defines = vec![
+            m(&[("name", "Tenant"), ("entity_type", "Party")]),
+            m(&[("name", "Landlord"), ("entity_type", "Party")]),
+        ];
+        let streams = encode_structural(&defines, &[], &[]);
+        assert_eq!(streams.stable, vec![0u8, 0u8], "un octet has_id_extra=0 par define, rien d'autre");
+        let (d, _, _) = decode_structural(&streams).unwrap();
+        assert_eq!(d, defines);
+    }
+
+    #[test]
+    fn test_defines_id_uses_numeric_fast_path_and_roundtrips() {
+        // 2026-09-29: extension de portee du fast-path prefix+delta a
+        // defines.id (avant, seuls relations.id et uncertainty.identifier
+        // en beneficiaient -- id vivait ici dans les extras generiques,
+        // interne comme n'importe quelle autre paire cle/valeur).
         let defines = vec![
             m(&[("name", "Tenant"), ("entity_type", "Party"), ("id", "e001")]),
             m(&[("name", "Landlord"), ("entity_type", "Party"), ("id", "e002")]),
         ];
         let streams = encode_structural(&defines, &[], &[]);
-        assert!(streams.stable.is_empty(), "defines n'a aucun opcode -- le flux stable doit rester vide");
+        assert!(!streams.ids.is_empty(), "id numerique doit passer par le flux ids");
+        assert!(!streams.stable.is_empty(), "les flags has_id_extra/id_is_numeric vivent dans stable");
         let (d, _, _) = decode_structural(&streams).unwrap();
         assert_eq!(d, defines);
+    }
+
+    #[test]
+    fn test_defines_non_numeric_id_falls_back_to_text_path() {
+        let defines = vec![m(&[("name", "Tenant"), ("entity_type", "Party"), ("id", "not-a-numeric-id")])];
+        let streams = encode_structural(&defines, &[], &[]);
+        assert!(streams.ids.is_empty(), "id non-numerique ne doit pas toucher le flux ids");
+        let (d, _, _) = decode_structural(&streams).unwrap();
+        assert_eq!(d, defines);
+    }
+
+    #[test]
+    fn test_defines_without_id_field_omits_extra_entirely() {
+        // Un define sans "id" du tout ne doit pas laisser de trace de ce
+        // champ au roundtrip (has_id_extra=0, aucune cle "id" reinseree).
+        let defines = vec![m(&[("name", "Tenant"), ("entity_type", "Party")])];
+        let streams = encode_structural(&defines, &[], &[]);
+        let (d, _, _) = decode_structural(&streams).unwrap();
+        assert!(!d[0].contains_key("id"));
     }
 
     #[test]

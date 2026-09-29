@@ -1249,7 +1249,7 @@ pub async fn handle_connection(
                     // sans jamais modifier le payload Layer 1 (immutable, signe, cryptographiquement garanti).
 
                     // Crée EvaluatedPayload avec snapshot gouvernance (Layer 2 metadata, immuable)
-                    let _evaluated_payload = {
+                    let evaluated_payload = {
                         let mut ep = super::evaluated_payload::EvaluatedPayload::new(
                             payload.clone(),
                             entry.hash.clone(),
@@ -1310,6 +1310,16 @@ pub async fn handle_connection(
                         error!("[Handler] adn_store.put failed: {}", e);
                     } else {
                         info!("[Handler] Stored in adn_store (hash={}, sigma={}, committed=false)", entry.hash, sigma);
+
+                        // STEP 3d-sigma (suite): persiste le wrapper Layer 2 EvaluatedPayload
+                        // construit plus haut -- FK sur adn_store(hash), donc APRES que le
+                        // put() ci-dessus ait reussi. Avant ce fix, ce wrapper etait calcule
+                        // (snapshot gouvernance + sigma effectif) puis jete (`_evaluated_payload`,
+                        // jamais consomme). Echec non-fatal: une evaluation manquante ne doit
+                        // pas faire echouer le stockage du payload Layer 1 lui-meme.
+                        if let Err(e) = ctx.adn_store.lock().await.put_evaluation(&evaluated_payload) {
+                            error!("[Handler] adn_store.put_evaluation failed: {}", e);
+                        }
 
                         // Persiste aussi les relations de ce payload pour que les
                         // requetes FUTURES puissent etre verifiees contre elles via

@@ -30,6 +30,24 @@ pub struct AdnEntry {
     pub created_at: i64,
 }
 
+/// Une ligne de `governance_evaluations` (Couche 5, Double Livre v5.2) --
+/// le snapshot Layer 2 (mutable, jamais signe) que `handler.rs` calcule
+/// pour chaque payload evalue: sigma effectif serveur, trust snapshot de
+/// l'agent, et l'etat de gouvernance (Couche 4) au moment de l'evaluation.
+#[derive(Debug, Clone)]
+pub struct GovernanceEvaluationRow {
+    pub payload_hash: String,
+    pub server_sigma_effective: f64,
+    pub agent_trust_snapshot: f64,
+    pub parent_payload_hash: Option<String>,
+    /// Serialise en JSON depuis `evaluated_payload::GovernanceSnapshot`;
+    /// `None` si aucun etat de gouvernance notable n'existait a ce moment
+    /// (cf. `with_governance_snapshot`, appele seulement si
+    /// `circuit_open || breaker_trips > 0 || drift_flagged`).
+    pub governance_snapshot_json: Option<String>,
+    pub evaluated_at: i64,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AdnStats {
     pub total: u64,
@@ -250,12 +268,21 @@ impl AdnStore {
                 comment TEXT NOT NULL,
                 timestamp INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS governance_evaluations (
+                payload_hash TEXT PRIMARY KEY REFERENCES adn_store(hash),
+                server_sigma_effective REAL NOT NULL,
+                agent_trust_snapshot REAL NOT NULL,
+                parent_payload_hash TEXT,
+                governance_snapshot_json TEXT,
+                evaluated_at INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
             CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);
             CREATE INDEX IF NOT EXISTS idx_wai_dictionaries_created ON wai_dictionaries(created_at);
             CREATE INDEX IF NOT EXISTS idx_deontic_executions_timestamp ON deontic_executions(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_comments_timestamp ON audit_comments(timestamp);",
+            CREATE INDEX IF NOT EXISTS idx_audit_comments_timestamp ON audit_comments(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_governance_evaluations_evaluated_at ON governance_evaluations(evaluated_at);",
         )?;
         // migrations/005_adn_sigma_audit_log_v5_2.sql -- cablage 2026-09-15.
         // Ce fichier existait depuis la session precedente mais n'etait
@@ -573,7 +600,15 @@ impl AdnStore {
             CREATE INDEX IF NOT EXISTS idx_adn_produced_by ON adn_store(produced_by);
             CREATE INDEX IF NOT EXISTS idx_adn_parent_hash ON adn_store(parent_hash);
             CREATE INDEX IF NOT EXISTS idx_adn_created_at ON adn_store(created_at);
-            CREATE INDEX IF NOT EXISTS idx_adn_conversation ON adn_store(conversation_id, turn);",
+            CREATE INDEX IF NOT EXISTS idx_adn_conversation ON adn_store(conversation_id, turn);
+            CREATE TABLE IF NOT EXISTS governance_evaluations (
+                payload_hash TEXT PRIMARY KEY REFERENCES adn_store(hash),
+                server_sigma_effective REAL NOT NULL,
+                agent_trust_snapshot REAL NOT NULL,
+                parent_payload_hash TEXT,
+                governance_snapshot_json TEXT,
+                evaluated_at INTEGER NOT NULL
+            );",
         )?;
         Ok(Self { conn })
     }
@@ -629,6 +664,64 @@ impl AdnStore {
             params![hash, payload_bytes, is_compressed as i32, encoder, produced_by, sigma, parent_hash, conversation_id, turn, now_unix()],
         )?;
         Ok(())
+    }
+
+    /// Persiste le wrapper Layer 2 `EvaluatedPayload` (Couche 5, Double
+    /// Livre v5.2) -- snapshot de gouvernance + sigma effectif calcule par
+    /// ExecutionLab au moment de l'evaluation. Table separee de `adn_store`
+    /// (le payload Layer 1 reste immuable, jamais touche ici), idempotente
+    /// sur `payload_hash` (meme semantique append-only que `put`).
+    ///
+    /// Avant ce fix (2026-09-29): `handler.rs` construisait ce wrapper
+    /// (`_evaluated_payload`, prefixe underscore) et le jetait -- calcule
+    /// mais jamais persiste ni consomme nulle part (confirme par grep avant
+    /// ce commit: zero reference a `EvaluatedPayload` hors de sa propre
+    /// definition et de ce point de construction).
+    pub fn put_evaluation(
+        &self,
+        ep: &crate::server::evaluated_payload::EvaluatedPayload,
+    ) -> Result<(), rusqlite::Error> {
+        let governance_snapshot_json = match &ep.governance_state_snapshot {
+            Some(snapshot) => Some(serde_json::to_string(snapshot).map_err(|e| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+            })?),
+            None => None,
+        };
+        self.conn.execute(
+            "INSERT OR IGNORE INTO governance_evaluations
+                (payload_hash, server_sigma_effective, agent_trust_snapshot, parent_payload_hash, governance_snapshot_json, evaluated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                ep.payload_hash,
+                ep.server_sigma_effective,
+                ep.agent_trust_snapshot,
+                ep.parent_payload_hash,
+                governance_snapshot_json,
+                ep.evaluated_at_utc.timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Relit une evaluation persistee par `put_evaluation`.
+    pub fn get_evaluation(&self, payload_hash: &str) -> Result<Option<GovernanceEvaluationRow>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT payload_hash, server_sigma_effective, agent_trust_snapshot, parent_payload_hash, governance_snapshot_json, evaluated_at
+                 FROM governance_evaluations WHERE payload_hash = ?1",
+                params![payload_hash],
+                |row| {
+                    Ok(GovernanceEvaluationRow {
+                        payload_hash: row.get(0)?,
+                        server_sigma_effective: row.get(1)?,
+                        agent_trust_snapshot: row.get(2)?,
+                        parent_payload_hash: row.get(3)?,
+                        governance_snapshot_json: row.get(4)?,
+                        evaluated_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
     }
 
     pub fn get(&self, hash: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
@@ -1950,6 +2043,60 @@ impl AdnStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_put_evaluation_roundtrip_and_fk_enforcement() {
+        // Cablage 2026-09-29: `handler.rs` construisait ce wrapper Layer 2
+        // (snapshot gouvernance + sigma effectif) et le jetait
+        // (`_evaluated_payload`). Verifie ici que la persistence marche
+        // reellement: roundtrip complet, ET que la contrainte FK sur
+        // adn_store(hash) est vraiment appliquee (pas juste presente dans
+        // le texte du schema) -- une evaluation ne peut pas exister pour un
+        // hash qui n'a jamais ete stocke via `put()`.
+        use crate::server::evaluated_payload::{EvaluatedPayload, GovernanceSnapshot};
+        use crate::server::parser::CstlPayload;
+
+        let store = AdnStore::open(":memory:").unwrap();
+
+        let ep = EvaluatedPayload::new(
+            CstlPayload::default(),
+            "sha256:orphan".to_string(),
+            0.72,
+            0.9,
+        );
+        let fk_result = store.put_evaluation(&ep);
+        assert!(fk_result.is_err(), "put_evaluation sur un hash jamais stocke dans adn_store doit echouer (FK)");
+
+        store.put("sha256:real", "payload text", None, None, 0.5, None, None, None).unwrap();
+
+        let ep = EvaluatedPayload::new(
+            CstlPayload::default(),
+            "sha256:real".to_string(),
+            0.72,
+            0.9,
+        ).with_parent_hash("sha256:parent".to_string())
+         .with_governance_snapshot(GovernanceSnapshot {
+            sender: "agent_a".to_string(),
+            breaker_trips: 2,
+            circuit_state: "open".to_string(),
+            drift_ratio: 0.31,
+            drift_flagged: true,
+            semantic_warnings_count: 3,
+        });
+
+        store.put_evaluation(&ep).expect("put_evaluation doit reussir une fois le hash present dans adn_store");
+
+        let row = store.get_evaluation("sha256:real").unwrap().expect("evaluation doit etre relisible");
+        assert_eq!(row.payload_hash, "sha256:real");
+        assert!((row.server_sigma_effective - 0.72).abs() < 1e-9);
+        assert!((row.agent_trust_snapshot - 0.9).abs() < 1e-9);
+        assert_eq!(row.parent_payload_hash.as_deref(), Some("sha256:parent"));
+        let snapshot_json = row.governance_snapshot_json.expect("snapshot doit etre serialise");
+        assert!(snapshot_json.contains("\"breaker_trips\":2"));
+        assert!(snapshot_json.contains("\"drift_flagged\":true"));
+
+        assert!(store.get_evaluation("sha256:does_not_exist").unwrap().is_none());
+    }
 
     #[test]
     fn test_migration_005_sigma_tables_exist_and_accept_writes() {
