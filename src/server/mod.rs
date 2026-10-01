@@ -23,6 +23,7 @@ pub mod deontic_orchestration;
 pub mod deontic_state_machine;
 pub mod graphify_server;
 pub mod evaluated_payload;
+pub mod response_compression;
 
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};

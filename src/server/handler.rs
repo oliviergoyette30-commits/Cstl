@@ -22,6 +22,7 @@ use super::parser;
 use super::validator;
 use super::ServerContext;
 use super::arbitrage;
+use super::response_compression::maybe_compress_response;
 
 /// Cherche `---END---` dans `buf` et retourne l'offset EXCLUSIF juste apres
 /// (et apres le `\n` qui suit immediatement, s'il y en a un) -- c'est-a-dire
@@ -146,6 +147,16 @@ pub async fn handle_connection(
         match parse_result {
             Ok(payload) => {
                 info!("[Handler] Parse successful");
+
+                // Compression des REPONSES (2026-10-01, response_compression.rs):
+                // opt-in explicite par le client via INTENT_PAYLOAD.compress_response,
+                // jamais par defaut -- retrocompatibilite totale avec tout client
+                // existant qui ne connait pas ce champ. Calcule une seule fois ici,
+                // utilise a chaque site socket.write_all(...) de cette branche.
+                let want_compressed_response = matches!(
+                    payload.intent.get("compress_response").map(String::as_str),
+                    Some("true") | Some("1")
+                );
 
                 // STEP 2: Validate semantically
                 let validation = validator::validate_payload(&payload);
@@ -275,7 +286,7 @@ pub async fn handle_connection(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=signature_rejected, reason={}, detail={}]\n---END---\n",
                             reason, detail
                         );
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         continue;
                     }
 
@@ -407,7 +418,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         continue;
                     }
 
@@ -459,7 +470,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         continue;
                     }
 
@@ -524,7 +535,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         continue;
                     }
 
@@ -671,7 +682,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         continue;
                     }
 
@@ -769,7 +780,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         continue;
                     }
 
@@ -1656,11 +1667,11 @@ pub async fn handle_connection(
                             entry.seq
                         );
 
-                        socket.write_all(response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
                         info!("[Handler] Response sent successfully");
                     } else {
                         let error_response = "#!CSTL v5.0.0 MODE=A\nINTENT_PAYLOAD [purpose=error, status=no_agent]\n---END---\n";
-                        socket.write_all(error_response.as_bytes()).await?;
+                        socket.write_all(maybe_compress_response(error_response, want_compressed_response).as_bytes()).await?;
                         error!("[Handler] No agent found for routing");
                     }
                 } else {
@@ -1683,7 +1694,7 @@ pub async fn handle_connection(
                         error_msg.replace("\"", "\\\"")
                     );
                     
-                    socket.write_all(error_response.as_bytes()).await?;
+                    socket.write_all(maybe_compress_response(&error_response, want_compressed_response).as_bytes()).await?;
                 }
             }
             Err(e) => {

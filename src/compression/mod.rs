@@ -7,6 +7,7 @@ pub mod stable_dictionary;
 pub mod text_dictionary;
 pub mod variable_delta;
 pub mod master;
+pub mod response;
 
 pub use fse::FSEEncoder;
 pub use wai_core::{WaiEncoder, WaiDecoder, WaiCoreError};
@@ -18,3 +19,4 @@ pub use stable_dictionary::{encode_stable, decode_stable, StableDictError, STABL
 pub use text_dictionary::{encode_text, decode_text, TextDictError, TEXT_DICTIONARY_VERSION};
 pub use variable_delta::{encode_variable, decode_variable, VariableDeltaError};
 pub use master::{master_compress, master_decompress, MasterError};
+pub use response::{compress_response_blocks, decompress_response_blocks, ResponseBlock, ResponseCompressionError};

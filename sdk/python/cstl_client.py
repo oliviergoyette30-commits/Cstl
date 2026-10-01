@@ -332,18 +332,84 @@ def decompress_data(data_b64: str, binary_path: str | None = None) -> dict:
     return json.loads(result.stdout.decode("utf-8"))
 
 
+def _decompress_response_blocks(data_b64: str, binary_path: str | None = None) -> list[tuple[str, list[tuple[str, str]]]]:
+    """Decompresse un bloc COMPRESSED_RESPONSE (voir
+    src/server/response_compression.rs) via `cstl_compress_cli
+    decompress-response`. Retourne une liste ordonnee de
+    (nom_de_bloc, [(cle, valeur), ...]) -- PAS un schema defines/relations/
+    uncertainty, contrairement a decompress_data()."""
+    cli = _resolve_compress_cli_path(binary_path)
+    try:
+        result = subprocess.run(
+            [str(cli), "decompress-response"],
+            input=data_b64.encode("ascii"),
+            capture_output=True,
+            timeout=10.0,
+        )
+    except FileNotFoundError as e:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli introuvable a {cli} -- compile-le d'abord avec "
+            f"'cargo build --release --bin cstl_compress_cli' dans le depot Rust."
+        ) from e
+    if result.returncode != 0:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli decompress-response a echoue (code {result.returncode}): "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    blocks = json.loads(result.stdout.decode("utf-8"))
+    return [(name, [(k, v) for k, v in fields]) for name, fields in blocks]
+
+
+_COMPRESSED_RESPONSE_LINE_RE = re.compile(r"^COMPRESSED_RESPONSE\s*\[(.*)\]\s*$")
+
+
+def _expand_compressed_response(raw: str, binary_path: str | None = None) -> str:
+    """Si `raw` contient un bloc COMPRESSED_RESPONSE (voir
+    maybe_compress_response cote serveur, src/server/response_compression.rs),
+    le remplace par les blocs CSTL en texte clair qu'il represente -- pour
+    que parse_response() (regex-based, inchangee) continue de fonctionner
+    de maniere totalement transparente, compresse ou non. Si aucun bloc
+    COMPRESSED_RESPONSE n'est present (cas par defaut -- le client n'a pas
+    demande compress_response=true), retourne `raw` tel quel sans toucher a
+    cstl_compress_cli du tout."""
+    lines = raw.splitlines()
+    for i, line in enumerate(lines):
+        m = _COMPRESSED_RESPONSE_LINE_RE.match(line.strip())
+        if not m:
+            continue
+        kv = _parse_kv_block(m.group(1))
+        data_b64 = kv.get("data")
+        if not data_b64:
+            return raw  # bloc malforme cote serveur -- ne devrait jamais arriver, on ne touche a rien
+        blocks = _decompress_response_blocks(data_b64, binary_path=binary_path)
+        expanded_lines = []
+        for name, fields in blocks:
+            rendered_fields = ", ".join(f"{k}={_quote_if_needed(v)}" for k, v in fields)
+            expanded_lines.append(f"{name} [{rendered_fields}]")
+        lines[i:i + 1] = expanded_lines
+        return "\n".join(lines)
+    return raw
+
+
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
 
 class CstlClient:
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
-                 timeout: float = 10.0, keep_alive: bool = False):
+                 timeout: float = 10.0, keep_alive: bool = False,
+                 compress_binary_path: str | None = None):
         self.host = host
         self.port = port
         self.timeout = timeout
         self.keep_alive = keep_alive
         self._sock: socket.socket | None = None
+        # Chemin de cstl_compress_cli pour TOUT ce client -- requetes
+        # (compress_triple) et reponses (_expand_compressed_response).
+        # None = auto-detection (_resolve_compress_cli_path), surchargeable
+        # par constructeur ou, comme avant, au cas par cas via les parametres
+        # binary_path/compress_binary_path des methodes individuelles.
+        self._compress_binary_path = compress_binary_path
 
     def _connect(self) -> socket.socket:
         if self.keep_alive and self._sock is not None:
@@ -369,7 +435,8 @@ class CstlClient:
                        compressed_defines: list[dict] | None = None,
                        compressed_relations: list[dict] | None = None,
                        compressed_uncertainty: list[dict] | None = None,
-                       compress_binary_path: str | None = None) -> str:
+                       compress_binary_path: str | None = None,
+                       request_compressed_response: bool = False) -> str:
         """compressed_defines/compressed_relations/compressed_uncertainty:
         quand au moins un des trois est fourni, ces entrees sont compressees
         via le Master Compresseur (sous-processus cstl_compress_cli, voir
@@ -378,13 +445,24 @@ class CstlClient:
         RELATION/UNCERTAINTY en texte clair. `relations=` (parametre deja
         existant) reste un chemin SEPARE, non compresse -- les deux peuvent
         coexister dans le meme message si besoin (le serveur fusionne les
-        deux sources cote parsing, voir record_compressed_payload)."""
+        deux sources cote parsing, voir record_compressed_payload).
+
+        request_compressed_response=True ajoute INTENT_PAYLOAD.compress_response=true
+        -- demande au serveur de compresser SA reponse en un bloc
+        COMPRESSED_RESPONSE (voir src/server/response_compression.rs).
+        send_raw() le deplie automatiquement avant parse_response(), donc
+        rien d'autre a faire cote appelant. Jamais actif par defaut --
+        retrocompatibilite totale."""
         meta_kv = {"encoder": encoder, "produced_by": produced_by}
         if extra_meta:
             meta_kv.update(extra_meta)
         intent_kv = {"purpose": purpose, "sender": sender, "receiver": receiver}
         if extra_intent:
             intent_kv.update(extra_intent)
+        if request_compressed_response:
+            intent_kv["compress_response"] = "true"
+
+        binary_path = compress_binary_path or self._compress_binary_path
 
         lines = [f"#!CSTL {version} MODE={mode}\n"]
         lines.append(_format_kv_block("META", meta_kv))
@@ -396,7 +474,7 @@ class CstlClient:
                 defines=compressed_defines,
                 relations=compressed_relations,
                 uncertainty=compressed_uncertainty,
-                binary_path=compress_binary_path,
+                binary_path=binary_path,
             )
             lines.append(_format_kv_block("COMPRESSED_PAYLOAD", {"data": data_b64}))
         lines.append("---END---\n")
@@ -416,6 +494,14 @@ class CstlClient:
                     break
                 buf.extend(chunk)
             raw = buf.decode("utf-8", errors="replace")
+            # Transparent cote reception: si le serveur a compresse sa reponse
+            # (le client a envoye compress_response=true -- voir build_payload),
+            # on la deplie en blocs texte clair AVANT parse_response(), qui
+            # n'a donc jamais besoin de savoir que la compression existe.
+            # Si aucun bloc COMPRESSED_RESPONSE n'est present (cas par
+            # defaut), _expand_compressed_response ne touche a rien et
+            # n'invoque meme pas cstl_compress_cli.
+            raw = _expand_compressed_response(raw, binary_path=self._compress_binary_path)
             return parse_response(raw)
         finally:
             if not self.keep_alive:
@@ -438,12 +524,14 @@ class CstlClient:
                          uncertainty: list[dict] | None = None,
                          encoder: str = "Agent", produced_by: str = "Client",
                          extra_intent: dict | None = None,
-                         compress_binary_path: str | None = None) -> CstlResponse:
+                         compress_binary_path: str | None = None,
+                         request_compressed_response: bool = False) -> CstlResponse:
         """Envoie defines/relations/uncertainty compresses via le Master
         Compresseur, dans un seul bloc COMPRESSED_PAYLOAD. Leve
         CstlCompressionUnavailable si cstl_compress_cli n'est pas compile/
         trouvable -- voir compress_triple() pour le message d'erreur
-        actionnable."""
+        actionnable. request_compressed_response=True demande EN PLUS au
+        serveur de compresser sa reponse (voir build_payload)."""
         payload = self.build_payload(
             encoder=encoder, produced_by=produced_by, purpose=purpose,
             sender=sender, receiver=receiver,
@@ -452,6 +540,7 @@ class CstlClient:
             compressed_relations=relations,
             compressed_uncertainty=uncertainty,
             compress_binary_path=compress_binary_path,
+            request_compressed_response=request_compressed_response,
         )
         return self.send_raw(payload)
 
@@ -487,7 +576,7 @@ class CstlClient:
 def _smoke_test(host: str, port: int) -> int:
     client = CstlClient(host=host, port=port, timeout=5.0)
 
-    print(f"[1/4] Envoi d'un payload valide vers {host}:{port} ...")
+    print(f"[1/5] Envoi d'un payload valide vers {host}:{port} ...")
     resp = client.send_relation(
         sender="alice", receiver="bob", purpose="smoke_test_greeting",
         relations=[{"type": "EQUALS", "subject": "cstl_client", "object": "works"}],
@@ -499,7 +588,7 @@ def _smoke_test(host: str, port: int) -> int:
     assert resp.audit_hash, "AUDIT.hash absent d'une reponse processed"
     print("      OK")
 
-    print("[2/4] Envoi d'un payload invalide (sender manquant) ...")
+    print("[2/5] Envoi d'un payload invalide (sender manquant) ...")
     bad_payload = (
         "#!CSTL v5.0.0 MODE=A\n"
         "META [encoder=Client, produced_by=Client]\n"
@@ -515,13 +604,13 @@ def _smoke_test(host: str, port: int) -> int:
     except CstlValidationError as e:
         print(f"      OK (CstlValidationError levee: {e})")
 
-    print("[3/4] Decision de council par un sender non autorise ...")
+    print("[3/5] Decision de council par un sender non autorise ...")
     resp3 = client.send_council_decision(
         sender="not_olivier", target_hash=resp.audit_hash, decision="commit",
     )
     print(f"      status={resp3.status!r} purpose={resp3.purpose!r} fields={resp3.fields}")
 
-    print("[4/4] Envoi compresse (COMPRESSED_PAYLOAD / Master Compresseur) ...")
+    print("[4/5] Envoi compresse (COMPRESSED_PAYLOAD / Master Compresseur) ...")
     try:
         resp4 = client.send_compressed(
             sender="alice", receiver="bob", purpose="smoke_test_compressed",
@@ -543,6 +632,25 @@ def _smoke_test(host: str, port: int) -> int:
             print(f"      ECHEC: statut inattendu. Reponse brute:\n{resp4.raw}")
             return 1
         print("      OK (le serveur a decompresse et traite le DEFINE/RELATION/UNCERTAINTY compresses)")
+
+    print("[5/5] Reponse compressee (COMPRESSED_RESPONSE, server/response_compression.rs) ...")
+    try:
+        resp5 = client.send_relation(
+            sender="alice", receiver="bob", purpose="smoke_test_compressed_response",
+            relations=[{"type": "EQUALS", "subject": "cstl_client", "object": "compressed_response_works"}],
+            extra_intent={"compress_response": "true"},
+        )
+    except CstlCompressionUnavailable as e:
+        print(f"      SKIP (cstl_compress_cli indisponible, pas un echec du client): {e}")
+    else:
+        print(f"      status={resp5.status!r} purpose={resp5.purpose!r} audit_hash={resp5.audit_hash!r}")
+        if "COMPRESSED_RESPONSE" in resp5.raw:
+            print(f"      ECHEC: le bloc COMPRESSED_RESPONSE n'a pas ete deplie avant parsing:\n{resp5.raw}")
+            return 1
+        if resp5.status != "processed" or not resp5.audit_hash:
+            print(f"      ECHEC: statut/audit_hash inattendu apres decompression. Reponse deplie:\n{resp5.raw}")
+            return 1
+        print("      OK (le client a transparemment deplie la reponse compressee avant de la parser)")
 
     print("\nSmoke-test termine sans erreur bloquante.")
     return 0

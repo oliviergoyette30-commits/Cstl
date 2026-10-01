@@ -615,7 +615,7 @@ fn parse_define_block(block: &str) -> Result<HashMap<String, String>, ParseError
 /// une valeur citee comme `produced_by="Report, final version"` -- le fragment
 /// resultant sans '=' etait alors ignore silencieusement (pas d'erreur), et la
 /// valeur d'origine finissait tronquee avec un guillemet ouvrant orphelin.
-fn split_top_level_commas(content: &str) -> Vec<&str> {
+pub(crate) fn split_top_level_commas(content: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0;
     let mut in_quotes = false;
