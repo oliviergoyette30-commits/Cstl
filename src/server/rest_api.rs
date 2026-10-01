@@ -17,6 +17,8 @@ use crate::adn_store::AdnStore;
 use crate::server::audit;
 use crate::server::graphify_server::GraphifyExporter;
 use crate::server::deontic_orchestration::DeonticOrchestrator;
+use crate::server::wai::DictionaryRegistry;
+use crate::calibration::SigmaCalibrator;
 
 /// Audit entry for API response
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -132,11 +134,22 @@ pub struct StatsResponse {
 /// deja `Clone`-free (methodes `&self` async derriere des `Mutex`
 /// internes), donc un seul `Arc` partage suffit, pas de `Mutex` externe
 /// necessaire ici contrairement a `chain`/`adn_store`.
+/// `wai_registry`/`sigma_calibrator` ajoutes le 2026-10-01: routes
+/// `/wai/*` et `/calibration/*`, meme histoire que `chain`/`deontic`
+/// ci-dessus -- trouvailles de l'audit "pub fn jamais appelees": les deux
+/// etaient deja construits et partages sur `ServerContext` (voir
+/// `server/mod.rs`), mais rien ne les lisait jamais apres construction.
+/// `wai_registry` est deja un `Arc<DictionaryRegistry>` sans `Mutex`
+/// interne (lecture seule une fois demarre, un seul writer a l'init) --
+/// partage direct. `sigma_calibrator` est deja `Arc<Mutex<...>>` sur le
+/// contexte, reutilise tel quel.
 #[derive(Clone)]
 pub struct ApiState {
     pub adn_store: Arc<Mutex<AdnStore>>,
     pub chain: Arc<Mutex<audit::HashChain>>,
     pub deontic: Arc<DeonticOrchestrator>,
+    pub wai_registry: Arc<DictionaryRegistry>,
+    pub sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
 }
 
 /// Health check endpoint
@@ -310,6 +323,112 @@ async fn deontic_executions(State(state): State<ApiState>) -> impl IntoResponse 
     }))
 }
 
+/// Query params partages par les routes de requete Graphify.
+#[derive(Debug, Deserialize)]
+pub struct GraphifyQueryParams {
+    pub node_type: Option<String>,
+    pub edge_type: Option<String>,
+    pub q: Option<String>,
+    pub start: Option<String>,
+    pub depth: Option<usize>,
+}
+
+/// `GET /graphify/filter?node_type=...&edge_type=...` -- filtre le graphe
+/// courant par type de noeud et/ou d'arc. Trouvaille de l'audit "pub fn
+/// jamais appelees" (2026-10-01): `filter_nodes_by_type`/
+/// `filter_edges_by_type` existaient depuis la creation de ce module mais
+/// n'avaient aucune route -- seuls `/export` et `/stats` l'etaient.
+async fn graphify_filter(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
+    let chain_snapshot = { state.chain.lock().await.clone() };
+    let exporter = GraphifyExporter::new(chain_snapshot);
+    let payload = exporter.build_from_audit_trail();
+
+    let nodes = params.node_type.as_deref().map(|t| exporter.filter_nodes_by_type(&payload, t));
+    let edges = params.edge_type.as_deref().map(|t| exporter.filter_edges_by_type(&payload, t));
+
+    Json(json!({
+        "nodes": nodes.unwrap_or_default(),
+        "edges": edges.unwrap_or_default(),
+    }))
+}
+
+/// `GET /graphify/search?q=...` -- recherche texte sur label/id/metadata
+/// des noeuds. Meme trouvaille: `search_nodes` jamais appelee avant ce
+/// commit.
+async fn graphify_search(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
+    let chain_snapshot = { state.chain.lock().await.clone() };
+    let exporter = GraphifyExporter::new(chain_snapshot);
+    let payload = exporter.build_from_audit_trail();
+
+    match params.q {
+        Some(q) => Json(json!({ "nodes": exporter.search_nodes(&payload, &q) })).into_response(),
+        None => (StatusCode::BAD_REQUEST, Json(json!({ "error": "missing query param 'q'" }))).into_response(),
+    }
+}
+
+/// `GET /graphify/traverse?start=<node_id>&depth=<n>` -- sous-graphe
+/// atteignable depuis `start` en au plus `depth` sauts (BFS). Meme
+/// trouvaille: `traverse_graph` jamais appelee avant ce commit.
+async fn graphify_traverse(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
+    let chain_snapshot = { state.chain.lock().await.clone() };
+    let exporter = GraphifyExporter::new(chain_snapshot);
+    let payload = exporter.build_from_audit_trail();
+
+    match params.start {
+        Some(start) => {
+            let depth = params.depth.unwrap_or(2);
+            Json(exporter.traverse_graph(&payload, &start, depth)).into_response()
+        }
+        None => (StatusCode::BAD_REQUEST, Json(json!({ "error": "missing query param 'start'" }))).into_response(),
+    }
+}
+
+/// `GET /wai/dictionaries` -- liste les versions de dictionnaire WAI
+/// enregistrees (resume: hash, timestamp, nb symboles, taille). Trouvaille
+/// de l'audit "pub fn jamais appelees" (2026-10-01): `wai_registry` est
+/// construit au demarrage et une version y est enregistree
+/// (`server/mod.rs`), mais rien ne le relisait jamais avant ce commit --
+/// `list_versions`/`get_latest`/`stats` existaient sans aucune route.
+async fn wai_list_dictionaries(State(state): State<ApiState>) -> impl IntoResponse {
+    Json(state.wai_registry.list_versions())
+}
+
+/// `GET /wai/dictionaries/latest` -- derniere version enregistree
+/// (dictionnaire complet, pas seulement le resume).
+async fn wai_latest_dictionary(State(state): State<ApiState>) -> impl IntoResponse {
+    match state.wai_registry.get_latest() {
+        Some(dict) => Json(dict.clone()).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "no dictionary version registered" }))).into_response(),
+    }
+}
+
+/// `GET /wai/stats` -- statistiques du registre (nb versions, nb symboles
+/// total, taille totale).
+async fn wai_stats(State(state): State<ApiState>) -> impl IntoResponse {
+    Json(state.wai_registry.stats())
+}
+
+/// `GET /calibration/agents` -- snapshot de toutes les calibrations EWMA
+/// par agent (monitoring/debug). Trouvaille de l'audit "pub fn jamais
+/// appelees" (2026-10-01): `sigma_calibrator` est deja partage sur
+/// `ServerContext` et alimente en continu par le pipeline de validation,
+/// mais `get_all_calibrations`/`get_calibration` n'avaient aucune route
+/// pour inspecter l'etat accumule depuis l'exterieur.
+async fn calibration_all(State(state): State<ApiState>) -> impl IntoResponse {
+    let calibrator = state.sigma_calibrator.lock().await;
+    Json(calibrator.get_all_calibrations())
+}
+
+/// `GET /calibration/agents/:agent_name` -- calibration EWMA d'un agent
+/// specifique.
+async fn calibration_for_agent(State(state): State<ApiState>, Path(agent_name): Path<String>) -> impl IntoResponse {
+    let calibrator = state.sigma_calibrator.lock().await;
+    match calibrator.get_calibration(&agent_name) {
+        Some(c) => Json(c.clone()).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": format!("no calibration recorded for agent '{}'", agent_name) }))).into_response(),
+    }
+}
+
 /// Root endpoint
 async fn root() -> impl IntoResponse {
     let response = json!({
@@ -322,7 +441,15 @@ async fn root() -> impl IntoResponse {
             "stats": "GET /audit/stats",
             "graphify_export": "GET /graphify/export",
             "graphify_stats": "GET /graphify/stats",
-            "deontic_executions": "GET /deontic/executions"
+            "graphify_filter": "GET /graphify/filter?node_type=...&edge_type=...",
+            "graphify_search": "GET /graphify/search?q=...",
+            "graphify_traverse": "GET /graphify/traverse?start=...&depth=...",
+            "deontic_executions": "GET /deontic/executions",
+            "wai_dictionaries": "GET /wai/dictionaries",
+            "wai_latest_dictionary": "GET /wai/dictionaries/latest",
+            "wai_stats": "GET /wai/stats",
+            "calibration_all": "GET /calibration/agents",
+            "calibration_for_agent": "GET /calibration/agents/{agent_name}"
         }
     });
 
@@ -330,8 +457,14 @@ async fn root() -> impl IntoResponse {
 }
 
 /// Create and return the REST API router
-pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::HashChain>>, deontic: Arc<DeonticOrchestrator>) -> Router {
-    let state = ApiState { adn_store, chain, deontic };
+pub fn create_router(
+    adn_store: Arc<Mutex<AdnStore>>,
+    chain: Arc<Mutex<audit::HashChain>>,
+    deontic: Arc<DeonticOrchestrator>,
+    wai_registry: Arc<DictionaryRegistry>,
+    sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
+) -> Router {
+    let state = ApiState { adn_store, chain, deontic, wai_registry, sigma_calibrator };
 
     Router::new()
         .route("/", get(root))
@@ -341,7 +474,15 @@ pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::Ha
         .route("/audit/stats", get(get_stats))
         .route("/graphify/export", get(graphify_export))
         .route("/graphify/stats", get(graphify_stats))
+        .route("/graphify/filter", get(graphify_filter))
+        .route("/graphify/search", get(graphify_search))
+        .route("/graphify/traverse", get(graphify_traverse))
         .route("/deontic/executions", get(deontic_executions))
+        .route("/wai/dictionaries", get(wai_list_dictionaries))
+        .route("/wai/dictionaries/latest", get(wai_latest_dictionary))
+        .route("/wai/stats", get(wai_stats))
+        .route("/calibration/agents", get(calibration_all))
+        .route("/calibration/agents/:agent_name", get(calibration_for_agent))
         .with_state(state)
 }
 
@@ -350,10 +491,12 @@ pub async fn start_rest_api(
     adn_store: Arc<Mutex<AdnStore>>,
     chain: Arc<Mutex<audit::HashChain>>,
     deontic: Arc<DeonticOrchestrator>,
+    wai_registry: Arc<DictionaryRegistry>,
+    sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
     host: &str,
     port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let router = create_router(adn_store, chain, deontic);
+    let router = create_router(adn_store, chain, deontic, wai_registry, sigma_calibrator);
     let addr_str = format!("{}:{}", host, port);
     let addr: std::net::SocketAddr = addr_str.parse()?;
 

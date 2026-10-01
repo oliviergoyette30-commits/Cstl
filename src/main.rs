@@ -55,6 +55,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let adn_store_for_rest = server.adn_store.clone();
     let chain_for_rest = server.chain.clone();
     let deontic_for_rest = server.deontic.clone();
+    let wai_registry_for_rest = server.wai_registry.clone();
+    let sigma_calibrator_for_rest = server.sigma_calibrator.clone();
 
     eprintln!("🌐 Starting REST API server on port 8000...");
     eprintln!("   GET /health → health check");
@@ -63,13 +65,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("   GET /audit/stats → audit statistics");
     eprintln!("   GET /graphify/export → graph export (nodes/edges JSON)");
     eprintln!("   GET /graphify/stats → graph node/edge counts");
-    eprintln!("   GET /deontic/executions → deontic rule execution log\n");
+    eprintln!("   GET /graphify/filter → filter nodes/edges by type");
+    eprintln!("   GET /graphify/search → search nodes by text");
+    eprintln!("   GET /graphify/traverse → BFS subgraph from a node");
+    eprintln!("   GET /deontic/executions → deontic rule execution log");
+    eprintln!("   GET /wai/dictionaries → WAI dictionary versions");
+    eprintln!("   GET /wai/dictionaries/latest → latest WAI dictionary");
+    eprintln!("   GET /wai/stats → WAI dictionary registry stats");
+    eprintln!("   GET /calibration/agents → all EWMA calibrations");
+    eprintln!("   GET /calibration/agents/{{agent_name}} → one agent's calibration\n");
 
     let rest_api_handle = tokio::spawn(async move {
         if let Err(e) = cstl_parser::server::rest_api::start_rest_api(
             adn_store_for_rest,
             chain_for_rest,
             deontic_for_rest,
+            wai_registry_for_rest,
+            sigma_calibrator_for_rest,
             "127.0.0.1",
             8000,
         ).await {

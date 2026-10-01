@@ -749,6 +749,70 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     }
                                 }
                             }
+                            // Trouvaille de l'audit "pub fn jamais appelees" (2026-10-01):
+                            // peer_review_async et escalate_to_council_async existaient
+                            // depuis longtemps (vraie logique DB: save_peer_review,
+                            // save_arbitrage_case) mais n'avaient AUCUNE action wire pour
+                            // les declencher -- consequence concrete verifiee: avant ce
+                            // fix, `final_ruling.peer_reviews` dans "finalize_case"
+                            // ci-dessous etait TOUJOURS vide, puisque rien n'appelait
+                            // jamais save_peer_review(). Cable ici sur le meme patron que
+                            // submit_ruling: le reviewer doit deja etre un arbitre
+                            // enregistre (cle publique connue), signature Ed25519 brute
+                            // sur "{reviewing_arbiter_id}||{ruling_id}" (voir
+                            // peer_review_async), verifiee via verify_ruling_signatures
+                            // -- meme mecanisme anti-usurpation que les rulings eux-memes.
+                            "peer_review" => {
+                                let ruling_id = payload.intent.get("ruling_id").cloned().unwrap_or_default();
+                                let reviewing_arbiter_id = payload.intent.get("arbiter_id").cloned().unwrap_or_default();
+                                let review_signature = payload.meta.get("signature").cloned().unwrap_or_default();
+
+                                if ruling_id.is_empty() || reviewing_arbiter_id.is_empty() {
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=missing_ruling_or_arbiter]\n---END---\n".to_string()
+                                } else {
+                                    match arbitrage::peer_review_async(&ctx.adn_store, &ruling_id, reviewing_arbiter_id.clone(), review_signature).await {
+                                        Ok(_) => {
+                                            info!("[Handler] Peer review added by {} to ruling {}", reviewing_arbiter_id, ruling_id);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=peer_review_added, ruling_id={}, reviewer={}]\n---END---\n",
+                                                ruling_id, reviewing_arbiter_id
+                                            )
+                                        }
+                                        Err(e) => {
+                                            error!("[Handler] Failed to add peer review: {}", e);
+                                            format!(
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=peer_review_failed, detail={}]\n---END---\n",
+                                                e.to_string().replace("\"", "\\\"")
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            "escalate_to_council" => {
+                                match case_id {
+                                    Some(cid) => {
+                                        match arbitrage::escalate_to_council_async(&ctx.adn_store, &cid).await {
+                                            Ok(_) => {
+                                                info!("[Handler] Case {} escalated to council", cid);
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=case_escalated, case_id={}]\n---END---\n",
+                                                    cid
+                                                )
+                                            }
+                                            Err(e) => {
+                                                error!("[Handler] Failed to escalate case {}: {}", cid, e);
+                                                format!(
+                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=escalation_failed, detail={}]\n---END---\n",
+                                                    e.to_string().replace("\"", "\\\"")
+                                                )
+                                            }
+                                        }
+                                    }
+                                    None => {
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=missing_case_id]\n---END---\n".to_string()
+                                    }
+                                }
+                            }
                             "finalize_case" => {
                                 match case_id {
                                     Some(cid) => {
