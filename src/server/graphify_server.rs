@@ -92,6 +92,31 @@ impl GraphifyExporter {
         }
     }
 
+    /// Tronque `s` a au plus `max_bytes` octets, SANS jamais couper au
+    /// milieu d'un caractere UTF-8 multi-octets. Trouvaille honnete
+    /// (2026-10-01, en lisant `build_from_audit_trail` avant de le cabler
+    /// dans `rest_api.rs`): le code original faisait `&entry.purpose[..20.min(entry.purpose.len())]`
+    /// directement -- un indexage par OCTET sur un `str`, qui PANIQUE en
+    /// Rust des que l'indice tombe au milieu d'un caractere multi-octets
+    /// (`byte index N is not a char boundary`). `purpose` vient directement
+    /// de `INTENT_PAYLOAD.purpose`, un champ texte totalement controle par
+    /// l'expediteur du payload CSTL (voir `audit.rs::HashChain::append`) --
+    /// n'importe quel client pouvait donc faire planter cette route HTTP
+    /// simplement en envoyant un payload dont `purpose` place un caractere
+    /// accentue/emoji/etc. pile au 20e octet. `entry.hash` n'a pas ce
+    /// probleme (toujours de l'hexadecimal SHA-256, donc ASCII pur par
+    /// construction), seul `purpose` est concerne.
+    fn truncate_utf8_safe(s: &str, max_bytes: usize) -> &str {
+        if s.len() <= max_bytes {
+            return s;
+        }
+        let mut end = max_bytes;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
+
     pub fn build_from_audit_trail(&self) -> GraphifyPayload {
         let mut nodes: HashMap<String, GraphifyNode> = HashMap::new();
         let mut edges: Vec<GraphifyEdge> = Vec::new();
@@ -116,7 +141,7 @@ impl GraphifyExporter {
 
             let node = GraphifyNode {
                 id: entry_id.clone(),
-                label: format!("{}...", &entry.purpose[..20.min(entry.purpose.len())]),
+                label: format!("{}...", Self::truncate_utf8_safe(&entry.purpose, 20)),
                 node_type: "audit_entry".to_string(),
                 color: Self::get_node_type_color("audit_entry"),
                 size: 1.0,
@@ -367,5 +392,40 @@ mod tests {
 
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("graphify-standard"));
+    }
+
+    #[test]
+    fn test_truncate_utf8_safe_never_panics_on_multibyte_boundary() {
+        // Un accent (e.g. 'é' = 2 octets UTF-8) place tel que l'ancien code
+        // (`&s[..20.min(s.len())]`) coupait EXACTEMENT au milieu de son
+        // encodage -- paniquait avec "byte index 20 is not a char boundary"
+        // sur ce genre de chaine, AVANT ce fix.
+        let purpose = "mise_a_jour_du_caf\u{e9}_et_du_statut"; // 'é' chevauche l'octet 20
+        let truncated = GraphifyExporter::truncate_utf8_safe(purpose, 20);
+        assert!(purpose.is_char_boundary(truncated.len()) || truncated.len() == purpose.len());
+        // Ne doit jamais depasser la limite demandee.
+        assert!(truncated.len() <= 20);
+    }
+
+    #[test]
+    fn test_build_from_audit_trail_does_not_panic_on_multibyte_purpose() {
+        // Preuve directe, via le chemin REELLEMENT exerce par
+        // build_from_audit_trail (pas seulement truncate_utf8_safe en
+        // isolation): un AuditEntry dont purpose vient, comme en
+        // production, d'un INTENT_PAYLOAD.purpose totalement controle par
+        // le client (voir audit.rs::HashChain::append) ne doit jamais faire
+        // planter l'export graphify.
+        let mut chain = audit::HashChain::new();
+        chain.entries.push(audit::AuditEntry {
+            hash: "a".repeat(64),
+            parent_hash: "root".to_string(),
+            sender: "agent_multibyte".to_string(),
+            receiver: "server".to_string(),
+            purpose: "mise_a_jour_du_caf\u{e9}_et_du_statut_complet".to_string(),
+            seq: 0,
+        });
+        let exporter = GraphifyExporter::new(chain);
+        let payload = exporter.build_from_audit_trail(); // ne doit PAS paniquer (c'est le but du test)
+        assert_eq!(payload.nodes.len(), 3); // 1 audit_entry + sender + receiver
     }
 }

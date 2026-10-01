@@ -41,6 +41,14 @@ pub struct AuditEntry {
     pub seq: u64,
 }
 
+/// `Clone` ajoute le 2026-10-01 pour `server/rest_api.rs::graphify_export`
+/// (Couche 6, voir `graphify_server.rs`): le handler HTTP a besoin d'un
+/// SNAPSHOT de la chaine au moment de la requete (`GraphifyExporter::new`
+/// prend une valeur possedee, pas une reference) sans retenir le verrou
+/// `Arc<Mutex<HashChain>>` pendant toute la construction du graphe --
+/// cloner `entries` (un `Vec<AuditEntry>`, deja `Clone`) est bon marche
+/// comparé à retenir le lock.
+#[derive(Clone)]
 pub struct HashChain {
     pub entries: Vec<AuditEntry>,
 }

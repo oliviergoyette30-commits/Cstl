@@ -14,6 +14,8 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::adn_store::AdnStore;
+use crate::server::audit;
+use crate::server::graphify_server::GraphifyExporter;
 
 /// Audit entry for API response
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -111,9 +113,19 @@ pub struct StatsResponse {
 }
 
 /// API state containing shared ADN store
+///
+/// `chain` ajoute le 2026-10-01: route `/graphify/*` (Couche 6, voir
+/// `graphify_server.rs`), trouve dead-code par le meme grep que CASTLE/
+/// quorum/tls -- a la difference de tls.rs, c'etait un module REEL
+/// (construit un graphe de noeuds/arcs depuis la chaine d'audit, deja
+/// teste en isolation) simplement jamais appele: `pub mod graphify_server;`
+/// seul, aucune route REST, malgre le README qui affirmait depuis un
+/// certain temps "GET /graphify/export" "v5.1 COMPLETE" -- affirmation
+/// fausse avant ce commit, corrigee ici (voir README).
 #[derive(Clone)]
 pub struct ApiState {
     pub adn_store: Arc<Mutex<AdnStore>>,
+    pub chain: Arc<Mutex<audit::HashChain>>,
 }
 
 /// Health check endpoint
@@ -247,6 +259,31 @@ async fn get_stats(State(state): State<ApiState>) -> impl IntoResponse {
     }
 }
 
+/// `GET /graphify/export` -- construit et retourne le graphe complet
+/// (noeuds agents + entrees d'audit, arcs sends_to/responds_to) depuis la
+/// chaine d'audit COURANTE. Clone la chaine (`HashChain: Clone`, voir
+/// `audit.rs`) pendant la duree du verrou plutot que de retenir le lock
+/// pendant toute la construction du `GraphifyPayload` -- cette derniere
+/// n'a besoin d'aucun etat partage apres le snapshot.
+async fn graphify_export(State(state): State<ApiState>) -> impl IntoResponse {
+    let chain_snapshot = { state.chain.lock().await.clone() };
+    let exporter = GraphifyExporter::new(chain_snapshot);
+    let payload = exporter.build_from_audit_trail();
+    Json(payload)
+}
+
+/// `GET /graphify/stats` -- complement naturel de `/graphify/export`
+/// (comptes de noeuds/arcs par type) -- construit le meme graphe puis
+/// delegue a `GraphifyExporter::get_graph_stats`, deja teste en isolation
+/// mais jusqu'ici jamais appele depuis une route reelle.
+async fn graphify_stats(State(state): State<ApiState>) -> impl IntoResponse {
+    let chain_snapshot = { state.chain.lock().await.clone() };
+    let exporter = GraphifyExporter::new(chain_snapshot);
+    let payload = exporter.build_from_audit_trail();
+    let stats = exporter.get_graph_stats(&payload);
+    Json(stats)
+}
+
 /// Root endpoint
 async fn root() -> impl IntoResponse {
     let response = json!({
@@ -256,7 +293,9 @@ async fn root() -> impl IntoResponse {
             "health": "GET /health",
             "audit_trail": "GET /audit/{case_id}",
             "query_audit": "POST /audit/query",
-            "stats": "GET /audit/stats"
+            "stats": "GET /audit/stats",
+            "graphify_export": "GET /graphify/export",
+            "graphify_stats": "GET /graphify/stats"
         }
     });
 
@@ -264,8 +303,8 @@ async fn root() -> impl IntoResponse {
 }
 
 /// Create and return the REST API router
-pub fn create_router(adn_store: Arc<Mutex<AdnStore>>) -> Router {
-    let state = ApiState { adn_store };
+pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::HashChain>>) -> Router {
+    let state = ApiState { adn_store, chain };
 
     Router::new()
         .route("/", get(root))
@@ -273,16 +312,19 @@ pub fn create_router(adn_store: Arc<Mutex<AdnStore>>) -> Router {
         .route("/audit/:case_id", get(get_audit_trail))
         .route("/audit/query", post(query_audit_trail))
         .route("/audit/stats", get(get_stats))
+        .route("/graphify/export", get(graphify_export))
+        .route("/graphify/stats", get(graphify_stats))
         .with_state(state)
 }
 
 /// Start REST API server on specified port
 pub async fn start_rest_api(
     adn_store: Arc<Mutex<AdnStore>>,
+    chain: Arc<Mutex<audit::HashChain>>,
     host: &str,
     port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let router = create_router(adn_store);
+    let router = create_router(adn_store, chain);
     let addr_str = format!("{}:{}", host, port);
     let addr: std::net::SocketAddr = addr_str.parse()?;
 

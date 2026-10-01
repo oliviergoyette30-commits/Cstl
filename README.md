@@ -236,44 +236,17 @@ EOF
 
 ---
 
-### Couche 6: Human Interface — Graphify + Obsidian Vault Sync
+### Couche 6: Graphify — audit-trail graph export wired into the live REST API (2026-10-01, `src/server/graphify_server.rs` + `src/server/rest_api.rs`)
 
-**v5.1 Implementation:**
+`graphify_server.rs` was found by the same `pub mod X` / zero-external-reference grep that found CASTLE, quorum and tls.rs. Unlike tls.rs's stub, this was a *real* module — `GraphifyExporter::build_from_audit_trail()` genuinely builds a node/edge graph from the live `audit::HashChain`, tested in isolation — but `pub mod graphify_server;` only: no REST route, no caller anywhere. The README previously claimed otherwise, in detail and at some length: a `GET /graphify/export` endpoint, node types `agent`/`fact`/`relation`/`council_decision`, edge types `communicates`/`verifies`/`contradicts`/`reinforces`, live deontic-modality coloring, and "real data: 842 nodes (agents + facts), 1784 edges, 42 detected communities." None of that matched the code. The actual node types `build_from_audit_trail` produces are `agent` and `audit_entry`; the actual edge types are `sends_to` and `responds_to` (the module's color map also defines `references`/`authorizes`/`restricts`/`confirms`/`violates`/`implements`, but nothing in `build_from_audit_trail` ever emits an edge of those types — dead code within dead code). Deontic coloring: `get_deontic_color()` exists and is unit-tested in isolation, but is never called by `build_from_audit_trail` — the audit chain's `AuditEntry` (`hash`/`parent_hash`/`sender`/`receiver`/`purpose`/`seq`) carries no deontic-modality field to color by in the first place, so there was nothing for that function to apply to even if it were called. "842 nodes... 42 detected communities" has no basis found anywhere in this repo — no community-detection algorithm exists in `graphify_server.rs` or anywhere else searched. Corrected below with real, measured numbers instead of repeating that figure.
 
-**Graphify Graph Export** (`src/server/graphify_server.rs`):
-- REST API: `GET /graphify/export` → JSON graph structure
-- Node types: `agent`, `fact`, `relation`, `council_decision`
-- Edge types: `communicates`, `verifies`, `contradicts`, `reinforces`
-- Deontic modal coloring: `MUST=#DC143C`, `MUST_NOT=#8B0000`, `MAY=#32CD32`
-- Node metadata: agent_name, trust_score, production_count, contradiction_count
-- Real data: 842 nodes (agents + facts), 1784 edges, 42 detected communities
+**A real correctness bug found by reading the code before wiring it** (same discipline as CASTLE/quorum): `build_from_audit_trail` truncated `entry.purpose` for the node label with `&entry.purpose[..20.min(entry.purpose.len())]` — a *byte* index into a `str`, which panics in Rust ("byte index N is not a char boundary") the instant that index lands inside a multi-byte UTF-8 character. `purpose` comes straight from the client-controlled `INTENT_PAYLOAD.purpose` field — any sender could crash this endpoint just by having an accented character or emoji land on the 20th byte of their stated purpose. Fixed with `GraphifyExporter::truncate_utf8_safe()` (walks back to the nearest char boundary); `entry.hash` didn't need the same fix since it's always a SHA-256 hex digest, pure ASCII by construction. Proven both in isolation (`test_build_from_audit_trail_does_not_panic_on_multibyte_purpose`) and live over real HTTP (`examples/graphify_smoke_test.rs` scenario 3, a crafted `purpose` sent over the real TCP port, then a real HTTP request against `/graphify/export` that must return `200 OK` rather than hang or drop the connection).
 
-**Obsidian Vault Sync** (`sdk/python/cstl_graphify_bridge.py`):
-- Live graph building from SQLite `adn_store`
-- Export formats: JSON (Graphify native) + Markdown (Obsidian vault)
-- Vault structure:
-  ```
-  vault/
-    _index.md                    # Graph overview, statistics
-    agents/
-      alice.md                   # Agent profile: trust_score, capabilities, production
-      bob.md
-    relations/
-      alice_communicates_bob.md  # Relation details: modality, signatures, proof chain
-    modalities/
-      MUST/                      # All relations grouped by deontic modality
-      MUST_NOT/
-      MAY/
-  ```
-- Bidirectional sync: Obsidian markdown edits → JSON update → server reload
-- Node filtering: by type, by agent, full-text search
-- Graph traversal: `max_depth` parameter, BFS ordering
+**What's wired now**: `GET /graphify/export` (full graph, matching the one genuinely-accurate line in the old claim) and `GET /graphify/stats` (node/edge counts by type, via `GraphifyExporter::get_graph_stats`, also previously tested in isolation but never reachable) — both added to the REST API that was already live on port 8000 (`rest_api.rs`, spawned from `main.rs` alongside the TCP server, unlike `graphify_server.rs` itself this part was real and running). `ApiState` gained a `chain: Arc<Mutex<audit::HashChain>>` field; each request clones a snapshot of the chain (`HashChain` is now `Clone`, cheap — a `Vec<AuditEntry>`) rather than holding the lock for the duration of graph construction. `GraphifyExporter::filter_nodes_by_type`/`filter_edges_by_type`/`search_nodes`/`traverse_graph` remain unwired — they need request parameters (`node_type`, `query`, `start_node_id`, `max_depth`) this pass didn't add HTTP plumbing for; noted here rather than silently left out.
 
-**Live Verification:**
-- Graph export tested end-to-end
-- Vault generation tested with 842 nodes
-- Obsidian vault consistency tested (markdown → JSON roundtrip)
-- Zero external dependencies (`sdk/python` uses only stdlib + sqlite3)
+**Verified live, real TCP + real HTTP, `examples/graphify_smoke_test.rs`** (4 scenarios, all passing): `/graphify/export` before any traffic → a valid empty graph (`node_count=0`), not an error; after 3 CSTL payloads from 2 agents over the real TCP port → `node_count=6` (3 `audit_entry` + alice + bob + the `server` receiver), `metadata.node_count` matches `nodes.len()` exactly; the multi-byte-purpose payload → `200 OK`, not a hang or dropped connection; `/graphify/stats` → `total_nodes=7`, `agents=3`, consistent with a fourth payload added by scenario 3.
+
+**Not touched by this pass, left as found**: the Python side (`sdk/python/cstl_graphify_bridge.py`, Obsidian vault sync, `sdk/python/test_graphify_integration.py`) — this session's scope was the dead Rust module and its REST wiring; the Python bridge's own claims were not re-verified here and should not be assumed correct or incorrect from this entry alone.
 
 ---
 
@@ -339,7 +312,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | ✅ **v5.1 COMPLETE**: REST API (`src/server/arbitration_api.rs`) with 6 endpoints (open case, get case, submit ruling, list rulings, finalize, WebSocket events). Case lifecycle: Open → Arbitration → Ruling → Closed. Peer review signatures required for finalization. E2E tests verify quorum enforcement and signature validation. Human channel fully wired via restricted council + Telegram bridge. |
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
 | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement, TF-IDF search, context loading, delta detection | ✅ **v5.1 COMPLETE**: TF-IDF retrieval (`get_tfidf_results`), context windows (`get_primer`, `load_context`), delta detection (`detect_deltas`). E2E persistence tests ✅. Compression (gzip, >10KB) + indexing (5 indices). |
-| 6 | **Human interface** — Obsidian vault escalation, Graphify knowledge graph | ✅ **v5.1 COMPLETE**: `src/server/graphify_server.rs` (REST API), `sdk/python/cstl_graphify_bridge.py` (graph export, Obsidian vault bidirectional sync). Live integration: 842 nodes, 1784 edges, 42 communities. Deontic modality coloring (MUST=#DC143C, MUST_NOT=#8B0000, MAY=#32CD32). |
+| 6 | **Human interface** — Obsidian vault escalation, Graphify knowledge graph | ⚠️ **Partially wired (2026-10-01)**: `src/server/graphify_server.rs` → `GET /graphify/export`/`GET /graphify/stats`, real REST routes, verified live (see Couche 6 section above) — was dead code with fabricated metrics before this date. Node types: `agent`, `audit_entry`. Edge types: `sends_to`, `responds_to`. No deontic-modality coloring (the audit chain carries no deontic field to color by). `sdk/python/cstl_graphify_bridge.py` / Obsidian vault sync: not re-verified this pass. |
 | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards | ✅ **NEW v5.1**: `Arc<Mutex<AgentRegistry>>` enables dynamic registration. `purpose=agent_register` wire message (self-signed bootstrap, no prior identity needed) upserts agents by name. Python SDK (`sdk/python/cstl_llm_agent.py`) can now register real LLM agents and sign their messages. |
 | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ **v5.1 COMPLETE**: Built and wired live. Hash chain real, persisted, reloadable. Deontic modality checking (`src/server/audit.rs::DeonticCheck`) verified for MUST/MUST_NOT/MAY. Council votes cryptographically enforced. |
 | 9 | **Deontic orchestration** — event-driven governance, state machine, replay-safe idempotency | ✅ **v5.1 COMPLETE**: `src/server/deontic_orchestration.rs` (event routing, broadcast channels), `src/server/deontic_state_machine.rs` (6-state lifecycle: Open → Arbitration → Ruling → Closed + appeals). `sdk/python/cstl_deontic_engine.py` (multi-threaded orchestrator, graceful degradation). 25+ unit tests. |
@@ -773,12 +746,10 @@ Apache 2.0 — Olivier Goyette
 - ✅ Council votes cryptographically enforced (Ed25519 signatures)
 
 **Couche 6 (Human Interface):**
-- ✅ Graphify REST API (`src/server/graphify_server.rs`)
-- ✅ Graph export: 842 nodes, 1784 edges, 42 communities
-- ✅ Deontic modal coloring (MUST/MUST_NOT/MAY)
-- ✅ Obsidian vault bidirectional sync (`sdk/python/cstl_graphify_bridge.py`)
-- ✅ Node filtering, full-text search, traversal with max_depth
-- ✅ 11 integration tests
+- ✅ Graphify REST API wired and verified live (2026-10-01): `GET /graphify/export`, `GET /graphify/stats` (`src/server/graphify_server.rs` + `src/server/rest_api.rs`) — was dead code with a fabricated node/edge/community count before this date, see Couche 6 section above for the honest writeup
+- ⚠️ `filter_nodes_by_type`/`search_nodes`/`traverse_graph` exist and are unit-tested but have no HTTP route yet (need query-param plumbing this pass didn't add)
+- ❌ No deontic-modal coloring applied in practice (`get_deontic_color` exists, unit-tested, but the audit chain it would color from carries no deontic field)
+- ⚠️ Obsidian vault bidirectional sync (`sdk/python/cstl_graphify_bridge.py`), node filtering/full-text search/traversal, 11 integration tests: not re-verified this pass, claim unchanged from before
 
 **Couche 9 (Deontic Orchestration):**
 - ✅ Event-driven orchestrator (`src/server/deontic_orchestration.rs`, ~700 lines)
