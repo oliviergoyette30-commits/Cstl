@@ -1,6 +1,7 @@
 /// CSTL Payload Parser
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
+use base64::Engine as _;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CstlPayload {
@@ -137,6 +138,51 @@ fn record_error_signal_request(payload: &mut CstlPayload, map: HashMap<String, S
     }
 }
 
+/// Decode un bloc `COMPRESSED_PAYLOAD [data=<base64>]` (wire format
+/// compresse, branche 2026-10-01) et etend `defines`/`relations`/
+/// `uncertainty` avec le triple decompresse. Deliberement en base64 a
+/// l'interieur de la grammaire texte existante plutot qu'en binaire brut
+/// sur le fil: des octets arbitraires pourraient contenir par hasard la
+/// sequence `---END---` qui delimite un message (voir `find_message_end`
+/// dans `handler.rs`), ce qui tronquerait silencieusement un message
+/// legitime -- le base64 ne peut structurellement pas produire cette
+/// collision (alphabet restreint a [A-Za-z0-9+/=]).
+///
+/// Un client peut melanger blocs compresses et blocs texte classiques
+/// (RELATION/DEFINE/UNCERTAINTY) dans le meme payload -- ce bloc ETEND les
+/// vecteurs, ne les remplace jamais. Erreur de decodage/decompression:
+/// avertissement dans `parse_warnings`, jamais un rejet dur du payload
+/// entier (meme politique R7 que RELATION/DEFINE malformes).
+fn record_compressed_payload(payload: &mut CstlPayload, map: HashMap<String, String>) {
+    let Some(data_b64) = map.get("data") else {
+        payload.parse_warnings.push(
+            "COMPRESSED_PAYLOAD: champ 'data' absent, bloc ignore".to_string()
+        );
+        return;
+    };
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(data_b64) {
+        Ok(b) => b,
+        Err(e) => {
+            payload.parse_warnings.push(format!(
+                "COMPRESSED_PAYLOAD: base64 invalide, bloc ignore -- {}", e
+            ));
+            return;
+        }
+    };
+    match crate::compression::master::master_decompress(&bytes) {
+        Ok((defines, relations, uncertainty)) => {
+            payload.defines.extend(defines);
+            payload.relations.extend(relations);
+            payload.uncertainty.extend(uncertainty);
+        }
+        Err(e) => {
+            payload.parse_warnings.push(format!(
+                "COMPRESSED_PAYLOAD: decompression Master Compresseur echouee, bloc ignore -- {}", e
+            ));
+        }
+    }
+}
+
 pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     let mut payload = CstlPayload {
         version: String::new(),
@@ -248,13 +294,16 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         // EXECUTION_TRACE n'apparait volontairement PAS ici -- jamais parse
         // en entree, purement genere par le serveur (voir handler.rs).
         let is_error_signal = line.starts_with("ERROR_SIGNAL [");
+        // COMPRESSED_PAYLOAD (wire format compresse, 2026-10-01) -- meme
+        // forme bracket generique, voir `record_compressed_payload`.
+        let is_compressed_payload = line.starts_with("COMPRESSED_PAYLOAD [");
         // Contrairement a META/INTENT_PAYLOAD/RELATION, le mot-cle DEFINE
         // n'est pas immediatement suivi de "[" -- la grammaire reelle (spec
         // §9) est `DEFINE <identifier> AS <entity_type> [attrs]`, avec deux
         // tokens (identifiant + type) entre le mot-cle et le crochet.
         let is_define = line.starts_with("DEFINE ");
 
-        if is_meta || is_intent || is_relation || is_define || is_guardrail || is_scope_lock || is_error_signal {
+        if is_meta || is_intent || is_relation || is_define || is_guardrail || is_scope_lock || is_error_signal || is_compressed_payload {
             // Save previous block if exists
             if !current_block.is_empty() && !block_name.is_empty() {
                 match block_name.as_str() {
@@ -296,13 +345,19 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                             "ERROR_SIGNAL mal forme ignore (bloc suivant demarre avant fermeture) -- {}", e
                         )),
                     },
+                    "COMPRESSED_PAYLOAD" => match parse_block(&current_block) {
+                        Ok(map) => record_compressed_payload(&mut payload, map),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "COMPRESSED_PAYLOAD mal forme ignore (bloc suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
                     _ => {}
                 }
             }
 
             // Start new block
             in_block = true;
-            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else if is_guardrail { "GUARDRAIL_REPORT" } else if is_scope_lock { "SCOPE_LOCK" } else if is_error_signal { "ERROR_SIGNAL" } else { "DEFINE" }.to_string();
+            block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else if is_guardrail { "GUARDRAIL_REPORT" } else if is_scope_lock { "SCOPE_LOCK" } else if is_error_signal { "ERROR_SIGNAL" } else if is_compressed_payload { "COMPRESSED_PAYLOAD" } else { "DEFINE" }.to_string();
             current_block = line.to_string();
 
             // Check if block ends on same line. Cas particulier DEFINE : le
@@ -351,6 +406,12 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                         Ok(req) => record_error_signal_request(&mut payload, req),
                         Err(e) => payload.parse_warnings.push(format!(
                             "ERROR_SIGNAL mal forme ignore -- {}", e
+                        )),
+                    },
+                    "COMPRESSED_PAYLOAD" => match parse_block(&current_block) {
+                        Ok(map) => record_compressed_payload(&mut payload, map),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "COMPRESSED_PAYLOAD mal forme ignore -- {}", e
                         )),
                     },
                     _ => {}
@@ -409,6 +470,12 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                     Ok(req) => record_error_signal_request(&mut payload, req),
                     Err(e) => payload.parse_warnings.push(format!(
                         "ERROR_SIGNAL mal forme ignore -- {}", e
+                    )),
+                },
+                "COMPRESSED_PAYLOAD" => match parse_block(&current_block) {
+                    Ok(map) => record_compressed_payload(&mut payload, map),
+                    Err(e) => payload.parse_warnings.push(format!(
+                        "COMPRESSED_PAYLOAD mal forme ignore -- {}", e
                     )),
                 },
                 _ => {}
@@ -472,6 +539,14 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
                 Ok(req) => record_error_signal_request(&mut payload, req),
                 Err(e) => payload.parse_warnings.push(format!(
                     "ERROR_SIGNAL mal forme ignore (jamais ferme avant ---END---) -- {}", e
+                )),
+            }
+        }
+        "COMPRESSED_PAYLOAD" if !current_block.is_empty() => {
+            match parse_block(&current_block) {
+                Ok(map) => record_compressed_payload(&mut payload, map),
+                Err(e) => payload.parse_warnings.push(format!(
+                    "COMPRESSED_PAYLOAD mal forme ignore (jamais ferme avant ---END---) -- {}", e
                 )),
             }
         }
@@ -817,6 +892,72 @@ INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
 
         let payload = parse_payload(payload_str).unwrap();
         assert_eq!(payload.meta.get("produced_by"), Some(&"Claude".to_string()));
+    }
+
+    #[test]
+    fn test_compressed_payload_block_roundtrips_defines_relations_uncertainty() {
+        use base64::Engine as _;
+        use std::collections::HashMap;
+
+        let mut d1 = HashMap::new();
+        d1.insert("name".to_string(), "agent_x".to_string());
+        d1.insert("entity_type".to_string(), "agent".to_string());
+        d1.insert("id".to_string(), "D-042".to_string());
+
+        let mut r1 = HashMap::new();
+        r1.insert("type".to_string(), "equals".to_string());
+        r1.insert("subject".to_string(), "x".to_string());
+        r1.insert("object".to_string(), "y".to_string());
+        r1.insert("id".to_string(), "R-007".to_string());
+
+        let mut u1 = HashMap::new();
+        u1.insert("identifier".to_string(), "U-001".to_string());
+        u1.insert("status".to_string(), "ESTIMATED".to_string());
+        u1.insert("sigma".to_string(), "0.9".to_string());
+
+        let defines = vec![d1];
+        let relations = vec![r1];
+        let uncertainty = vec![u1];
+
+        let compressed = crate::compression::master::master_compress(&defines, &relations, &uncertainty)
+            .expect("master_compress should succeed");
+        let data_b64 = base64::engine::general_purpose::STANDARD.encode(&compressed);
+
+        let payload_str = format!(
+            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=Agent_CLAUDE]\nINTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]\nCOMPRESSED_PAYLOAD [data={}]\n---END---",
+            data_b64
+        );
+
+        let payload = parse_payload(&payload_str).unwrap();
+        assert!(payload.parse_warnings.is_empty(), "warnings inattendus: {:?}", payload.parse_warnings);
+        assert_eq!(payload.defines, defines);
+        assert_eq!(payload.relations, relations);
+        assert_eq!(payload.uncertainty, uncertainty);
+    }
+
+    #[test]
+    fn test_compressed_payload_block_bad_base64_pushes_warning_not_panic() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+COMPRESSED_PAYLOAD [data=not_valid_base64!!!]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.defines.is_empty());
+        assert!(payload.parse_warnings.iter().any(|w| w.contains("COMPRESSED_PAYLOAD")));
+    }
+
+    #[test]
+    fn test_compressed_payload_block_missing_data_field_pushes_warning() {
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+COMPRESSED_PAYLOAD [foo=bar]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(payload.parse_warnings.iter().any(|w| w.contains("COMPRESSED_PAYLOAD") && w.contains("data")));
     }
 
     #[test]

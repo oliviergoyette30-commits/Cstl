@@ -84,6 +84,14 @@ version = "0.1"
 version = "2"
 features = ["rand_core"]
 
+[dependencies.base64]
+# Encodage du bloc COMPRESSED_PAYLOAD (wire format compresse, 2026-10-01) --
+# le payload binaire du Master Compresseur doit rester a l'interieur de la
+# grammaire texte existante (NOM [cle=valeur]), jamais en binaire brut sur
+# le fil (risque de collision avec le marqueur ---END---, voir commentaire
+# dans structural.rs/parser.rs).
+version = "0.22"
+
 [dependencies.hex]
 # Le hex hand-roule via `{:x}` (server/audit.rs) marche seulement sur le
 # GenericArray retourne par sha2 -- pas sur les octets bruts [u8;N] des

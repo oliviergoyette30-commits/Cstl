@@ -385,6 +385,23 @@ Both dictionary streams (`stable`, `text`) size-guard their mode choice: the pre
 
 ---
 
+## Wire-Protocol Compression — `COMPRESSED_PAYLOAD` Block (post-v5.1, `src/server/parser.rs`, 2026-10-01)
+
+Unlike the Master Compressor section above (storage-layer only), this extends the Master Compresseur onto the TCP wire itself. A sender can now include a `COMPRESSED_PAYLOAD [data=<base64>]` block alongside (or instead of) plain-text `DEFINE`/`RELATION`/`UNCERTAINTY` blocks; the server base64-decodes `data`, runs it through `master_decompress`, and merges the resulting `defines`/`relations`/`uncertainty` into the parsed payload before validation runs — a compressed define is indistinguishable from a plain-text one by the time the governance/validation pipeline sees it.
+
+**Why base64 inside the existing text grammar, not a raw binary envelope**: the TCP framing layer (`handler.rs::find_message_end`) finds message boundaries by scanning for the literal byte sequence `---END---`. Arbitrary compressed bytes could coincidentally contain that sequence and corrupt framing; base64's restricted alphabet (`[A-Za-z0-9+/=]`) cannot produce it. This design required zero changes to the TCP framing/buffering logic — all of it lives in `parser.rs`'s existing block-dispatch state machine (the same 4 dispatch sites every other block type — META, RELATION, DEFINE, etc. — already goes through).
+
+**Failure handling is deliberately non-fatal**: a missing `data` field or invalid base64 does not reject the message — it appends a `SEMANTIC_WARNING` (e.g. `COMPRESSED_PAYLOAD: base64 invalide; bloc ignore -- ...`) and the rest of the payload (plain-text blocks, if any) is still processed normally. Verified live against the real running server: a malformed `COMPRESSED_PAYLOAD [data=not_valid_base64!!!]` block produced exactly that warning and the message still completed the full pipeline (validation → consistency → governance → audit).
+
+**Verified live, real TCP, not just `cargo test`**: a `defines`/`relations`/`uncertainty` triple was compressed with the real `master_compress`, base64-encoded, sent as a `COMPRESSED_PAYLOAD` block over a real TCP connection to the real running server, and the server's response showed the decompressed `DEFINE`/`RELATION`/`UNCERTAINTY` content flowing correctly through semantic validation (it even correctly raised a `W608` semantic warning that the decompressed `DEFINE` wasn't referenced by the decompressed `RELATION`'s subject/object — proof the decompressed data reached the same validation code a plain-text payload would).
+
+**Scope limits, stated plainly**:
+- **Decode only, one direction.** The server can receive and decompress `COMPRESSED_PAYLOAD`; nothing in `sdk/python/cstl_client.py` can yet send one. A client wanting to use this has to hand-construct the block (base64 of `master_compress`'s output) itself today.
+- **Requests only, not responses.** Every server response in `handler.rs` is still built as plain-text `format!("#!CSTL...")` — recompressing response generation touches dozens of call sites and was kept out of this pass.
+- **Still scoped to `defines`/`relations`/`uncertainty`**, same as the underlying Master Compresseur — `meta`/`intent`/other block types are unaffected and still travel as plain text alongside a `COMPRESSED_PAYLOAD` block in the same message.
+
+---
+
 ## Security Improvements (v5.0.0 → v5.1)
 
 ### OWASP ASI03: Identity & Privilege Abuse
@@ -588,7 +605,7 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 - Multi-hop degradation measured to 12+ hops; real network characteristics beyond that uncharacterized
 - `emergence_proofs` table has real schema but zero production data (nobody has run a real tripartite session yet)
 - CASTLE compression mode: architecture only, no implementation
-- Master Compressor (`src/compression/master.rs`, 4-stream) is wired into `server/handler.rs`'s live pipeline as of 2026-09-29, but only at the storage layer (Couche 5) — it compresses `defines`/`relations`/`uncertainty` into `master_compressed` alongside the raw payload. It does **not** affect the TCP wire format: nothing sent or received by an agent uses this encoding, only what the server stores locally does
+- Master Compressor (`src/compression/master.rs`, 4-stream) is wired into `server/handler.rs`'s live pipeline as of 2026-09-29 at the storage layer (Couche 5) — compresses `defines`/`relations`/`uncertainty` into `master_compressed` alongside the raw payload. As of 2026-10-01 it is ALSO reachable on the wire via the `COMPRESSED_PAYLOAD` block (see dedicated section above), but that path is decode-only: the server can receive and decompress it, no SDK can yet send one, and server responses are still always plain text
 - Layer 3a KB verification: wall-clock timeout added (2026-09-05) to prevent hangs on slow networks, but real wikidata.org access still not tested from this sandbox (blocked by outbound proxy)
 - Domain simulator: one domain only (numeric/physical bounds), no live data source
 - `ERROR_SIGNAL`: deontic-violation half implemented; sigma-divergence half explicitly out of scope (architectural reasons documented in `CSTL_SPEC_v5_0.md` §16.6)
