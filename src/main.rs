@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This allows HTTP access to audit trail while TCP server handles CSTL payloads
     let adn_store_for_rest = server.adn_store.clone();
     let chain_for_rest = server.chain.clone();
+    let deontic_for_rest = server.deontic.clone();
 
     eprintln!("🌐 Starting REST API server on port 8000...");
     eprintln!("   GET /health → health check");
@@ -61,12 +62,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("   POST /audit/query → filter audit by date/entity/action");
     eprintln!("   GET /audit/stats → audit statistics");
     eprintln!("   GET /graphify/export → graph export (nodes/edges JSON)");
-    eprintln!("   GET /graphify/stats → graph node/edge counts\n");
+    eprintln!("   GET /graphify/stats → graph node/edge counts");
+    eprintln!("   GET /deontic/executions → deontic rule execution log\n");
 
     let rest_api_handle = tokio::spawn(async move {
         if let Err(e) = cstl_parser::server::rest_api::start_rest_api(
             adn_store_for_rest,
             chain_for_rest,
+            deontic_for_rest,
             "127.0.0.1",
             8000,
         ).await {

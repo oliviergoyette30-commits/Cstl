@@ -121,10 +121,12 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
         obsidian: server.obsidian,
         governance: server.governance,
         sigma_calibrator: server.sigma_calibrator,
+        deontic: server.deontic,
+        collect_response_corpus: false,
     });
 
     tokio::spawn(async move {
-        let _ = listener::accept_connections(tcp_listener, ctx).await;
+        let _ = listener::accept_connections(tcp_listener, ctx, None).await;
     });
 
     // -- 1) Reponse SOLO de Agent_CLAUDE : "option_C" (va diverger du trio) --

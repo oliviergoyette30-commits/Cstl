@@ -250,53 +250,105 @@ EOF
 
 ---
 
-### Couche 9: Deontic Orchestration — Event-Driven Governance
+### Couche 9: Deontic Orchestration — câblée en observation sur l'arbitrage réel (2026-10-01)
 
-**v5.1 Implementation:**
+Cette section affirmait depuis un certain temps "v5.1 COMPLETE" avec un
+fichier `src/server/arbitration_api.rs` ("REST API, 6 endpoints,
+WebSocket events") — ce fichier existe mais est **vide (0 octet)**, n'est
+déclaré module nulle part, et ne compile dans rien. Rien de ce qu'il
+décrivait n'a jamais existé. Les affirmations sur `deontic_state_machine.rs`
+(noms d'états, hash chain, replay-safety) étaient également fausses — voir
+plus bas. Ce qui suit remplace l'ancien texte par ce qui est réellement
+construit et vérifié live à cette date.
 
-**Event-Driven Architecture** (`src/server/deontic_orchestration.rs`):
-- `DeonticOrchestrator`: rule registry + event dispatcher
-- Broadcast channels for multi-agent coordination
-- Event matching: `sender=`, `severity>=`, wildcard routing
-- Rule conditions: lambda-like predicates over payload fields
-- Action execution: callback handlers per rule
+**`src/server/deontic_orchestration.rs` — réel, maintenant câblé (pas dead code)**:
+`DeonticOrchestrator` (registre de règles MUST/MUST_NOT/MAY + dispatcher
+d'événements `tokio::broadcast`) existait depuis des mois avec 15 tests
+d'intégration réels (`tests/deontic_orchestration_integration_test.rs`,
+tous passants) mais n'était construit nulle part — trouvé dead code par le
+même grep que CASTLE/quorum/tls/graphify. Câblé ici:
+- `ServerContext.deontic: Arc<DeonticOrchestrator>`, construit dans
+  `CstlNativeServer::try_with_data_path`, 3 règles MUST/MAY enregistrées
+  par défaut dans `start()`.
+- `handler.rs` émet un `DeonticEvent` réel à 3 points du pipeline déjà
+  réel: `AgentRegister` après une écriture réussie dans
+  `agent_registry` (`purpose=agent_register`), `ArbitrationRuling` après
+  une soumission de ruling réussie (`purpose=arbitrage_channel,
+  action=submit_ruling`, voir `arbitrage.rs`), `GovernanceBreach` quand
+  `GovernanceState.circuit_open` ou `.drift_flagged` (Couche 2).
+- `GET /deontic/executions` (REST, port 8000) expose le journal
+  d'exécutions + le nombre de règles, pour vérification externe.
 
-**Deontic State Machine** (`src/server/deontic_state_machine.rs`):
-- 6-state lifecycle for governance decisions:
-  1. **Open** — new decision, awaiting input
-  2. **Arbitration** — human review (council_decision sent)
-  3. **Ruling** — council voted, awaiting confirmation
-  4. **Closed** — final decision recorded
-  5. **Appeal** — decision appealed, back to Arbitration
-  6. **Stale** — decision aged out, archived
-- State transitions with event triggers
-- Immutable audit trail: each state change logged with hash chain
-- Replay-safe: idempotent event handlers, version-keyed conflict resolution
+**Limite honnête, prouvée plutôt qu'affirmée**: c'est une couche
+d'**observation/audit**, pas une garde préventive. `emit_event` est
+toujours appelé **après** que l'action sous-jacente a déjà été commise
+(écriture registre, persistance SQLite du ruling) — un payload n'est
+jamais bloqué par cette couche. Les handlers `execute_must_rule`/
+`execute_must_not_rule` dans `deontic_orchestration.rs` eux-mêmes ne font
+que logger (`eprintln!`); `MUST_NOT` ne rejette donc rien en pratique sur
+ce chemin de câblage (seuls les event types `agent_register`/
+`arbitration_ruling`/`governance_breach` ont une règle enregistrée, toutes
+`MUST`/`MAY` par défaut). Les anciennes affirmations "replay-safe:
+idempotent event handlers, version-keyed conflict resolution" étaient
+fausses — rien de tel n'existe dans le code, ni avant ni après ce commit.
 
-**Python Orchestrator** (`sdk/python/cstl_deontic_engine.py`):
-- Multi-threaded event processing
-- Graceful degradation: returns `None` if `anthropic` SDK absent
-- Deontic rule evaluation: MUST/MUST_NOT/MAY enforcement
-- Metrics: event latency (P50/P95), rejection counts, decision latency
-- Replay-safe idempotency using (sender, timestamp, decision_id) as conflict key
+**`src/server/deontic_state_machine.rs` — réel mais SUPERSEDED, volontairement non câblé**:
+543 lignes, 15 tests unitaires réels qui passent — mais ce module
+**duplique** `arbitrage.rs`, déjà en production (persisté SQLite, rulings
+Ed25519-signés et vérifiés, déjà câblé dans `handler.rs` via
+`purpose=arbitrage_channel`, bien avant ce commit). `DecisionLifecycle`/
+`DecisionStore` ne sont qu'en mémoire (`HashMap`, perdu au redémarrage),
+n'exigent aucune signature et n'écrivent aucune chaîne de hachage — malgré
+l'ancienne affirmation "immutable audit trail: each state change logged
+with hash chain". Les noms d'états affirmés ("Open → Arbitration → Ruling
+→ Closed + appeals", plus un état "Stale") ne correspondent même pas aux
+7 variantes réelles de `DecisionState` (`Open, UnderReview, Arbitration,
+Appealed, Ruled, Closed, Failed` — pas de `Stale`, "Ruling" n'existe pas,
+c'est `Ruled`). Décision utilisateur (2026-10-01, clarification demandée
+avant tout câblage, même discipline que pour `tls.rs`): câbler
+l'orchestrateur sur le système d'arbitrage déjà réel plutôt que de
+construire une deuxième notion de "décision" parallèle et incohérente.
+Le module reste donc en l'état — code réel, testé, mais délibérément
+jamais construit — voir le commentaire en tête de fichier.
 
-**Test Coverage:**
-- Rust: 15+ e2e tests (`tests/deontic_orchestration_integration_test.rs`)
-  - Event routing and broadcast verification
-  - State transition correctness
-  - Deontic rule enforcement (MUST/MUST_NOT/MAY)
-  - Multi-agent orchestration
-- Python: 43 tests (`sdk/python/test_deontic_engine.py`)
-  - Event routing with condition matching
-  - State machine transitions
-  - Conflict resolution and replay safety
-  - Rule execution and metrics
+**Python Orchestrator** (`sdk/python/cstl_deontic_engine.py`,
+`sdk/python/test_deontic_engine.py`): les deux fichiers existent
+(489 et 471 lignes). **Non ré-vérifiés dans cette passe** — ce commit
+porte sur le câblage Rust uniquement, même frontière que pour le pont
+Obsidian de Graphify (Couche 6).
 
-**Live Verification:**
-- Full end-to-end orchestration flow tested
-- Multi-agent event broadcast verified
-- State machine transitions validated
-- Deontic rule enforcement confirmed
+**Vérification live (2026-10-01)**, `examples/deontic_smoke_test.rs`, vrai
+TCP + vrai HTTP (reqwest):
+1. `/deontic/executions` avant tout trafic — 3 règles par défaut, 0
+   exécution.
+2. `purpose=agent_register` réel (vraie paire de clés Ed25519, vraie
+   signature) → `/deontic/executions` reflète une exécution réelle
+   (`Must`/`log_agent_registration`/`Success`).
+3. Un vrai cas d'arbitrage: arbitre enregistré (vraie clé), cas ouvert,
+   arbitre assigné, ruling **réellement signé** Ed25519 et vérifié par
+   `arbitrage::verify_ruling_signatures` → `/deontic/executions` reflète
+   une deuxième exécution (`Must`/`log_ruling_applied`/`Success`).
+
+**Bug trouvé et corrigé en marge de cette vérification** (`handler.rs`,
+`submit_ruling`): avant ce commit, `ruling_id` était **toujours** généré
+côté serveur (UUID aléatoire) après réception du message, mais
+`verify_ruling_signatures` vérifie la signature sur
+`ruling_id||decision||justification` — aucun client réel ne pouvait donc
+jamais produire une signature valide, puisqu'il ne connaît pas encore le
+`ruling_id` au moment de signer. Ce chemin n'avait jamais eu de smoke test
+live avant `deontic_smoke_test.rs` (aucun n'existait pour
+`purpose=arbitrage_channel`), donc jamais déclenché. Corrigé: le client
+choisit maintenant son propre `ruling_id` (même principe que `case_id`,
+déjà repris du serveur par le client dans les appels suivants); le
+serveur n'en génère un que si absent, pour ne rien casser côté
+compatibilité.
+
+**Non vérifié ici**: la règle `governance_breach` (MAY) est câblée
+(`handler.rs`, émise quand `GovernanceState.circuit_open` ou
+`.drift_flagged`) mais déclencher un vrai circuit breaker exige un
+historique d'incohérences construit sur plusieurs payloads — hors de la
+portée du smoke test ponctuel ci-dessus. Couverte par lecture de code et
+les tests existants de `governance.rs`, pas par du trafic live.
 
 ---
 
@@ -309,13 +361,13 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 | 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
 | 2 | **Governance / Resilience** — Ed25519 identity, signature verification, key rotation, circuit breaker, 2/3 quorum | ✅ **NEW v5.1**: `src/signing.rs` (check_signature, check_rotation_signature), `src/server/handler.rs` STEP 2a signature verification, all registered agents require valid signatures. Backward compatible: bootstrap agents (alice, bob) with `public_key=None` don't require signatures. |
 | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
-| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | ✅ **v5.1 COMPLETE**: REST API (`src/server/arbitration_api.rs`) with 6 endpoints (open case, get case, submit ruling, list rulings, finalize, WebSocket events). Case lifecycle: Open → Arbitration → Ruling → Closed. Peer review signatures required for finalization. E2E tests verify quorum enforcement and signature validation. Human channel fully wired via restricted council + Telegram bridge. |
+| 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | ✅ Real, wired live over TCP (`purpose=arbitrage_channel` in `handler.rs`, `src/server/arbitrage.rs`): open case, assign arbiters, submit ruling, finalize. **Corrected 2026-10-01**: the previously claimed `src/server/arbitration_api.rs` ("REST API, 6 endpoints, WebSocket events") is an empty (0-byte) file, declared nowhere, compiled into nothing — that claim was entirely fabricated. The real path is the TCP channel above; see the Couche 9 section for a live-verified example (open → assign → Ed25519-signed ruling). Case lifecycle: Open → InProgress → RulingSubmitted → Finalized/EscalatedToCouncil (`arbitrage::CaseStatus`, not the names previously claimed here). Peer review signatures required for finalization. Human channel fully wired via restricted council + Telegram bridge. |
 | 4 | **Calibration** — Laplace-smoothed scoring, per-agent/per-domain accuracy | ✅ Tested |
 | 5 | **Persistent memory / provenance** — SQLite store, hash entanglement, TF-IDF search, context loading, delta detection | ✅ **v5.1 COMPLETE**: TF-IDF retrieval (`get_tfidf_results`), context windows (`get_primer`, `load_context`), delta detection (`detect_deltas`). E2E persistence tests ✅. Compression (gzip, >10KB) + indexing (5 indices). |
 | 6 | **Human interface** — Obsidian vault escalation, Graphify knowledge graph | ⚠️ **Partially wired (2026-10-01)**: `src/server/graphify_server.rs` → `GET /graphify/export`/`GET /graphify/stats`, real REST routes, verified live (see Couche 6 section above) — was dead code with fabricated metrics before this date. Node types: `agent`, `audit_entry`. Edge types: `sends_to`, `responds_to`. No deontic-modality coloring (the audit chain carries no deontic field to color by). `sdk/python/cstl_graphify_bridge.py` / Obsidian vault sync: not re-verified this pass. |
 | 7 | **Agent discovery & routing** — CSTL-native registry, agent cards | ✅ **NEW v5.1**: `Arc<Mutex<AgentRegistry>>` enables dynamic registration. `purpose=agent_register` wire message (self-signed bootstrap, no prior identity needed) upserts agents by name. Python SDK (`sdk/python/cstl_llm_agent.py`) can now register real LLM agents and sign their messages. |
 | 8 | **Provenance audit** — hash-chained audit trail, deontic modality enforcement | ✅ **v5.1 COMPLETE**: Built and wired live. Hash chain real, persisted, reloadable. Deontic modality checking (`src/server/audit.rs::DeonticCheck`) verified for MUST/MUST_NOT/MAY. Council votes cryptographically enforced. |
-| 9 | **Deontic orchestration** — event-driven governance, state machine, replay-safe idempotency | ✅ **v5.1 COMPLETE**: `src/server/deontic_orchestration.rs` (event routing, broadcast channels), `src/server/deontic_state_machine.rs` (6-state lifecycle: Open → Arbitration → Ruling → Closed + appeals). `sdk/python/cstl_deontic_engine.py` (multi-threaded orchestrator, graceful degradation). 25+ unit tests. |
+| 9 | **Deontic orchestration** — event-driven observation/audit layer over arbitration & governance | ⚠️ **Partially wired (2026-10-01)**: `src/server/deontic_orchestration.rs` (real event router, was dead code, now constructed + emits on 3 real events: agent_register, arbitration_ruling, governance_breach) → `GET /deontic/executions`, verified live (see Couche 9 section). Observational only — emitted *after* the underlying action, does not gate anything; MUST_NOT handlers only log. `src/server/deontic_state_machine.rs` deliberately left unwired (duplicates `arbitrage.rs`, see Couche 9 section) — no "appeals" lifecycle live. `sdk/python/cstl_deontic_engine.py`: not re-verified this pass. No real replay-safety/idempotency exists anywhere in this layer (previously claimed, false). |
 | 10 | **WAI v5.1 Compression Layer** — bit-packing, varints, zigzag, delta, optional TANS/session-state | ✅ **v5.1 COMPLETE**: `src/compression/wai_core.rs` (350+ lines, core transformations), `src/compression/fse_encoder_rs.rs` (340+ lines, optional TANS + dynamic session state). Wire format: magic 0x57 0x41 0x49, SHA-256 dict sync, symbol count varint. **Performance:** 63.81% compression ratio (exceeds 70% target), 100% roundtrip accuracy. **Tests:** 408/408 passing (21 WAI-specific, 387 existing CSTL, zero regressions). **Spec:** `docs/WAI_SPECIFICATION_v5_1_COMPLETE.md`, verification report `docs/WAI_V5_1_VERIFICATION_COMPLETE_2026-09-14.md`. |
 
 **Key v5.1 Changes to Layer 2:**
@@ -699,8 +751,8 @@ Apache 2.0 — Olivier Goyette
 **New Rust Modules:**
 - `src/signing.rs` (127 lines) — Ed25519 verification (Features A/B-2)
 - `src/server/graphify_server.rs` (~300 lines) — REST API + graph export (Couche 6)
-- `src/server/deontic_orchestration.rs` (~700 lines) — Event-driven orchestrator (Couche 9)
-- `src/server/deontic_state_machine.rs` (~520 lines) — 6-state decision lifecycle (Couche 9)
+- `src/server/deontic_orchestration.rs` (~700 lines) — Event-driven orchestrator (Couche 9); wired live 2026-10-01, see Couche 9 section
+- `src/server/deontic_state_machine.rs` (~543 lines) — decision lifecycle, superseded/not wired, see Couche 9 section
 
 **Modified Rust Files:**
 - `src/agent_discovery.rs` — `AgentCard::public_key` field added (Features B-1)
@@ -751,15 +803,14 @@ Apache 2.0 — Olivier Goyette
 - ❌ No deontic-modal coloring applied in practice (`get_deontic_color` exists, unit-tested, but the audit chain it would color from carries no deontic field)
 - ⚠️ Obsidian vault bidirectional sync (`sdk/python/cstl_graphify_bridge.py`), node filtering/full-text search/traversal, 11 integration tests: not re-verified this pass, claim unchanged from before
 
-**Couche 9 (Deontic Orchestration):**
-- ✅ Event-driven orchestrator (`src/server/deontic_orchestration.rs`, ~700 lines)
-- ✅ 6-state decision machine (`src/server/deontic_state_machine.rs`, ~520 lines)
-- ✅ Broadcast channels for multi-agent coordination
-- ✅ MUST/MUST_NOT/MAY deontic rule enforcement
-- ✅ Immutable audit trail with hash-chain
-- ✅ Replay-safe idempotency with version-keyed conflict resolution
-- ✅ Python orchestrator (`sdk/python/cstl_deontic_engine.py`, multi-threaded)
-- ✅ 25+ unit tests + 15 e2e tests
+**Couche 9 (Deontic Orchestration) — corrected 2026-10-01:**
+- ✅ Event-driven orchestrator wired live (`src/server/deontic_orchestration.rs`, ~700 lines) — was dead code before this date, see Couche 9 section above for the honest writeup
+- ✅ `GET /deontic/executions` (REST), emits on 3 real events: `agent_register`, `arbitration_ruling` (`arbitrage.rs`), `governance_breach` (Couche 2) — verified live via `examples/deontic_smoke_test.rs`
+- ⚠️ Observational only: `emit_event` runs *after* the underlying action; MUST/MUST_NOT handlers only `eprintln!`, nothing is actually blocked or enforced
+- ❌ `src/server/deontic_state_machine.rs` (~543 lines): real, unit-tested, but deliberately NOT wired — duplicates `arbitrage.rs` already in production (in-memory only, no signatures, no hash chain). No 6-state/"appeals"/"Stale" lifecycle live anywhere; its actual 7 states don't match what was previously claimed here
+- ❌ No immutable hash-chained audit trail and no replay-safe idempotency exist in this layer — both previously claimed, both fabricated, neither was ever in the code
+- ⚠️ Python orchestrator (`sdk/python/cstl_deontic_engine.py`, `sdk/python/test_deontic_engine.py`): exist, not re-verified this pass
+- `tests/deontic_orchestration_integration_test.rs`: 15 real e2e tests, passing
 
 **Security Patch:**
 - ✅ CVE-2025-53605: Protobuf 3.7.2 deployed (stack overflow fix, CVSS 6.6)

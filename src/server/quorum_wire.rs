@@ -342,6 +342,12 @@ mod tests {
             obsidian: None,
             governance: Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
             sigma_calibrator: Arc::new(Mutex::new(crate::calibration::SigmaCalibrator::new(0.2))),
+            deontic: Arc::new(crate::server::deontic_orchestration::DeonticOrchestrator::new(
+                256,
+                Arc::new(Mutex::new(AdnStore::open(":memory:").unwrap())),
+                Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
+                Arc::new(RestrictedCouncil::single_member("olivier")),
+            )),
             collect_response_corpus: false,
         })
     }

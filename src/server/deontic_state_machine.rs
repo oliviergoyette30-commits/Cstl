@@ -1,3 +1,30 @@
+//! SUPERSEDED (2026-10-01) -- NE PAS CABLER TEL QUEL.
+//!
+//! Trouve dead code par le meme grep que CASTLE/quorum/tls/graphify/
+//! deontic_orchestration (zero reference externe, `pub mod
+//! deontic_state_machine;` seul). A la difference de ces derniers, ce
+//! module ne manquait pas d'etre cable -- il DUPLIQUE un systeme deja reel
+//! et en production: `arbitrage.rs` (persiste en SQLite, rulings
+//! Ed25519-signes et verifies, deja cable live dans `handler.rs` via
+//! `purpose=arbitrage_channel`). `DecisionLifecycle`/`DecisionStore` ici
+//! ne sont qu'en memoire (`HashMap`, perdu au redemarrage), n'exigent
+//! aucune signature, et n'ecrivent aucune chaine de hachage -- malgre ce
+//! que le README affirmait ("immutable audit trail: each state change
+//! logged with hash chain", "v5.1 COMPLETE", noms d'etats "Open →
+//! Arbitration → Ruling → Closed + appeals" / "Stale" qui ne correspondent
+//! meme pas aux 7 variantes reelles de `DecisionState` ci-dessous).
+//!
+//! Decision utilisateur (2026-10-01, question posee avant tout cablage,
+//! meme discipline que pour tls.rs): cabler plutot `deontic_orchestration.rs`
+//! (le vrai moteur d'evenements, lui aussi dead code jusqu'a ce commit) EN
+//! OBSERVATION sur le pipeline `arbitrage.rs` deja reel (voir
+//! `ServerContext.deontic`, `handler.rs` STEP 3b-arbitrage/B-2/
+//! STEP 3c-governance) -- pas construire une DEUXIEME notion de "decision"
+//! parallele et incoherente avec la premiere. Ce module reste donc tel
+//! quel: code reel, 15 tests unitaires qui passent, mais jamais construit
+//! nulle part, deliberement. Une migration future vers une vraie
+//! persistance + signature + fusion avec `arbitrage::CaseRecord` reste
+//! possible mais n'a pas ete demandee ni faite ici.
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

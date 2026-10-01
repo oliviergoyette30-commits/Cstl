@@ -83,12 +83,13 @@ async fn main() {
     let server = make_test_server(tcp_port);
     let adn_store_for_rest = server.adn_store.clone();
     let chain_for_rest = server.chain.clone();
+    let deontic_for_rest = server.deontic.clone();
 
     tokio::spawn(async move {
         server.start().await.expect("TCP server start");
     });
     tokio::spawn(async move {
-        cstl_parser::server::rest_api::start_rest_api(adn_store_for_rest, chain_for_rest, "127.0.0.1", rest_port)
+        cstl_parser::server::rest_api::start_rest_api(adn_store_for_rest, chain_for_rest, deontic_for_rest, "127.0.0.1", rest_port)
             .await
             .expect("REST API start");
     });

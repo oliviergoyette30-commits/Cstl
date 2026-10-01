@@ -16,6 +16,7 @@ use tokio::sync::Mutex;
 use crate::adn_store::AdnStore;
 use crate::server::audit;
 use crate::server::graphify_server::GraphifyExporter;
+use crate::server::deontic_orchestration::DeonticOrchestrator;
 
 /// Audit entry for API response
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -122,10 +123,20 @@ pub struct StatsResponse {
 /// seul, aucune route REST, malgre le README qui affirmait depuis un
 /// certain temps "GET /graphify/export" "v5.1 COMPLETE" -- affirmation
 /// fausse avant ce commit, corrigee ici (voir README).
+/// `deontic` ajoute le 2026-10-01: route `/deontic/*` (Couche 9, voir
+/// `deontic_orchestration.rs`) -- meme histoire que `chain`/graphify
+/// ci-dessus: module reel (15 tests d'integration passent), trouve dead
+/// code, jamais construit nulle part avant ce commit, malgre le README qui
+/// affirmait "v5.1 COMPLETE". Expose ici en lecture seule (executions +
+/// nombre de regles) pour verification live -- `DeonticOrchestrator` est
+/// deja `Clone`-free (methodes `&self` async derriere des `Mutex`
+/// internes), donc un seul `Arc` partage suffit, pas de `Mutex` externe
+/// necessaire ici contrairement a `chain`/`adn_store`.
 #[derive(Clone)]
 pub struct ApiState {
     pub adn_store: Arc<Mutex<AdnStore>>,
     pub chain: Arc<Mutex<audit::HashChain>>,
+    pub deontic: Arc<DeonticOrchestrator>,
 }
 
 /// Health check endpoint
@@ -284,6 +295,21 @@ async fn graphify_stats(State(state): State<ApiState>) -> impl IntoResponse {
     Json(stats)
 }
 
+/// `GET /deontic/executions` -- historique des executions de regles
+/// deontiques (Couche 9) accumulees depuis le demarrage du serveur (en
+/// memoire seulement, voir `DeonticOrchestrator` -- aucune persistance
+/// SQLite pour l'instant, limite honnete a documenter comme pour le reste
+/// de cette couche).
+async fn deontic_executions(State(state): State<ApiState>) -> impl IntoResponse {
+    let executions = state.deontic.get_executions().await;
+    let rules_count = state.deontic.rules_count().await;
+    Json(json!({
+        "rules_count": rules_count,
+        "execution_count": executions.len(),
+        "executions": executions,
+    }))
+}
+
 /// Root endpoint
 async fn root() -> impl IntoResponse {
     let response = json!({
@@ -295,7 +321,8 @@ async fn root() -> impl IntoResponse {
             "query_audit": "POST /audit/query",
             "stats": "GET /audit/stats",
             "graphify_export": "GET /graphify/export",
-            "graphify_stats": "GET /graphify/stats"
+            "graphify_stats": "GET /graphify/stats",
+            "deontic_executions": "GET /deontic/executions"
         }
     });
 
@@ -303,8 +330,8 @@ async fn root() -> impl IntoResponse {
 }
 
 /// Create and return the REST API router
-pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::HashChain>>) -> Router {
-    let state = ApiState { adn_store, chain };
+pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::HashChain>>, deontic: Arc<DeonticOrchestrator>) -> Router {
+    let state = ApiState { adn_store, chain, deontic };
 
     Router::new()
         .route("/", get(root))
@@ -314,6 +341,7 @@ pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::Ha
         .route("/audit/stats", get(get_stats))
         .route("/graphify/export", get(graphify_export))
         .route("/graphify/stats", get(graphify_stats))
+        .route("/deontic/executions", get(deontic_executions))
         .with_state(state)
 }
 
@@ -321,10 +349,11 @@ pub fn create_router(adn_store: Arc<Mutex<AdnStore>>, chain: Arc<Mutex<audit::Ha
 pub async fn start_rest_api(
     adn_store: Arc<Mutex<AdnStore>>,
     chain: Arc<Mutex<audit::HashChain>>,
+    deontic: Arc<DeonticOrchestrator>,
     host: &str,
     port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let router = create_router(adn_store, chain);
+    let router = create_router(adn_store, chain, deontic);
     let addr_str = format!("{}:{}", host, port);
     let addr: std::net::SocketAddr = addr_str.parse()?;
 

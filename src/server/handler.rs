@@ -21,6 +21,7 @@ use super::parser;
 use super::validator;
 use super::ServerContext;
 use super::arbitrage;
+use super::deontic_orchestration::DeonticEvent;
 use super::response_compression::maybe_compress_response;
 use super::castle::CastleParser;
 use super::castle_wire::maybe_castle_compress_response;
@@ -688,12 +689,30 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
 
                                 match case_id {
                                     Some(cid) if !arbiter_id.is_empty() => {
-                                        let ruling_id = format!("ruling_{}", uuid::Uuid::new_v4().to_string());
+                                        // Trouvaille du smoke test live deontic_smoke_test.rs
+                                        // (2026-10-01): avant ce fix, ruling_id etait TOUJOURS
+                                        // genere cote serveur (uuid aleatoire) APRES reception du
+                                        // message -- mais `verify_ruling_signatures` verifie la
+                                        // signature sur `ruling_id||decision||justification`.
+                                        // Aucun client reel ne pouvait donc jamais produire une
+                                        // signature valide: il ne connait pas encore le ruling_id
+                                        // au moment de signer. Ce chemin etait verifiable par
+                                        // lecture de code seulement -- aucun smoke test live
+                                        // n'existait pour `submit_ruling`, donc jamais declenche
+                                        // avant maintenant. Fix: le client choisit son propre
+                                        // ruling_id (meme principe que `case_id`, deja choisi
+                                        // cote serveur a l'ouverture puis simplement repris par
+                                        // le client dans les appels suivants -- ici c'est le
+                                        // client qui le choisit des le depart puisque c'est LUI
+                                        // qui doit le signer en premier); le serveur en genere un
+                                        // par defaut seulement si absent, pour ne rien casser.
+                                        let ruling_id = payload.intent.get("ruling_id").cloned()
+                                            .unwrap_or_else(|| format!("ruling_{}", uuid::Uuid::new_v4().to_string()));
                                         let ruling = arbitrage::ArbitrationRuling {
-                                            ruling_id,
+                                            ruling_id: ruling_id.clone(),
                                             case_id: cid.clone(),
-                                            arbiter_id,
-                                            decision,
+                                            arbiter_id: arbiter_id.clone(),
+                                            decision: decision.clone(),
                                             justification,
                                             signature,
                                             ruled_at: chrono::Utc::now(),
@@ -702,6 +721,16 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         match arbitrage::submit_ruling_async(&ctx.adn_store, ruling).await {
                                             Ok(_) => {
                                                 info!("[Handler] Ruling submitted on case {}", cid);
+                                                // Couche 9 (2026-10-01): notifie l'orchestrateur
+                                                // deontique APRES la persistance reelle du ruling --
+                                                // couche d'observation/audit, pas une garde.
+                                                let _ = ctx.deontic.emit_event(DeonticEvent::ArbitrationRuling {
+                                                    ruling_id,
+                                                    case_id: cid.clone(),
+                                                    arbiter_id,
+                                                    decision,
+                                                    timestamp: chrono::Utc::now(),
+                                                }).await;
                                                 format!(
                                                     "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=ruling_submitted, case_id={}]\n---END---\n",
                                                     cid
@@ -829,6 +858,16 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         } else {
                                             info!("[Handler] agent_register: '{}' registered/updated (trust_score={})", name, trust_score);
                                         }
+                                        // Couche 9 (2026-10-01): notifie l'orchestrateur deontique
+                                        // APRES l'ecriture reelle dans le registre -- couche
+                                        // d'observation/audit, pas une garde (voir le commentaire
+                                        // sur `ServerContext.deontic`).
+                                        let _ = ctx.deontic.emit_event(DeonticEvent::AgentRegister {
+                                            agent_id: name.clone(),
+                                            agent_name: name.clone(),
+                                            public_key: public_key.clone().unwrap_or_default(),
+                                            timestamp: chrono::Utc::now(),
+                                        }).await;
                                         format!(
                                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=agent_register_ack, name={}]\n---END---\n",
                                             name
@@ -1312,6 +1351,24 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         if let Err(e) = ctx.adn_store.lock().await.save_governance_alert(&governance_sender, gov_ts) {
                             error!("[Handler] Governance alert persist failed: {}", e);
                         }
+                    }
+                    // Couche 9 (2026-10-01): notifie l'orchestrateur deontique quand la
+                    // Couche 2 signale quelque chose de reel (circuit ouvert ou drift
+                    // signale) -- severite grossiere (8 si circuit ouvert, sinon 5),
+                    // aucun signal fin de gravite n'existe dans `GovernanceState`. Comme
+                    // ailleurs, c'est de l'observation/audit: la Couche 2 elle-meme NE
+                    // REJETTE JAMAIS le payload (voir le commentaire plus haut), et cet
+                    // evenement ne change pas ce comportement.
+                    if gov_state.circuit_open || gov_state.drift_flagged {
+                        let severity: u8 = if gov_state.circuit_open { 8 } else { 5 };
+                        let breach_type = if gov_state.circuit_open { "circuit_breaker_open" } else { "drift_flagged" };
+                        let _ = ctx.deontic.emit_event(DeonticEvent::GovernanceBreach {
+                            breach_id: uuid::Uuid::new_v4().to_string(),
+                            agent_id: governance_sender.clone(),
+                            breach_type: breach_type.to_string(),
+                            severity,
+                            timestamp: chrono::Utc::now(),
+                        }).await;
                     }
                     info!(
                         "[Handler] Governance: sender={} circuit={} breaker_trips={} drift_ratio={:.2} drift_flagged={}",

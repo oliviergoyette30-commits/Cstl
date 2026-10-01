@@ -57,6 +57,22 @@ pub struct ServerContext {
     /// pour standardiser sigma entre les backends LLM (Claude/Gemini/Hermes).
     /// Alpha = 0.2 pour adaptation rapide (~50 message effective window).
     pub sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
+    /// Couche 9 (deontic orchestration, 2026-10-01) -- moteur d'evenements +
+    /// regles MUST/MUST_NOT/MAY (voir `deontic_orchestration.rs`). Trouve
+    /// dead code par le meme grep que CASTLE/quorum/tls/graphify: module
+    /// reel (15 tests d'integration passent, `tests/
+    /// deontic_orchestration_integration_test.rs`) mais jamais construit ni
+    /// appele nulle part avant ce commit, malgre le README qui affirmait
+    /// "v5.1 COMPLETE". Cable ici en couche D'OBSERVATION/AUDIT sur le
+    /// pipeline d'arbitrage deja reel (`arbitrage.rs`) et de gouvernance
+    /// (`governance.rs`) -- PAS en couche de blocage: `emit_event` est
+    /// appele APRES que l'action sous-jacente (enregistrement d'agent,
+    /// ruling d'arbitrage) a deja ete commise, et `execute_must_rule`/
+    /// `execute_must_not_rule` dans `deontic_orchestration.rs` ne font que
+    /// logger (`eprintln!`) -- ils ne rejettent/bloquent rien reellement.
+    /// Honnete: c'est un journal de regles deontiques appliquees apres
+    /// coup, pas une garde preventive. Voir README pour le detail.
+    pub deontic: Arc<deontic_orchestration::DeonticOrchestrator>,
     /// Corpus de collecte des reponses plain-text (2026-10-01, voir
     /// `adn_store::record_response_corpus_entry`) -- opt-in explicite via
     /// la variable d'environnement CSTL_COLLECT_RESPONSE_CORPUS, lue UNE
@@ -111,6 +127,10 @@ pub struct CstlNativeServer {
     /// pour standardiser sigma entre les backends LLM (Claude/Gemini/Hermes).
     /// Alpha = 0.2 pour adaptation rapide (~50 message effective window).
     pub sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
+    /// Couche 9 -- voir le champ identique sur `ServerContext` ci-dessus
+    /// pour le detail; `start()` clone cet `Arc` dans le `ServerContext`
+    /// comme pour tous les autres sous-systemes partages.
+    pub deontic: Arc<deontic_orchestration::DeonticOrchestrator>,
     /// Couche 10 (WAI) -- Registre de dictionnaires pour compression reseau
     /// statique. Le dictionnaire v5.0.0 est charge au demarrage et partage
     /// par tous les agents sur le meme serveur.
@@ -214,31 +234,45 @@ impl CstlNativeServer {
             .map_err(|e| format!("impossible de sauvegarder le dictionnaire WAI v5.0.0: {e}"))?;
 
         let adn_store_arc = Arc::new(Mutex::new(adn_store));
+        // Portee reduite v1, decision explicite de l'utilisateur: un seul membre
+        // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
+        // decrit dans le README.
+        // Config production (2026-09-04): CSTL_COUNCIL_MEMBERS (noms
+        // separes par des virgules) permet un vrai conseil multi-membres;
+        // absent -> single_member("Olivier"), comportement identique a
+        // avant ce changement. Voir restricted_council.rs::from_env()
+        // pour le detail, et handler.rs (bloc council_decision) pour la
+        // verification de signature qui rend ce quorum reellement
+        // infalsifiable (pas seulement arithmetiquement correct).
+        let restricted_council_arc = Arc::new(RestrictedCouncil::from_env());
+        let governance_arc = Arc::new(Mutex::new(governance));
+        // Couche 9 (2026-10-01) -- construit ici (pas dans `start()`) pour
+        // que meme un appelant qui ne lance jamais `start()` (tests,
+        // smoke-tests qui construisent `ServerContext` a la main) ait un
+        // orchestrateur fonctionnel; les regles par defaut, elles, sont
+        // enregistrees dans `start()` (operation async, voir plus bas).
+        let deontic_arc = Arc::new(deontic_orchestration::DeonticOrchestrator::new(
+            256,
+            adn_store_arc.clone(),
+            governance_arc.clone(),
+            restricted_council_arc.clone(),
+        ));
         Ok(CstlNativeServer {
             port,
             agent_registry: Arc::new(RwLock::new(AgentRegistry::new())),
             chain: Arc::new(Mutex::new(chain)),
             kb_verifier: Arc::new(KbVerifier::new()),
             adn_store: adn_store_arc,
-            // Portee reduite v1, decision explicite de l'utilisateur: un seul membre
-            // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
-            // decrit dans le README.
-            // Config production (2026-09-04): CSTL_COUNCIL_MEMBERS (noms
-            // separes par des virgules) permet un vrai conseil multi-membres;
-            // absent -> single_member("Olivier"), comportement identique a
-            // avant ce changement. Voir restricted_council.rs::from_env()
-            // pour le detail, et handler.rs (bloc council_decision) pour la
-            // verification de signature qui rend ce quorum reellement
-            // infalsifiable (pas seulement arithmetiquement correct).
-            restricted_council: Arc::new(RestrictedCouncil::from_env()),
+            restricted_council: restricted_council_arc,
             // None si TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents de l'environnement -
             // degradation propre, le serveur marche pareil sans notification.
             telegram: TelegramNotifier::from_env().map(Arc::new),
             // None si OBSIDIAN_VAULT_PATH absent de l'environnement - degradation
             // propre, le serveur marche pareil sans escalade Obsidian.
             obsidian: ObsidianEscalation::from_env().map(Arc::new),
-            governance: Arc::new(Mutex::new(governance)),
+            governance: governance_arc,
             sigma_calibrator: Arc::new(Mutex::new(sigma_calibrator)),
+            deontic: deontic_arc,
             wai_registry: Arc::new(wai_registry),
             tls: None,
         })
@@ -246,6 +280,25 @@ impl CstlNativeServer {
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[CSTL-Native Server] Starting on port {}", self.port);
+
+        // Couche 9 -- regles par defaut, enregistrees une seule fois au
+        // demarrage (register_rule est async, donc pas possible depuis le
+        // constructeur sync `try_with_data_path`). Toutes MUST/MAY -- aucune
+        // MUST_NOT par defaut: le but ici est d'avoir un journal observable
+        // des agent_register/rulings/breaches reels des la premiere requete,
+        // pas de bloquer quoi que ce soit (voir le commentaire sur le champ
+        // `deontic` de `ServerContext` pour la limite honnete de ce
+        // cablage: observation/audit, pas garde preventive).
+        self.deontic.register_rule(deontic_orchestration::DeonticRule::new_must(
+            "agent_register", "all_agents", "log_agent_registration",
+        )).await;
+        self.deontic.register_rule(deontic_orchestration::DeonticRule::new_must(
+            "arbitration_ruling", "all_rulings", "log_ruling_applied",
+        )).await;
+        self.deontic.register_rule(deontic_orchestration::DeonticRule::new_may(
+            "governance_breach", "all_breaches", "log_governance_breach",
+        )).await;
+        eprintln!("[CSTL-Native Server] Deontic orchestrator actif ({} regles par defaut)", self.deontic.rules_count().await);
 
         if let Some(telegram) = &self.telegram {
             eprintln!("[CSTL-Native Server] Telegram poller actif");
@@ -323,6 +376,7 @@ impl CstlNativeServer {
             obsidian: self.obsidian.clone(),
             governance: self.governance.clone(),
             sigma_calibrator: self.sigma_calibrator.clone(),
+            deontic: self.deontic.clone(),
             // Lu UNE fois ici (pas a chaque requete): la collecte est une
             // decision de deploiement, pas quelque chose qui doit changer
             // en cours de route sans redemarrer le serveur.
