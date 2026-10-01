@@ -847,6 +847,28 @@ pub async fn handle_connection(
                         continue;
                     }
 
+                    // Quorum (Layer 2, BFT multi-agent) -- 2026-10-01, voir
+                    // server/quorum_wire.rs pour la portee v1 assumee (membre =
+                    // agent enregistre avec public_key, pas de deuxieme
+                    // signature, pas de round/timeout automatique). Reutilise
+                    // sig_check deja calcule en STEP 2a, meme patron court-
+                    // circuit que council_decision/agent_register ci-dessus.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("quorum_propose") {
+                        let response = super::quorum_wire::handle_quorum_propose(&payload, &ctx, &sig_check).await;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+                    if payload.intent.get("purpose").map(String::as_str) == Some("quorum_vote") {
+                        let response = super::quorum_wire::handle_quorum_vote(&payload, &ctx, &sig_check).await;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+                    if payload.intent.get("purpose").map(String::as_str) == Some("quorum_circuit_breaker") {
+                        let response = super::quorum_wire::handle_quorum_circuit_breaker(&payload, &ctx, &sig_check).await;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
                     let entry = { ctx.chain.lock().await.append(&payload) };

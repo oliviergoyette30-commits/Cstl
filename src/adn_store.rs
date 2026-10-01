@@ -304,6 +304,32 @@ impl AdnStore {
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_response_corpus_created_at ON response_corpus(created_at);
+            CREATE TABLE IF NOT EXISTS quorum_proposals (
+                proposal_id TEXT PRIMARY KEY,
+                round INTEGER NOT NULL,
+                yea_count INTEGER NOT NULL,
+                nay_count INTEGER NOT NULL,
+                abstain_count INTEGER NOT NULL,
+                threshold INTEGER NOT NULL,
+                circuit_breaker_active INTEGER NOT NULL,
+                circuit_breaker_reason TEXT NOT NULL,
+                final_decision TEXT NOT NULL,
+                proposer TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS quorum_votes (
+                vote_id TEXT PRIMARY KEY,
+                proposal_id TEXT NOT NULL REFERENCES quorum_proposals(proposal_id),
+                voter_id TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                sequence_number INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(proposal_id, voter_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_quorum_votes_proposal ON quorum_votes(proposal_id);
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
             CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);
@@ -649,6 +675,31 @@ impl AdnStore {
                 response_text TEXT NOT NULL,
                 response_len INTEGER NOT NULL,
                 created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS quorum_proposals (
+                proposal_id TEXT PRIMARY KEY,
+                round INTEGER NOT NULL,
+                yea_count INTEGER NOT NULL,
+                nay_count INTEGER NOT NULL,
+                abstain_count INTEGER NOT NULL,
+                threshold INTEGER NOT NULL,
+                circuit_breaker_active INTEGER NOT NULL,
+                circuit_breaker_reason TEXT NOT NULL,
+                final_decision TEXT NOT NULL,
+                proposer TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS quorum_votes (
+                vote_id TEXT PRIMARY KEY,
+                proposal_id TEXT NOT NULL REFERENCES quorum_proposals(proposal_id),
+                voter_id TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                sequence_number INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(proposal_id, voter_id)
             );",
         )?;
         Ok(Self { conn })
@@ -863,6 +914,160 @@ impl AdnStore {
         )?;
         let rows = stmt.query_map(params![limit as i64], |row| row.get::<_, String>(0))?;
         rows.collect()
+    }
+
+    // ------------------------------------------------------------------
+    // Quorum (Layer 2, src/server/quorum.rs) -- cable dans le pipeline live
+    // le 2026-10-01 (voir src/server/quorum_wire.rs). Un `QuorumState`
+    // existait deja comme type de valeur pur (compute/check_consensus en
+    // memoire, teste isolement) mais n'avait AUCUNE persistance -- essentiel
+    // ici car, contrairement au dictionnaire CASTLE (scope a UNE connexion
+    // TCP), une proposition de quorum doit survivre entre plusieurs
+    // connexions DISTINCTES: chaque agent vote depuis sa propre connexion,
+    // potentiellement a des minutes d'intervalle.
+    // ------------------------------------------------------------------
+
+    /// Insere une nouvelle proposition. Erreur sur `proposal_id` deja
+    /// existant (PRIMARY KEY) -- l'appelant verifie `get_quorum_proposal`
+    /// avant plutot que de dependre du texte de l'erreur SQLite.
+    pub fn insert_quorum_proposal(
+        &self,
+        state: &crate::server::quorum::QuorumState,
+        proposer: &str,
+        description: &str,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO quorum_proposals
+                (proposal_id, round, yea_count, nay_count, abstain_count, threshold,
+                 circuit_breaker_active, circuit_breaker_reason, final_decision,
+                 proposer, description, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                state.proposal_id,
+                state.round,
+                state.yea_count as i64,
+                state.nay_count as i64,
+                state.abstain_count as i64,
+                state.threshold as i64,
+                state.circuit_breaker_active as i64,
+                state.circuit_breaker_reason,
+                state.final_decision,
+                proposer,
+                description,
+                state.created_at.timestamp(),
+                state.updated_at.timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Charge l'etat courant d'une proposition, ou `None` si inconnue.
+    pub fn get_quorum_proposal(
+        &self,
+        proposal_id: &str,
+    ) -> Result<Option<crate::server::quorum::QuorumState>, rusqlite::Error> {
+        use chrono::{DateTime, Utc};
+        self.conn
+            .query_row(
+                "SELECT proposal_id, round, yea_count, nay_count, abstain_count, threshold,
+                        circuit_breaker_active, circuit_breaker_reason, final_decision,
+                        created_at, updated_at
+                 FROM quorum_proposals WHERE proposal_id = ?1",
+                params![proposal_id],
+                |row| {
+                    let created_at: i64 = row.get(9)?;
+                    let updated_at: i64 = row.get(10)?;
+                    Ok(crate::server::quorum::QuorumState {
+                        proposal_id: row.get(0)?,
+                        round: row.get::<_, i64>(1)? as u32,
+                        yea_count: row.get::<_, i64>(2)? as u64,
+                        nay_count: row.get::<_, i64>(3)? as u64,
+                        abstain_count: row.get::<_, i64>(4)? as u64,
+                        threshold: row.get::<_, i64>(5)? as u64,
+                        circuit_breaker_active: row.get::<_, i64>(6)? != 0,
+                        circuit_breaker_reason: row.get(7)?,
+                        final_decision: row.get(8)?,
+                        created_at: DateTime::from_timestamp(created_at, 0).unwrap_or_else(Utc::now),
+                        updated_at: DateTime::from_timestamp(updated_at, 0).unwrap_or_else(Utc::now),
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Persiste l'etat (compteurs, circuit breaker, decision finale) apres
+    /// un vote ou une activation manuelle du circuit breaker. `proposal_id`
+    /// et `created_at`/`proposer`/`description` ne changent jamais apres
+    /// creation -- seuls les champs mutables sont reecrits.
+    pub fn update_quorum_proposal(
+        &self,
+        state: &crate::server::quorum::QuorumState,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE quorum_proposals SET
+                round = ?2, yea_count = ?3, nay_count = ?4, abstain_count = ?5,
+                circuit_breaker_active = ?6, circuit_breaker_reason = ?7,
+                final_decision = ?8, updated_at = ?9
+             WHERE proposal_id = ?1",
+            params![
+                state.proposal_id,
+                state.round,
+                state.yea_count as i64,
+                state.nay_count as i64,
+                state.abstain_count as i64,
+                state.circuit_breaker_active as i64,
+                state.circuit_breaker_reason,
+                state.final_decision,
+                state.updated_at.timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Un membre ne peut voter qu'une fois par proposition (contrainte
+    /// UNIQUE(proposal_id, voter_id) en base) -- verifie explicitement
+    /// avant insertion pour donner un rejet propre (`duplicate_vote`)
+    /// plutot que de dependre du texte de l'erreur SQLite.
+    pub fn has_voted(&self, proposal_id: &str, voter_id: &str) -> Result<bool, rusqlite::Error> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM quorum_votes WHERE proposal_id = ?1 AND voter_id = ?2",
+            params![proposal_id, voter_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    /// Ajoute un vote au registre immuable (jamais de mise a jour ni de
+    /// suppression -- append-only, meme philosophie que `audit_trail`).
+    pub fn record_quorum_vote(
+        &self,
+        vote: &crate::server::quorum::VoteMessage,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO quorum_votes
+                (vote_id, proposal_id, voter_id, decision, sequence_number, content_hash, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                vote.vote_id,
+                vote.proposal_id,
+                vote.voter_id,
+                vote.decision,
+                vote.sequence_number as i64,
+                vote.content_hash,
+                vote.timestamp.timestamp(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Nombre de votes deja enregistres pour une proposition (sequence_number
+    /// du prochain vote = ce compte + 1).
+    pub fn count_quorum_votes(&self, proposal_id: &str) -> Result<i64, rusqlite::Error> {
+        self.conn.query_row(
+            "SELECT COUNT(*) FROM quorum_votes WHERE proposal_id = ?1",
+            params![proposal_id],
+            |row| row.get(0),
+        )
     }
 
     pub fn get(&self, hash: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
@@ -2254,6 +2459,72 @@ mod tests {
 
         let limited = store.export_response_corpus(1).unwrap();
         assert_eq!(limited.len(), 1, "la limite doit etre respectee");
+    }
+
+    #[test]
+    fn test_quorum_proposal_roundtrips_through_insert_get_update() {
+        use crate::server::quorum::QuorumState;
+
+        let store = AdnStore::open(":memory:").unwrap();
+        assert!(store.get_quorum_proposal("prop_001").unwrap().is_none());
+
+        let state = QuorumState::new("prop_001".to_string(), 2);
+        store.insert_quorum_proposal(&state, "alice", "test proposal").unwrap();
+
+        let loaded = store.get_quorum_proposal("prop_001").unwrap().expect("doit exister");
+        assert_eq!(loaded.proposal_id, "prop_001");
+        assert_eq!(loaded.threshold, 2);
+        assert_eq!(loaded.yea_count, 0);
+        assert_eq!(loaded.final_decision, "unknown");
+
+        let mut updated = loaded;
+        updated.add_vote("yea").unwrap();
+        store.update_quorum_proposal(&updated).unwrap();
+
+        let reloaded = store.get_quorum_proposal("prop_001").unwrap().unwrap();
+        assert_eq!(reloaded.yea_count, 1);
+    }
+
+    #[test]
+    fn test_quorum_insert_duplicate_proposal_id_fails() {
+        use crate::server::quorum::QuorumState;
+
+        let store = AdnStore::open(":memory:").unwrap();
+        let state = QuorumState::new("prop_dup".to_string(), 2);
+        store.insert_quorum_proposal(&state, "alice", "first").unwrap();
+
+        let state2 = QuorumState::new("prop_dup".to_string(), 3);
+        let result = store.insert_quorum_proposal(&state2, "bob", "second");
+        assert!(result.is_err(), "un proposal_id deja pris doit etre refuse (PRIMARY KEY)");
+    }
+
+    #[test]
+    fn test_quorum_votes_unique_per_voter_and_has_voted() {
+        use crate::server::quorum::{QuorumState, VoteMessage};
+
+        let store = AdnStore::open(":memory:").unwrap();
+        let state = QuorumState::new("prop_vote".to_string(), 2);
+        store.insert_quorum_proposal(&state, "alice", "desc").unwrap();
+
+        assert!(!store.has_voted("prop_vote", "bob").unwrap());
+
+        let vote = VoteMessage::new("prop_vote".to_string(), "bob".to_string(), "yea".to_string(), 1);
+        store.record_quorum_vote(&vote).unwrap();
+        assert!(store.has_voted("prop_vote", "bob").unwrap());
+        assert_eq!(store.count_quorum_votes("prop_vote").unwrap(), 1);
+
+        // Meme votant, meme proposition -- la contrainte UNIQUE doit rejeter.
+        let vote2 = VoteMessage::new("prop_vote".to_string(), "bob".to_string(), "nay".to_string(), 2);
+        assert!(
+            store.record_quorum_vote(&vote2).is_err(),
+            "un deuxieme vote du meme votant sur la meme proposition doit etre refuse (UNIQUE)"
+        );
+        assert_eq!(store.count_quorum_votes("prop_vote").unwrap(), 1, "le vote rejete ne doit pas avoir ete compte");
+
+        // Votant different -- doit passer.
+        let vote3 = VoteMessage::new("prop_vote".to_string(), "carol".to_string(), "nay".to_string(), 2);
+        store.record_quorum_vote(&vote3).unwrap();
+        assert_eq!(store.count_quorum_votes("prop_vote").unwrap(), 2);
     }
 
     #[test]
