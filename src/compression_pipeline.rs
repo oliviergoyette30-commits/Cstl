@@ -1,6 +1,33 @@
 //! WAI Layer 10+ — Full Compression Pipeline
 //! Intègre Varint + Bit-Packing + MTF + RLE + Delta + Dictionary + Huffman
 //! Pour un ratio de compression réaliste et mesurable
+//!
+//! SUPERSEDED (2026-10-01) -- NE PAS CABLER.
+//!
+//! Trouve dead code par le meme grep que les autres modules attaques cette
+//! session (zero reference externe, meme pas dans un test d'integration --
+//! contrairement a `adn_delta_detector.rs`, qui lui avait au moins
+//! `tests/couche5_persistence_e2e_test.rs`). Reel et teste (3 tests
+//! unitaires passent: Huffman, delta CRC32, pipeline complet
+//! RLE→MTF→BitPack→Huffman→Varint), mais c'est une tentative ANTERIEURE,
+//! abandonnee, de ce que la vraie Couche 10 (WAI v5.1) fait deja en
+//! production: `crate::compression::master` (`master_compress`/
+//! `master_decompress`, appele depuis `adn_store.rs::put_master_compressed`,
+//! lui-meme cable live dans `handler.rs` STEP 3e) et
+//! `crate::compression::response` (`compress_response_blocks`, appele
+//! depuis `server/response_compression.rs::maybe_compress_response`,
+//! egalement cable live) -- tous deux construits sur `compression::wai_core`/
+//! `compression::fse`/`fse_encoder_rs`, documentes dans le README (Couche
+//! 10, "63.81% compression ratio, 408/408 tests passing").
+//!
+//! Decision utilisateur (2026-10-01, question posee avant tout cablage,
+//! meme discipline que pour `tls.rs`/`deontic_state_machine.rs`): laisser
+//! ce module mort plutot que de cabler un DEUXIEME pipeline de compression
+//! incoherent avec celui deja en production. Le CRC32 "hashing simplifie"
+//! de `PayloadDelta::compute_delta` et le Huffman/RLE/MTF/BitPack naifs
+//! ici n'ont jamais ete compares en performance a la vraie Couche 10 --
+//! aucune affirmation de superiorite/inferiorite n'est faite, seulement
+//! que le vrai systeme est deja live et que ce module ne l'est pas.
 
 use crate::wai_compression::*;
 use std::collections::HashMap;

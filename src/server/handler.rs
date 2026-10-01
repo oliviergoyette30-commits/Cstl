@@ -1465,6 +1465,11 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         None,
                         None,
                     );
+                    // Rempli dans la branche succes du put() juste en dessous -- voir
+                    // STEP 3e-delta plus loin, declare ici (pas seulement dans le bloc
+                    // else) pour rester visible lors de l'assemblage de la reponse plus
+                    // bas, meme style que temporal_cycle_line/implausibility_line.
+                    let mut adn_delta_line = String::new();
                     if let Err(e) = put_result {
                         error!("[Handler] adn_store.put failed: {}", e);
                     } else {
@@ -1505,6 +1510,39 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             raw_payload.len(),
                         ) {
                             error!("[Handler] adn_store.put_master_compressed failed: {}", e);
+                        }
+
+                        // STEP 3e-delta (Couche 5, 2026-10-01): adn_delta_detector.rs
+                        // etait dead code (zero reference externe, meme grep que CASTLE/
+                        // quorum/tls/graphify/deontic_orchestration) malgre le README qui
+                        // affirmait "delta detection (detect_deltas)" "v5.1 COMPLETE" --
+                        // la fonction existait reellement et etait testee
+                        // (tests/couche5_persistence_e2e_test.rs l'appelle deja), mais
+                        // jamais invoquee depuis le pipeline live. Cable ici: compare
+                        // l'entree qu'on vient de stocker (entry.hash) a son parent
+                        // direct dans la chaine de hachage (entry.parent_hash). Echoue
+                        // silencieusement (pas une erreur) sur le genesis ou le tout
+                        // premier message d'une nouvelle chaine, quand le parent n'a
+                        // jamais ete .put() dans adn_store -- attendu, pas logue en
+                        // erreur. Informatif seulement, meme discipline que
+                        // CONSISTENCY/deontic_audit_line plus bas: jamais de rejet, une
+                        // ligne ADN_DELTA n'est ajoutee a la reponse que si un
+                        // changement reel (severity != NoChange) est detecte.
+                        {
+                            let store = ctx.adn_store.lock().await;
+                            match crate::adn_delta_detector::compute_delta_report(&store, &entry.parent_hash, &entry.hash) {
+                                Ok(report) if report.conflict_severity != crate::adn_delta_detector::ConflictSeverity::NoChange => {
+                                    info!(
+                                        "[Handler] ADN delta vs parent: severity={:?} sigma_delta={:.3} payload_changed={}",
+                                        report.conflict_severity, report.sigma_delta, report.payload_changed
+                                    );
+                                    adn_delta_line = crate::adn_delta_detector::format_cstl(&report);
+                                }
+                                Ok(_) => {}
+                                Err(e) => {
+                                    debug!("[Handler] adn_delta_detector: pas de delta calculable (genesis/nouvelle chaine probable): {}", e);
+                                }
+                            }
                         }
 
                         // STEP 3e: Notification RestrictedCouncil (portee reduite v1) —
@@ -1790,6 +1828,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
@@ -1810,6 +1849,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             scope_lock_line,
                             error_signal_lines,
                             execution_trace_line,
+                            adn_delta_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq
