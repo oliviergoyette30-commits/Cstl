@@ -297,6 +297,13 @@ impl AdnStore {
                 compressed_len INTEGER NOT NULL,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS response_corpus (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                response_text TEXT NOT NULL,
+                response_len INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_response_corpus_created_at ON response_corpus(created_at);
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
             CREATE INDEX IF NOT EXISTS idx_peer_review_ruling ON peer_review_signatures(ruling_id);
@@ -636,6 +643,12 @@ impl AdnStore {
                 reference_payload_text_len INTEGER NOT NULL,
                 compressed_len INTEGER NOT NULL,
                 created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS response_corpus (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                response_text TEXT NOT NULL,
+                response_len INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
             );",
         )?;
         Ok(Self { conn })
@@ -807,6 +820,49 @@ impl AdnStore {
                 },
             )
             .optional()
+    }
+
+    /// Enregistre UNE reponse plain-text, telle qu'elle etait sur le point
+    /// d'etre envoyee (2026-10-01, pour debloquer le reentrainement futur
+    /// de `text_dictionary`/`stable_dictionary` sur du vrai vocabulaire de
+    /// reponse -- voir README, section Response-side compression: la
+    /// mesure live montrait une compression de reponse inefficace faute de
+    /// corpus d'entrainement adapte; ceci commence a construire ce corpus).
+    /// Append-only, AUCUNE deduplication: un trainer de dictionnaire a
+    /// besoin des FREQUENCES reelles (combien de fois chaque bloc/valeur
+    /// apparait), pas seulement d'un echantillon de formes distinctes --
+    /// dedupliquer ici detruirait precisement l'information qu'on veut
+    /// capturer. Jamais appele a moins que `ServerContext.collect_response_corpus`
+    /// soit actif (opt-in explicite, voir `ServerContext::from_env`-style
+    /// construction dans `server/mod.rs`), donc zero cout/zero ligne ecrite
+    /// pour quiconque n'a pas explicitement demande cette collecte.
+    pub fn record_response_corpus_entry(&self, response_text: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO response_corpus (response_text, response_len, created_at) VALUES (?1, ?2, ?3)",
+            params![response_text, response_text.len() as i64, now_unix()],
+        )?;
+        Ok(())
+    }
+
+    /// Nombre total d'entrees accumulees -- pour que l'operateur sache si
+    /// un corpus est deja assez gros pour servir a un reentrainement, sans
+    /// devoir ouvrir la base SQLite a la main.
+    pub fn count_response_corpus_entries(&self) -> Result<i64, rusqlite::Error> {
+        self.conn.query_row("SELECT COUNT(*) FROM response_corpus", [], |row| row.get(0))
+    }
+
+    /// Exporte jusqu'a `limit` reponses (les plus RECENTES d'abord), pour
+    /// alimenter un futur script d'entrainement de dictionnaire. Pas de
+    /// pretention de "retrieval intelligent" ici (cf. l'honnetete deja
+    /// affichee en tete de ce fichier pour le reste de `AdnStore`) -- un
+    /// simple export, le travail d'analyse reste a faire ailleurs quand il
+    /// y aura assez de donnees pour que ca vaille la peine.
+    pub fn export_response_corpus(&self, limit: usize) -> Result<Vec<String>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT response_text FROM response_corpus ORDER BY created_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit as i64], |row| row.get::<_, String>(0))?;
+        rows.collect()
     }
 
     pub fn get(&self, hash: &str) -> Result<Option<AdnEntry>, rusqlite::Error> {
@@ -2171,6 +2227,33 @@ mod tests {
         assert_eq!(u, uncertainty);
 
         assert!(store.get_master_compressed("sha256:does_not_exist").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_response_corpus_append_only_no_dedup_and_export_order() {
+        // Corpus de collecte (2026-10-01): contrairement a master_compressed
+        // (FK + idempotent sur hash), response_corpus n'a PAS de FK (une
+        // reponse n'est pas un payload stocke dans adn_store) et n'est
+        // JAMAIS deduplique -- la MEME reponse enregistree deux fois doit
+        // produire DEUX lignes, pas une (on veut les frequences reelles
+        // pour un futur entrainement de dictionnaire).
+        let store = AdnStore::open(":memory:").unwrap();
+
+        assert_eq!(store.count_response_corpus_entries().unwrap(), 0);
+
+        store.record_response_corpus_entry("#!CSTL v5.0.0 MODE=A\nAUDIT [hash=sha256:a]\n---END---\n").unwrap();
+        store.record_response_corpus_entry("#!CSTL v5.0.0 MODE=A\nAUDIT [hash=sha256:a]\n---END---\n").unwrap();
+        store.record_response_corpus_entry("#!CSTL v5.0.0 MODE=A\nAUDIT [hash=sha256:b]\n---END---\n").unwrap();
+
+        assert_eq!(store.count_response_corpus_entries().unwrap(), 3, "aucune deduplication attendue");
+
+        let exported = store.export_response_corpus(10).unwrap();
+        assert_eq!(exported.len(), 3);
+        assert!(exported.iter().any(|t| t.contains("sha256:a")));
+        assert!(exported.iter().any(|t| t.contains("sha256:b")));
+
+        let limited = store.export_response_corpus(1).unwrap();
+        assert_eq!(limited.len(), 1, "la limite doit etre respectee");
     }
 
     #[test]

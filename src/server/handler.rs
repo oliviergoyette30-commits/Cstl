@@ -44,6 +44,35 @@ fn find_message_end(buf: &[u8]) -> Option<usize> {
 /// If no complete message is received within this duration, the connection is closed.
 const SOCKET_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// Point d'envoi UNIQUE pour toute reponse construite dans la branche
+/// `Ok(payload)` de `handle_connection` (2026-10-01) -- remplace les 9
+/// `socket.write_all(maybe_compress_response(...))` individuels. Fait DEUX
+/// choses, dans cet ordre precis:
+/// 1. Si `ctx.collect_response_corpus` est actif (opt-in, voir
+///    `ServerContext`), persiste le texte PLAIN TEXT original (jamais la
+///    version compressee -- c'est le vocabulaire reel qu'un futur
+///    reentrainement de dictionnaire doit voir) via
+///    `adn_store::record_response_corpus_entry`. Best-effort: un echec
+///    d'ecriture logge un warning mais ne fait jamais echouer l'envoi de
+///    la reponse elle-meme -- la collecte est un a-cote, jamais un chemin
+///    critique.
+/// 2. Decide si cette reponse doit etre compressee (`maybe_compress_response`,
+///    avec sa propre garde de taille) et l'envoie sur le socket.
+async fn send_response(
+    socket: &mut TcpStream,
+    response: &str,
+    ctx: &Arc<ServerContext>,
+    want_compressed: bool,
+) -> std::io::Result<()> {
+    if ctx.collect_response_corpus {
+        if let Err(e) = ctx.adn_store.lock().await.record_response_corpus_entry(response) {
+            warn!("[ResponseCorpus] enregistrement echoue (non bloquant, reponse envoyee quand meme): {}", e);
+        }
+    }
+    let out = maybe_compress_response(response, want_compressed);
+    socket.write_all(out.as_bytes()).await
+}
+
 /// Handle a single connection with access to all server sub-systems via ServerContext.
 /// Replaces 9 separate parameters with a single Arc<ServerContext> owned value.
 pub async fn handle_connection(
@@ -286,7 +315,7 @@ pub async fn handle_connection(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=signature_rejected, reason={}, detail={}]\n---END---\n",
                             reason, detail
                         );
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         continue;
                     }
 
@@ -418,7 +447,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         continue;
                     }
 
@@ -470,7 +499,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         continue;
                     }
 
@@ -535,7 +564,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         continue;
                     }
 
@@ -682,7 +711,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         continue;
                     }
 
@@ -780,7 +809,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         continue;
                     }
 
@@ -1667,11 +1696,11 @@ pub async fn handle_connection(
                             entry.seq
                         );
 
-                        socket.write_all(maybe_compress_response(&response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
                         info!("[Handler] Response sent successfully");
                     } else {
                         let error_response = "#!CSTL v5.0.0 MODE=A\nINTENT_PAYLOAD [purpose=error, status=no_agent]\n---END---\n";
-                        socket.write_all(maybe_compress_response(error_response, want_compressed_response).as_bytes()).await?;
+                        send_response(&mut socket, error_response, &ctx, want_compressed_response).await?;
                         error!("[Handler] No agent found for routing");
                     }
                 } else {
@@ -1694,7 +1723,7 @@ pub async fn handle_connection(
                         error_msg.replace("\"", "\\\"")
                     );
                     
-                    socket.write_all(maybe_compress_response(&error_response, want_compressed_response).as_bytes()).await?;
+                    send_response(&mut socket, &error_response, &ctx, want_compressed_response).await?;
                 }
             }
             Err(e) => {

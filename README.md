@@ -417,6 +417,18 @@ The remaining gap from the first pass — responses were always plain text — i
 
 **Honest conclusion, updated**: the mechanism is correct, safe (the roundtrip gate guarantees no corruption), fully wired end-to-end, and now also harmless by construction — a client can set `compress_response=true` unconditionally and will never pay the measured 137%-152% overhead, because the size guard refuses to send anything bigger than plain text. It just won't help EITHER, on the vocabulary the server currently sends (scattered hashes, mostly-unique field values) — the structural overhead plus base64 rarely beats plain text unless a response happens to repeat a lot of identical content, which real responses mostly don't. The deeper fix remains the same known, bounded future work: train `text_dictionary` (or a new response-specific dictionary) on real response traffic instead of the defines/relations/uncertainty corpus it has today — the same "needs real traffic data" limitation already on record for the word-level dictionary, not a new unknown.
 
+### Response corpus collection — `CSTL_COLLECT_RESPONSE_CORPUS` (2026-10-01, `src/adn_store.rs` + `src/server/handler.rs::send_response`)
+
+The response-compression section above identifies the actual fix needed: `text_dictionary` has to be trained on real response vocabulary, which doesn't exist anywhere yet. This feature is purely infrastructure toward that — it does not retrain anything itself, it only makes the training data collectable.
+
+**What it does**: opt-in, off by default, read once at startup from the environment variable `CSTL_COLLECT_RESPONSE_CORPUS` (`1` or `true`, case-insensitive — same pattern as `TelegramNotifier::from_env()`/`RestrictedCouncil::from_env()` elsewhere in this codebase). When active, every response built in the successfully-parsed branch of `handle_connection` is persisted, in its original PLAIN-TEXT form (never the compressed wire form, even if `compress_response=true` was also requested — a future dictionary trainer needs the real vocabulary, not a base64 blob), into a new append-only `response_corpus` SQLite table (`id`, `response_text`, `response_len`, `created_at`, no foreign key — a response isn't tied to one specific stored payload the way `master_compressed`/`governance_evaluations` are). Single new integration point: `send_response()` wraps the write to the socket — it persists first (best-effort; a write failure only logs a warning, never blocks or fails the actual response to the client) and then applies the existing `maybe_compress_response` decision. All 9 of the handler's former direct `socket.write_all(maybe_compress_response(...))` call sites now go through this one function.
+
+**Deliberately no deduplication.** A dictionary trainer needs real frequency data — how often a given string actually occurs — not a deduplicated sample of distinct forms. `AdnStore::record_response_corpus_entry` inserts unconditionally; `count_response_corpus_entries`/`export_response_corpus(limit)` are the read side for a future offline training pass. Covered by `test_response_corpus_append_only_no_dedup_and_export_order` (`cargo test --lib adn_store::tests::test_response_corpus`), which explicitly asserts that two identical entries both land as separate rows.
+
+**Verified live, real TCP, both states**: started the server with the variable unset, ran the full `cstl_client.py --smoke-test` (5 requests, a mix of normal/compressed/error responses) — `response_corpus` table exists (created either way, cost-free) but has exactly 0 rows afterward. Restarted with `CSTL_COLLECT_RESPONSE_CORPUS=1` set (confirmed via the server's own startup banner), ran the identical smoke test — 5 rows landed, each one the genuine plain-text response body (confirmed by inspecting `response_text` directly via `sqlite3`), including the step-5 request that used `compress_response=true` on the wire — proving the stored copy is the plain text, not the compressed form that actually went to the client.
+
+**Honest scope**: this is collection only. No retraining happens automatically, no dictionary is touched, and the response-compression size guard documented above still rejects compression on typical traffic today exactly as before — nothing about THAT measurement changes until someone actually runs an offline training pass against an exported corpus and rebuilds `text_dictionary` from it, which remains future work.
+
 ---
 
 ## Security Improvements (v5.0.0 → v5.1)
@@ -599,6 +611,7 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 | `ANTHROPIC_API_KEY` | Claude model access | `sk-ant-...` |
 | `GOOGLE_API_KEY` | Gemini model access | `AIza...` |
 | `CSTL_COUNCIL_MEMBERS` | Authorized council voters | `alice,bob,charlie` |
+| `CSTL_COLLECT_RESPONSE_CORPUS` | Opt-in: persist plain-text server responses to `response_corpus` for future dictionary retraining (off by default) | `1` or `true` |
 
 ### Database
 
@@ -607,6 +620,7 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
   - `adn_store` — semantic facts with sigma
   - `adn_relations` — structured relations
   - `adn_council_log` — human arbitration decisions (signature verification now required for votes)
+  - `response_corpus` — append-only, no dedup, only populated when `CSTL_COLLECT_RESPONSE_CORPUS` is set; see "Response corpus collection" above
 
 ### Backward Compatibility
 

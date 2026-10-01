@@ -55,6 +55,15 @@ pub struct ServerContext {
     /// pour standardiser sigma entre les backends LLM (Claude/Gemini/Hermes).
     /// Alpha = 0.2 pour adaptation rapide (~50 message effective window).
     pub sigma_calibrator: Arc<Mutex<SigmaCalibrator>>,
+    /// Corpus de collecte des reponses plain-text (2026-10-01, voir
+    /// `adn_store::record_response_corpus_entry`) -- opt-in explicite via
+    /// la variable d'environnement CSTL_COLLECT_RESPONSE_CORPUS, lue UNE
+    /// fois au demarrage (voir `CstlNativeServer::start`), jamais active
+    /// par defaut. Objectif: accumuler du vrai vocabulaire de reponse pour
+    /// pouvoir un jour reentrainer text_dictionary/stable_dictionary --
+    /// jusqu'ici bloque par l'absence de ce genre de donnees (voir
+    /// README, section Response-side compression).
+    pub collect_response_corpus: bool,
 }
 
 pub struct CstlNativeServer {
@@ -252,7 +261,17 @@ impl CstlNativeServer {
             obsidian: self.obsidian.clone(),
             governance: self.governance.clone(),
             sigma_calibrator: self.sigma_calibrator.clone(),
+            // Lu UNE fois ici (pas a chaque requete): la collecte est une
+            // decision de deploiement, pas quelque chose qui doit changer
+            // en cours de route sans redemarrer le serveur.
+            collect_response_corpus: std::env::var("CSTL_COLLECT_RESPONSE_CORPUS")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         };
+
+        if ctx.collect_response_corpus {
+            eprintln!("[CSTL-Native Server] Collecte du corpus de reponses ACTIVE (CSTL_COLLECT_RESPONSE_CORPUS) -- chaque reponse plain-text sera persistee dans response_corpus");
+        }
 
         listener::accept_connections(listener, Arc::new(ctx)).await?;
 
