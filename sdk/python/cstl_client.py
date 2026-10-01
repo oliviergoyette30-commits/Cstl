@@ -26,10 +26,14 @@ Auto-test contre un serveur reellement demarre:
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import socket
+import subprocess
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5050
@@ -219,6 +223,116 @@ def _format_kv_block(name: str, kv: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Pont vers le Master Compresseur (src/compression/master.rs) -- cote EMISSION
+# du bloc wire-protocol COMPRESSED_PAYLOAD (2026-10-01). Le cote RECEPTION
+# vit deja dans server/parser.rs::record_compressed_payload depuis la meme
+# date; ce bloc ferme la boucle pour le SDK Python.
+#
+# Pourquoi un sous-processus plutot qu'un port Python du format de
+# compression (4 flux, 2 dictionnaires pre-entraines, delta-zigzag-varint):
+# ce format est deja non-trivial et teste exhaustivement cote Rust. Un
+# deuxieme port independant en Python serait une deuxieme surface pouvant
+# deriver silencieusement de l'original -- voir cstl_signing.py pour le
+# meme risque documente sur la canonicalisation de signature (la, le risque
+# est inevitable, la signature doit etre calculee cote client avant tout
+# envoi). Ici il n'y a aucune raison de le payer: la compression peut
+# parfaitement vivre dans un sous-processus appele par le client. Zero
+# logique dupliquee, zero drift possible.
+# ---------------------------------------------------------------------------
+
+class CstlCompressionUnavailable(RuntimeError):
+    """Leve quand cstl_compress_cli est introuvable ou echoue. Jamais une
+    raison de bloquer tout le client -- seulement les appels qui demandent
+    explicitement un envoi compresse (meme patron de degradation propre que
+    TelegramNotifier::from_env() cote Rust: absent -> None/erreur ciblee,
+    jamais un crash du reste du programme)."""
+
+
+def _default_compress_cli_path() -> Path:
+    """cstl_compress_cli n'est jamais installe globalement -- il vit a cote
+    du depot Rust. Cherche target/debug puis target/release, relatif a ce
+    fichier (sdk/python/cstl_client.py -> remonte de 2 niveaux vers la
+    racine du depot). Peut toujours etre surcharge via
+    CSTL_COMPRESS_CLI_PATH ou le parametre binary_path explicite."""
+    repo_root = Path(__file__).resolve().parents[2]
+    for profile in ("release", "debug"):
+        candidate = repo_root / "target" / profile / "cstl_compress_cli"
+        if candidate.is_file():
+            return candidate
+    # Rien trouve -- retourne le chemin debug par defaut; l'appel
+    # subprocess qui suit produira l'erreur FileNotFoundError explicite.
+    return repo_root / "target" / "debug" / "cstl_compress_cli"
+
+
+def _resolve_compress_cli_path(binary_path: str | None) -> Path:
+    if binary_path:
+        return Path(binary_path)
+    env_path = os.environ.get("CSTL_COMPRESS_CLI_PATH")
+    if env_path:
+        return Path(env_path)
+    return _default_compress_cli_path()
+
+
+def compress_triple(defines: list[dict] | None = None,
+                     relations: list[dict] | None = None,
+                     uncertainty: list[dict] | None = None,
+                     binary_path: str | None = None) -> str:
+    """Compresse un triple defines/relations/uncertainty via le Master
+    Compresseur (sous-processus cstl_compress_cli) et retourne le resultat
+    en base64, pret a etre embarque dans COMPRESSED_PAYLOAD [data=<...>]."""
+    cli = _resolve_compress_cli_path(binary_path)
+    payload_json = json.dumps({
+        "defines": defines or [],
+        "relations": relations or [],
+        "uncertainty": uncertainty or [],
+    })
+    try:
+        result = subprocess.run(
+            [str(cli), "compress"],
+            input=payload_json.encode("utf-8"),
+            capture_output=True,
+            timeout=10.0,
+        )
+    except FileNotFoundError as e:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli introuvable a {cli} -- compile-le d'abord avec "
+            f"'cargo build --release --bin cstl_compress_cli' dans le depot Rust, "
+            f"ou passe binary_path= / CSTL_COMPRESS_CLI_PATH vers le binaire."
+        ) from e
+    if result.returncode != 0:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli compress a echoue (code {result.returncode}): "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return result.stdout.decode("ascii").strip()
+
+
+def decompress_data(data_b64: str, binary_path: str | None = None) -> dict:
+    """Inverse de compress_triple -- surtout utile pour verifier en local
+    qu'un bloc COMPRESSED_PAYLOAD qu'on vient de construire redonne bien le
+    triple attendu, avant de l'envoyer sur le fil."""
+    cli = _resolve_compress_cli_path(binary_path)
+    try:
+        result = subprocess.run(
+            [str(cli), "decompress"],
+            input=data_b64.encode("ascii"),
+            capture_output=True,
+            timeout=10.0,
+        )
+    except FileNotFoundError as e:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli introuvable a {cli} -- compile-le d'abord avec "
+            f"'cargo build --release --bin cstl_compress_cli' dans le depot Rust."
+        ) from e
+    if result.returncode != 0:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli decompress a echoue (code {result.returncode}): "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return json.loads(result.stdout.decode("utf-8"))
+
+
+# ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
 
@@ -251,7 +365,20 @@ class CstlClient:
                        relations: list[dict] | None = None,
                        mode: str = "A", version: str = "v5.0.0",
                        extra_meta: dict | None = None,
-                       extra_intent: dict | None = None) -> str:
+                       extra_intent: dict | None = None,
+                       compressed_defines: list[dict] | None = None,
+                       compressed_relations: list[dict] | None = None,
+                       compressed_uncertainty: list[dict] | None = None,
+                       compress_binary_path: str | None = None) -> str:
+        """compressed_defines/compressed_relations/compressed_uncertainty:
+        quand au moins un des trois est fourni, ces entrees sont compressees
+        via le Master Compresseur (sous-processus cstl_compress_cli, voir
+        compress_triple ci-dessus) et envoyees comme UN SEUL bloc
+        COMPRESSED_PAYLOAD [data=<base64>] -- jamais comme des blocs DEFINE/
+        RELATION/UNCERTAINTY en texte clair. `relations=` (parametre deja
+        existant) reste un chemin SEPARE, non compresse -- les deux peuvent
+        coexister dans le meme message si besoin (le serveur fusionne les
+        deux sources cote parsing, voir record_compressed_payload)."""
         meta_kv = {"encoder": encoder, "produced_by": produced_by}
         if extra_meta:
             meta_kv.update(extra_meta)
@@ -264,6 +391,14 @@ class CstlClient:
         lines.append(_format_kv_block("INTENT_PAYLOAD", intent_kv))
         for rel in relations or []:
             lines.append(_format_kv_block("RELATION", rel))
+        if compressed_defines or compressed_relations or compressed_uncertainty:
+            data_b64 = compress_triple(
+                defines=compressed_defines,
+                relations=compressed_relations,
+                uncertainty=compressed_uncertainty,
+                binary_path=compress_binary_path,
+            )
+            lines.append(_format_kv_block("COMPRESSED_PAYLOAD", {"data": data_b64}))
         lines.append("---END---\n")
         return "".join(lines)
 
@@ -294,6 +429,29 @@ class CstlClient:
             encoder=encoder, produced_by=produced_by, purpose=purpose,
             sender=sender, receiver=receiver, relations=relations,
             extra_intent=extra_intent,
+        )
+        return self.send_raw(payload)
+
+    def send_compressed(self, sender: str, receiver: str, purpose: str,
+                         defines: list[dict] | None = None,
+                         relations: list[dict] | None = None,
+                         uncertainty: list[dict] | None = None,
+                         encoder: str = "Agent", produced_by: str = "Client",
+                         extra_intent: dict | None = None,
+                         compress_binary_path: str | None = None) -> CstlResponse:
+        """Envoie defines/relations/uncertainty compresses via le Master
+        Compresseur, dans un seul bloc COMPRESSED_PAYLOAD. Leve
+        CstlCompressionUnavailable si cstl_compress_cli n'est pas compile/
+        trouvable -- voir compress_triple() pour le message d'erreur
+        actionnable."""
+        payload = self.build_payload(
+            encoder=encoder, produced_by=produced_by, purpose=purpose,
+            sender=sender, receiver=receiver,
+            extra_intent=extra_intent,
+            compressed_defines=defines,
+            compressed_relations=relations,
+            compressed_uncertainty=uncertainty,
+            compress_binary_path=compress_binary_path,
         )
         return self.send_raw(payload)
 
@@ -329,7 +487,7 @@ class CstlClient:
 def _smoke_test(host: str, port: int) -> int:
     client = CstlClient(host=host, port=port, timeout=5.0)
 
-    print(f"[1/3] Envoi d'un payload valide vers {host}:{port} ...")
+    print(f"[1/4] Envoi d'un payload valide vers {host}:{port} ...")
     resp = client.send_relation(
         sender="alice", receiver="bob", purpose="smoke_test_greeting",
         relations=[{"type": "EQUALS", "subject": "cstl_client", "object": "works"}],
@@ -341,7 +499,7 @@ def _smoke_test(host: str, port: int) -> int:
     assert resp.audit_hash, "AUDIT.hash absent d'une reponse processed"
     print("      OK")
 
-    print("[2/3] Envoi d'un payload invalide (sender manquant) ...")
+    print("[2/4] Envoi d'un payload invalide (sender manquant) ...")
     bad_payload = (
         "#!CSTL v5.0.0 MODE=A\n"
         "META [encoder=Client, produced_by=Client]\n"
@@ -357,11 +515,34 @@ def _smoke_test(host: str, port: int) -> int:
     except CstlValidationError as e:
         print(f"      OK (CstlValidationError levee: {e})")
 
-    print("[3/3] Decision de council par un sender non autorise ...")
+    print("[3/4] Decision de council par un sender non autorise ...")
     resp3 = client.send_council_decision(
         sender="not_olivier", target_hash=resp.audit_hash, decision="commit",
     )
     print(f"      status={resp3.status!r} purpose={resp3.purpose!r} fields={resp3.fields}")
+
+    print("[4/4] Envoi compresse (COMPRESSED_PAYLOAD / Master Compresseur) ...")
+    try:
+        resp4 = client.send_compressed(
+            sender="alice", receiver="bob", purpose="smoke_test_compressed",
+            defines=[{"name": "sdk_compressed_test", "entity_type": "agent", "id": "D-900"}],
+            relations=[{"type": "equals", "subject": "sdk_compressed_test", "object": "ok", "id": "R-900"}],
+            uncertainty=[{"identifier": "U-900", "status": "ESTIMATED", "sigma": "0.5"}],
+        )
+    except CstlCompressionUnavailable as e:
+        print(f"      SKIP (cstl_compress_cli indisponible, pas un echec du client): {e}")
+    else:
+        print(f"      status={resp4.status!r} purpose={resp4.purpose!r}")
+        if "COMPRESSED_PAYLOAD" in resp4.raw:
+            # Le serveur n'emet "COMPRESSED_PAYLOAD" que dans un
+            # SEMANTIC_WARNING (donnees mal formees, bloc ignore) -- un
+            # roundtrip reussi ne le mentionne jamais dans sa reponse.
+            print(f"      ECHEC: le serveur a signale un probleme sur le bloc compresse:\n{resp4.raw}")
+            return 1
+        if resp4.status != "processed":
+            print(f"      ECHEC: statut inattendu. Reponse brute:\n{resp4.raw}")
+            return 1
+        print("      OK (le serveur a decompresse et traite le DEFINE/RELATION/UNCERTAINTY compresses)")
 
     print("\nSmoke-test termine sans erreur bloquante.")
     return 0
