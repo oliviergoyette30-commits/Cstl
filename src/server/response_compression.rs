@@ -126,7 +126,21 @@ fn try_compress(response: &str) -> Option<String> {
 
     let compressed = compress_response_blocks(&blocks);
     let data_b64 = base64::engine::general_purpose::STANDARD.encode(&compressed);
-    Some(format!("{header}{COMPRESSED_RESPONSE_BLOCK} [data={data_b64}]\n{footer}"))
+    let candidate = format!("{header}{COMPRESSED_RESPONSE_BLOCK} [data={data_b64}]\n{footer}");
+
+    // Garde de TAILLE (2026-10-01, suite a la mesure live: 137%-152% de la
+    // taille originale sur de vraies reponses -- base64 + text_dictionary
+    // entraine sur le mauvais vocabulaire, voir README). Meme principe que
+    // le repli deja en place dans stable_dictionary/text_dictionary: le
+    // mode compresse n'est utilise QUE s'il est reellement plus petit que
+    // l'original, jamais suppose. Compare le texte complet (header+bloc+
+    // footer) a l'original -- pas seulement les octets compresses -- pour
+    // inclure fidelement le cout du base64 et du bloc COMPRESSED_RESPONSE
+    // lui-meme dans la comparaison.
+    if candidate.len() >= response.len() {
+        return None;
+    }
+    Some(candidate)
 }
 
 /// Point d'entree appele a chaque site `socket.write_all(response...)` de
@@ -134,6 +148,10 @@ fn try_compress(response: &str) -> Option<String> {
 /// de la REQUETE du client (voir handler.rs) -- jamais applique par defaut,
 /// retrocompatibilite totale avec tout client existant qui n'envoie pas ce
 /// champ (`cstl_client.py` ne l'envoie pas encore par defaut non plus).
+/// Meme quand demande, ne compresse que si c'est reellement plus petit
+/// (garde de taille dans `try_compress`) -- un client qui demande toujours
+/// `compress_response=true` ne paie donc jamais le surcout mesure sur les
+/// reponses typiques actuelles, il recoit juste du texte brut dans ce cas.
 pub fn maybe_compress_response(response: &str, want_compressed: bool) -> String {
     if !want_compressed {
         return response.to_string();
@@ -160,17 +178,45 @@ AUDIT [hash=sha256:03d86bf1, parent_hash=root, seq=0]\n\
     }
 
     #[test]
-    fn test_compressed_response_roundtrips_through_decompress() {
+    fn test_small_realistic_response_hits_size_guard_stays_plain_text() {
+        // Mesure live (2026-10-01, voir README): une reponse de cette taille
+        // compresse PLUS GROSSE que l'original (base64 + text_dictionary
+        // entraine sur le mauvais vocabulaire) -- la garde de taille doit
+        // donc la laisser telle quelle, jamais lui faire payer ce surcout.
         let out = maybe_compress_response(SAMPLE_RESPONSE, true);
-        assert_ne!(out, SAMPLE_RESPONSE);
+        assert_eq!(out, SAMPLE_RESPONSE, "la garde de taille doit rejeter un gain negatif");
+    }
+
+    #[test]
+    fn test_large_repetitive_response_compresses_and_roundtrips() {
+        // Contrairement a SAMPLE_RESPONSE (realiste mais petite -- rejetee
+        // par la garde de taille ci-dessus), une reponse avec beaucoup de
+        // blocs au vocabulaire tres repete donne au text_dictionary/
+        // structure-delta de quoi vraiment gagner: ce test verifie que le
+        // CHEMIN de compression (pas seulement la garde qui le bloque)
+        // fonctionne et roundtrip correctement quand il s'active.
+        // Valeur IDENTIQUE repetee (pas une variante par iteration) --
+        // c'est precisement la redondance que text_dictionary/structure-delta
+        // exploitent; une valeur legerement differente a chaque ligne (ex.
+        // un numero d'iteration) detruit cette redondance et empeche tout
+        // gain, voir la mesure honnete documentee dans le README.
+        let mut body = String::new();
+        for _ in 0..40 {
+            body.push_str("SEMANTIC_WARNING [detail=W608: DEFINE non reference par aucune RELATION]\n");
+        }
+        let large_response = format!("#!CSTL v5.0.0 MODE=A\n{body}---END---\n");
+
+        let out = maybe_compress_response(&large_response, true);
+        assert_ne!(out, large_response, "devrait compresser -- vocabulaire tres repete");
+        assert!(out.len() < large_response.len(), "devrait etre reellement plus petit: {} vs {}", out.len(), large_response.len());
         assert!(out.contains("COMPRESSED_RESPONSE [data="));
 
         // Rejoue le cote reception: extrait le base64, decompresse, confirme
         // qu'on retrouve exactement les memes blocs que l'original.
-        let (header, body, footer) = split_response(&out).unwrap();
+        let (header, body_out, footer) = split_response(&out).unwrap();
         assert_eq!(header, "#!CSTL v5.0.0 MODE=A\n");
         assert_eq!(footer, "---END---\n");
-        let blocks = parse_plain_blocks(body).unwrap();
+        let blocks = parse_plain_blocks(body_out).unwrap();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].0, COMPRESSED_RESPONSE_BLOCK);
         let data_b64 = blocks[0].1.iter().find(|(k, _)| k == "data").map(|(_, v)| v.as_str()).unwrap();
@@ -178,7 +224,7 @@ AUDIT [hash=sha256:03d86bf1, parent_hash=root, seq=0]\n\
         let decompressed = crate::compression::response::decompress_response_blocks(&compressed).unwrap();
 
         let original_blocks = parse_plain_blocks(
-            split_response(SAMPLE_RESPONSE).unwrap().1
+            split_response(&large_response).unwrap().1
         ).unwrap();
         assert_eq!(decompressed, original_blocks);
     }
@@ -191,26 +237,22 @@ AUDIT [hash=sha256:03d86bf1, parent_hash=root, seq=0]\n\
     }
 
     #[test]
-    fn test_response_with_quoted_comma_value_roundtrips_safely() {
-        // Un champ cite contenant une virgule ne doit PAS casser le
-        // roundtrip (split_top_level_commas le gere) -- et si jamais un
-        // futur format de reponse le faisait, la garde octet-par-octet
-        // intercepterait silencieusement plutot que de corrompre.
+    fn test_response_with_quoted_comma_value_parses_and_renders_safely() {
+        // Un champ cite contenant une virgule ne doit PAS casser le parsing
+        // (split_top_level_commas le gere) -- teste directement
+        // parse_plain_blocks/render_plain_blocks/compress_response_blocks
+        // (pas maybe_compress_response: ce message est trop court pour
+        // passer la garde de taille, ce n'est pas ce que ce test verifie).
         let response = "#!CSTL v5.0.0 MODE=A\n\
 INTENT_PAYLOAD [purpose=validation_error, errors=\"E304: Missing sender, E305: Missing receiver\"]\n\
 ---END---\n";
-        let compressed = maybe_compress_response(response, true);
-        let (_, body, _) = split_response(&compressed).unwrap();
+        let (_, body, _) = split_response(response).unwrap();
         let blocks = parse_plain_blocks(body).unwrap();
-        let data_b64 = blocks[0].1.iter().find(|(k, _)| k == "data").map(|(_, v)| v.as_str()).unwrap();
-        let bytes = base64::engine::general_purpose::STANDARD.decode(data_b64).unwrap();
-        let decompressed = crate::compression::response::decompress_response_blocks(&bytes).unwrap();
-        // L'invariant reel: re-rendre les blocs decompresses redonne EXACTEMENT
-        // le corps original (quotes incluses -- ni parse_plain_blocks ni
-        // render_plain_blocks ne les retirent, c'est le roundtrip octet-par-
-        // octet qui compte, pas une valeur "deballee").
-        let (_, original_body, _) = split_response(response).unwrap();
-        assert_eq!(render_plain_blocks(&decompressed), original_body);
+        assert_eq!(render_plain_blocks(&blocks), body, "garde octet-par-octet: doit roundtrip");
+
+        let compressed = compress_response_blocks(&blocks);
+        let decompressed = crate::compression::response::decompress_response_blocks(&compressed).unwrap();
+        assert_eq!(render_plain_blocks(&decompressed), body);
     }
 
     #[test]
