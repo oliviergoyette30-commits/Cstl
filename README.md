@@ -831,3 +831,26 @@ Apache 2.0 — Olivier Goyette
 **v5.1 Release Date:** 2026-09-14
 
 **Status:** ✅ PRODUCTION READY. All features, couches, and security patches complete and verified. GitHub deployment confirmed.
+
+---
+
+## Grille d'audit empirique — 10 points (2026-10-01)
+
+Benchmark réel, exécuté contre le serveur CSTL **effectivement en cours d'exécution** (TCP 5050 + REST 8000), pas un micro-benchmark in-process qui saute le coût réel de parsing/validation/pipeline. Script reproductible : `examples/benchmark_audit.rs` (`cargo run --example benchmark_audit` avec le serveur déjà lancé). Chaque chiffre ci-dessous est mesuré, pas estimé — quand une mesure n'avait pas de sens (ex: la première version du point 3 envoyait une syntaxe `DEFINE`/`RELATIONS` inventée, ignorée silencieusement par le parser — confirmé par les logs serveur montrant `DEFINE: 0 blocks` à chaque fois — mesurant donc la compression d'un triple vide), c'est corrigé et redémontré avant publication, pas arrondi pour faire joli.
+
+**Conditions de mesure, à lire avant les chiffres** : build `debug` (pas `--release` — les temps seraient significativement meilleurs en release, non mesuré ici), une seule connexion TCP à la fois côté client (séquentiel, pas de vrai test de concurrence), loopback `127.0.0.1` (zéro latence réseau réelle), base SQLite fraîche avant le run (~200 messages au total), ratios de compression mesurés sur du texte synthétique répétitif (le ratio réel dépend de l'entropie du contenu réel).
+
+| # | Point | Résultat mesuré |
+|---|---|---|
+| 1 | Latence TCP par message (N=100, payload simple) | p50=6.4ms, p95=7.4ms, p99=7.7ms, min=5.1ms, max=9.6ms |
+| 2 | Débit soutenu (même série, 1 connexion à la fois) | 155.8 msg/s |
+| 3 | Taux de compression Master Compressor (réel, lu depuis `master_compressed`, texte structuré répétitif) | petit (618o)→51.6% réduction, moyen (2936o)→38.8%, grand (11216o)→33.9% — le ratio baisse avec la taille car le contenu synthétique devient proportionnellement moins répétitif à cette échelle, pas une anomalie |
+| 4 | Overhead de vérification de signature Ed25519 (même pipeline, sender inconnu vs enregistré+signé) | non-signé p50=6.6ms vs signé+vérifié p50=17.5ms → **+11.6ms en moyenne** attribuable à la vérification Ed25519 et au parsing du champ signature |
+| 5 | Cycle d'arbitrage complet (8 aller-retours TCP : 2× arbiter_register, open, assign, submit_ruling, peer_review, escalate, finalize) | **61.3ms total** — détail : arbiter_register 12.8ms×2, submit_ruling 14.9ms, peer_review 12.3ms, le reste <2.2ms chacun |
+| 6 | Latence endpoints REST (p50, N=20 chacun) | `/health` 0.8ms, `/audit/stats` 0.8ms, `/deontic/executions` 0.7ms, `/wai/stats` 0.6ms, `/calibration/agents` 0.6ms, `/graphify/stats` 2.6ms, `/graphify/export` 7.9ms (le plus coûteux — reconstruit tout le graphe depuis la chaîne d'audit à chaque appel, pas de cache) |
+| 7 | Overhead `ADN_DELTA` (parent identique=NoChange vs parent différent=diff réel) | NoChange p50=2.5ms vs changement réel p50=6.1ms → **+3.6ms en moyenne** attribuable au calcul de diff |
+| 8 | Croissance SQLite réelle | 323584o (schéma vide, ~25 tables) → 651264o après ~202 messages → **~1622 octets/message** (moyenne grossière, inclut index/overhead SQLite, pas juste le texte utile) |
+| 9 | Latence requêtes Graphify sur graphe réel (~200 messages, pas le cas vide) | `/graphify/filter?node_type=agent` 4.0ms (6 nœuds), `/graphify/search?q=bench` 8.5ms (199 nœuds), `/graphify/traverse?depth=2` 9.6ms (102 nœuds) |
+| 10 | Robustesse sous rafale (N=50, aussi vite que possible, séquentiel) | **50/50 succès (100%)**, 148.0 msg/s, p50=6.3ms, p99=9.7ms — aucune erreur, aucun timeout sur ce volume |
+
+**Pas mesuré ici, honnêtement signalé plutôt que simulé** : comportement sous vraie charge concurrente (plusieurs clients TCP simultanés — l'architecture handler.rs est async/tokio et devrait le supporter, mais ce n'est pas démontré par ce run séquentiel) ; comportement à grande échelle (des dizaines de milliers de messages, pas ~200) ; build `--release` ; latence réseau réelle hors loopback ; calibration EWMA avec de vraies données (nécessite une confirmation Wikidata externe, indisponible hors-ligne — voir Couche 4 plus haut).
