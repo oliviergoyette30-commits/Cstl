@@ -43,7 +43,7 @@ pub const COMPRESSED_RESPONSE_BLOCK: &str = "COMPRESSED_RESPONSE";
 /// (en-tete, corps, pied) -- `None` si la forme attendue n'est pas
 /// respectee (ne devrait jamais arriver sur une reponse construite par ce
 /// serveur, mais on ne suppose rien).
-fn split_response(response: &str) -> Option<(&str, &str, &str)> {
+pub(crate) fn split_response(response: &str) -> Option<(&str, &str, &str)> {
     let header_end = response.find('\n')? + 1;
     let header = &response[..header_end];
     if !header.starts_with("#!CSTL ") {

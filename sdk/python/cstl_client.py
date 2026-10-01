@@ -360,7 +360,41 @@ def _decompress_response_blocks(data_b64: str, binary_path: str | None = None) -
     return [(name, [(k, v) for k, v in fields]) for name, fields in blocks]
 
 
+def _decode_castle_response(data_b64: str, dict_json: str | None,
+                             binary_path: str | None = None) -> tuple[str, str]:
+    """Decode un bloc CASTLE_RESPONSE (voir src/server/castle_wire.rs) via
+    `cstl_compress_cli decode-castle-response`. CASTLE a un dictionnaire
+    qui s'accumule sur la DUREE DE LA CONNEXION (contrairement a
+    COMPRESSED_RESPONSE, stateless par message) -- `dict_json` est l'etat
+    renvoye par l'appel PRECEDENT sur cette meme connexion (None pour le
+    tout premier message), et le dict_json renvoye ici DOIT etre repasse
+    au prochain appel, sous peine de desynchroniser le dictionnaire cote
+    client de celui du serveur. Retourne (texte_decode, dict_json_a_jour)."""
+    cli = _resolve_compress_cli_path(binary_path)
+    req = json.dumps({"dict_json": dict_json, "payload_b64": data_b64})
+    try:
+        result = subprocess.run(
+            [str(cli), "decode-castle-response"],
+            input=req.encode("utf-8"),
+            capture_output=True,
+            timeout=10.0,
+        )
+    except FileNotFoundError as e:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli introuvable a {cli} -- compile-le d'abord avec "
+            f"'cargo build --release --bin cstl_compress_cli' dans le depot Rust."
+        ) from e
+    if result.returncode != 0:
+        raise CstlCompressionUnavailable(
+            f"cstl_compress_cli decode-castle-response a echoue (code {result.returncode}): "
+            f"{result.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    resp = json.loads(result.stdout.decode("utf-8"))
+    return resp["decoded"], resp["dict_json"]
+
+
 _COMPRESSED_RESPONSE_LINE_RE = re.compile(r"^COMPRESSED_RESPONSE\s*\[(.*)\]\s*$")
+_CASTLE_RESPONSE_LINE_RE = re.compile(r"^CASTLE_RESPONSE\s*\[(.*)\]\s*$")
 
 
 def _expand_compressed_response(raw: str, binary_path: str | None = None) -> str:
@@ -405,11 +439,20 @@ class CstlClient:
         self.keep_alive = keep_alive
         self._sock: socket.socket | None = None
         # Chemin de cstl_compress_cli pour TOUT ce client -- requetes
-        # (compress_triple) et reponses (_expand_compressed_response).
-        # None = auto-detection (_resolve_compress_cli_path), surchargeable
-        # par constructeur ou, comme avant, au cas par cas via les parametres
-        # binary_path/compress_binary_path des methodes individuelles.
+        # (compress_triple) et reponses (_expand_compressed_response,
+        # _expand_castle_response). None = auto-detection
+        # (_resolve_compress_cli_path), surchargeable par constructeur ou,
+        # comme avant, au cas par cas via les parametres binary_path/
+        # compress_binary_path des methodes individuelles.
         self._compress_binary_path = compress_binary_path
+        # Etat CASTLE (castle_wire.rs): dictionnaire serialise (JSON),
+        # miroir cote client de celui que le serveur maintient pour CETTE
+        # connexion. None = dictionnaire vide (debut de connexion). Doit
+        # etre reinitialise des qu'une VRAIE nouvelle connexion TCP est
+        # ouverte -- voir _connect() -- sinon ce client croirait connaitre
+        # des symboles que le NOUVEAU serveur (ou la nouvelle connexion sur
+        # le meme serveur) n'a jamais vus.
+        self._castle_dict_json: str | None = None
 
     def _connect(self) -> socket.socket:
         if self.keep_alive and self._sock is not None:
@@ -417,6 +460,7 @@ class CstlClient:
         sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
         if self.keep_alive:
             self._sock = sock
+        self._castle_dict_json = None
         return sock
 
     def close(self) -> None:
@@ -425,6 +469,34 @@ class CstlClient:
                 self._sock.close()
             finally:
                 self._sock = None
+        self._castle_dict_json = None
+
+    def _expand_castle_response(self, raw: str) -> str:
+        """Si `raw` contient un bloc CASTLE_RESPONSE (voir
+        maybe_castle_compress_response cote serveur,
+        src/server/castle_wire.rs), le remplace par le texte clair qu'il
+        represente, en faisant avancer self._castle_dict_json pour le
+        prochain appel sur cette meme connexion. Symetrique de
+        _expand_compressed_response, mais STATEFUL (d'ou une methode, pas
+        une fonction libre) -- CASTLE n'a de sens qu'avec keep_alive=True:
+        avec le defaut (une connexion par envoi), chaque message repart
+        d'un dictionnaire vide des deux cotes, documente dans le README."""
+        lines = raw.splitlines()
+        for i, line in enumerate(lines):
+            m = _CASTLE_RESPONSE_LINE_RE.match(line.strip())
+            if not m:
+                continue
+            kv = _parse_kv_block(m.group(1))
+            data_b64 = kv.get("data")
+            if not data_b64:
+                return raw  # bloc malforme cote serveur -- ne devrait jamais arriver
+            decoded_body, new_dict_json = _decode_castle_response(
+                data_b64, self._castle_dict_json, binary_path=self._compress_binary_path,
+            )
+            self._castle_dict_json = new_dict_json
+            lines[i:i + 1] = decoded_body.splitlines()
+            return "\n".join(lines)
+        return raw
 
     def build_payload(self, *, encoder: str, produced_by: str, purpose: str,
                        sender: str, receiver: str,
@@ -436,7 +508,8 @@ class CstlClient:
                        compressed_relations: list[dict] | None = None,
                        compressed_uncertainty: list[dict] | None = None,
                        compress_binary_path: str | None = None,
-                       request_compressed_response: bool = False) -> str:
+                       request_compressed_response: bool = False,
+                       request_castle_response: bool = False) -> str:
         """compressed_defines/compressed_relations/compressed_uncertainty:
         quand au moins un des trois est fourni, ces entrees sont compressees
         via le Master Compresseur (sous-processus cstl_compress_cli, voir
@@ -452,7 +525,20 @@ class CstlClient:
         COMPRESSED_RESPONSE (voir src/server/response_compression.rs).
         send_raw() le deplie automatiquement avant parse_response(), donc
         rien d'autre a faire cote appelant. Jamais actif par defaut --
-        retrocompatibilite totale."""
+        retrocompatibilite totale.
+
+        request_castle_response=True ajoute INTENT_PAYLOAD.castle_response=true
+        -- demande le DEUXIEME codec de reponse, CASTLE (Layer 9, voir
+        src/server/castle_wire.rs), dont le dictionnaire s'accumule sur la
+        duree de la CONNEXION -- n'a de valeur qu'avec
+        CstlClient(keep_alive=True); avec le defaut (une connexion par
+        envoi), chaque message reste au dictionnaire vide et la garde de
+        taille cote serveur le garde systematiquement en texte clair
+        (jamais une erreur, juste jamais un gain -- voir le README).
+        Mutuellement exclusif avec request_compressed_response: si les
+        deux sont vrais, le serveur privilegie compress_response (limite
+        de portee v1 assumee, documentee dans send_response() cote Rust).
+        send_raw() le deplie automatiquement, meme contrat que ci-dessus."""
         meta_kv = {"encoder": encoder, "produced_by": produced_by}
         if extra_meta:
             meta_kv.update(extra_meta)
@@ -461,6 +547,8 @@ class CstlClient:
             intent_kv.update(extra_intent)
         if request_compressed_response:
             intent_kv["compress_response"] = "true"
+        if request_castle_response:
+            intent_kv["castle_response"] = "true"
 
         binary_path = compress_binary_path or self._compress_binary_path
 
@@ -502,6 +590,11 @@ class CstlClient:
             # defaut), _expand_compressed_response ne touche a rien et
             # n'invoque meme pas cstl_compress_cli.
             raw = _expand_compressed_response(raw, binary_path=self._compress_binary_path)
+            # Meme contrat pour CASTLE_RESPONSE (stateful, voir
+            # _expand_castle_response) -- les deux expansions sont
+            # inoffensives l'une sur l'autre: chacune ne touche que son
+            # propre nom de bloc, absent si l'autre codec a ete utilise.
+            raw = self._expand_castle_response(raw)
             return parse_response(raw)
         finally:
             if not self.keep_alive:
@@ -510,11 +603,15 @@ class CstlClient:
     def send_relation(self, sender: str, receiver: str, purpose: str,
                        relations: list[dict], encoder: str = "Agent",
                        produced_by: str = "Client",
-                       extra_intent: dict | None = None) -> CstlResponse:
+                       extra_intent: dict | None = None,
+                       request_compressed_response: bool = False,
+                       request_castle_response: bool = False) -> CstlResponse:
         payload = self.build_payload(
             encoder=encoder, produced_by=produced_by, purpose=purpose,
             sender=sender, receiver=receiver, relations=relations,
             extra_intent=extra_intent,
+            request_compressed_response=request_compressed_response,
+            request_castle_response=request_castle_response,
         )
         return self.send_raw(payload)
 
@@ -576,7 +673,7 @@ class CstlClient:
 def _smoke_test(host: str, port: int) -> int:
     client = CstlClient(host=host, port=port, timeout=5.0)
 
-    print(f"[1/5] Envoi d'un payload valide vers {host}:{port} ...")
+    print(f"[1/6] Envoi d'un payload valide vers {host}:{port} ...")
     resp = client.send_relation(
         sender="alice", receiver="bob", purpose="smoke_test_greeting",
         relations=[{"type": "EQUALS", "subject": "cstl_client", "object": "works"}],
@@ -588,7 +685,7 @@ def _smoke_test(host: str, port: int) -> int:
     assert resp.audit_hash, "AUDIT.hash absent d'une reponse processed"
     print("      OK")
 
-    print("[2/5] Envoi d'un payload invalide (sender manquant) ...")
+    print("[2/6] Envoi d'un payload invalide (sender manquant) ...")
     bad_payload = (
         "#!CSTL v5.0.0 MODE=A\n"
         "META [encoder=Client, produced_by=Client]\n"
@@ -604,13 +701,13 @@ def _smoke_test(host: str, port: int) -> int:
     except CstlValidationError as e:
         print(f"      OK (CstlValidationError levee: {e})")
 
-    print("[3/5] Decision de council par un sender non autorise ...")
+    print("[3/6] Decision de council par un sender non autorise ...")
     resp3 = client.send_council_decision(
         sender="not_olivier", target_hash=resp.audit_hash, decision="commit",
     )
     print(f"      status={resp3.status!r} purpose={resp3.purpose!r} fields={resp3.fields}")
 
-    print("[4/5] Envoi compresse (COMPRESSED_PAYLOAD / Master Compresseur) ...")
+    print("[4/6] Envoi compresse (COMPRESSED_PAYLOAD / Master Compresseur) ...")
     try:
         resp4 = client.send_compressed(
             sender="alice", receiver="bob", purpose="smoke_test_compressed",
@@ -633,7 +730,7 @@ def _smoke_test(host: str, port: int) -> int:
             return 1
         print("      OK (le serveur a decompresse et traite le DEFINE/RELATION/UNCERTAINTY compresses)")
 
-    print("[5/5] Reponse compressee (COMPRESSED_RESPONSE, server/response_compression.rs) ...")
+    print("[5/6] Reponse compressee (COMPRESSED_RESPONSE, server/response_compression.rs) ...")
     try:
         resp5 = client.send_relation(
             sender="alice", receiver="bob", purpose="smoke_test_compressed_response",
@@ -651,6 +748,41 @@ def _smoke_test(host: str, port: int) -> int:
             print(f"      ECHEC: statut/audit_hash inattendu apres decompression. Reponse deplie:\n{resp5.raw}")
             return 1
         print("      OK (le client a transparemment deplie la reponse compressee avant de la parser)")
+
+    print("[6/6] Reponse CASTLE (Layer 9, server/castle_wire.rs) sur une connexion persistante ...")
+    try:
+        castle_client = CstlClient(host=host, port=port, timeout=5.0, keep_alive=True)
+        try:
+            saw_castle_block = False
+            for i in range(5):
+                respN = castle_client.send_relation(
+                    sender="alice", receiver="bob", purpose="smoke_test_castle_response",
+                    relations=[{"type": "EQUALS", "subject": "cstl_client", "object": "castle_response_works"}],
+                    request_castle_response=True,
+                )
+                if respN.status != "processed":
+                    print(f"      ECHEC (iteration {i}): statut inattendu. Reponse brute:\n{respN.raw}")
+                    return 1
+                if "CASTLE_RESPONSE" in respN.raw:
+                    print(f"      ECHEC (iteration {i}): le bloc CASTLE_RESPONSE n'a pas ete deplie avant parsing:\n{respN.raw}")
+                    return 1
+                # On ne peut pas savoir ICI si le serveur a reellement
+                # compresse (le client ne voit que le texte deja deplie) --
+                # mais on sait que le mecanisme bout-en-bout (dictionnaire
+                # de connexion, garde octet-par-octet, decodage) tourne sans
+                # erreur sur 5 messages reels d'affilee, compresse ou non.
+                if castle_client._castle_dict_json is not None:
+                    saw_castle_block = True
+            print(f"      OK (5 messages sur une connexion persistante, audit_hash final={respN.audit_hash!r}, "
+                  f"dictionnaire CASTLE avance={saw_castle_block})")
+            if not saw_castle_block:
+                print("      NOTE (pas un echec): aucune des 5 reponses n'a ete compressee -- mesure "
+                      "honnete et attendue sur ce genre de contenu, voir castle_wire.rs et le README "
+                      "(le vocabulaire CSTL ordinaire ne compresse pas avec ce codec pour l'instant).")
+        finally:
+            castle_client.close()
+    except CstlCompressionUnavailable as e:
+        print(f"      SKIP (cstl_compress_cli indisponible, pas un echec du client): {e}")
 
     print("\nSmoke-test termine sans erreur bloquante.")
     return 0

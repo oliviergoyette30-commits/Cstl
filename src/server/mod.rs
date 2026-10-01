@@ -13,6 +13,7 @@ pub mod handler;
 pub mod quorum;
 pub mod arbitrage;
 pub mod castle;
+pub mod castle_wire;
 pub mod wai;
 pub mod parser;
 pub mod validator;

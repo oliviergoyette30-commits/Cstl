@@ -47,6 +47,7 @@ use std::process::ExitCode;
 use base64::Engine as _;
 use cstl_parser::compression::master::{master_compress, master_decompress};
 use cstl_parser::compression::response::{compress_response_blocks, decompress_response_blocks, ResponseBlock};
+use cstl_parser::server::castle::{decode_encoded_payload, deserialize_encoded_payload, Dictionary};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -121,6 +122,60 @@ fn run_decompress_response() -> Result<(), String> {
     Ok(())
 }
 
+/// decode-castle-response: contre-partie Python de `castle_wire.rs`'s
+/// `decode_castle_response_block` (2026-10-01). CASTLE (Layer 9,
+/// src/server/castle.rs) a un dictionnaire qui s'accumule sur la DUREE DE
+/// LA CONNEXION -- contrairement a compress/decompress et
+/// compress-response/decompress-response ci-dessus (stateless par
+/// message), un sous-processus CLI invoque une fois par message ne peut
+/// donc PAS maintenir cet etat tout seul. Le client Python le fait a sa
+/// place: il garde le dictionnaire serialise (JSON, pas le format binaire
+/// compact du fil -- cet IPC est local, pas bande-passante-contrainte) et
+/// le repasse a chaque appel, exactement comme le ferait un vrai client
+/// CASTLE qui maintiendrait son propre `Dictionary` en memoire.
+#[derive(Debug, Serialize, Deserialize)]
+struct CastleDecodeRequest {
+    /// Dictionnaire serialise (JSON) tel que renvoye par l'appel
+    /// precedent, ou absent/null pour le tout premier message de la
+    /// connexion (dictionnaire vide).
+    #[serde(default)]
+    dict_json: Option<String>,
+    /// Le champ `data=` du bloc CASTLE_RESPONSE, tel quel (base64).
+    payload_b64: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CastleDecodeResponse {
+    decoded: String,
+    /// Dictionnaire mis a jour (JSON) -- a repasser dans `dict_json` au
+    /// prochain appel sur la MEME connexion.
+    dict_json: String,
+}
+
+fn run_decode_castle_response() -> Result<(), String> {
+    let raw = read_stdin_all().map_err(|e| format!("lecture stdin: {e}"))?;
+    let req: CastleDecodeRequest = serde_json::from_str(raw.trim())
+        .map_err(|e| format!("JSON d'entree invalide (attendu {{dict_json?, payload_b64}}): {e}"))?;
+
+    let mut dict: Dictionary = match &req.dict_json {
+        Some(j) => serde_json::from_str(j).map_err(|e| format!("dict_json invalide: {e}"))?,
+        None => Dictionary::new(),
+    };
+
+    let payload_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&req.payload_b64)
+        .map_err(|e| format!("payload_b64 invalide: {e}"))?;
+    let payload = deserialize_encoded_payload(&payload_bytes).map_err(|e| format!("{e}"))?;
+    let decoded = decode_encoded_payload(&payload, &mut dict).map_err(|e| format!("{e}"))?;
+
+    let dict_json = serde_json::to_string(&dict).map_err(|e| format!("serialisation dict: {e}"))?;
+    let resp = CastleDecodeResponse { decoded, dict_json };
+    let json = serde_json::to_string(&resp).map_err(|e| format!("serialisation JSON: {e}"))?;
+    print!("{json}");
+    io::stdout().flush().map_err(|e| format!("ecriture stdout: {e}"))?;
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let mode = std::env::args().nth(1);
     let result = match mode.as_deref() {
@@ -128,12 +183,14 @@ fn main() -> ExitCode {
         Some("decompress") => run_decompress(),
         Some("compress-response") => run_compress_response(),
         Some("decompress-response") => run_decompress_response(),
+        Some("decode-castle-response") => run_decode_castle_response(),
         _ => {
-            eprintln!("usage: cstl_compress_cli <compress|decompress|compress-response|decompress-response>");
-            eprintln!("  compress:            stdin = JSON {{defines,relations,uncertainty}} -> stdout = base64");
-            eprintln!("  decompress:          stdin = base64                                -> stdout = JSON triple");
-            eprintln!("  compress-response:   stdin = JSON [[nom,[[k,v],...]],...]           -> stdout = base64");
-            eprintln!("  decompress-response: stdin = base64                                -> stdout = JSON blocs");
+            eprintln!("usage: cstl_compress_cli <compress|decompress|compress-response|decompress-response|decode-castle-response>");
+            eprintln!("  compress:              stdin = JSON {{defines,relations,uncertainty}} -> stdout = base64");
+            eprintln!("  decompress:            stdin = base64                                -> stdout = JSON triple");
+            eprintln!("  compress-response:     stdin = JSON [[nom,[[k,v],...]],...]           -> stdout = base64");
+            eprintln!("  decompress-response:   stdin = base64                                -> stdout = JSON blocs");
+            eprintln!("  decode-castle-response: stdin = JSON {{dict_json?,payload_b64}}        -> stdout = JSON {{decoded,dict_json}}");
             return ExitCode::FAILURE;
         }
     };

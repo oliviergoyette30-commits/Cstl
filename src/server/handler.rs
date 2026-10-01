@@ -23,6 +23,8 @@ use super::validator;
 use super::ServerContext;
 use super::arbitrage;
 use super::response_compression::maybe_compress_response;
+use super::castle::CastleParser;
+use super::castle_wire::maybe_castle_compress_response;
 
 /// Cherche `---END---` dans `buf` et retourne l'offset EXCLUSIF juste apres
 /// (et apres le `\n` qui suit immediatement, s'il y en a un) -- c'est-a-dire
@@ -56,20 +58,33 @@ const SOCKET_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 ///    d'ecriture logge un warning mais ne fait jamais echouer l'envoi de
 ///    la reponse elle-meme -- la collecte est un a-cote, jamais un chemin
 ///    critique.
-/// 2. Decide si cette reponse doit etre compressee (`maybe_compress_response`,
-///    avec sa propre garde de taille) et l'envoie sur le socket.
+/// 2. Decide si cette reponse doit etre compressee et l'envoie sur le
+///    socket -- DEUX codecs possibles, mutuellement exclusifs (voir
+///    castle_wire.rs pour pourquoi: deux formats de bloc wire differents,
+///    un client qui ne sait decoder que l'un ne doit jamais recevoir
+///    l'autre): `COMPRESSED_RESPONSE` (Master Compresseur, stateless par
+///    message, prioritaire si demande) ou `CASTLE_RESPONSE` (Layer 9,
+///    dictionnaire qui s'accumule sur la CONNEXION -- `castle_parser` doit
+///    donc venir de l'appelant, cree une seule fois en haut de
+///    `handle_connection`, jamais recree par message).
 async fn send_response(
     socket: &mut TcpStream,
     response: &str,
     ctx: &Arc<ServerContext>,
     want_compressed: bool,
+    want_castle: bool,
+    castle_parser: &mut CastleParser,
 ) -> std::io::Result<()> {
     if ctx.collect_response_corpus {
         if let Err(e) = ctx.adn_store.lock().await.record_response_corpus_entry(response) {
             warn!("[ResponseCorpus] enregistrement echoue (non bloquant, reponse envoyee quand meme): {}", e);
         }
     }
-    let out = maybe_compress_response(response, want_compressed);
+    let out = if want_compressed {
+        maybe_compress_response(response, true)
+    } else {
+        maybe_castle_compress_response(response, castle_parser, want_castle)
+    };
     socket.write_all(out.as_bytes()).await
 }
 
@@ -94,6 +109,14 @@ pub async fn handle_connection(
     // pour la prochaine iteration au lieu d'etre perdu.
     let mut accumulated: Vec<u8> = Vec::new();
     const MAX_PAYLOAD_SIZE: usize = 1024 * 1024; // 1 MiB -- tres au-dessus de tout payload CSTL reel observe cette session
+
+    // CASTLE (Layer 9, castle.rs/castle_wire.rs): un seul dictionnaire pour
+    // TOUTE la duree de cette connexion -- c'est le sens de
+    // "session-amortized" dans le nom du module (voir le commentaire de
+    // module de castle_wire.rs). Cree ici, PAS a l'interieur de la boucle
+    // ci-dessous, sinon chaque message repartirait d'un dictionnaire vide
+    // et CASTLE ne pourrait jamais amortir quoi que ce soit.
+    let mut castle_parser = CastleParser::new(true);
 
     loop {
         let raw_payload = loop {
@@ -184,6 +207,17 @@ pub async fn handle_connection(
                 // utilise a chaque site socket.write_all(...) de cette branche.
                 let want_compressed_response = matches!(
                     payload.intent.get("compress_response").map(String::as_str),
+                    Some("true") | Some("1")
+                );
+
+                // CASTLE (2026-10-01, castle_wire.rs): deuxieme codec de
+                // reponse opt-in, egalement jamais actif par defaut. Si le
+                // client demande les deux, compress_response (Master
+                // Compresseur) est prioritaire -- send_response() applique
+                // cette precedence -- une limite de portee v1 assumee et
+                // documentee plutot que de gerer un double-encodage.
+                let want_castle_response = matches!(
+                    payload.intent.get("castle_response").map(String::as_str),
                     Some("true") | Some("1")
                 );
 
@@ -315,7 +349,7 @@ pub async fn handle_connection(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=signature_rejected, reason={}, detail={}]\n---END---\n",
                             reason, detail
                         );
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
                     }
 
@@ -447,7 +481,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
                     }
 
@@ -499,7 +533,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
                     }
 
@@ -564,7 +598,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
                     }
 
@@ -711,7 +745,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
                     }
 
@@ -809,7 +843,7 @@ pub async fn handle_connection(
                             }
                         };
 
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
                     }
 
@@ -1696,11 +1730,11 @@ pub async fn handle_connection(
                             entry.seq
                         );
 
-                        send_response(&mut socket, &response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         info!("[Handler] Response sent successfully");
                     } else {
                         let error_response = "#!CSTL v5.0.0 MODE=A\nINTENT_PAYLOAD [purpose=error, status=no_agent]\n---END---\n";
-                        send_response(&mut socket, error_response, &ctx, want_compressed_response).await?;
+                        send_response(&mut socket, error_response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         error!("[Handler] No agent found for routing");
                     }
                 } else {
@@ -1723,7 +1757,7 @@ pub async fn handle_connection(
                         error_msg.replace("\"", "\\\"")
                     );
                     
-                    send_response(&mut socket, &error_response, &ctx, want_compressed_response).await?;
+                    send_response(&mut socket, &error_response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                 }
             }
             Err(e) => {

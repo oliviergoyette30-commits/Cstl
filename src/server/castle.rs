@@ -1,7 +1,40 @@
 //! CASTLE Layer 9 — Session-amortized shared dictionary compression
 //!
-//! Encodes JSON payloads using a shared symbol dictionary to reduce wire size.
-//! Variable-length encoding: symbol IDs < 256 use 1 byte, >= 256 use 2 bytes.
+//! Encodes text payloads using a shared symbol dictionary to reduce wire size.
+//!
+//! **2026-10-01 correctness rewrite.** This module existed since v5.0.0 with
+//! 7 passing unit tests but was never wired into the live pipeline (dead
+//! code — `pub mod castle;` only). Wiring it up (see `castle_wire.rs`)
+//! required an honest look first, and it surfaced three real bugs the loose
+//! "contains()" assertions in the original tests never caught:
+//!
+//! 1. **Ambiguous byte stream.** The old `encode_symbol_id`/`is_symbol_marker`
+//!    scheme tried to tell symbol-ID bytes apart from structural/literal
+//!    bytes using a heuristic (`byte >= 128 || byte < 32`) with NO reserved
+//!    marker range -- a single-byte symbol ID is any value 0..=255 and
+//!    routinely collides with the ASCII range used by structural chars and
+//!    literals. Decoding could silently emit the wrong bytes. Fixed here
+//!    with a self-describing tag-prefixed format (see `encode_tokens`/
+//!    `decode_data_section`): every token is `[tag][payload]`, no ambiguity
+//!    possible regardless of byte values.
+//! 2. **Whitespace and quote marks silently dropped** by `tokenize_json`
+//!    (whitespace was consumed and never re-emitted; quote characters were
+//!    stripped from quoted spans). Harmless for JSON formatted exactly the
+//!    way the tokenizer expects, but CSTL block text is not JSON -- it has
+//!    meaningful whitespace and quoted values (`errors="...,..."`) -- so
+//!    this would have corrupted real traffic. Fixed by folding whitespace
+//!    into the current token and keeping the quote characters themselves as
+//!    part of the captured string.
+//! 3. **"Delta" was not actually a delta**: `encode_json_with_dict` cloned
+//!    the ENTIRE dictionary into every `EncodedPayload.dictionary`,
+//!    `DictType::Delta` or not -- the one thing "session-amortized" is
+//!    supposed to avoid. Fixed: `Delta` now carries only the symbols newly
+//!    inserted during that one call; `Full` still carries everything (first
+//!    message / large-vocabulary bursts).
+//!
+//! None of this is a performance optimization pass — it's what makes a
+//! byte-exact roundtrip even possible, which is the precondition for the
+//! safety gate in `castle_wire.rs` to ever let compression through at all.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -147,21 +180,47 @@ fn tokenize_json(input: &str) -> Vec<Token> {
                 chars.next();
             }
             '"' => {
+                // 2026-10-01 fix: the original code consumed the opening and
+                // closing quote chars without ever re-emitting them, so a
+                // decode could never reproduce a quoted field exactly (CSTL
+                // values are routinely quoted, e.g. `errors="E304: ..., ..."`
+                // to protect an embedded comma -- see
+                // parser::split_top_level_commas). Both quote characters are
+                // now kept as part of the captured token, so the token's
+                // content is exactly the source bytes it spans, no matter
+                // how it gets chunked.
                 if !current_token.is_empty() {
                     tokens.push(Token::String(current_token.clone()));
                     current_token.clear();
                 }
-                chars.next(); // consume opening quote
                 let mut string_val = String::new();
-                while let Some(ch) = chars.next() {
-                    if ch == '"' {
+                string_val.push(ch); // opening quote
+                chars.next();
+                for c in chars.by_ref() {
+                    string_val.push(c);
+                    if c == '"' {
                         break;
                     }
-                    string_val.push(ch);
                 }
                 tokens.push(Token::String(string_val));
             }
             '0'..='9' | '-' | 't' | 'f' | 'n' => {
+                // 2026-10-01 fix: this branch is reached on EVERY peeked
+                // char, not just at token boundaries -- a wildcard-started
+                // token like "status" hits 's' (wildcard, pushed into
+                // current_token) then 't' (which matches this branch's
+                // trigger set) *mid-word*. The original code started a new
+                // `literal` buffer and pushed it to `tokens` immediately,
+                // while the "s" sitting in `current_token` only got flushed
+                // later -- reordering the output ("tatus" before "s").
+                // Flushing here first keeps byte order correct; it still
+                // mid-word-splits occasionally (e.g. "status" -> "s" +
+                // "tatus"), which only affects compression efficiency, not
+                // correctness, since decode just concatenates in order.
+                if !current_token.is_empty() {
+                    tokens.push(Token::String(current_token.clone()));
+                    current_token.clear();
+                }
                 let mut literal = String::new();
                 while let Some(&ch) = chars.peek() {
                     match ch {
@@ -178,6 +237,14 @@ fn tokenize_json(input: &str) -> Vec<Token> {
                 }
             }
             ' ' | '\n' | '\r' | '\t' => {
+                // 2026-10-01 fix: previously consumed and discarded -- fine
+                // for insignificant JSON whitespace between tokens, wrong
+                // for CSTL block text where whitespace inside a field value
+                // is meaningful content (e.g. "produced_by=Server, status=
+                // ..." -- the space after the comma is part of the real
+                // bytes a decode must reproduce). Folded into the current
+                // token instead of being dropped.
+                current_token.push(ch);
                 chars.next();
             }
             _ => {
@@ -194,19 +261,23 @@ fn tokenize_json(input: &str) -> Vec<Token> {
     tokens
 }
 
-/// Encode variable-length symbol ID: < 256 → 1 byte, else → 2 bytes big-endian
-fn encode_symbol_id(id: u16) -> Vec<u8> {
-    if id < 256 {
-        vec![id as u8]
-    } else {
-        vec![(id >> 8) as u8, (id & 0xFF) as u8]
-    }
-}
+/// Tag bytes for the self-describing token stream (2026-10-01 rewrite).
+/// The old format tried to distinguish symbol IDs from structural/literal
+/// bytes by VALUE HEURISTIC (`byte >= 128 || byte < 32`) with no reserved
+/// range -- a single-byte symbol ID can legitimately be any value 0..=255,
+/// so it routinely collided with ASCII structural/literal bytes and decoded
+/// wrong. Every token is now `[tag][payload]`, so decoding never has to
+/// guess what a byte means.
+const TAG_SYMBOL: u8 = 0;
+const TAG_STRUCTURAL: u8 = 1;
+const TAG_LITERAL: u8 = 2;
 
-/// Encode tokens using dictionary, tracking new symbols
-fn encode_tokens(tokens: &[Token], dict: &mut Dictionary) -> (Vec<u8>, usize) {
+/// Encode tokens using the dictionary. Returns the encoded byte stream and
+/// the list of symbols NEWLY inserted during this call (id, value) -- the
+/// caller decides whether to ship the full dictionary or just this delta.
+fn encode_tokens(tokens: &[Token], dict: &mut Dictionary) -> (Vec<u8>, Vec<(u16, String)>) {
     let mut output = Vec::new();
-    let mut new_count = 0;
+    let mut new_symbols = Vec::new();
 
     for token in tokens {
         match token {
@@ -214,36 +285,52 @@ fn encode_tokens(tokens: &[Token], dict: &mut Dictionary) -> (Vec<u8>, usize) {
                 let old_size = dict.symbol_count();
                 let id = dict.get_or_insert(s);
                 if dict.symbol_count() > old_size {
-                    new_count += 1;
+                    new_symbols.push((id, s.clone()));
                 }
-                output.extend(encode_symbol_id(id));
+                output.push(TAG_SYMBOL);
+                output.extend_from_slice(&id.to_be_bytes());
             }
             Token::Structural(ch) => {
+                // CSTL/JSON structural chars ({}[]:,) are all single-byte
+                // ASCII, so the `as u8` cast is exact -- never used for
+                // anything outside that fixed set (see tokenize_json).
+                output.push(TAG_STRUCTURAL);
                 output.push(*ch as u8);
             }
             Token::Literal(val) => {
-                output.extend(val.as_bytes());
+                let bytes = val.as_bytes();
+                output.push(TAG_LITERAL);
+                output.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+                output.extend_from_slice(bytes);
             }
         }
     }
 
-    (output, new_count)
+    (output, new_symbols)
 }
 
-/// Main encoding function: JSON → EncodedPayload
+/// Main encoding function: text → EncodedPayload. The name (and the
+/// `json_input` parameter name below) predates this rewrite -- despite the
+/// "JSON" framing the tokenizer is tolerant of arbitrary text (CSTL block
+/// text included), see the module doc comment.
 pub fn encode_json_with_dict(
     json_input: &str,
     dict: &mut Dictionary,
     _prev_dict_version: u32,
 ) -> EncodedPayload {
-    // Step 1: Tokenize JSON
+    // Step 1: Tokenize
     let tokens = tokenize_json(json_input);
 
-    // Step 2: Encode tokens, track new symbols
-    let (encoded_data, new_symbols_count) = encode_tokens(&tokens, dict);
+    // Step 2: Encode tokens, collect newly-inserted symbols
+    let (encoded_data, new_symbols) = encode_tokens(&tokens, dict);
 
-    // Step 3: Decide full dict or delta
-    let dict_type = if new_symbols_count >= 100 {
+    // Step 3: Decide full dict or delta. A large burst of new vocabulary
+    // (>=100 new symbols in one call) ships the whole dictionary so a
+    // receiver that somehow desynced can resync in one shot; otherwise
+    // (the common case) only the genuinely new entries travel -- see the
+    // module doc comment for why the old code's "delta" didn't actually do
+    // this.
+    let dict_type = if new_symbols.len() >= 100 {
         DictType::Full
     } else {
         DictType::Delta
@@ -254,61 +341,58 @@ pub fn encode_json_with_dict(
     EncodedPayload {
         version: dict.version,
         dict_type,
-        dictionary: dict.symbols.clone(),
+        dictionary: match dict_type {
+            DictType::Full => dict.symbols.clone(),
+            DictType::Delta => new_symbols,
+        },
         encoded_data,
     }
 }
 
-/// Check if byte is a symbol marker (marker for dictionary lookup)
-fn is_symbol_marker(byte: u8) -> bool {
-    // Symbols marked by their variable-length encoding
-    // In this simplified version, any byte >= 128 or < 32 (except whitespace) could be a marker
-    byte >= 128 || (byte < 32 && byte != b' ')
-}
-
-/// Check if char is structural JSON element
-fn is_structural(ch: char) -> bool {
-    matches!(ch, '{' | '}' | '[' | ']' | ':' | ',')
-}
-
-/// Decode variable-length symbol ID from byte stream
-fn decode_symbol_id(bytes: &[u8]) -> (u16, usize) {
-    if bytes.is_empty() {
-        return (0, 1);
-    }
-
-    if bytes[0] < 128 {
-        (bytes[0] as u16, 1)
-    } else if bytes.len() > 1 {
-        let id = ((bytes[0] as u16) << 8) | (bytes[1] as u16);
-        (id, 2)
-    } else {
-        (bytes[0] as u16, 1)
-    }
-}
-
-/// Decode data section using dictionary
+/// Decode the tag-prefixed data section using the dictionary.
 fn decode_data_section(data: &[u8], dict: &Dictionary) -> Result<String, DecodeError> {
     let mut output = String::new();
     let mut i = 0;
 
     while i < data.len() {
-        let byte = data[i];
-
-        if is_symbol_marker(byte) {
-            let (id, consumed) = decode_symbol_id(&data[i..]);
-            if let Some(s) = dict.decode(id) {
-                output.push_str(s);
-                i += consumed;
-            } else {
-                return Err(DecodeError::SymbolNotFound(id));
+        let tag = data[i];
+        i += 1;
+        match tag {
+            TAG_SYMBOL => {
+                if i + 2 > data.len() {
+                    return Err(DecodeError::InvalidData("truncated symbol id".to_string()));
+                }
+                let id = u16::from_be_bytes([data[i], data[i + 1]]);
+                i += 2;
+                match dict.decode(id) {
+                    Some(s) => output.push_str(s),
+                    None => return Err(DecodeError::SymbolNotFound(id)),
+                }
             }
-        } else if is_structural(byte as char) {
-            output.push(byte as char);
-            i += 1;
-        } else {
-            output.push(byte as char);
-            i += 1;
+            TAG_STRUCTURAL => {
+                if i >= data.len() {
+                    return Err(DecodeError::InvalidData("truncated structural token".to_string()));
+                }
+                output.push(data[i] as char);
+                i += 1;
+            }
+            TAG_LITERAL => {
+                if i + 4 > data.len() {
+                    return Err(DecodeError::InvalidData("truncated literal length".to_string()));
+                }
+                let len = u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize;
+                i += 4;
+                if i + len > data.len() {
+                    return Err(DecodeError::InvalidData("truncated literal body".to_string()));
+                }
+                let s = std::str::from_utf8(&data[i..i + len])
+                    .map_err(|e| DecodeError::InvalidData(format!("invalid utf-8 in literal: {e}")))?;
+                output.push_str(s);
+                i += len;
+            }
+            other => {
+                return Err(DecodeError::InvalidData(format!("unknown token tag byte {other}")));
+            }
         }
     }
 
@@ -348,6 +432,7 @@ pub fn decode_encoded_payload(
 }
 
 /// CASTLE compression parser and integration point
+#[derive(Clone)]
 pub struct CastleParser {
     dictionary: Dictionary,
     compression_enabled: bool,
@@ -392,6 +477,113 @@ impl CastleParser {
     pub fn symbol_count(&self) -> usize {
         self.dictionary.symbol_count()
     }
+
+    /// Snapshot the current dictionary state (cheap clone -- used by
+    /// `castle_wire.rs` to trial-encode a message without committing the
+    /// live dictionary until the byte-exact roundtrip gate has passed; see
+    /// that module for why a rejected trial must never advance the
+    /// connection's real dictionary).
+    pub fn dictionary_snapshot(&self) -> Dictionary {
+        self.dictionary.clone()
+    }
+
+    /// Replace the live dictionary wholesale (commits a trial encode after
+    /// its gate has passed).
+    pub fn commit_dictionary(&mut self, dict: Dictionary) {
+        self.dictionary = dict;
+    }
+}
+
+/// Compact binary wire serialization of an `EncodedPayload` -- deliberately
+/// NOT `serde_json` (a `Vec<u8>` serialized as a JSON array of numbers would
+/// bloat the very thing this module exists to shrink). Format:
+///   [1 byte dict_type: 0=Full, 1=Delta]
+///   [4 bytes version, big-endian]
+///   [4 bytes dictionary entry count, big-endian]
+///   repeated: [2 bytes id][4 bytes value byte-length][value bytes]
+///   [4 bytes encoded_data byte-length][encoded_data bytes]
+pub fn serialize_encoded_payload(payload: &EncodedPayload) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.push(match payload.dict_type {
+        DictType::Full => 0u8,
+        DictType::Delta => 1u8,
+    });
+    out.extend_from_slice(&payload.version.to_be_bytes());
+    out.extend_from_slice(&(payload.dictionary.len() as u32).to_be_bytes());
+    for (id, value) in &payload.dictionary {
+        out.extend_from_slice(&id.to_be_bytes());
+        let vb = value.as_bytes();
+        out.extend_from_slice(&(vb.len() as u32).to_be_bytes());
+        out.extend_from_slice(vb);
+    }
+    out.extend_from_slice(&(payload.encoded_data.len() as u32).to_be_bytes());
+    out.extend_from_slice(&payload.encoded_data);
+    out
+}
+
+/// Inverse of `serialize_encoded_payload`. Never panics on truncated or
+/// malformed input -- every length-prefixed read is bounds-checked and
+/// returns `DecodeError::InvalidData` instead, same discipline as
+/// `decode_data_section` above.
+pub fn deserialize_encoded_payload(bytes: &[u8]) -> Result<EncodedPayload, DecodeError> {
+    fn need(bytes: &[u8], i: usize, n: usize) -> Result<(), DecodeError> {
+        if i + n > bytes.len() {
+            Err(DecodeError::InvalidData("truncated CASTLE wire payload".to_string()))
+        } else {
+            Ok(())
+        }
+    }
+
+    let mut i = 0;
+    need(bytes, i, 1)?;
+    let dict_type = match bytes[i] {
+        0 => DictType::Full,
+        1 => DictType::Delta,
+        other => {
+            return Err(DecodeError::InvalidData(format!("unknown dict_type tag {other}")));
+        }
+    };
+    i += 1;
+
+    need(bytes, i, 4)?;
+    let version = u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap());
+    i += 4;
+
+    need(bytes, i, 4)?;
+    let dict_len = u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+    i += 4;
+
+    let mut dictionary = Vec::with_capacity(dict_len.min(1_000_000));
+    for _ in 0..dict_len {
+        need(bytes, i, 2)?;
+        let id = u16::from_be_bytes([bytes[i], bytes[i + 1]]);
+        i += 2;
+
+        need(bytes, i, 4)?;
+        let vlen = u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+        i += 4;
+
+        need(bytes, i, vlen)?;
+        let value = std::str::from_utf8(&bytes[i..i + vlen])
+            .map_err(|e| DecodeError::InvalidData(format!("invalid utf-8 in dict value: {e}")))?
+            .to_string();
+        i += vlen;
+
+        dictionary.push((id, value));
+    }
+
+    need(bytes, i, 4)?;
+    let data_len = u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+    i += 4;
+    need(bytes, i, data_len)?;
+    let encoded_data = bytes[i..i + data_len].to_vec();
+
+    Ok(EncodedPayload {
+        version,
+        dict_type,
+        dictionary,
+        encoded_data,
+    })
 }
 
 #[cfg(test)]
@@ -400,6 +592,9 @@ mod tests {
 
     #[test]
     fn test_encode_decode_roundtrip() {
+        // 2026-10-01: tightened from a loose `contains()` check to exact
+        // equality, now that the tag-prefixed format makes it possible to
+        // actually guarantee this.
         let json_input = r#"{"user":"alice","age":30,"active":true}"#;
         let mut parser = CastleParser::new(true);
 
@@ -410,9 +605,21 @@ mod tests {
             .receive_and_decode(&encoded)
             .expect("decode failed");
 
-        // Check that roundtrip preserves content
-        assert!(!decoded.is_empty());
-        assert!(decoded.contains("alice") || decoded.contains("user"));
+        assert_eq!(decoded, json_input);
+    }
+
+    #[test]
+    fn test_roundtrip_exact_on_cstl_block_text_with_whitespace_and_quotes() {
+        // The old tokenizer dropped whitespace and quote marks -- both are
+        // meaningful bytes in real CSTL block text (not JSON). This is the
+        // shape of text castle_wire.rs actually compresses.
+        let cstl_body = "META [encoder=CstlNativeServer, produced_by=Server, status=processed]\nINTENT_PAYLOAD [purpose=acknowledgement, errors=\"E304: Missing sender, E305: Missing receiver\"]\n";
+        let mut parser = CastleParser::new(true);
+
+        let encoded = parser.parse_and_encode(cstl_body).expect("encode failed");
+        let decoded = parser.receive_and_decode(&encoded).expect("decode failed");
+
+        assert_eq!(decoded, cstl_body);
     }
 
     #[test]
@@ -429,18 +636,67 @@ mod tests {
     }
 
     #[test]
-    fn test_symbol_id_encoding_single_byte() {
-        let encoded = encode_symbol_id(100);
-        assert_eq!(encoded.len(), 1);
-        assert_eq!(encoded[0], 100);
+    fn test_delta_carries_only_newly_inserted_symbols() {
+        // 2026-10-01 fix: DictType::Delta used to clone the WHOLE dictionary
+        // into every EncodedPayload regardless -- defeating the point of a
+        // delta. This asserts the real contract: a second message that
+        // repeats the first message's vocabulary adds nothing new.
+        let mut parser = CastleParser::new(true);
+
+        let first = parser
+            .parse_and_encode(r#"{"user":"alice"}"#)
+            .expect("encode failed");
+        assert_eq!(first.dict_type, DictType::Delta);
+        assert!(!first.dictionary.is_empty(), "first message must introduce symbols");
+
+        let second = parser
+            .parse_and_encode(r#"{"user":"alice"}"#)
+            .expect("encode failed");
+        assert_eq!(second.dict_type, DictType::Delta);
+        assert!(
+            second.dictionary.is_empty(),
+            "repeating known vocabulary must not resend any dictionary entries, got {:?}",
+            second.dictionary
+        );
+
+        // And it must still decode correctly against the accumulated dictionary.
+        let decoded = parser.receive_and_decode(&second).expect("decode failed");
+        assert_eq!(decoded, r#"{"user":"alice"}"#);
     }
 
     #[test]
-    fn test_symbol_id_encoding_double_byte() {
-        let encoded = encode_symbol_id(256);
-        assert_eq!(encoded.len(), 2);
-        assert_eq!(encoded[0], 1);
-        assert_eq!(encoded[1], 0);
+    fn test_serialize_deserialize_encoded_payload_roundtrips() {
+        let mut dict = Dictionary::new();
+        let encoded = encode_json_with_dict(
+            r#"{"user":"alice","note":"hello, world"}"#,
+            &mut dict,
+            0,
+        );
+
+        let wire_bytes = serialize_encoded_payload(&encoded);
+        let restored = deserialize_encoded_payload(&wire_bytes).expect("deserialize failed");
+
+        assert_eq!(restored.version, encoded.version);
+        assert_eq!(restored.dict_type, encoded.dict_type);
+        assert_eq!(restored.dictionary, encoded.dictionary);
+        assert_eq!(restored.encoded_data, encoded.encoded_data);
+    }
+
+    #[test]
+    fn test_deserialize_encoded_payload_truncated_input_never_panics() {
+        // Same fuzz-style discipline as compression/response.rs's truncated-
+        // input test: a malformed/truncated wire payload must error, not panic.
+        let valid = {
+            let mut dict = Dictionary::new();
+            let encoded = encode_json_with_dict(r#"{"a":"b"}"#, &mut dict, 0);
+            serialize_encoded_payload(&encoded)
+        };
+
+        for cut in 0..valid.len() {
+            let _ = deserialize_encoded_payload(&valid[..cut]);
+        }
+        let _ = deserialize_encoded_payload(&[]);
+        let _ = deserialize_encoded_payload(&[0xFF; 3]);
     }
 
     #[test]
