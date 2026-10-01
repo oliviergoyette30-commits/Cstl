@@ -115,6 +115,16 @@ pub struct CstlNativeServer {
     /// statique. Le dictionnaire v5.0.0 est charge au demarrage et partage
     /// par tous les agents sur le meme serveur.
     pub wai_registry: Arc<wai::DictionaryRegistry>,
+    /// TLS 1.3 (optionnel, mutuellement authentifie ou non) -- `None` par
+    /// defaut (`try_with_data_path`), comportement inchange: TCP brut, meme
+    /// qu'avant ce cablage. `start()` construit cette valeur depuis
+    /// `CSTL_TLS_*` (voir plus bas) si `None` et que les variables
+    /// d'environnement sont presentes; un test/smoke-test peut aussi
+    /// l'assigner directement avant d'appeler `start()` (meme patron que
+    /// `agent_registry`/`restricted_council`, voir les smoke-tests
+    /// existants) pour utiliser des certificats generes en memoire sans
+    /// passer par le disque.
+    pub tls: Option<Arc<tls::TlsServer>>,
 }
 
 impl CstlNativeServer {
@@ -230,6 +240,7 @@ impl CstlNativeServer {
             governance: Arc::new(Mutex::new(governance)),
             sigma_calibrator: Arc::new(Mutex::new(sigma_calibrator)),
             wai_registry: Arc::new(wai_registry),
+            tls: None,
         })
     }
 
@@ -253,6 +264,55 @@ impl CstlNativeServer {
 
         eprintln!("[CSTL-Native Server] Listening on {}", addr);
 
+        // TLS 1.3 (optionnel, mutuellement authentifie ou non) -- 2026-10-01,
+        // voir server/tls.rs. Priorite: `self.tls` (deja construit, ex. par
+        // un smoke-test avec des certificats generes en memoire) > variables
+        // d'environnement `CSTL_TLS_*` (chargees UNE SEULE FOIS ici, meme
+        // discipline que CSTL_COLLECT_RESPONSE_CORPUS juste plus bas) > rien
+        // (TCP brut, comportement inchange -- c'est l'etat par defaut tant
+        // qu'aucune des deux sources n'est fournie).
+        let tls_server: Option<Arc<tls::TlsServer>> = if let Some(tls) = &self.tls {
+            eprintln!("[CSTL-Native Server] TLS 1.3 actif (configure directement sur CstlNativeServer.tls)");
+            Some(tls.clone())
+        } else {
+            match (std::env::var("CSTL_TLS_CERT_PATH"), std::env::var("CSTL_TLS_KEY_PATH")) {
+                (Ok(cert_path), Ok(key_path)) => {
+                    let cert_chain_pem = std::fs::read(&cert_path)
+                        .map_err(|e| format!("lecture de CSTL_TLS_CERT_PATH='{}' echouee: {}", cert_path, e))?;
+                    let private_key_pem = std::fs::read(&key_path)
+                        .map_err(|e| format!("lecture de CSTL_TLS_KEY_PATH='{}' echouee: {}", key_path, e))?;
+                    let require_mutual_auth = std::env::var("CSTL_TLS_REQUIRE_MUTUAL_AUTH")
+                        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                        .unwrap_or(false);
+                    let client_ca_pem = match std::env::var("CSTL_TLS_CLIENT_CA_PATH") {
+                        Ok(ca_path) => Some(
+                            std::fs::read(&ca_path)
+                                .map_err(|e| format!("lecture de CSTL_TLS_CLIENT_CA_PATH='{}' echouee: {}", ca_path, e))?,
+                        ),
+                        Err(_) => None,
+                    };
+                    let tls_config = tls::TlsConfig {
+                        cert_chain_pem,
+                        private_key_pem,
+                        client_ca_pem,
+                        require_mutual_auth,
+                    };
+                    let tls_server = tls::TlsServer::new(tls_config)
+                        .map_err(|e| format!("configuration TLS invalide (CSTL_TLS_*): {}", e))?;
+                    eprintln!(
+                        "[CSTL-Native Server] TLS 1.3 actif (CSTL_TLS_CERT_PATH/CSTL_TLS_KEY_PATH, mutual_auth={})",
+                        require_mutual_auth
+                    );
+                    Some(Arc::new(tls_server))
+                }
+                _ => {
+                    eprintln!("[CSTL-Native Server] TLS desactive (CSTL_TLS_CERT_PATH / CSTL_TLS_KEY_PATH absents) -- TCP brut");
+                    None
+                }
+            }
+        };
+        let tls_acceptor = tls_server.map(|s| Arc::new(s.acceptor()));
+
         let ctx = ServerContext {
             agent_registry: self.agent_registry.clone(),
             chain: self.chain.clone(),
@@ -275,7 +335,7 @@ impl CstlNativeServer {
             eprintln!("[CSTL-Native Server] Collecte du corpus de reponses ACTIVE (CSTL_COLLECT_RESPONSE_CORPUS) -- chaque reponse plain-text sera persistee dans response_corpus");
         }
 
-        listener::accept_connections(listener, Arc::new(ctx)).await?;
+        listener::accept_connections(listener, Arc::new(ctx), tls_acceptor).await?;
 
         Ok(())
     }

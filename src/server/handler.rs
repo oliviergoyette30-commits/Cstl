@@ -8,8 +8,7 @@
 //! 5. Record audit trail
 //! 6. Send response
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use std::sync::Arc;
 use log::{error, warn, info, debug};
 use crate::execution_lab;
@@ -67,8 +66,8 @@ const SOCKET_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 ///    dictionnaire qui s'accumule sur la CONNEXION -- `castle_parser` doit
 ///    donc venir de l'appelant, cree une seule fois en haut de
 ///    `handle_connection`, jamais recree par message).
-async fn send_response(
-    socket: &mut TcpStream,
+async fn send_response<S: AsyncWrite + Unpin>(
+    socket: &mut S,
     response: &str,
     ctx: &Arc<ServerContext>,
     want_compressed: bool,
@@ -90,8 +89,15 @@ async fn send_response(
 
 /// Handle a single connection with access to all server sub-systems via ServerContext.
 /// Replaces 9 separate parameters with a single Arc<ServerContext> owned value.
-pub async fn handle_connection(
-    mut socket: TcpStream,
+///
+/// Generique sur `S` depuis le cablage de `server/tls.rs` (2026-10-01):
+/// `listener.rs` appelle cette fonction avec soit un `TcpStream` brut (TLS
+/// desactive, comportement inchange), soit un `tokio_rustls::server::TlsStream<TcpStream>`
+/// (TLS active) -- le corps ne lit/ecrit que via `AsyncRead`/`AsyncWrite`,
+/// jamais une methode specifique a `TcpStream`, donc aucune duplication de
+/// code n'etait necessaire pour supporter les deux cas.
+pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
+    mut socket: S,
     ctx: Arc<ServerContext>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0u8; 8192];

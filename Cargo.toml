@@ -202,3 +202,10 @@ version = "1.0"
 [dependencies.lazy_static]
 # WAI/CASTLE dictionary symbols — static initialization
 version = "1.4"
+
+[dependencies.rcgen]
+# Generation de certificats X.509 REELS pour tests/bootstrap de
+# src/server/tls.rs (2026-10-01) -- remplace les octets PEM factices
+# codes en dur de l'ancien stub ("MIIC...\n"). JAMAIS utilise pour un
+# certificat de production: self-signed/CA jetable, voir tls.rs.
+version = "0.14"
