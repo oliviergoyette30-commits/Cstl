@@ -23,12 +23,16 @@ path = "src/lib.rs"
 # (NFC). Corrige le 2026-09-03.
 
 [dev-dependencies]
+# lz4_flex: reste exploratoire (examples/benchmark_zstd_lz4_gzip.rs,
+# 2026-10-02) -- mesure (voir benchmark) montre qu'il perd TOUJOURS en
+# taille vs gzip/zstd pour un gain de vitesse inutile a cette echelle de
+# message (differences de microsecondes). Jamais adopte dans master.rs.
+lz4_flex = "0.14.0"
 # Requis pour les tests de src/signing.rs et src/crypto/post_quantum.rs
 # (SigningKey::generate(&mut csprng)) -- ed25519-dalek 2.x exige un
 # CryptoRngCore, rand 0.8's OsRng l'implemente.
 # Aussi utilisé en production dans post_quantum.rs pour la génération de clés.
 criterion = "0.5"
-flate2 = "1.0"
 proptest = "1.4"
 prost = "0.14.4"
 prost-derive = "0.14.4"
@@ -200,7 +204,23 @@ version = "0.11"
 [dependencies.flate2]
 # GZIP compression for optional Couche 5 payload storage
 # Reduces DB size for long-running systems without breaking retrieval
+# Aussi utilise comme candidat MODE_GZIP_STRUCTURAL dans
+# src/compression/master.rs (mode hybride, 2026-10-02).
 version = "1.0"
+
+[dependencies.zstd]
+# Candidat MODE_ZSTD_DICT dans src/compression/master.rs (2026-10-02) --
+# promu de dev-dependency a dependency de production: mesure (voir
+# examples/benchmark_zstd_dictionary.rs) montre un gain de 23-47% vs le
+# mode hybride dict-maison/gzip, grace au mecanisme de dictionnaire NATIF
+# de zstd (zdict/COVER) entraine une fois hors-ligne et EMBARQUE dans le
+# binaire (src/compression/zstd_cstl_dict.bin via include_bytes!), jamais
+# transmis sur le fil -- meme principe que stable_dictionary.rs/
+# text_dictionary.rs mais pour un dictionnaire d'octets bruts plutot que
+# semantique. feature "zdict_builder" (activee par defaut) necessaire
+# seulement pour re-entrainer via examples/train_zstd_dictionary.rs, pas
+# pour compresser/decompresser en prod.
+version = "0.14.0"
 
 [dependencies.lazy_static]
 # WAI/CASTLE dictionary symbols — static initialization
