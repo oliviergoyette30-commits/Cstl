@@ -285,11 +285,24 @@ impl DeonticOrchestrator {
 
             executions.push(execution.clone());
 
-            // Persist execution to audit trail
-            // TODO: Implement save_deontic_execution in AdnStore
-            // if let Ok(mut store) = self.adn_store.try_lock() {
-            //     let _ = store.save_deontic_execution(&execution);
-            // }
+            // Persist execution to audit trail -- `save_deontic_execution`
+            // existait deja dans adn_store.rs (table `deontic_executions`,
+            // voir CREATE TABLE) mais n'etait jamais appele: ce TODO datait
+            // d'avant l'implementation de la fonction, jamais reconnecte.
+            // `.lock().await` plutot que le `try_lock()` du code commente
+            // original: sous contention, `try_lock()` aurait echoue
+            // silencieusement et saute l'ecriture d'audit -- inacceptable
+            // pour le journal cense tracer CHAQUE application de regle
+            // deontique (voir doc de module: "l'audit trail est
+            // fondationnel"). Erreur de persistance loguee, jamais
+            // avalee silencieusement (meme patron que handler.rs
+            // save_audit_entry).
+            if let Err(e) = self.adn_store.lock().await.save_deontic_execution(&execution) {
+                eprintln!(
+                    "[DeonticOrchestrator] save_deontic_execution failed (rule={}, event={}): {}",
+                    execution.rule_id, execution.event_id, e
+                );
+            }
         }
 
         // Store all executions
@@ -361,15 +374,22 @@ impl DeonticOrchestrator {
     async fn execute_must_not_rule(&self, event: &DeonticEvent, rule: &DeonticRule) -> ExecutionResult {
         eprintln!("[MUST_NOT] Rejecting action: {}", rule.action);
 
-        // Audit the rejection
-        // TODO: Implement append_comment in AdnStore
-        // if let Ok(mut store) = self.adn_store.try_lock() {
-        //     let audit_msg = format!(
-        //         "REJECTION: Rule {} prevented action: {}",
-        //         rule.rule_id, rule.action
-        //     );
-        //     let _ = store.append_comment(&audit_msg);
-        // }
+        // Audit the rejection -- meme situation que save_deontic_execution
+        // ci-dessus: `append_comment` existait deja, jamais appele. Une
+        // regle MUST_NOT qui rejette une action SANS laisser de trace
+        // d'audit est exactement le trou que l'architecture de ce depot
+        // dit ne jamais vouloir (voir memoire de session: "sans l'audit
+        // trail, les contraintes deontiques deviennent inapplicables").
+        let audit_msg = format!(
+            "REJECTION: Rule {} prevented action: {} (event_type={})",
+            rule.rule_id, rule.action, event.event_type()
+        );
+        if let Err(e) = self.adn_store.lock().await.append_comment(&audit_msg) {
+            eprintln!(
+                "[DeonticOrchestrator] append_comment failed for MUST_NOT rejection (rule={}): {}",
+                rule.rule_id, e
+            );
+        }
 
         match event {
             DeonticEvent::AgentRegister { agent_id, .. } => {

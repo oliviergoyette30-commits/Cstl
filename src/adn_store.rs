@@ -1967,11 +1967,18 @@ impl AdnStore {
         &self,
         execution: &crate::server::deontic_orchestration::DeonticExecution,
     ) -> Result<(), rusqlite::Error> {
-        let execution_id = format!(
-            "{}_{}",
-            execution.rule_id,
-            execution.timestamp.timestamp()
-        );
+        // Bug reel trouve par test_audit_trail_persistence le 2026-10-02,
+        // des que cette fonction a ete reellement appelee pour la premiere
+        // fois (TODO jamais reconnecte avant): `rule_id + timestamp a la
+        // SECONDE pres` collisionne des qu'une rafale d'evenements
+        // declenche la MEME regle plus d'une fois dans la meme seconde
+        // (cas courant, pas un edge case) -- `execution_id TEXT PRIMARY
+        // KEY` + `INSERT OR IGNORE` avalait alors silencieusement toutes
+        // les executions sauf la premiere. `event_id` est deja unique par
+        // evenement (UUID genere a l'emission, voir `emit_event`) --
+        // combine a `rule_id`, ca identifie une execution de facon unique
+        // meme si un meme evenement declenche plusieurs regles.
+        let execution_id = format!("{}_{}", execution.rule_id, execution.event_id);
 
         let modality_str = match execution.modality {
             crate::server::deontic_orchestration::DeonticModality::Must => "MUST",
@@ -2003,6 +2010,17 @@ impl AdnStore {
         Ok(())
     }
 
+    /// Nombre total d'executions deontiques journalisees -- pour que les
+    /// tests (et un operateur) puissent verifier que
+    /// `save_deontic_execution` persiste reellement en SQLite, pas
+    /// seulement dans la liste en memoire de `DeonticOrchestrator`
+    /// (meme patron que `count_response_corpus_entries`, 2026-10-02:
+    /// reponse au trou trouve en audit -- le TODO jamais reconnecte qui
+    /// laissait `deontic_orchestration.rs` ecrire nulle part).
+    pub fn count_deontic_executions(&self) -> Result<i64, rusqlite::Error> {
+        self.conn.query_row("SELECT COUNT(*) FROM deontic_executions", [], |row| row.get(0))
+    }
+
     /// Couche 9: Append audit comment to the trail
     pub fn append_comment(&self, comment: &str) -> Result<(), rusqlite::Error> {
         let timestamp = std::time::SystemTime::now()
@@ -2015,6 +2033,12 @@ impl AdnStore {
             params![comment, timestamp],
         )?;
         Ok(())
+    }
+
+    /// Nombre total de commentaires d'audit -- meme raison que
+    /// `count_deontic_executions`, cote verification des rejets MUST_NOT.
+    pub fn count_audit_comments(&self) -> Result<i64, rusqlite::Error> {
+        self.conn.query_row("SELECT COUNT(*) FROM audit_comments", [], |row| row.get(0))
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -11,11 +11,23 @@ mod common {
     use cstl_parser::server::deontic_orchestration::DeonticOrchestrator;
 
     pub fn create_test_orchestrator() -> DeonticOrchestrator {
+        create_test_orchestrator_with_store().0
+    }
+
+    /// Variante qui rend aussi la poignee `adn_store` -- necessaire pour
+    /// verifier la VRAIE persistance SQLite (deontic_executions /
+    /// audit_comments), pas seulement la liste en memoire de
+    /// `DeonticOrchestrator::get_executions()`. SQLite `:memory:` reste
+    /// vivante tant que l'Arc est garde quelque part (ici, retournee a
+    /// l'appelant) -- si elle n'etait pas retournee, la DB disparaitrait
+    /// des que `create_test_orchestrator()` retourne.
+    pub fn create_test_orchestrator_with_store() -> (DeonticOrchestrator, Arc<Mutex<AdnStore>>) {
         let adn_store = Arc::new(Mutex::new(AdnStore::open(":memory:").unwrap()));
         let governance = Arc::new(Mutex::new(GovernanceTracker::with_defaults()));
         let council = Arc::new(RestrictedCouncil::single_member("TestCouncil"));
 
-        DeonticOrchestrator::new(100, adn_store, governance, council)
+        let orchestrator = DeonticOrchestrator::new(100, adn_store.clone(), governance, council);
+        (orchestrator, adn_store)
     }
 }
 
@@ -334,7 +346,12 @@ async fn test_mixed_modality_execution_order() {
 
 #[tokio::test]
 async fn test_audit_trail_persistence() {
-    let orchestrator = common::create_test_orchestrator();
+    // Verifie la VRAIE persistance SQLite (table `deontic_executions`),
+    // pas seulement `get_executions()` (liste en memoire) -- avant le fix
+    // du 2026-10-02, `save_deontic_execution` existait dans adn_store.rs
+    // mais n'etait jamais appelee (TODO jamais reconnecte): ce test
+    // passait deja avant le fix sans rien garantir sur la DB.
+    let (orchestrator, adn_store) = common::create_test_orchestrator_with_store();
 
     let rule = cstl_parser::server::deontic_orchestration::DeonticRule::new_must(
         "governance_breach",
@@ -363,6 +380,41 @@ async fn test_audit_trail_persistence() {
         .iter()
         .all(|e| e.result == cstl_parser::server::deontic_orchestration::ExecutionResult::Success);
     assert!(all_successful);
+
+    let persisted_count = adn_store.lock().await.count_deontic_executions().unwrap();
+    assert_eq!(persisted_count, 5, "les 5 executions MUST doivent etre persistees en SQLite, pas seulement en memoire");
+}
+
+#[tokio::test]
+async fn test_must_not_rejection_leaves_audit_comment() {
+    // Reponse directe au deuxieme trou trouve dans l'audit du 2026-10-02 :
+    // une regle MUST_NOT qui rejette une action doit laisser une trace
+    // dans `audit_comments`, pas seulement logguer sur stderr.
+    let (orchestrator, adn_store) = common::create_test_orchestrator_with_store();
+
+    let rule = cstl_parser::server::deontic_orchestration::DeonticRule::new_must_not(
+        "governance_breach",
+        "all_breaches",
+        "deny_breach",
+    );
+    orchestrator.register_rule(rule).await;
+
+    let before = adn_store.lock().await.count_audit_comments().unwrap();
+
+    let event = cstl_parser::server::deontic_orchestration::DeonticEvent::GovernanceBreach {
+        breach_id: Uuid::new_v4().to_string(),
+        agent_id: "agent_rejected".to_string(),
+        breach_type: "test_breach".to_string(),
+        severity: 9,
+        timestamp: Utc::now(),
+    };
+    let executions = orchestrator.emit_event(event).await;
+
+    assert_eq!(executions.len(), 1);
+    assert_eq!(executions[0].result, cstl_parser::server::deontic_orchestration::ExecutionResult::Rejected);
+
+    let after = adn_store.lock().await.count_audit_comments().unwrap();
+    assert_eq!(after, before + 1, "le rejet MUST_NOT doit ajouter EXACTEMENT un commentaire d'audit");
 }
 
 #[tokio::test]
