@@ -295,19 +295,69 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<u8>, Order1Error> {
 /// encoder` (table externe non synchronisee).
 pub struct PretrainedOrder1Table(HashMap<u16, CtxTable>);
 
+/// Lissage de Laplace (add-one) PAR CONTEXTE : au lieu de ne retenir que les
+/// symboles reellement observes (ce que fait `normalize`), chaque symbole
+/// possible (0..=255) recoit un pseudo-compte plancher de 1 avant
+/// normalisation -- garantit `freq[sym] >= 1` pour TOUS les symboles dans
+/// TOUS les contextes vus a l'entrainement.
+///
+/// Corrige un bug reel trouve le 2026-10-02 (pas un defaut de calibration) :
+/// `build_reference_messages` (text_dictionary.rs) entraine chaque mot
+/// comme son PROPRE message isole + une poignee de paires concatenees
+/// choisies a l'avance -- donc une transition de frontiere entre deux mots
+/// qui n'est PAS une de ces paires precises (ex: deux mots du corpus
+/// concatenes dans un ordre different) tombe sur un symbole jamais vu dans
+/// ce contexte -> `UnknownSlot`, erreur systematique capturee silencieusement
+/// par le fallback brut de `encode_text`. Mesure : un flux de 224 octets
+/// compose a 100% de mots d'entrainement concatenes echouait quand meme.
+/// Le lissage ne cache pas cette limite (le cout du symbole lisse reste
+/// elevee -- la comparaison de cout dans `encode_text` continue de choisir
+/// le brut si le lissage ne suffit pas), il elimine seulement la classe
+/// d'erreur: un `Err` devient un `Ok` couteux, laissant la comparaison de
+/// cout deja existante faire son travail au lieu de planter.
+fn normalize_smoothed(counts: &HashMap<u8, u32>) -> CtxTable {
+    let mut dense: HashMap<u8, u32> = (0u16..256).map(|s| (s as u8, 1u32)).collect();
+    for (&sym, &c) in counts {
+        *dense.get_mut(&sym).expect("dense couvre 0..=255") += c;
+    }
+    normalize(&dense)
+}
+
+/// Comme `build_tables_from_messages`, mais via `normalize_smoothed` --
+/// reserve a l'usage de `PretrainedOrder1Table::train*` (table PARTAGEE,
+/// susceptible de rencontrer du contenu absent du corpus d'entrainement).
+/// Le chemin ADAPTATIF (`encode`/`decode`, table construite sur les
+/// donnees memes qu'on encode) garde `build_tables`/`normalize` sans
+/// lissage -- aucune raison d'y diluer la precision, puisque par
+/// construction tout symbole rencontre a l'encodage a deja ete vu a la
+/// construction de SA PROPRE table.
+fn build_tables_from_messages_smoothed(messages: &[&[u8]]) -> HashMap<u16, CtxTable> {
+    let mut raw: HashMap<u16, HashMap<u8, u32>> = HashMap::new();
+    for data in messages {
+        for i in 0..data.len() {
+            let ctx = context_for(data, i);
+            *raw.entry(ctx).or_default().entry(data[i]).or_insert(0) += 1;
+        }
+    }
+    raw.into_iter().map(|(ctx, counts)| (ctx, normalize_smoothed(&counts))).collect()
+}
+
 impl PretrainedOrder1Table {
     /// Entraine une table a partir d'un corpus (idealement un ensemble de
     /// PLUSIEURS messages CSTL reels, pas un seul court exemple -- voir
-    /// mise en garde de surapprentissage ci-dessus).
+    /// mise en garde de surapprentissage ci-dessus). Lissee (voir
+    /// `normalize_smoothed`) -- ne plante plus sur un symbole absent du
+    /// contexte, retombe correctement sur la comparaison de cout.
     pub fn train(corpus: &[u8]) -> Self {
-        PretrainedOrder1Table(build_tables(corpus))
+        PretrainedOrder1Table(build_tables_from_messages_smoothed(std::slice::from_ref(&corpus)))
     }
 
     /// Comme `train`, mais sur plusieurs messages INDEPENDANTS -- chacun
     /// voit son propre `START_CONTEXT` au lieu que seul le tout premier
-    /// du lot compte. Voir doc de `build_tables_from_messages`.
+    /// du lot compte. Voir doc de `build_tables_from_messages`. Lissee,
+    /// meme raison que `train`.
     pub fn train_from_messages(messages: &[&[u8]]) -> Self {
-        PretrainedOrder1Table(build_tables_from_messages(messages))
+        PretrainedOrder1Table(build_tables_from_messages_smoothed(messages))
     }
 }
 

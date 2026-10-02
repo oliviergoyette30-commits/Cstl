@@ -28,7 +28,10 @@ path = "src/lib.rs"
 # CryptoRngCore, rand 0.8's OsRng l'implemente.
 # Aussi utilisé en production dans post_quantum.rs pour la génération de clés.
 criterion = "0.5"
+flate2 = "1.0"
 proptest = "1.4"
+prost = "0.14.4"
+prost-derive = "0.14.4"
 
 [dev-dependencies.wiremock]
 # Serveur HTTP mock local pour tests/kb_verify_mock_wikidata_test.rs -- exerce

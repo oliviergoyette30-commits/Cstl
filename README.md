@@ -834,23 +834,69 @@ Apache 2.0 — Olivier Goyette
 
 ---
 
-## Grille d'audit empirique — 10 points (2026-10-01)
+## Grille d'audit empirique — 10 points (2026-10-01, refait en `--release` le 2026-10-02)
 
-Benchmark réel, exécuté contre le serveur CSTL **effectivement en cours d'exécution** (TCP 5050 + REST 8000), pas un micro-benchmark in-process qui saute le coût réel de parsing/validation/pipeline. Script reproductible : `examples/benchmark_audit.rs` (`cargo run --example benchmark_audit` avec le serveur déjà lancé). Chaque chiffre ci-dessous est mesuré, pas estimé — quand une mesure n'avait pas de sens (ex: la première version du point 3 envoyait une syntaxe `DEFINE`/`RELATIONS` inventée, ignorée silencieusement par le parser — confirmé par les logs serveur montrant `DEFINE: 0 blocks` à chaque fois — mesurant donc la compression d'un triple vide), c'est corrigé et redémontré avant publication, pas arrondi pour faire joli.
+Benchmark réel, exécuté contre le serveur CSTL **effectivement en cours d'exécution** (TCP 5050 + REST 8000), pas un micro-benchmark in-process qui saute le coût réel de parsing/validation/pipeline. Script reproductible : `examples/benchmark_audit.rs` (`cargo run --release --example benchmark_audit` avec le serveur déjà lancé en `--release`). Chaque chiffre ci-dessous est mesuré, pas estimé.
 
-**Conditions de mesure, à lire avant les chiffres** : build `debug` (pas `--release` — les temps seraient significativement meilleurs en release, non mesuré ici), une seule connexion TCP à la fois côté client (séquentiel, pas de vrai test de concurrence), loopback `127.0.0.1` (zéro latence réseau réelle), base SQLite fraîche avant le run (~200 messages au total), ratios de compression mesurés sur du texte synthétique répétitif (le ratio réel dépend de l'entropie du contenu réel).
+**Première version (2026-10-01) mesurée en build `debug`, refaite le lendemain en `--release`** sur demande explicite d'Olivier après la comparaison avec la concurrence ci-dessous — l'écart s'est avéré énorme (voir le point 4 et 5) et confirme que la version debug était trompeusement pessimiste pour plusieurs points, pas seulement la crypto. Les deux séries sont gardées côte à côte ici par transparence.
 
-| # | Point | Résultat mesuré |
+**Conditions de mesure** : une seule connexion TCP à la fois côté client (séquentiel, pas de vrai test de concurrence), loopback `127.0.0.1` (zéro latence réseau réelle), base SQLite fraîche avant chaque run (~200 messages au total), ratios de compression mesurés sur du texte synthétique répétitif (le ratio réel dépend de l'entropie du contenu réel).
+
+| # | Point | debug (2026-10-01) | **release (2026-10-02)** |
+|---|---|---|---|
+| 1 | Latence TCP par message (N=100) | p50=6.4ms, p95=7.4ms, max=9.6ms | **p50=5.4ms, p95=9.0ms, max=32.1ms** (queue occasionnelle plus visible, médiane plus basse) |
+| 2 | Débit soutenu | 155.8 msg/s | **167.0 msg/s** |
+| 3 | Compression Master Compressor (réel, `master_compressed`) | petit 51.6%, moyen 38.8%, grand 33.9% | **identique** — algorithme indépendant du profil de build, seule la vitesse change, pas le ratio |
+| 4 | Overhead "sender enregistré + signé" vs inconnu | **+11.6ms** (mesure fausse, voir ci-dessous) | **-0.98ms (signé légèrement PLUS rapide, dans le bruit de mesure)** — confirme que le +11.6ms en debug n'était pas un coût crypto réel, juste du bruit/overhead de build non optimisé amplifié |
+| 5 | Cycle d'arbitrage complet (8 aller-retours) | 61.3ms | **11.5ms (5.3× plus rapide)** |
+| 6 | Latence REST (p50) | `/health` 0.8ms, `/graphify/export` 7.9ms | **`/health` 0.13ms, `/graphify/export` 1.24ms (6.4× plus rapide)** |
+| 7 | Overhead `ADN_DELTA` (NoChange vs diff réel) | +3.6ms | **+4.1ms** (stable, cohérent) |
+| 8 | Croissance SQLite | ~1622 octets/message | **identique** (indépendant du profil de build) |
+| 9 | Latence Graphify (graphe réel ~200 msg) | filter 4.0ms, search 8.5ms, traverse 9.6ms | **filter 1.3ms, search 2.2ms, traverse 1.5ms** |
+| 10 | Robustesse sous rafale (N=50) | 50/50 succès, 148.0 msg/s | **50/50 succès, 164.4 msg/s** |
+
+**Correction importante faite en republiant ces chiffres** : la première version du point 4 affirmait "+11.6ms attribuable à la vérification Ed25519" — c'était faux, démontré par comparaison externe (`ed25519-dalek`, la bibliothèque utilisée ici, vérifie en ~45-63µs en release et ~717µs en debug d'après son propre dépôt, soit 16-250× moins que 11.6ms) avant même de refaire ce run en release. Le run release confirme la correction de façon encore plus directe : en profil optimisé, le delta signé/non-signé disparaît complètement (différence négative, dans le bruit). Le +11.6ms en debug était un artefact de build, pas un coût du protocole.
+
+**Pas mesuré ici, honnêtement signalé plutôt que simulé** : comportement sous vraie charge concurrente (plusieurs clients TCP simultanés — l'architecture handler.rs est async/tokio et devrait le supporter, mais ce n'est pas démontré par ce run séquentiel) ; comportement à grande échelle (des dizaines de milliers de messages, pas ~200) ; latence réseau réelle hors loopback ; calibration EWMA avec de vraies données (nécessite une confirmation Wikidata externe, indisponible hors-ligne — voir Couche 4 plus haut).
+
+### Comparaison avec la concurrence (2026-10-01/02)
+
+Chiffres publiés trouvés par recherche web, pas mémorisés — sources citées. **Avertissement méthodologique** : matériel différent d'une source à l'autre, charges de travail différentes. Les chiffres CSTL ci-dessous sont maintenant tous en `--release`, donc la comparaison de build n'est plus un biais comme dans la première version de cette section.
+
+| Protocole / composant | Mesure publiée | Source |
 |---|---|---|
-| 1 | Latence TCP par message (N=100, payload simple) | p50=6.4ms, p95=7.4ms, p99=7.7ms, min=5.1ms, max=9.6ms |
-| 2 | Débit soutenu (même série, 1 connexion à la fois) | 155.8 msg/s |
-| 3 | Taux de compression Master Compressor (réel, lu depuis `master_compressed`, texte structuré répétitif) | petit (618o)→51.6% réduction, moyen (2936o)→38.8%, grand (11216o)→33.9% — le ratio baisse avec la taille car le contenu synthétique devient proportionnellement moins répétitif à cette échelle, pas une anomalie |
-| 4 | Overhead de vérification de signature Ed25519 (même pipeline, sender inconnu vs enregistré+signé) | non-signé p50=6.6ms vs signé+vérifié p50=17.5ms → **+11.6ms en moyenne** attribuable à la vérification Ed25519 et au parsing du champ signature |
-| 5 | Cycle d'arbitrage complet (8 aller-retours TCP : 2× arbiter_register, open, assign, submit_ruling, peer_review, escalate, finalize) | **61.3ms total** — détail : arbiter_register 12.8ms×2, submit_ruling 14.9ms, peer_review 12.3ms, le reste <2.2ms chacun |
-| 6 | Latence endpoints REST (p50, N=20 chacun) | `/health` 0.8ms, `/audit/stats` 0.8ms, `/deontic/executions` 0.7ms, `/wai/stats` 0.6ms, `/calibration/agents` 0.6ms, `/graphify/stats` 2.6ms, `/graphify/export` 7.9ms (le plus coûteux — reconstruit tout le graphe depuis la chaîne d'audit à chaque appel, pas de cache) |
-| 7 | Overhead `ADN_DELTA` (parent identique=NoChange vs parent différent=diff réel) | NoChange p50=2.5ms vs changement réel p50=6.1ms → **+3.6ms en moyenne** attribuable au calcul de diff |
-| 8 | Croissance SQLite réelle | 323584o (schéma vide, ~25 tables) → 651264o après ~202 messages → **~1622 octets/message** (moyenne grossière, inclut index/overhead SQLite, pas juste le texte utile) |
-| 9 | Latence requêtes Graphify sur graphe réel (~200 messages, pas le cas vide) | `/graphify/filter?node_type=agent` 4.0ms (6 nœuds), `/graphify/search?q=bench` 8.5ms (199 nœuds), `/graphify/traverse?depth=2` 9.6ms (102 nœuds) |
-| 10 | Robustesse sous rafale (N=50, aussi vite que possible, séquentiel) | **50/50 succès (100%)**, 148.0 msg/s, p50=6.3ms, p99=9.7ms — aucune erreur, aucun timeout sur ce volume |
+| **CSTL** (ce dépôt, build **release**, pipeline complet : parse+validate+ExecutionLab+governance+store, TCP brut) | p50=5.4ms/msg, 167.0 msg/s | mesuré ici (point 1, release) |
+| MCP, transport stdio (résolution d'appel d'outil) | p50=0.42ms, 14 200 req/s | [Benchmark RFC MCP stdio vs SSE](https://github.com/jibranpcccc/open-agent-protocol-hub/issues/4) |
+| MCP, transport SSE (HTTP/1.1) | p50=4.85ms, 3 100 req/s | idem |
+| ACP, overhead d'adaptateur par message (32 agents) | 0.18ms | [ProtocolBench (arXiv 2510.17149)](https://arxiv.org/pdf/2510.17149) |
+| A2A, overhead d'adaptateur par message (32 agents) | 10.50ms | idem |
+| ANP, overhead d'adaptateur par message (32 agents) | 14.10ms | idem |
+| Agora, overhead d'adaptateur par message (32 agents) | 33.60ms | idem |
+| `ed25519-dalek` (lib Ed25519 utilisée par CSTL), vérification, release | ~45-63µs | [Issue dalek-cryptography/ed25519-dalek #87](https://github.com/dalek-cryptography/ed25519-dalek/issues/87) |
 
-**Pas mesuré ici, honnêtement signalé plutôt que simulé** : comportement sous vraie charge concurrente (plusieurs clients TCP simultanés — l'architecture handler.rs est async/tokio et devrait le supporter, mais ce n'est pas démontré par ce run séquentiel) ; comportement à grande échelle (des dizaines de milliers de messages, pas ~200) ; build `--release` ; latence réseau réelle hors loopback ; calibration EWMA avec de vraies données (nécessite une confirmation Wikidata externe, indisponible hors-ligne — voir Couche 4 plus haut).
+**Lecture honnête, pas une victoire auto-proclamée** :
+
+- En release, CSTL (5.4ms, pipeline complet) bat maintenant A2A (10.5ms) et ANP (14.1ms) sur leur propre terrain déclaré — mais ProtocolBench mesure un overhead d'ADAPTATEUR par-dessus un protocole sous-jacent (à 32 agents), pas le traitement complet d'un message côté serveur comme ici ; comparaison suggestive, pas équivalente.
+- Face à MCP stdio (0.42ms), CSTL reste ~13× plus lent — attendu : MCP stdio élimine tout le stack TCP (pas de socket, pas de TLS handshake), CSTL fait un vrai aller-retour réseau + un pipeline complet. Face à MCP SSE (4.85ms, coût de transport comparable à un socket TCP), l'écart tombe à +0.6ms — essentiellement à égalité.
+- ACP à 0.18ms/message reste dans une classe à part ; pas d'explication trouvée sans creuser leur implémentation, donc pas inventée ici.
+- CSTL mesure des choses que ces protocoles généralistes ne mesurent pas parce qu'ils ne les ont pas : un cycle d'arbitrage signé multi-parties avec quorum de pairs (11.5ms bout en bout en release, point 5), une chaîne d'audit hash-chaînée interrogeable, une détection de delta sémantique. Pas de comparateur direct trouvé dans la littérature consultée — périmètres fonctionnels différents, "plus rapide/plus lent" tout court n'a pas de sens pour ces capacités-là.
+
+### CSTL vs JSON vs texte naturel vs Protobuf — le vrai choix des développeurs (2026-10-02)
+
+Demande explicite d'Olivier : comparer contre ce que les développeurs utilisent réellement aujourd'hui plutôt que CSTL — JSON (choix par défaut quasi universel), texte naturel brut (prompt-à-prompt), et Protobuf (choix "perf/compacité" d'une équipe infra). Script reproductible : `examples/benchmark_wire_formats.rs` (pur in-process, pas besoin de serveur). **Même contenu sémantique exact** encodé dans les 4 formats — 20 concepts définis + 20 relations entre eux —, rien n'est truqué en faveur d'un format.
+
+| Format | Taille brute | Après gzip | Encodage | Décodage |
+|---|---|---|---|---|
+| **CSTL** (wire natif) | 2942o | 494o (83.2% réduction) | parse réel (pipeline complet) : 0.074ms | — |
+| JSON (`serde_json`, compact) | 3952o | 450o (88.6%) | 0.009ms | 0.031ms |
+| Protobuf (`prost`, binaire) | **2481o (le plus compact en brut)** | 366o (85.2%, **le plus compact après gzip aussi**) | 0.002ms (le plus rapide) | 0.018ms |
+| Texte naturel (prose, même info) | 4129o (le plus gros) | 464o (88.8%) | N/A | **N/A — aucune grammaire formelle, rien à extraire de manière déterministe sans un LLM/parseur NLP séparé** |
+
+**Résultat honnête, pas flatteur pour CSTL sur deux points précis** :
+
+- **Protobuf gagne sur la taille et la vitesse brutes**, dans les deux cas, sans ambiguïté. C'est attendu — c'est un format binaire avec schéma figé, CSTL est un format texte lisible par un humain. Le compromis est assumé (lisibilité/débogabilité humaine vs compacité binaire pure), pas nié.
+- **Trouvaille la plus importante de cette comparaison, trouvée en la faisant, pas anticipée** : sur ce contenu, `gzip` tout seul (zéro travail custom, disponible partout) compresse le texte CSTL brut à 494o (83.2%), alors que le Master Compressor CSTL — le système de compression "maison" déjà mesuré au point 3 de la grille ci-dessus sur un payload de taille quasi identique (2936o) — ne descend qu'à 1798o (38.8%). **`gzip` fait environ 3.6× mieux que le Master Compressor CSTL sur ce type de contenu.** Comparaison apples-to-apples confirmée : les deux mesurent la compression du même texte wire CSTL complet (`reference_payload_text_len = raw_payload.len()` dans `adn_store.rs::put_master_compressed`, pas un sous-ensemble). Pas caché, pas minimisé : sur du contenu répétitif comme ce test, le Master Compressor n'apporte actuellement aucun avantage démontré face à un `gzip` générique — à investiguer avant de continuer à vendre le Master Compressor comme un avantage compétitif sur CE type de contenu. (Le chiffre WAI v5.1 de 63.81% cité plus haut dans ce README vient d'un corpus de test différent — pas directement comparable à ce résultat-ci sans revérifier.)
+- CSTL et JSON restent proches après gzip (494o vs 450o) — à ce niveau de contenu, la différence de format texte source importe peu une fois compressé ; l'avantage structurel de CSTL n'est pas dans la taille sur le fil.
+- Le texte naturel n'est PAS comparable sur le decodage — c'est l'argument central de CSTL, pas un angle mort de ce test : il n'y a rien à parser de façon déterministe dans une prose libre. Un système qui s'appuie sur du texte naturel entre agents n'a aucune garantie de récupérer les 20 relations structurées sans repasser par un LLM (coût, latence et taux d'erreur non nuls, non mesurés ici).
+
+Sources : [Benchmark RFC MCP stdio vs SSE latency (open-agent-protocol-hub)](https://github.com/jibranpcccc/open-agent-protocol-hub/issues/4) · [ProtocolBench: Which LLM MultiAgent Protocol to Choose? (arXiv:2510.17149)](https://arxiv.org/pdf/2510.17149) · [ed25519-dalek issue #87 — vérification performance](https://github.com/dalek-cryptography/ed25519-dalek/issues/87)
