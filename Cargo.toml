@@ -168,7 +168,11 @@ version = "6"
 version = "0.14"
 
 [dependencies.governor]
-# Rate limiting
+# Rate limiting par IP sur le listener TCP (src/server/connection_limits.rs,
+# 2026-10-02) -- declaree depuis le debut de ce depot avec ce commentaire
+# mais jamais importee nulle part avant ce commit (dependance fantome,
+# trouvee par audit). Feature "dashmap" par defaut: backend du limiteur
+# garde par IpAddr, dashmap deja une dependance directe de ce depot.
 version = "0.7"
 
 [dependencies.notify]

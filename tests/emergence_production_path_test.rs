@@ -125,8 +125,9 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
         collect_response_corpus: false,
     });
 
+    let connection_limits = std::sync::Arc::new(cstl_parser::server::connection_limits::ConnectionLimits::from_env());
     tokio::spawn(async move {
-        let _ = listener::accept_connections(tcp_listener, ctx, None).await;
+        let _ = listener::accept_connections(tcp_listener, ctx, None, connection_limits).await;
     });
 
     // -- 1) Reponse SOLO de Agent_CLAUDE : "option_C" (va diverger du trio) --

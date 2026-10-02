@@ -9,6 +9,7 @@
 //! 5. Audit Trail (immutable SHA-256 record)
 
 pub mod listener;
+pub mod connection_limits;
 pub mod handler;
 pub mod quorum;
 pub mod quorum_wire;
@@ -366,6 +367,11 @@ impl CstlNativeServer {
         };
         let tls_acceptor = tls_server.map(|s| Arc::new(s.acceptor()));
 
+        // Protections anti-DoS (2026-10-02, point 3 de l'audit multi-angle)
+        // -- voir connection_limits.rs pour le detail. Construit une seule
+        // fois ici, meme discipline que tls_acceptor juste au-dessus.
+        let connection_limits = Arc::new(connection_limits::ConnectionLimits::from_env());
+
         let ctx = ServerContext {
             agent_registry: self.agent_registry.clone(),
             chain: self.chain.clone(),
@@ -389,7 +395,7 @@ impl CstlNativeServer {
             eprintln!("[CSTL-Native Server] Collecte du corpus de reponses ACTIVE (CSTL_COLLECT_RESPONSE_CORPUS) -- chaque reponse plain-text sera persistee dans response_corpus");
         }
 
-        listener::accept_connections(listener, Arc::new(ctx), tls_acceptor).await?;
+        listener::accept_connections(listener, Arc::new(ctx), tls_acceptor, connection_limits).await?;
 
         Ok(())
     }
