@@ -71,26 +71,21 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Sixieme iteration : relance les MEMES 18 items que le run complet haiku
-# (commit 85b63ec) mais sur sonnet-4-5 (via ANTHROPIC_MODEL au lancement,
-# PAS en modifiant MODEL ci-dessus), pour comparaison complete modele vs
-# modele sur tout le sous-ensemble, pas juste les 5 items d'echec deja
-# compares individuellement.
-#
-# MISE EN GARDE METHODOLOGIQUE (pas de comparaison silencieusement biaisee):
-# ce run utilise le prompt ACTUEL, qui inclut REACTS (ajoute en 3105d83,
-# APRES le run haiku de 85b63ec). Ce n'est donc PAS une comparaison
-# controlee isolant uniquement la variable "modele" -- deux choses changent
-# en meme temps entre le run haiku (85b63ec, sans REACTS) et ce run sonnet
-# (avec REACTS). Sur medium_003 specifiquement, toute amelioration observee
-# ne permettra pas de trancher si elle vient du modele ou du nouvel
-# operateur disponible. Les 4 autres items (pas d'usage attendu de REACTS)
-# restent une comparaison modele-isolee valide.
+# Septieme iteration : relance CIBLEE sur complex_004 seul, pour tester si
+# "NDA prohibits disclosure WITHOUT prior written consent" se resout
+# maintenant que le prompt enseigne explicitement le patron
+# FORBID+UNLESS (ajoute ci-dessous) -- hypothese du dossier
+# claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md: c'etait un angle mort du
+# prompt (jamais enseigne), pas un trou de grammaire (UNLESS existe deja
+# comme modalite CONSTRAINTS depuis le debut). But: lancer SUR LES DEUX
+# MODELES (haiku d'abord par defaut, puis sonnet via ANTHROPIC_MODEL) pour
+# voir si le fix de prompt suffit a lui seul, independamment du modele --
+# si oui, confirme "angle mort du prompt" ; si haiku echoue encore malgre
+# l'instruction explicite, ca redevient une question de capacite du
+# modele, meme pattern que la distinction etablie pour EXCEPT/edge_002 et
+# REACTS/medium_003 plus haut dans ce fichier.
 RUN_SUBSET = {
-    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
-    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
-    "complex_001", "complex_003", "complex_004", "complex_005",
-    "edge_002", "edge_003", "edge_004", "edge_005",
+    "complex_004",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -297,6 +292,8 @@ If the source text expresses an epistemic attitude (BELIEVES, KNOWS, DOUBTS, DIS
 
 If the source text expresses an EMOTIONAL/AFFECTIVE stance of a subject toward an object or event that already exists (e.g. "upset about", "angry about", "pleased with", "worried about"), use REACTS -- do NOT use CATALYZE (that implies the subject's state causally PRODUCES the object, inverting the direction when the object already happened) and do NOT use BELIEVES/KNOWS (those are epistemic/cognitive, not affective). Pattern: (subject) REACTS (object) [id=rNNN, valence=negative|positive|neutral|mixed, affect=<short free-text label, e.g. upset/angry/pleased>]. valence is required; affect is optional but encouraged when the source text names the specific emotion.
 
+If the source text expresses a prohibition that has a named EXCEPTION ("X is prohibited without Y", "X is forbidden unless Y", "not allowed except with Y"), do NOT invent a RELATIONS operator that doesn't exist in the closed list above (e.g. there is no "PROHIBITS"), and do NOT misuse a temporal operator like BEFORE/AFTER/DURING to express the exception (those are Allen temporal relations between two time intervals, not a conditional-exception relation -- "without prior written consent" is not a claim about temporal ordering). Instead use TWO CONSTRAINTS lines: one with MODALITY=FORBID for the base prohibition, and one with MODALITY=UNLESS naming the exception condition as its object, both using an operator from the closed list above -- e.g. CONSTRAINTS [ (FORBID) subject PERFORM disclosure [id=c1] (UNLESS) disclosure POSSESSES consent [id=c2] ]. This is the ONLY correct way to express a conditional exception to a prohibition in CSTL.
+
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
 
 IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear -- never translate, paraphrase, explain, or guess what they might represent.
@@ -316,6 +313,7 @@ Reading rules, important, do not default to the wrong one:
 - Two separate CONSTRAINTS/RELATIONS lines that are NOT linked by an EITHER_OR line are each independently required -- read them as "and" (conjunction), e.g. "requires both X and Y".
 - If (and only if) two objects are explicitly linked by an EITHER_OR relation line, read THOSE TWO as alternatives -- "requires X or Y" (disjunction), NOT "both X and Y". The EITHER_OR line overrides the default conjunctive reading for exactly the two objects it names.
 - A REACTS relation means the subject has an emotional/affective stance TOWARD the object -- the object is NOT caused or produced by the subject's state, it's the pre-existing target of the reaction. Reconstruct as "<subject> is/are <affect, or a generic word matching valence if affect is absent> about <object>" -- never phrase it as the subject producing, making, or causing the object.
+- A MODALITY=UNLESS line paired with a MODALITY=FORBID (or MUST_NOT) line on the same subject/action means the prohibition does NOT apply when the UNLESS line's condition holds -- reconstruct as "X is forbidden/prohibited unless Y" or "X is not allowed without Y", never as a temporal claim ("before Y") and never drop the exception entirely.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
 - If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier (e.g. "early", "quickly") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it.
 
