@@ -127,8 +127,23 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # medium_002 sort propre cette fois (haiku est non-deterministe), ce test
 # ne prouve rien dans un sens ou l'autre sur CE run, mais confirme au
 # moins que le check ne lance pas de faux positif sur une sortie correcte.
+#
+# RUN FINAL COMPLET POST-CORRECTIFS (2026-10-05) -- recalcul du kappa de
+# Fleiss sur l'ensemble des 18 items avec la version la plus a jour du
+# prompt : split POSSESSES/INVOLVES/SATISFIES (a0b4889), correctif de
+# sur-generalisation (f8cd9b9), correctif de l'hallucination LITnQZK
+# (0e1df56), verification mecanique #3 active (7870d1c). Memes 18 items
+# que le run de consolidation precedent (e98e487) -- complex_002 et
+# edge_001 toujours exclus (voir claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md
+# pour le detail de cette exclusion). Lance sur sonnet-4-5
+# (ANTHROPIC_MODEL=claude-sonnet-4-5 au lancement) -- c'est le modele de
+# production etabli pour ce run final, pas de comparaison modele
+# recherchee ici.
 RUN_SUBSET = {
-    "medium_002",
+    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
+    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
+    "complex_001", "complex_003", "complex_004", "complex_005",
+    "edge_002", "edge_003", "edge_004", "edge_005",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
