@@ -71,25 +71,30 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Quatrieme iteration : relance sur les 18 items du corpus de 20 PAS ENCORE
-# verifies avec le pipeline v2 pleinement corrige (OFFICIAL_OPERATORS_SNAPSHOT
-# a jour incluant EITHER_OR, instruction value=, instruction manner=,
-# instruction de selection d'objet epistemique, catalogue de domaines en
-# anglais). Exclus de ce lot, deja traites et verifies corrects avec cette
-# version finale du prompt :
-#   - complex_002 (commit 4b2876e, 100% preservation litterale, EITHER_OR OK)
-#   - edge_001    (commit bcddf1f, DISBELIEVES + manner= OK)
-# NOTE DE TRANSPARENCE (pas de choix silencieux sur le "16" demande) :
-# complex_003 avait "reussi" au tout premier run (commit 1cbfcda), mais
-# UNIQUEMENT avec la version originale, non corrigee, du prompt -- jamais
-# retestee avec OFFICIAL_OPERATORS_SNAPSHOT/value=/manner=/EITHER_OR. Elle
-# est donc incluse ici (18 items, pas 16) par souci de rigueur methodologique
-# -- mieux vaut un ecart signale qu'un trou de couverture silencieux.
+# Cinquieme iteration : relance CIBLEE sur les 5 items identifies comme
+# "echec d'execution du modele" dans l'audit du run complet 18 items
+# (commit 85b63ec, voir claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md dans
+# le projet) -- PAS les items identifies comme trou de grammaire CSTL
+# reproductible (edge_002: pas d'operateur EXCEPT; une partie de
+# medium_004: pas de construction pour la predication intransitive/pas
+# d'operateur WARN -- ceux-la resteraient casses sur n'importe quel modele,
+# relancer ne teste rien). But : lancer avec MODEL=claude-sonnet-4-5 (via
+# la variable d'environnement ANTHROPIC_MODEL, PAS en modifiant la
+# constante MODEL ci-dessus -- cf instructions de lancement) pour separer
+# "probleme de modele haiku" de "probleme de grammaire CSTL" :
+#   - edge_005    (conditionnel IF perdu malgre CONSTRAINTS[(IF)...] existant)
+#   - complex_001 (PERFORM existant mais ARR.PRODUCE+TRANSFORM utilise a la
+#                  place, + litteral "Article 42 GDPR" omis entierement)
+#   - medium_003  (hallucination: "believe the decision" ajoute, absent
+#                  de l'original)
+#   - medium_004  (inclus malgre le trou de grammaire WARN/predication
+#                  intransitive identifie, pour voir si sonnet trouve un
+#                  contournement different que haiku, pas pour "corriger"
+#                  le trou lui-meme)
+#   - edge_002    (inclus pour la meme raison -- comparaison, pas correction
+#                  attendue du trou EXCEPT/cardinalite)
 RUN_SUBSET = {
-    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
-    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
-    "complex_001", "complex_003", "complex_004", "complex_005",
-    "edge_002", "edge_003", "edge_004", "edge_005",
+    "edge_005", "complex_001", "medium_003", "medium_004", "edge_002",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -323,7 +328,20 @@ CSTL PAYLOAD:
 
 
 def main():
+    # Fusionne avec les resultats existants au lieu d'ecraser (ajoute
+    # 2026-10-05) -- sans ca, relancer un RUN_SUBSET restreint (ex: les 5
+    # items d'echec pour comparaison sonnet vs haiku) effacerait
+    # silencieusement les resultats deja obtenus et audites pour les items
+    # hors du nouveau sous-ensemble. Les cles du RUN_SUBSET courant sont
+    # toujours ecrasees par le nouveau run (c'est le but), les autres cles
+    # existantes sont preservees telles quelles.
     results = {}
+    if RESULTS_FILE.exists():
+        try:
+            results = json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[AVERTISSEMENT] impossible de charger {RESULTS_FILE} existant ({exc}) -- redemarre a vide.")
+            results = {}
     total_literals = 0
     total_lost_cstl = 0
     total_lost_reconstruction = 0
