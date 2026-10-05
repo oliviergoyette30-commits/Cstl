@@ -72,9 +72,9 @@
     "original": "Patient prescribed antibiotics, took for week to recover.",
     "protected_spans": [],
     "redacted_text": "Patient prescribed antibiotics, took for week to recover.",
-    "cstl_redacted": "```cstl\nDEFINE patient AS agent [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE prescribing AS event [id=e3]\nDEFINE took AS event [id=e4]\nDEFINE week AS duration [id=e5]\nDEFINE recover AS event [id=e6]\n\nRELATIONS [\n  (patient) PRESCRIBE antibiotics [id=r1]\n  (patient) PERFORM took [id=r2]\n  (took) INVOLVES antibiotics [id=r3, role=theme]\n  (took) INVOLVES week [id=r4, role=duration]\n  (patient) INTENT recover [id=r5]\n]\n```",
-    "reconstruction_redacted": "The patient was prescribed antibiotics and took the antibiotics for a week in order to recover.",
-    "reconstruction": "The patient was prescribed antibiotics and took the antibiotics for a week in order to recover.",
+    "cstl_redacted": "DEFINE patient AS entity [id=e1]\nDEFINE antibiotics AS entity [id=e2]\nDEFINE recovery AS event [id=e3]\nDEFINE treatment_course AS event [id=e4, value=LIT0QZK]\nRELATIONS [\n(patient) PRESCRIBE antibiotics [id=r1]\n(patient) ADMINISTER antibiotics [id=r2]\n(treatment_course) INVOLVES antibiotics [id=r3, role=medication]\n(treatment_course) INVOLVES patient [id=r4, role=patient]\n(treatment_course) BEFORE recovery [id=r5]\n]",
+    "reconstruction_redacted": "The patient was prescribed and administered antibiotics as part of a treatment course of LIT0QZK, which must occur before recovery.",
+    "reconstruction": "The patient was prescribed and administered antibiotics as part of a treatment course of LIT0QZK, which must occur before recovery.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
@@ -105,9 +105,9 @@
     "original": "Contract signed by parties, confirming agreement on terms.",
     "protected_spans": [],
     "redacted_text": "Contract signed by parties, confirming agreement on terms.",
-    "cstl_redacted": "```CSTL\nDEFINE contract AS document [id=e1]\nDEFINE signing AS event [id=e2]\nDEFINE parties AS agent [id=e3]\nDEFINE agreement AS state [id=e4]\nDEFINE terms AS content [id=e5]\n\nRELATIONS [\n  (parties) PERFORM signing [id=r1]\n  (signing) INVOLVES contract [id=r2, role=theme]\n  (signing) ENTAILS agreement [id=r3]\n  (agreement) INVOLVES terms [id=r4, role=theme]\n]\n```",
-    "reconstruction_redacted": "The parties sign the contract, which establishes agreement on the terms.",
-    "reconstruction": "The parties sign the contract, which establishes agreement on the terms.",
+    "cstl_redacted": "DEFINE contract AS entity [id=e1]\nDEFINE parties AS entity [id=e2]\nDEFINE agreement AS entity [id=e3]\nDEFINE terms AS entity [id=e4]\nDEFINE signing AS event [id=e5]\n\nRELATIONS [\n(parties) PERFORM signing [id=r1]\n(signing) INVOLVES contract [id=r2, role=theme]\n(signing) CATALYZE agreement [id=r3]\n(agreement) INVOLVES terms [id=r4, role=theme]\n]",
+    "reconstruction_redacted": "The parties sign the contract, thereby catalyzing an agreement that involves the terms.",
+    "reconstruction": "The parties sign the contract, thereby catalyzing an agreement that involves the terms.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
@@ -118,11 +118,15 @@
       "Article 42 GDPR"
     ],
     "redacted_text": "LIT0QZK: data controllers must implement measures.",
-    "cstl_redacted": "```cstl\nDEFINE LIT0QZK AS entity [id=e1]\nDEFINE data_controllers AS role [id=e2]\nDEFINE measures AS artifact [id=e3]\n\nRELATIONS [\n  (LIT0QZK) POSSESSES data_controllers [id=r1]\n]\n\nCONSTRAINTS [\n  (REQUIRE) data_controllers TRANSFORM measures [id=c1]\n]\n```",
-    "reconstruction_redacted": "LIT0QZK's data controllers are required to transform measures.",
-    "reconstruction": "Article 42 GDPR's data controllers are required to transform measures.",
-    "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "cstl_redacted": "DEFINE data_controllers AS entity [id=e1]\nDEFINE measures AS entity [id=e2]\nDEFINE implementation AS event [id=e3]\nRELATIONS [\n(data_controllers) PERFORM implementation [id=r1]\n(implementation) INVOLVES measures [id=r2, role=theme]\n]\nCONSTRAINTS [\n(MUST) data_controllers PERFORM implementation [id=c1]\n]",
+    "reconstruction_redacted": "Data controllers must implement measures.",
+    "reconstruction": "Data controllers must implement measures.",
+    "literal_lost_at_cstl": [
+      "LIT0QZK"
+    ],
+    "literal_lost_at_reconstruction": [
+      "LIT0QZK"
+    ]
   },
   "complex_003": {
     "diff": "complex",
@@ -142,9 +146,9 @@
     "original": "NDA prohibits disclosure without prior written consent.",
     "protected_spans": [],
     "redacted_text": "NDA prohibits disclosure without prior written consent.",
-    "cstl_redacted": "```cstl\nDEFINE NDA AS document [id=e1]\nDEFINE disclosure AS event [id=e2]\nDEFINE consent AS authorization [id=e3, manner=prior_written]\n\nRELATIONS [\n  (NDA) INVOLVES disclosure [id=r1, role=theme]\n]\n\nCONSTRAINTS [\n  (FORBID) NDA PERFORM disclosure [id=c1]\n  (UNLESS) disclosure SATISFIES consent [id=c2]\n]\n```",
-    "reconstruction_redacted": "The NDA prohibits disclosure unless prior written consent has been obtained.",
-    "reconstruction": "The NDA prohibits disclosure unless prior written consent has been obtained.",
+    "cstl_redacted": "DEFINE disclosure AS event [id=e1]\nDEFINE consent AS event [id=e2]\nCONSTRAINTS [\n(FORBID) disclosure PERFORM disclosure [id=c1]\n(UNLESS) disclosure SATISFIES consent [id=c2]\n]",
+    "reconstruction_redacted": "Disclosure is forbidden unless it satisfies consent.",
+    "reconstruction": "Disclosure is forbidden unless it satisfies consent.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
@@ -189,9 +193,9 @@
     "original": "Hiring Sophie controversial, argued not qualified.",
     "protected_spans": [],
     "redacted_text": "Hiring Sophie controversial, argued not qualified.",
-    "cstl_redacted": "```cstl\nDEFINE Sophie AS person [id=e1]\nDEFINE hiring AS event [id=e2]\nDEFINE controversial AS quality [id=e3]\nDEFINE argued AS event [id=e4]\nDEFINE not_qualified AS proposition [id=e5]\n\nRELATIONS [\n  (hiring) INVOLVES Sophie [id=r1, role=theme]\n  (hiring) POSSESSES controversial [id=r2]\n  (argued) STATE not_qualified [id=r3]\n  (not_qualified) INVOLVES Sophie [id=r4, role=theme]\n]\n```",
-    "reconstruction_redacted": "Sophie's controversial hiring was argued to mean she was not qualified.",
-    "reconstruction": "Sophie's controversial hiring was argued to mean she was not qualified.",
+    "cstl_redacted": "DEFINE Sophie AS entity [id=e1]\nDEFINE hiring AS event [id=e2]\nRELATIONS [\n(hiring) INVOLVES (Sophie) [id=r1, role=theme]\n(hiring) POSSESSES (controversial) [id=r2]\n]\nCONSTRAINTS [\n(NOT) Sophie POSSESSES (qualified) [id=c1]\n]",
+    "reconstruction_redacted": "Sophie's hiring is controversial because she is not qualified.",
+    "reconstruction": "Sophie's hiring is controversial because she is not qualified.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
