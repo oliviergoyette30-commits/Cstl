@@ -158,11 +158,17 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # PERFORM passed_exam], reconstruction "All the students except Marie
 # passed the exam." Relance des 18 items au complet, meme run que
 # fb1621f mais avec l'instruction EXCEPT desormais presente.
+# RETEST PONCTUEL (2026-10-05, post-c03fae0) -- le run complet ci-dessus a
+# donne 100% partout sauf complex_005 : reconstruction coupee net a "The
+# filt" (literal_lost_at_reconstruction=['LIT0QZK','LIT1QZK']). Pas un
+# defaut de raisonnement -- aucune trace de hallucination/structure
+# cassee dans le CSTL lui-meme (propre : 3 stages, INVOLVES+BEFORE
+# corrects), juste une reponse coupee en cours de generation (panne
+# reseau/API non remontee comme exception par call_claude). RUN_SUBSET
+# restreint a cet item seul pour regenerer une reconstruction complete
+# avant d'assembler le lot final pour les juges.
 RUN_SUBSET = {
-    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
-    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
-    "complex_001", "complex_003", "complex_004", "complex_005",
-    "edge_002", "edge_003", "edge_004", "edge_005",
+    "complex_005",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
