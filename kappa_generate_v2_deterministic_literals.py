@@ -58,11 +58,17 @@
 import os
 import json
 import re
+import time
 from pathlib import Path
 import anthropic
 
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
 MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
+# complex_005 apres 3 "Reponse vide de l'API" consecutives SANS delai entre
+# les tentatives -- aucune chance pour une erreur transitoire (surcharge,
+# rate-limit cote API) de se resorber. Backoff lineaire simple (5s, 10s, 15s)
+# avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
 # Quatrieme iteration : relance sur les 18 items du corpus de 20 PAS ENCORE
@@ -171,6 +177,10 @@ def call_claude(prompt: str, max_tokens: int = 400) -> str:
                 raise RuntimeError(f"Erreur API non-recuperable, arret immediat: {msg}") from exc
             last_exc = exc
             print(f"    [retry {attempt}/{MAX_RETRIES}] {msg}")
+            if attempt < MAX_RETRIES:
+                delay = RETRY_BACKOFF_SECONDS * attempt
+                print(f"    [attente {delay}s avant nouvelle tentative]")
+                time.sleep(delay)
     raise RuntimeError(f"Echec apres {MAX_RETRIES} tentatives: {last_exc}")
 
 
