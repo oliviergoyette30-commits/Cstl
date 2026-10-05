@@ -65,16 +65,20 @@ MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
 MAX_RETRIES = 3
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Deuxieme iteration : relance sur complex_002 SEUL, avec le prompt
-# encode_to_cstl() corrige (voir OFFICIAL_OPERATORS_SNAPSHOT plus bas).
-# Le premier run (complex_002/complex_003/edge_001, commit 1cbfcda) a
-# genere des operateurs (REQUIRES, USES, CAUSES, NEGATES) dont PAS UN
-# SEUL n'est dans le vrai OFFICIAL_OPERATORS de src/semantic.rs -- le
-# prompt proposait une liste d'exemples inventee, jamais verifiee contre
-# le depot. complex_003 et edge_001 ne sont pas relances ici (pas la
-# demande d'Olivier) -- complex_003 avait deja reussi, edge_001 reste a
-# refaire separement avec ce meme prompt corrige si besoin.
-RUN_SUBSET = {"complex_002"}
+# Troisieme iteration : relance sur edge_001 SEUL, avec le meme prompt
+# encode_to_cstl() corrige (OFFICIAL_OPERATORS_SNAPSHOT inclut DISBELIEVES
+# depuis le 2026-09-23 -- jamais mentionne au premier run sur cet item,
+# commit 1cbfcda, ou le LLM avait improvise NEGATES, piochant dans
+# l'ancienne liste d'exemples inventee du prompt plutot que dans le vrai
+# catalogue). Objectif : verifier si DISBELIEVES sort spontanement
+# maintenant que le prompt reference le vrai OFFICIAL_OPERATORS, et si la
+# question laissee ouverte au run precedent (le modificateur temporel
+# "early" sur une relation, confondue par le biais de prompt a l'epoque)
+# se clarifie. edge_001 n'a AUCUN litteral protege (PROTECTED_SPANS vide,
+# volontaire -- cas de negation epistemique, pas de valeur numerique) --
+# donc l'instruction value= ajoutee a l'iteration precedente ne joue
+# aucun role ici, attendu.
+RUN_SUBSET = {"edge_001"}
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not API_KEY:
