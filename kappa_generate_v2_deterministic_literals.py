@@ -116,8 +116,19 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # qu'edge_004 garde POSSESSES pour la qualite sur haiku cette fois, et (b)
 # qu'aucun des 3 items deja corriges (medium_002/medium_005/complex_004)
 # n'a regresse avec la reformulation.
+#
+# VERIFICATION #3 EN CONDITIONS REELLES (2026-10-05, post-correctif du
+# verificateur) -- find_hallucinated_tokens() a ete valide par un test
+# synthetique qui rejoue exactement le bug mesure sur medium_002/haiku
+# (token LIT0QZK invente sur un item a protected_spans=[]). RUN_SUBSET
+# restreint a medium_002 seul, haiku par defaut (c'est le modele ou le
+# bug a ete observe) : si le meme defaut se reproduit, la ligne
+# [LITERAL_HALLUCINATED @ ...] doit apparaitre dans la sortie -- si
+# medium_002 sort propre cette fois (haiku est non-deterministe), ce test
+# ne prouve rien dans un sens ou l'autre sur CE run, mais confirme au
+# moins que le check ne lance pas de faux positif sur une sortie correcte.
 RUN_SUBSET = {
-    "medium_002", "medium_005", "complex_001", "complex_004", "edge_004",
+    "medium_002",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -251,6 +262,30 @@ def restore(text: str, token_to_literal: dict[str, str]) -> tuple[str, list[str]
         else:
             lost.append(token)
     return restored, lost
+
+
+# Forme generale des tokens opaques produits par redact() : LIT<i>QZK, i
+# entier. Sert au check de hallucination ci-dessous -- independant de
+# combien de spans ont ete reellement proteges pour un item donne.
+TOKEN_SHAPE_RE = re.compile(r"LIT\d+QZK")
+
+
+def find_hallucinated_tokens(text: str, token_to_literal: dict[str, str]) -> list[str]:
+    """Verification mecanique #3 (ajoutee 2026-10-05, correctif de l'angle
+    mort decouvert sur medium_002/haiku lors du retest INVOLVES/SATISFIES,
+    voir claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md) -- les checks #1
+    (LITERAL_LOST) et #2 ne detectent que la PERTE d'un token REEL, jamais
+    l'INVENTION d'un token de la forme LITnQZK qui n'a jamais ete emis par
+    redact() pour cet item (ex: item avec protected_spans=[] -- token_map
+    vide -- mais le modele invente quand meme `value=LIT0QZK` dans le CSTL,
+    sans aucun antecedent). Un tel token n'est JAMAIS restaure par
+    restore() (il ne correspond a aucune cle de token_to_literal), donc il
+    reste visible tel quel, non traduit, dans la reconstruction finale --
+    un defaut de contenu invisible aux checks precedents. Retourne la liste
+    des tokens NON ATTENDUS trouves dans `text` (forme LITnQZK presente,
+    mais absente de token_to_literal)."""
+    found = set(TOKEN_SHAPE_RE.findall(text))
+    return sorted(found - set(token_to_literal))
 
 
 # ===== CATALOGUE REEL, PAS INVENTE (correctif 2026-10-05) =====
@@ -390,6 +425,9 @@ def main():
     total_literals = 0
     total_lost_cstl = 0
     total_lost_reconstruction = 0
+    total_hallucinated_cstl = 0
+    total_hallucinated_reconstruction = 0
+    items_with_hallucination = []
 
     corpus_subset = {k: v for k, v in CORPUS.items() if k in RUN_SUBSET}
 
@@ -413,8 +451,28 @@ def main():
         if lost_in_cstl:
             print(f"    [LITERAL_LOST @ CSTL] {lost_in_cstl}")
 
+        # Verification mecanique #3a: le modele a-t-il INVENTE un token
+        # LITnQZK sans antecedent (voir find_hallucinated_tokens ci-dessus) ?
+        hallucinated_in_cstl = find_hallucinated_tokens(cstl, token_map)
+        total_hallucinated_cstl += len(hallucinated_in_cstl)
+        if hallucinated_in_cstl:
+            print(f"    [LITERAL_HALLUCINATED @ CSTL] {hallucinated_in_cstl} -- token sans antecedent dans protected_spans")
+
         print("    reconstruct <- CSTL (a l'aveugle)...")
         reconstruction_redacted = reconstruct_from_cstl(cstl)
+
+        # Verification mecanique #3b: meme chose cote reconstruction, AVANT
+        # restore() -- un token invente ici ne correspond a aucune cle de
+        # token_map, restore() le laisse donc tel quel (non traduit) dans le
+        # texte final, ce que #3a seul ne capturerait pas si le modele
+        # l'avait invente seulement a cette etape-ci plutot qu'au CSTL.
+        hallucinated_in_reconstruction = find_hallucinated_tokens(reconstruction_redacted, token_map)
+        total_hallucinated_reconstruction += len(hallucinated_in_reconstruction)
+        if hallucinated_in_reconstruction:
+            print(f"    [LITERAL_HALLUCINATED @ reconstruction] {hallucinated_in_reconstruction} -- token sans antecedent dans protected_spans")
+
+        if hallucinated_in_cstl or hallucinated_in_reconstruction:
+            items_with_hallucination.append(text_id)
 
         # Verification mecanique #2 + restauration finale -- purement
         # deterministe, aucun LLM/humain implique dans cette etape.
@@ -433,6 +491,8 @@ def main():
             "reconstruction": reconstruction,
             "literal_lost_at_cstl": lost_in_cstl,
             "literal_lost_at_reconstruction": lost_in_reconstruction,
+            "literal_hallucinated_at_cstl": hallucinated_in_cstl,
+            "literal_hallucinated_at_reconstruction": hallucinated_in_reconstruction,
         }
 
         RESULTS_FILE.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -449,6 +509,15 @@ def main():
     print(f"Perdus a l'etape reconstruction: {total_lost_reconstruction}")
     if literal_preservation_rate is not None:
         print(f"Taux de preservation litterale (mecanique, independant des juges): {literal_preservation_rate:.1%}")
+    # Hallucination de token (verification #3, ajoutee 2026-10-05) --
+    # independante de total_literals : peut se produire meme sur un item a
+    # 0 littteral protege (c'est exactement le cas qui l'a revelee,
+    # medium_002/haiku). Affichee meme si total_hallucinated est 0, pour
+    # qu'un 0 explicite distingue "verifie, rien trouve" de "jamais verifie".
+    total_hallucinated = total_hallucinated_cstl + total_hallucinated_reconstruction
+    print(f"Tokens LITnQZK HALLUCINES (sans antecedent, verif #3): {total_hallucinated} (CSTL: {total_hallucinated_cstl}, reconstruction: {total_hallucinated_reconstruction})")
+    if items_with_hallucination:
+        print(f"  -> items affectes: {items_with_hallucination}")
     print("=" * 60)
 
     # ===== prompt-juge consolide, MEME format que kappa_generate_real.py --
