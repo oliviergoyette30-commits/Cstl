@@ -45,7 +45,7 @@ TEXT B: The CEO announced layoffs, and employees are upset about the decision.
 
 [medium_004]
 TEXT A: Climate change accelerating. Scientists warn of consequences.
-TEXT B: Scientists are warning about the consequences of accelerating climate change.
+TEXT B: Scientists warn of the consequences of accelerating climate change.
 
 [medium_005]
 TEXT A: Contract signed by parties, confirming agreement on terms.
