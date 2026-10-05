@@ -61,7 +61,7 @@ TEXT B: The algorithm accesses Bayesian optimization Thompson sampling.
 
 [complex_004]
 TEXT A: NDA prohibits disclosure without prior written consent.
-TEXT B: The NDA forbids disclosure before prior written consent.
+TEXT B: Disclosure is forbidden unless it possesses prior_written consent.
 
 [complex_005]
 TEXT A: Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.
