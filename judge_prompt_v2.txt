@@ -33,11 +33,11 @@ TEXT B: Dogs are animals.
 
 [medium_001]
 TEXT A: Sophie arrived late to meeting because traffic was heavy. She apologized.
-TEXT B: Sophie arrived late to the meeting because of heavy traffic and apologized.
+TEXT B: Sophie arrived late to the meeting due to heavy traffic and apologized.
 
 [medium_002]
 TEXT A: Patient prescribed antibiotics, took for week to recover.
-TEXT B: The patient took prescribed antibiotics during the week to recover.
+TEXT B: The patient was prescribed antibiotics and took them for a week to recover.
 
 [medium_003]
 TEXT A: CEO announced layoffs. Employees were upset about decision.
@@ -49,7 +49,7 @@ TEXT B: Scientists warn of the consequences of accelerating climate change.
 
 [medium_005]
 TEXT A: Contract signed by parties, confirming agreement on terms.
-TEXT B: The parties signed the contract, which establishes an agreement on the terms.
+TEXT B: The parties sign the contract, which entails an agreement with terms.
 
 [complex_001]
 TEXT A: Article 42 GDPR: data controllers must implement measures.
@@ -65,11 +65,11 @@ TEXT B: Disclosure is forbidden unless it possesses prior_written consent.
 
 [complex_005]
 TEXT A: Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.
-TEXT B: The three-stage filtration process has a 10 microns stage, followed by a 0.1 microns stage with a membrane,
+TEXT B: The filtration process has a 10 microns stage, a 0.1 microns stage with a membrane, and a carbon stage, in that order.
 
 [edge_002]
 TEXT A: Every student except Marie passed exam.
-TEXT B: Every student passed the exam, but Marie did not.
+TEXT B: The students passed the exam, but their Marie did not pass the exam.
 
 [edge_003]
 TEXT A: Neither manager nor employee knew about change.
@@ -77,7 +77,7 @@ TEXT B: The manager and the employee do not know about the change.
 
 [edge_004]
 TEXT A: Hiring Sophie controversial, argued not qualified.
-TEXT B: The controversial hiring of Sophie, who was argued to be qualified, though she was not.
+TEXT B: The hiring of Sophie was controversial, as it was argued that Sophie was not qualified.
 
 [edge_005]
 TEXT A: If Alice and Bob leave, project fails.
