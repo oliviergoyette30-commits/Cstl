@@ -65,20 +65,26 @@ MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
 MAX_RETRIES = 3
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Troisieme iteration : relance sur edge_001 SEUL, avec le meme prompt
-# encode_to_cstl() corrige (OFFICIAL_OPERATORS_SNAPSHOT inclut DISBELIEVES
-# depuis le 2026-09-23 -- jamais mentionne au premier run sur cet item,
-# commit 1cbfcda, ou le LLM avait improvise NEGATES, piochant dans
-# l'ancienne liste d'exemples inventee du prompt plutot que dans le vrai
-# catalogue). Objectif : verifier si DISBELIEVES sort spontanement
-# maintenant que le prompt reference le vrai OFFICIAL_OPERATORS, et si la
-# question laissee ouverte au run precedent (le modificateur temporel
-# "early" sur une relation, confondue par le biais de prompt a l'epoque)
-# se clarifie. edge_001 n'a AUCUN litteral protege (PROTECTED_SPANS vide,
-# volontaire -- cas de negation epistemique, pas de valeur numerique) --
-# donc l'instruction value= ajoutee a l'iteration precedente ne joue
-# aucun role ici, attendu.
-RUN_SUBSET = {"edge_001"}
+# Quatrieme iteration : relance sur les 18 items du corpus de 20 PAS ENCORE
+# verifies avec le pipeline v2 pleinement corrige (OFFICIAL_OPERATORS_SNAPSHOT
+# a jour incluant EITHER_OR, instruction value=, instruction manner=,
+# instruction de selection d'objet epistemique, catalogue de domaines en
+# anglais). Exclus de ce lot, deja traites et verifies corrects avec cette
+# version finale du prompt :
+#   - complex_002 (commit 4b2876e, 100% preservation litterale, EITHER_OR OK)
+#   - edge_001    (commit bcddf1f, DISBELIEVES + manner= OK)
+# NOTE DE TRANSPARENCE (pas de choix silencieux sur le "16" demande) :
+# complex_003 avait "reussi" au tout premier run (commit 1cbfcda), mais
+# UNIQUEMENT avec la version originale, non corrigee, du prompt -- jamais
+# retestee avec OFFICIAL_OPERATORS_SNAPSHOT/value=/manner=/EITHER_OR. Elle
+# est donc incluse ici (18 items, pas 16) par souci de rigueur methodologique
+# -- mieux vaut un ecart signale qu'un trou de couverture silencieux.
+RUN_SUBSET = {
+    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
+    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
+    "complex_001", "complex_003", "complex_004", "complex_005",
+    "edge_002", "edge_003", "edge_004", "edge_005",
+}
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not API_KEY:
