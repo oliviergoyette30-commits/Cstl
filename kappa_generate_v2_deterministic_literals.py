@@ -71,30 +71,26 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Cinquieme iteration : relance CIBLEE sur les 5 items identifies comme
-# "echec d'execution du modele" dans l'audit du run complet 18 items
-# (commit 85b63ec, voir claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md dans
-# le projet) -- PAS les items identifies comme trou de grammaire CSTL
-# reproductible (edge_002: pas d'operateur EXCEPT; une partie de
-# medium_004: pas de construction pour la predication intransitive/pas
-# d'operateur WARN -- ceux-la resteraient casses sur n'importe quel modele,
-# relancer ne teste rien). But : lancer avec MODEL=claude-sonnet-4-5 (via
-# la variable d'environnement ANTHROPIC_MODEL, PAS en modifiant la
-# constante MODEL ci-dessus -- cf instructions de lancement) pour separer
-# "probleme de modele haiku" de "probleme de grammaire CSTL" :
-#   - edge_005    (conditionnel IF perdu malgre CONSTRAINTS[(IF)...] existant)
-#   - complex_001 (PERFORM existant mais ARR.PRODUCE+TRANSFORM utilise a la
-#                  place, + litteral "Article 42 GDPR" omis entierement)
-#   - medium_003  (hallucination: "believe the decision" ajoute, absent
-#                  de l'original)
-#   - medium_004  (inclus malgre le trou de grammaire WARN/predication
-#                  intransitive identifie, pour voir si sonnet trouve un
-#                  contournement different que haiku, pas pour "corriger"
-#                  le trou lui-meme)
-#   - edge_002    (inclus pour la meme raison -- comparaison, pas correction
-#                  attendue du trou EXCEPT/cardinalite)
+# Sixieme iteration : relance les MEMES 18 items que le run complet haiku
+# (commit 85b63ec) mais sur sonnet-4-5 (via ANTHROPIC_MODEL au lancement,
+# PAS en modifiant MODEL ci-dessus), pour comparaison complete modele vs
+# modele sur tout le sous-ensemble, pas juste les 5 items d'echec deja
+# compares individuellement.
+#
+# MISE EN GARDE METHODOLOGIQUE (pas de comparaison silencieusement biaisee):
+# ce run utilise le prompt ACTUEL, qui inclut REACTS (ajoute en 3105d83,
+# APRES le run haiku de 85b63ec). Ce n'est donc PAS une comparaison
+# controlee isolant uniquement la variable "modele" -- deux choses changent
+# en meme temps entre le run haiku (85b63ec, sans REACTS) et ce run sonnet
+# (avec REACTS). Sur medium_003 specifiquement, toute amelioration observee
+# ne permettra pas de trancher si elle vient du modele ou du nouvel
+# operateur disponible. Les 4 autres items (pas d'usage attendu de REACTS)
+# restent une comparaison modele-isolee valide.
 RUN_SUBSET = {
-    "edge_005", "complex_001", "medium_003", "medium_004", "edge_002",
+    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
+    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
+    "complex_001", "complex_003", "complex_004", "complex_005",
+    "edge_002", "edge_003", "edge_004", "edge_005",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
