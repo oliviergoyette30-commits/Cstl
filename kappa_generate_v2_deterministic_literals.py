@@ -71,22 +71,24 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Huitieme iteration : relance CIBLEE sur edge_005 seul, pour tester si
-# "If Alice AND Bob leave, project fails" se resout maintenant que le
-# prompt etend explicitement la convention EITHER_OR (deja utilisee pour
-# la disjonction d'objets) a la conjonction/disjonction de PLUSIEURS
-# SUJETS dans le meme evenement -- aucun nouvel operateur, aucun nouveau
-# mecanisme Rust, juste une instruction de prompt plus large sur un
-# mecanisme deja existant. Hypothese du dossier
-# claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md: dernier trou de grammaire
-# non explique par un angle mort de prompt (confirme deux fois
-# independamment, haiku ET sonnet) -- mais les deux precedents (EXCEPT,
-# UNLESS) se sont aussi reveles etre des angles morts de prompt une fois
-# testes explicitement, donc meme demarche ici avant de conclure
-# definitivement a une vraie lacune structurelle. But: lancer SUR LES DEUX
-# MODELES (haiku par defaut, puis sonnet via ANTHROPIC_MODEL).
+# Neuvieme iteration : relance CIBLEE sur medium_004 seul -- dernier trou
+# non teste du dossier claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md. Deux
+# sous-problemes distincts sur le meme item ("Climate change accelerating.
+# Scientists warn of consequences."), deux instructions de prompt ajoutees
+# ci-dessous, aucun nouvel operateur ni mecanisme Rust (meme demarche que
+# EXCEPT/UNLESS/AND-OR, tous les trois retombes en angle mort de prompt) :
+#   1. Predication intransitive (le sujet change d'etat lui-meme, pas une
+#      relation a deux parties) -- reutilise manner= (deja existant) plutot
+#      qu'inventer un objet separe lie par TRANSFORM.
+#   2. Acte de parole WARN -- aucun operateur dedie dans le catalogue, mais
+#      compose correctement via PERFORM(sujet,evenement)+STATE(evenement,
+#      contenu), le patron que sonnet avait deja trouve spontanement lors
+#      du test cible precedent sans qu'on le lui enseigne.
+# But : lancer SUR LES DEUX MODELES (haiku par defaut, puis sonnet via
+# ANTHROPIC_MODEL) pour trancher si c'est enfin une vraie lacune de
+# grammaire ou encore un angle mort de prompt.
 RUN_SUBSET = {
-    "edge_005",
+    "medium_004",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -291,6 +293,10 @@ If an entity carries a concrete value from the source text (a number, a threshol
 
 If the source text has an adverbial/manner/relative-temporal modifier on an event or relation ("early", "late", "quickly", "reluctantly", etc.), do NOT force it into a BEFORE/AFTER/DURING relation (those are Allen temporal relations between two intervals -- they require a real second term to compare against, and using them for a bare modifier like "early" with nothing to compare to is a type error that silently drops the modifier's actual meaning). Instead attach it as a `manner=` attribute directly on the entity or relation it modifies, e.g. DEFINE left AS event [id=e3, manner=early].
 
+If the source text says a subject is undergoing a change or has a changing property ON ITS OWN, with no second entity actually being acted upon ("climate change is accelerating", "the situation is worsening", "the economy is growing") -- do NOT invent a second entity for the property/change and link the subject to it with TRANSFORM or any other transitive RELATIONS operator (that falsely implies the subject is acting on some separate object). This is a self-change, not a two-party relation. Instead attach the change/property as a `manner=` attribute directly on the subject's own DEFINE line, the same mechanism as the adverbial modifier case above, e.g. DEFINE climate_change AS phenomenon [id=e1, manner=accelerating].
+
+If the source text describes someone WARNING about something (as opposed to merely stating or declaring it neutrally) -- there is no dedicated WARN operator in the closed list above, and using STATE alone drops the cautionary/urgent illocutionary force of "warn". Instead compose it from two relations: PERFORM for the act of warning as an event, then STATE from that event to its content, e.g. DEFINE warning AS event [id=e2] / RELATIONS [ (scientists) PERFORM warning [id=r1] (warning) STATE consequences [id=r2] ]. This preserves "warn" as a distinct event rather than flattening it into a neutral declarative.
+
 If the source text expresses an epistemic attitude (BELIEVES, KNOWS, DOUBTS, DISBELIEVES, ASSUMES) toward a PROPOSITION (something happening/being true), the object of that operator must be the entity/event that IS the proposition (e.g. `left`, already DEFINEd), never a bare agent name alone (e.g. `Bob`) -- "Alice does not believe Bob" (object=Bob, an agent) and "Alice does not believe [that] Bob left [early]" (object=left, a proposition/event) are different claims; only the second matches what these sentences normally mean. Pick the DEFINEd entity that represents the actual proposition as the object, not whichever agent happens to be nearby in the sentence.
 
 If the source text expresses an EMOTIONAL/AFFECTIVE stance of a subject toward an object or event that already exists (e.g. "upset about", "angry about", "pleased with", "worried about"), use REACTS -- do NOT use CATALYZE (that implies the subject's state causally PRODUCES the object, inverting the direction when the object already happened) and do NOT use BELIEVES/KNOWS (those are epistemic/cognitive, not affective). Pattern: (subject) REACTS (object) [id=rNNN, valence=negative|positive|neutral|mixed, affect=<short free-text label, e.g. upset/angry/pleased>]. valence is required; affect is optional but encouraged when the source text names the specific emotion.
@@ -319,7 +325,8 @@ Reading rules, important, do not default to the wrong one:
 - A REACTS relation means the subject has an emotional/affective stance TOWARD the object -- the object is NOT caused or produced by the subject's state, it's the pre-existing target of the reaction. Reconstruct as "<subject> is/are <affect, or a generic word matching valence if affect is absent> about <object>" -- never phrase it as the subject producing, making, or causing the object.
 - A MODALITY=UNLESS line paired with a MODALITY=FORBID (or MUST_NOT) line on the same subject/action means the prohibition does NOT apply when the UNLESS line's condition holds -- reconstruct as "X is forbidden/prohibited unless Y" or "X is not allowed without Y", never as a temporal claim ("before Y") and never drop the exception entirely.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
-- If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier (e.g. "early", "quickly") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it.
+- If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier OR a self-change/property the entity itself is undergoing (e.g. "early", "quickly", "accelerating", "worsening") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it, and do not phrase a self-change `manner=` as the entity acting on some other thing.
+- If an entity is PERFORMed as an event and that event in turn STATEs an object (a two-step chain: subject PERFORM event, event STATE content), and the event's own name/type suggests warning/cautioning rather than a neutral announcement, reconstruct it with "warn" (or an equivalent cautionary verb), not a flat neutral "state"/"say" -- preserve the urgency, don't flatten it to a bare declarative.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 
