@@ -71,21 +71,22 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Septieme iteration : relance CIBLEE sur complex_004 seul, pour tester si
-# "NDA prohibits disclosure WITHOUT prior written consent" se resout
-# maintenant que le prompt enseigne explicitement le patron
-# FORBID+UNLESS (ajoute ci-dessous) -- hypothese du dossier
-# claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md: c'etait un angle mort du
-# prompt (jamais enseigne), pas un trou de grammaire (UNLESS existe deja
-# comme modalite CONSTRAINTS depuis le debut). But: lancer SUR LES DEUX
-# MODELES (haiku d'abord par defaut, puis sonnet via ANTHROPIC_MODEL) pour
-# voir si le fix de prompt suffit a lui seul, independamment du modele --
-# si oui, confirme "angle mort du prompt" ; si haiku echoue encore malgre
-# l'instruction explicite, ca redevient une question de capacite du
-# modele, meme pattern que la distinction etablie pour EXCEPT/edge_002 et
-# REACTS/medium_003 plus haut dans ce fichier.
+# Huitieme iteration : relance CIBLEE sur edge_005 seul, pour tester si
+# "If Alice AND Bob leave, project fails" se resout maintenant que le
+# prompt etend explicitement la convention EITHER_OR (deja utilisee pour
+# la disjonction d'objets) a la conjonction/disjonction de PLUSIEURS
+# SUJETS dans le meme evenement -- aucun nouvel operateur, aucun nouveau
+# mecanisme Rust, juste une instruction de prompt plus large sur un
+# mecanisme deja existant. Hypothese du dossier
+# claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md: dernier trou de grammaire
+# non explique par un angle mort de prompt (confirme deux fois
+# independamment, haiku ET sonnet) -- mais les deux precedents (EXCEPT,
+# UNLESS) se sont aussi reveles etre des angles morts de prompt une fois
+# testes explicitement, donc meme demarche ici avant de conclure
+# definitivement a une vraie lacune structurelle. But: lancer SUR LES DEUX
+# MODELES (haiku par defaut, puis sonnet via ANTHROPIC_MODEL).
 RUN_SUBSET = {
-    "complex_004",
+    "edge_005",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -284,6 +285,8 @@ If the English text expresses an obligation or requirement ("must", "requires", 
 
 If the English text expresses an alternative ("A or B", "either A or B"), do NOT collapse it into two separate parallel relations/constraints (that reads back as "both A and B", a conjunction -- wrong). Instead, after declaring the two relevant constraint/relation lines, add ONE additional RELATIONS line explicitly linking their two objects with EITHER_OR: (object_A) EITHER_OR (object_B) [id=rNNN]. This is the ONLY correct way to express disjunction in CSTL.
 
+This EITHER_OR default also applies when MULTIPLE SUBJECTS jointly participate in or trigger the SAME event/object (e.g. "If Alice and Bob leave, the project fails"): declare one RELATIONS line per subject into that same event id (e.g. (Alice) ARR leaving [id=r1] / (Bob) ARR leaving [id=r2]) -- by DEFAULT, with no EITHER_OR line linking the two subjects, this means ALL of them jointly (a conjunction, "Alice AND Bob leave"), exactly the same default-conjunctive reading as any other pair of parallel relation/constraint lines. Only if the source text says "either X or Y" ABOUT THE SUBJECTS THEMSELVES do you add (Alice) EITHER_OR (Bob) [id=rNNN] to override that default to a disjunction ("Alice OR Bob leaves"). Do not guess -- the presence or absence of this EITHER_OR line between the subjects is what decides AND vs OR, never infer it from word order or plausibility.
+
 If an entity carries a concrete value from the source text (a number, a threshold, a quantity, a named amount, a date) -- including an opaque placeholder token standing in for one -- do NOT leave it implicit in just the entity's name or type. Attach it explicitly with a `value=` attribute on its DEFINE line, e.g. DEFINE Hypertension AS condition [id=e1, value=LIT2QZK]. A DEFINE for an entity that has a concrete value in the source text but no `value=` attribute is INCOMPLETE -- this is a known failure mode, do not repeat it.
 
 If the source text has an adverbial/manner/relative-temporal modifier on an event or relation ("early", "late", "quickly", "reluctantly", etc.), do NOT force it into a BEFORE/AFTER/DURING relation (those are Allen temporal relations between two intervals -- they require a real second term to compare against, and using them for a bare modifier like "early" with nothing to compare to is a type error that silently drops the modifier's actual meaning). Instead attach it as a `manner=` attribute directly on the entity or relation it modifies, e.g. DEFINE left AS event [id=e3, manner=early].
@@ -312,6 +315,7 @@ Reading rules, important, do not default to the wrong one:
 - A CONSTRAINTS line with MODALITY=REQUIRE (or MUST) means that object is REQUIRED/obligatory.
 - Two separate CONSTRAINTS/RELATIONS lines that are NOT linked by an EITHER_OR line are each independently required -- read them as "and" (conjunction), e.g. "requires both X and Y".
 - If (and only if) two objects are explicitly linked by an EITHER_OR relation line, read THOSE TWO as alternatives -- "requires X or Y" (disjunction), NOT "both X and Y". The EITHER_OR line overrides the default conjunctive reading for exactly the two objects it names.
+- The same rule applies when multiple subjects each have their own relation line into the same shared event/object: with NO EITHER_OR line linking those subjects, read them as jointly/ALL of them (conjunction -- "Alice and Bob leave", never "Alice or Bob leave"). Only read it as a disjunction ("Alice or Bob leave") if an EITHER_OR line explicitly links those subjects. Do not default to "or" just because two separate lines point to the same object -- the default is always "and" unless EITHER_OR says otherwise.
 - A REACTS relation means the subject has an emotional/affective stance TOWARD the object -- the object is NOT caused or produced by the subject's state, it's the pre-existing target of the reaction. Reconstruct as "<subject> is/are <affect, or a generic word matching valence if affect is absent> about <object>" -- never phrase it as the subject producing, making, or causing the object.
 - A MODALITY=UNLESS line paired with a MODALITY=FORBID (or MUST_NOT) line on the same subject/action means the prohibition does NOT apply when the UNLESS line's condition holds -- reconstruct as "X is forbidden/prohibited unless Y" or "X is not allowed without Y", never as a temporal claim ("before Y") and never drop the exception entirely.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
