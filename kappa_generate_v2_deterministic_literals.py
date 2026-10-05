@@ -89,11 +89,22 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # Lance sur sonnet-4-5 par defaut cette fois (pas de comparaison modele
 # recherchee ici, juste la version de production la plus fiable --
 # ANTHROPIC_MODEL=claude-sonnet-4-5 au lancement).
+# TEST CIBLE INVOLVES/SATISFIES (correctif 2026-10-05, commit a0b4889) --
+# les 5 items ou POSSESSES etait mesure comme surcharge (voir
+# CSTL_SPEC_v5_0.md §10.3quater) : medium_002/medium_005/edge_004/
+# complex_001 (role thematique evenement->argument, devrait migrer vers
+# INVOLVES) et complex_004 (satisfaction de precondition, devrait migrer
+# vers SATISFIES). A lancer sur les DEUX modeles (haiku par defaut, puis
+# ANTHROPIC_MODEL=claude-sonnet-4-5) -- meme methode que les tests
+# UNLESS/EITHER_OR/manner= precedents : ne pas conclure que le split
+# regle quoi que ce soit avant de verifier que les deux modeles migrent
+# spontanement sans que le prompt leur force la main plus qu'il ne le
+# fait deja (l'instruction ajoutee au commit a0b4889 dit explicitement
+# "ne pas utiliser POSSESSES ici", donc cette fois l'instruction EST deja
+# dans le prompt -- ce test verifie qu'elle est suivie, pas qu'un angle
+# mort est comble).
 RUN_SUBSET = {
-    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
-    "medium_001", "medium_002", "medium_005",
-    "complex_003", "complex_005",
-    "edge_002", "edge_003", "edge_004",
+    "medium_002", "medium_005", "complex_001", "complex_004", "edge_004",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
