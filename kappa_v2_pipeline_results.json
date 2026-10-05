@@ -83,9 +83,9 @@
     "original": "CEO announced layoffs. Employees were upset about decision.",
     "protected_spans": [],
     "redacted_text": "CEO announced layoffs. Employees were upset about decision.",
-    "cstl_redacted": "DEFINE CEO AS agent [id=e1]\nDEFINE layoffs AS event [id=e2]\nDEFINE Employees AS agent [id=e3]\nDEFINE decision AS event [id=e4]\nDEFINE upset AS state [id=e5]\n\nRELATIONS [\n(CEO) PERFORM (layoffs) [id=r1]\n(Employees) BELIEVES (decision) [id=r2]\n(Employees) TRANSFORM (upset) [id=r3]\n]",
-    "reconstruction_redacted": "The CEO performed layoffs, and the employees believe the decision and are upset about it.",
-    "reconstruction": "The CEO performed layoffs, and the employees believe the decision and are upset about it.",
+    "cstl_redacted": "```cstl\nDEFINE CEO AS role [id=e1]\nDEFINE layoffs AS event [id=e2]\nDEFINE Employees AS role [id=e3]\nDEFINE upset AS state [id=e4]\nDEFINE decision AS event [id=e5]\n\nRELATIONS [\n  (CEO) STATE layoffs [id=r1]\n  (Employees) POSSESSES upset [id=r2]\n  (upset) CATALYZE decision [id=r3]\n]\n```",
+    "reconstruction_redacted": "The CEO announced layoffs, and the upset employees made a decision.",
+    "reconstruction": "The CEO announced layoffs, and the upset employees made a decision.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
@@ -94,9 +94,9 @@
     "original": "Climate change accelerating. Scientists warn of consequences.",
     "protected_spans": [],
     "redacted_text": "Climate change accelerating. Scientists warn of consequences.",
-    "cstl_redacted": "DEFINE climate_change AS event [id=e1]\nDEFINE acceleration AS event [id=e2]\nDEFINE scientists AS entity [id=e3]\nDEFINE consequences AS entity [id=e4]\n\nRELATIONS [\n(climate_change) TRANSFORM (acceleration) [id=r1]\n(scientists) STATE (consequences) [id=r2]\n]",
-    "reconstruction_redacted": "Climate change is transforming acceleration, and scientists are stating consequences.",
-    "reconstruction": "Climate change is transforming acceleration, and scientists are stating consequences.",
+    "cstl_redacted": "```cstl\nDEFINE climate_change AS phenomenon [id=e1]\nDEFINE accelerating AS event [id=e2]\nDEFINE scientists AS agent [id=e3]\nDEFINE warn AS event [id=e4]\nDEFINE consequences AS concept [id=e5]\n\nRELATIONS [\n  (climate_change) TRANSFORM accelerating [id=r1]\n  (scientists) PERFORM warn [id=r2]\n  (warn) STATE consequences [id=r3]\n]\n```",
+    "reconstruction_redacted": "Scientists warn of consequences as climate change accelerates.",
+    "reconstruction": "Scientists warn of consequences as climate change accelerates.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
@@ -118,15 +118,11 @@
       "Article 42 GDPR"
     ],
     "redacted_text": "LIT0QZK: data controllers must implement measures.",
-    "cstl_redacted": "```\nDEFINE data_controllers AS entity [id=e1]\nDEFINE measures AS entity [id=e2]\nDEFINE implementation AS event [id=e3]\n\nRELATIONS [\n(data_controllers) ARR.PRODUCE (implementation) [id=r1]\n(implementation) TRANSFORM (measures) [id=r2]\n]\n\nCONSTRAINTS [\n(MUST) data_controllers ARR.PRODUCE (implementation) [id=c1]\n]\n```",
-    "reconstruction_redacted": "Data controllers must produce an implementation that transforms measures.",
-    "reconstruction": "Data controllers must produce an implementation that transforms measures.",
-    "literal_lost_at_cstl": [
-      "LIT0QZK"
-    ],
-    "literal_lost_at_reconstruction": [
-      "LIT0QZK"
-    ]
+    "cstl_redacted": "```cstl\nDEFINE LIT0QZK AS entity [id=e1, value=LIT0QZK]\nDEFINE data_controllers AS role [id=e2]\nDEFINE measures AS artifact [id=e3]\n\nRELATIONS [\n  (LIT0QZK) POSSESSES data_controllers [id=r1]\n]\n\nCONSTRAINTS [\n  (REQUIRE) data_controllers ARR.CREATE measures [id=c1]\n]\n```",
+    "reconstruction_redacted": "LIT0QZK's data controllers must create measures.",
+    "reconstruction": "Article 42 GDPR's data controllers must create measures.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
   },
   "complex_003": {
     "diff": "complex",
@@ -171,9 +167,9 @@
     "original": "Every student except Marie passed exam.",
     "protected_spans": [],
     "redacted_text": "Every student except Marie passed exam.",
-    "cstl_redacted": "DEFINE student AS entity [id=e1]\nDEFINE Marie AS entity [id=e2]\nDEFINE exam AS entity [id=e3]\nDEFINE passed_exam AS event [id=e4]\nRELATIONS [\n(student) PERFORM passed_exam [id=r1]\n(passed_exam) OPPOSES (Marie) [id=r2]\n]",
-    "reconstruction_redacted": "The student passed the exam, which opposes Marie.",
-    "reconstruction": "The student passed the exam, which opposes Marie.",
+    "cstl_redacted": "```cstl\nDEFINE Students AS group [id=e1]\nDEFINE Marie AS person [id=e2]\nDEFINE Exam AS assessment [id=e3]\nDEFINE Passed AS event [id=e4]\n\nRELATIONS [\n  (Students) PERFORM Passed [id=r1]\n  (Passed) ARR.PRODUCE Exam [id=r2]\n]\n\nCONSTRAINTS [\n  (NOT) Marie PERFORM Passed [id=c1]\n]\n```",
+    "reconstruction_redacted": "The students passed the exam, but Marie did not.",
+    "reconstruction": "The students passed the exam, but Marie did not.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   },
@@ -204,9 +200,9 @@
     "original": "If Alice and Bob leave, project fails.",
     "protected_spans": [],
     "redacted_text": "If Alice and Bob leave, project fails.",
-    "cstl_redacted": "DEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE leave AS event [id=e3]\nDEFINE project AS entity [id=e4]\nDEFINE fails AS event [id=e5]\n\nRELATIONS [\n(Alice) ARR.JOIN leave [id=r1]\n(Bob) ARR.JOIN leave [id=r2]\n(leave) ENTAILS fails [id=r3]\n]\n\nCONSTRAINTS [\n(IF) leave ENTAILS fails [id=c1]\n]",
-    "reconstruction_redacted": "Alice and Bob both leave the project, which entails that the project fails.",
-    "reconstruction": "Alice and Bob both leave the project, which entails that the project fails.",
+    "cstl_redacted": "```cstl\nDEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE leave AS event [id=e3]\nDEFINE project AS entity [id=e4]\nDEFINE fails AS event [id=e5]\n\nRELATIONS [\n  (Alice) ARR.JOIN leave [id=r1]\n  (Bob) ARR.JOIN leave [id=r2]\n  (leave) ENTAILS fails [id=r3]\n  (project) ARR.JOIN fails [id=r4]\n]\n```",
+    "reconstruction_redacted": "If Alice or Bob leaves, the project fails.",
+    "reconstruction": "If Alice or Bob leaves, the project fails.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   }

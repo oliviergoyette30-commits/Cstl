@@ -41,11 +41,11 @@ TEXT B: The patient was prescribed antibiotics, administered antibiotics over a 
 
 [medium_003]
 TEXT A: CEO announced layoffs. Employees were upset about decision.
-TEXT B: The CEO performed layoffs, and the employees believe the decision and are upset about it.
+TEXT B: The CEO announced layoffs, and the upset employees made a decision.
 
 [medium_004]
 TEXT A: Climate change accelerating. Scientists warn of consequences.
-TEXT B: Climate change is transforming acceleration, and scientists are stating consequences.
+TEXT B: Scientists warn of consequences as climate change accelerates.
 
 [medium_005]
 TEXT A: Contract signed by parties, confirming agreement on terms.
@@ -53,7 +53,7 @@ TEXT B: The parties perform the signing of the contract, which entails an agreem
 
 [complex_001]
 TEXT A: Article 42 GDPR: data controllers must implement measures.
-TEXT B: Data controllers must produce an implementation that transforms measures.
+TEXT B: Article 42 GDPR's data controllers must create measures.
 
 [complex_003]
 TEXT A: Algorithm uses Bayesian optimization Thompson sampling.
@@ -69,7 +69,7 @@ TEXT B: The filtration process produces three stages: 10 microns, 0.1 microns, a
 
 [edge_002]
 TEXT A: Every student except Marie passed exam.
-TEXT B: The student passed the exam, which opposes Marie.
+TEXT B: The students passed the exam, but Marie did not.
 
 [edge_003]
 TEXT A: Neither manager nor employee knew about change.
@@ -81,4 +81,4 @@ TEXT B: Sophie was hired in a controversial manner, despite not being qualified.
 
 [edge_005]
 TEXT A: If Alice and Bob leave, project fails.
-TEXT B: Alice and Bob both leave the project, which entails that the project fails.
+TEXT B: If Alice or Bob leaves, the project fails.
