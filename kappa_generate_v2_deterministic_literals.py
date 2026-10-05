@@ -65,20 +65,16 @@ MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
 MAX_RETRIES = 3
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Au lieu des 20 textes, on ne relance QUE les 3 items ou le pipeline v1
-# original (kappa_generate_real.py, run du 2026-09-22, kappa=0.6296) a
-# mesure un desaccord entre juges: complex_002, complex_003, edge_001.
-# Motif: reduire le cout/volume d'appels API. Consequence methodologique
-# explicite: le kappa de Fleiss n'est PAS recalculable sur ce sous-ensemble
-# de 3 items de la meme facon statistiquement valide qu'avec les 20 (trop
-# peu d'items, marges degenerees) -- ce run sert a verifier item-par-item
-# si l'extraction deterministe change le verdict des juges sur CES 3 cas
-# precis, pas a produire un nouveau kappa global comparable au 0.6296.
-# edge_001 n'a aucun litteral protege (volontaire, voir plus haut) -- il
-# sert de temoin negatif: si son verdict change quand meme, c'est que le
-# changement vient d'autre chose que la protection des litteraux (ex: le
-# passage de claude-sonnet-4-5 a claude-haiku-4-5), signal a surveiller.
-RUN_SUBSET = {"complex_002", "complex_003", "edge_001"}
+# Deuxieme iteration : relance sur complex_002 SEUL, avec le prompt
+# encode_to_cstl() corrige (voir OFFICIAL_OPERATORS_SNAPSHOT plus bas).
+# Le premier run (complex_002/complex_003/edge_001, commit 1cbfcda) a
+# genere des operateurs (REQUIRES, USES, CAUSES, NEGATES) dont PAS UN
+# SEUL n'est dans le vrai OFFICIAL_OPERATORS de src/semantic.rs -- le
+# prompt proposait une liste d'exemples inventee, jamais verifiee contre
+# le depot. complex_003 et edge_001 ne sont pas relances ici (pas la
+# demande d'Olivier) -- complex_003 avait deja reussi, edge_001 reste a
+# refaire separement avec ce meme prompt corrige si besoin.
+RUN_SUBSET = {"complex_002"}
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not API_KEY:
@@ -209,18 +205,67 @@ def restore(text: str, token_to_literal: dict[str, str]) -> tuple[str, list[str]
     return restored, lost
 
 
+# ===== CATALOGUE REEL, PAS INVENTE (correctif 2026-10-05) =====
+# La version precedente de ce prompt proposait une liste d'exemples
+# d'operateurs (KNOWS, LOCATED, WROTE, CAUSES, PRESCRIBED, ANNOUNCED,
+# REQUIRES, PROHIBITS, NEGATES, EXCEPT, NEITHER_NOR, CONDITIONAL) --
+# verifie apres coup contre src/semantic.rs::OFFICIAL_OPERATORS (commit
+# 0bcea13) : PAS UN SEUL de ces mots n'est un operateur officiel CSTL, ni
+# dans le noyau, ni dans l'extension de domaine medical
+# (src/domains.rs::get_domain_operators_slice). Les payloads generes
+# passaient quand meme (E101 est un avertissement, jamais bloquant) --
+# mais c'etait du CSTL non-conforme qui ressemble a du CSTL, pas la grammaire
+# reelle. Liste ci-dessous recopiee a la main depuis
+# src/semantic.rs::OFFICIAL_OPERATORS (38 operateurs, verifies le
+# 2026-10-05) -- a resynchroniser manuellement si ce fichier evolue, ce
+# script n'a pas acces au depot Rust pour l'importer dynamiquement.
+OFFICIAL_OPERATORS_SNAPSHOT = [
+    "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
+    "INTENT", "MAINTAIN", "TRANSFORM", "RESIST", "AMP", "INH",
+    "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
+    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES",
+    "COMPARES", "ENTAILS", "CONTRADICTS",
+    "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
+    "BEFORE", "AFTER", "DURING", "EITHER_OR",
+]
+# Domaine medical (src/domains.rs) -- accepte EN PLUS du noyau quand le
+# texte est clairement clinique (c'est le cas de complex_002). Verbes en
+# francais dans le depot (ontologie d'origine), gardes tels quels.
+MEDICAL_DOMAIN_OPERATORS_SNAPSHOT = [
+    "PRESCRIRE", "DIAGNOSTIQUER", "CONTRA_INDIQUER", "ADMINISTRER",
+    "OPERER", "SURVEILLER", "REFERER", "HOSPITALISER", "TRAITER",
+    "VACCINER", "PREVENIR",
+]
+
+
 def encode_to_cstl(redacted_text: str) -> str:
+    ops = ", ".join(OFFICIAL_OPERATORS_SNAPSHOT)
+    med_ops = ", ".join(MEDICAL_DOMAIN_OPERATORS_SNAPSHOT)
     prompt = f"""Represent the factual content of the following English text as a minimal CSTL payload.
 
-Use ONLY these two blocks:
+Use ONLY these blocks:
 DEFINE <entity> AS <type> [id=eNNN]
 RELATIONS [
 (subject) OPERATOR object [id=rNNN]
 ]
+CONSTRAINTS [
+(MODALITY) subject OPERATOR object [id=cNNN]
+]
 
-Pick operators freely (KNOWS, LOCATED, WROTE, CAUSES, PRESCRIBED, ANNOUNCED, REQUIRES, PROHIBITS, NEGATES, EXCEPT, NEITHER_NOR, CONDITIONAL, etc.) -- whatever best captures the logical structure, including negation, exceptions, and conditionals precisely. Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE and RELATIONS blocks.
+OPERATOR must be chosen from this EXACT closed list (CSTL's real operator catalogue -- do not invent, do not use English verbs not on this list):
+{ops}
 
-IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear (e.g. as a value= field or inside an entity name) -- never translate, paraphrase, explain, or guess what they might represent.
+If the text is clearly clinical/medical, you may ALSO use these domain-specific operators (French verbs, part of CSTL's medical domain extension), in addition to the list above:
+{med_ops}
+
+If the English text expresses an obligation or requirement ("must", "requires", "is required to"), do NOT invent a RELATIONS operator like REQUIRES. Instead use the CONSTRAINTS block with MODALITY=REQUIRE (other valid modalities: MUST, MUST_NOT, NOT, MAY, SHOULD, IF, IFF, UNLESS, FORBID), wrapping an operator from the lists above -- e.g. (REQUIRE) subject ADMINISTRER object [id=cNNN].
+
+If the English text expresses an alternative ("A or B", "either A or B"), do NOT collapse it into two separate parallel relations/constraints (that reads back as "both A and B", a conjunction -- wrong). Instead, after declaring the two relevant constraint/relation lines, add ONE additional RELATIONS line explicitly linking their two objects with EITHER_OR: (object_A) EITHER_OR (object_B) [id=rNNN]. This is the ONLY correct way to express disjunction in CSTL.
+
+Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
+
+IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear -- never translate, paraphrase, explain, or guess what they might represent.
 
 TEXT:
 {redacted_text}"""
@@ -230,7 +275,12 @@ TEXT:
 def reconstruct_from_cstl(cstl_payload: str) -> str:
     prompt = f"""You are given a CSTL payload (a structured semantic representation). You have NEVER seen the original text it came from.
 
-Write a single, natural, standalone English sentence (or two, if needed) that expresses exactly what this payload states -- nothing more, nothing less. Do not mention CSTL, DEFINE, RELATIONS, or any formatting. Just the plain-English reconstruction.
+Write a single, natural, standalone English sentence (or two, if needed) that expresses exactly what this payload states -- nothing more, nothing less. Do not mention CSTL, DEFINE, RELATIONS, CONSTRAINTS, or any formatting. Just the plain-English reconstruction.
+
+Reading rules, important, do not default to the wrong one:
+- A CONSTRAINTS line with MODALITY=REQUIRE (or MUST) means that object is REQUIRED/obligatory.
+- Two separate CONSTRAINTS/RELATIONS lines that are NOT linked by an EITHER_OR line are each independently required -- read them as "and" (conjunction), e.g. "requires both X and Y".
+- If (and only if) two objects are explicitly linked by an EITHER_OR relation line, read THOSE TWO as alternatives -- "requires X or Y" (disjunction), NOT "both X and Y". The EITHER_OR line overrides the default conjunctive reading for exactly the two objects it names.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 
