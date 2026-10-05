@@ -555,6 +555,63 @@ concrète reste valide), documenté ici pour que les futurs prompts
 d'encodage sachent qu'une valeur explicite est disponible et attendue
 quand le texte source en contient une.
 
+### 13.2 Convention `manner=` — modificateur adverbial/temporel sur une relation (2026-10-05)
+
+Trouvaille du pipeline kappa v2 (item `edge_001`, "Alice does not believe
+Bob left **early**") : le payload généré définissait `left_early AS event`
+puis reliait `(Bob) BEFORE (left_early)` — un opérateur temporel d'Allen
+(relation entre deux INTERVALLES, §10.5) utilisé à tort pour relier un
+agent à un événement, et qui n'encode de toute façon aucune notion de
+"tôt" (`BEFORE` n'a pas de point de référence). La nuance adverbiale de
+l'original disparaissait du payload, non récupérable par un décodeur.
+
+Même diagnostic que §13.1 : **aucun changement de grammaire requis**. Le
+bloc `attrs` (`[clé=valeur, ...]`) qui termine une ligne `RELATIONS`/
+`CONSTRAINTS` est déjà un parseur clé=valeur générique
+(`parser.rs::take_trailing_attrs`, aucune liste blanche de clés), et
+`compression::structural` fait déjà le roundtrip de toute paire extra
+au-delà de `type`/`subject`/`object`/`modality`/`id` sur une `RELATIONS`
+tout comme sur un `DEFINE` — zéro perte à travers la compression. Le trou
+n'était pas dans le parseur, seulement dans la convention : rien
+n'indiquait explicitement qu'un modificateur adverbial (manière, degré,
+notion temporelle relative comme "tôt"/"tard"/"rapidement") devait être
+attaché en attribut plutôt que laissé implicite dans le nom de
+l'entité/relation, ou mal forcé dans un opérateur temporel d'Allen qui ne
+convient pas.
+
+Convention recommandée : attacher le modificateur via `manner=` sur
+l'entité ou la relation concernée, plutôt que d'inventer une relation
+`BEFORE`/`AFTER` sans second terme de comparaison réel :
+
+```
+DEFINE Alice AS agent [id=e1]
+DEFINE Bob AS agent [id=e2]
+DEFINE left AS event [id=e3, manner=early]
+
+CONSTRAINTS [
+(NOT) Alice BELIEVES left [id=c1]
+]
+```
+
+Noter aussi, dans cet exemple, la correction attenante : l'objet d'un
+opérateur épistémique (`BELIEVES`, `KNOWS`, etc.) doit référencer
+l'entité-proposition par son nom (`left`, définie plus haut), jamais un
+agent nommé seul (`Bob`) quand la proposition réelle porte sur un
+événement impliquant cet agent — sans quoi la négation porte sur le
+mauvais terme (voir trouvaille associée, run kappa v2 `edge_001`,
+commit `0e46060`).
+
+**Mise en garde terminologique** : ne pas confondre avec
+`entanglement`/intrication, déjà pris dans ce dépôt pour un mécanisme
+sans rapport (génération d'hypothèses de relation entre entités Wikidata
+dont les voisinages se recoupent, `src/hypothesis_engine.rs`/
+`src/kb_verify.rs::detect_entanglement` ; et le chaînage de hash de
+`adn_store.rs::hash_entanglement`, dépendances entre hash de payloads).
+`manner=` ne crée aucun lien entre deux entités — c'est un attribut
+simple sur UNE entité/relation, pas une relation entre deux.
+
+Non normatif, même portée que §13.1 (pas de nouveau code d'erreur).
+
 ---
 
 ## 14. Mécanismes de relay — GRAMMAR_PRIMER et COPIED_RULES

@@ -236,10 +236,15 @@ OFFICIAL_OPERATORS_SNAPSHOT = [
 # Domaine medical (src/domains.rs) -- accepte EN PLUS du noyau quand le
 # texte est clairement clinique (c'est le cas de complex_002). Verbes en
 # francais dans le depot (ontologie d'origine), gardes tels quels.
+# Resynchronise le 2026-10-05 (commit 7fc522b a traduit domains.rs en
+# anglais -- cette snapshot etait restee en francais, desynchronisee,
+# exactement le genre d'erreur que la convention OFFICIAL_OPERATORS_SNAPSHOT
+# existe pour eviter. A resynchroniser manuellement a chaque evolution de
+# src/domains.rs, meme avertissement que ci-dessus.
 MEDICAL_DOMAIN_OPERATORS_SNAPSHOT = [
-    "PRESCRIRE", "DIAGNOSTIQUER", "CONTRA_INDIQUER", "ADMINISTRER",
-    "OPERER", "SURVEILLER", "REFERER", "HOSPITALISER", "TRAITER",
-    "VACCINER", "PREVENIR",
+    "PRESCRIBE", "DIAGNOSE", "CONTRAINDICATE", "ADMINISTER",
+    "OPERATE", "MONITOR", "REFER", "HOSPITALIZE", "TREAT",
+    "VACCINATE", "PREVENT",
 ]
 
 
@@ -260,7 +265,7 @@ CONSTRAINTS [
 OPERATOR must be chosen from this EXACT closed list (CSTL's real operator catalogue -- do not invent, do not use English verbs not on this list):
 {ops}
 
-If the text is clearly clinical/medical, you may ALSO use these domain-specific operators (French verbs, part of CSTL's medical domain extension), in addition to the list above:
+If the text is clearly clinical/medical, you may ALSO use these domain-specific operators (part of CSTL's medical domain extension), in addition to the list above:
 {med_ops}
 
 If the English text expresses an obligation or requirement ("must", "requires", "is required to"), do NOT invent a RELATIONS operator like REQUIRES. Instead use the CONSTRAINTS block with MODALITY=REQUIRE (other valid modalities: MUST, MUST_NOT, NOT, MAY, SHOULD, IF, IFF, UNLESS, FORBID), wrapping an operator from the lists above -- e.g. (REQUIRE) subject ADMINISTRER object [id=cNNN].
@@ -268,6 +273,10 @@ If the English text expresses an obligation or requirement ("must", "requires", 
 If the English text expresses an alternative ("A or B", "either A or B"), do NOT collapse it into two separate parallel relations/constraints (that reads back as "both A and B", a conjunction -- wrong). Instead, after declaring the two relevant constraint/relation lines, add ONE additional RELATIONS line explicitly linking their two objects with EITHER_OR: (object_A) EITHER_OR (object_B) [id=rNNN]. This is the ONLY correct way to express disjunction in CSTL.
 
 If an entity carries a concrete value from the source text (a number, a threshold, a quantity, a named amount, a date) -- including an opaque placeholder token standing in for one -- do NOT leave it implicit in just the entity's name or type. Attach it explicitly with a `value=` attribute on its DEFINE line, e.g. DEFINE Hypertension AS condition [id=e1, value=LIT2QZK]. A DEFINE for an entity that has a concrete value in the source text but no `value=` attribute is INCOMPLETE -- this is a known failure mode, do not repeat it.
+
+If the source text has an adverbial/manner/relative-temporal modifier on an event or relation ("early", "late", "quickly", "reluctantly", etc.), do NOT force it into a BEFORE/AFTER/DURING relation (those are Allen temporal relations between two intervals -- they require a real second term to compare against, and using them for a bare modifier like "early" with nothing to compare to is a type error that silently drops the modifier's actual meaning). Instead attach it as a `manner=` attribute directly on the entity or relation it modifies, e.g. DEFINE left AS event [id=e3, manner=early].
+
+If the source text expresses an epistemic attitude (BELIEVES, KNOWS, DOUBTS, DISBELIEVES, ASSUMES) toward a PROPOSITION (something happening/being true), the object of that operator must be the entity/event that IS the proposition (e.g. `left`, already DEFINEd), never a bare agent name alone (e.g. `Bob`) -- "Alice does not believe Bob" (object=Bob, an agent) and "Alice does not believe [that] Bob left [early]" (object=left, a proposition/event) are different claims; only the second matches what these sentences normally mean. Pick the DEFINEd entity that represents the actual proposition as the object, not whichever agent happens to be nearby in the sentence.
 
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
 
@@ -288,6 +297,7 @@ Reading rules, important, do not default to the wrong one:
 - Two separate CONSTRAINTS/RELATIONS lines that are NOT linked by an EITHER_OR line are each independently required -- read them as "and" (conjunction), e.g. "requires both X and Y".
 - If (and only if) two objects are explicitly linked by an EITHER_OR relation line, read THOSE TWO as alternatives -- "requires X or Y" (disjunction), NOT "both X and Y". The EITHER_OR line overrides the default conjunctive reading for exactly the two objects it names.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
+- If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier (e.g. "early", "quickly") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 
