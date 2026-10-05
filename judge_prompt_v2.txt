@@ -17,7 +17,7 @@ TEXT B: Alice knows Bob, and Bob is in Paris.
 
 [easy_002]
 TEXT A: The capital of France is Paris.
-TEXT B: France's capital is Paris.
+TEXT B: Paris is the capital of France.
 
 [easy_003]
 TEXT A: Einstein wrote the theory of relativity.
@@ -37,11 +37,11 @@ TEXT B: Sophie arrived late to the meeting because of heavy traffic and apologiz
 
 [medium_002]
 TEXT A: Patient prescribed antibiotics, took for week to recover.
-TEXT B: The patient was prescribed antibiotics and took them for a week to recover.
+TEXT B: The patient was prescribed antibiotics and took them for a week in order to recover.
 
 [medium_003]
 TEXT A: CEO announced layoffs. Employees were upset about decision.
-TEXT B: The CEO announced layoffs, and the employees are upset about the decision.
+TEXT B: The CEO announced layoffs, and employees are upset about the decision.
 
 [medium_004]
 TEXT A: Climate change accelerating. Scientists warn of consequences.
@@ -49,15 +49,15 @@ TEXT B: Scientists are warning of the consequences of accelerating climate chang
 
 [medium_005]
 TEXT A: Contract signed by parties, confirming agreement on terms.
-TEXT B: The parties sign the contract, which establishes agreement on the terms.
+TEXT B: The parties sign the contract, agreeing to the terms.
 
 [complex_001]
 TEXT A: Article 42 GDPR: data controllers must implement measures.
-TEXT B: Article 42 GDPR data controllers are required to perform measures.
+TEXT B: Article 42 GDPR states that data controllers are required to implement measures.
 
 [complex_003]
 TEXT A: Algorithm uses Bayesian optimization Thompson sampling.
-TEXT B: The algorithm has Bayesian optimization Thompson sampling.
+TEXT B: The algorithm accesses Bayesian optimization Thompson sampling.
 
 [complex_004]
 TEXT A: NDA prohibits disclosure without prior written consent.
@@ -65,20 +65,20 @@ TEXT B: The NDA prohibits disclosure unless prior written consent has been obtai
 
 [complex_005]
 TEXT A: Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.
-TEXT B: The three-stage filtration process involves a 10 microns stage, a membrane_0.1 microns stage, and a carbon stage.
+TEXT B: The filt
 
 [edge_002]
 TEXT A: Every student except Marie passed exam.
-TEXT B: Marie opposes the students arriving to pass the exam.
+TEXT B: All the students except Marie passed the exam.
 
 [edge_003]
 TEXT A: Neither manager nor employee knew about change.
-TEXT B: The manager and employee do not know about the change.
+TEXT B: Every manager and every employee does not know about the change.
 
 [edge_004]
 TEXT A: Hiring Sophie controversial, argued not qualified.
-TEXT B: The hiring of Sophie is controversial, with arguing that she is not qualified.
+TEXT B: Sophie's controversial hiring sparked an argument that she was not qualified.
 
 [edge_005]
 TEXT A: If Alice and Bob leave, project fails.
-TEXT B: Alice and Bob are leaving, and if they leave, the project will fail.
+TEXT B: If Alice and Bob leave, the project will fail.
