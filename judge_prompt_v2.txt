@@ -81,4 +81,4 @@ TEXT B: The controversial hiring of Sophie, who was argued to be qualified, thou
 
 [edge_005]
 TEXT A: If Alice and Bob leave, project fails.
-TEXT B: If Alice or Bob leaves, the project fails.
+TEXT B: If Alice leaves and Bob leaves, the project fails.

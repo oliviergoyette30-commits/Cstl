@@ -1,0 +1,209 @@
+{
+  "easy_001": {
+    "diff": "easy",
+    "original": "Alice knows Bob. Bob is in Paris.",
+    "protected_spans": [],
+    "redacted_text": "Alice knows Bob. Bob is in Paris.",
+    "cstl_redacted": "```cstl\nDEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE Paris AS location [id=e3]\n\nRELATIONS [\n  (Alice) KNOWS Bob [id=r1]\n  (Bob) CO_LOCATES Paris [id=r2]\n]\n```",
+    "reconstruction_redacted": "Alice knows Bob, and Bob is in Paris.",
+    "reconstruction": "Alice knows Bob, and Bob is in Paris.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "easy_002": {
+    "diff": "easy",
+    "original": "The capital of France is Paris.",
+    "protected_spans": [],
+    "redacted_text": "The capital of France is Paris.",
+    "cstl_redacted": "```cstl\nDEFINE France AS country [id=e1]\nDEFINE Paris AS city [id=e2]\nDEFINE capital_relationship AS relation [id=e3]\n\nRELATIONS [\n  (France) POSSESSES capital_relationship [id=r1]\n  (capital_relationship) EQUALS Paris [id=r2]\n]\n```",
+    "reconstruction_redacted": "France's capital is Paris.",
+    "reconstruction": "France's capital is Paris.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "easy_003": {
+    "diff": "easy",
+    "original": "Einstein wrote the theory of relativity.",
+    "protected_spans": [],
+    "redacted_text": "Einstein wrote the theory of relativity.",
+    "cstl_redacted": "```cstl\nDEFINE Einstein AS person [id=e1]\nDEFINE theory_of_relativity AS theory [id=e2]\nDEFINE wrote AS event [id=e3]\n\nRELATIONS [\n  (Einstein) PERFORM wrote [id=r1]\n  (wrote) ARR.PRODUCE theory_of_relativity [id=r2]\n]\n```",
+    "reconstruction_redacted": "Einstein wrote the theory of relativity.",
+    "reconstruction": "Einstein wrote the theory of relativity.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "easy_004": {
+    "diff": "easy",
+    "original": "Water boils at 100 degrees Celsius.",
+    "protected_spans": [
+      "100 degrees Celsius"
+    ],
+    "redacted_text": "Water boils at LIT0QZK.",
+    "cstl_redacted": "```cstl\nDEFINE Water AS substance [id=e1]\nDEFINE boiling AS process [id=e2, value=LIT0QZK]\n\nRELATIONS [\n  (Water) TRANSFORM boiling [id=r1]\n]\n```",
+    "reconstruction_redacted": "Water boils at LIT0QZK.",
+    "reconstruction": "Water boils at 100 degrees Celsius.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "easy_005": {
+    "diff": "easy",
+    "original": "Dogs are animals.",
+    "protected_spans": [],
+    "redacted_text": "Dogs are animals.",
+    "cstl_redacted": "```cstl\nDEFINE Dogs AS category [id=e1]\nDEFINE animals AS category [id=e2]\n\nRELATIONS [\n  (Dogs) INH animals [id=r1]\n]\n```",
+    "reconstruction_redacted": "Dogs are animals.",
+    "reconstruction": "Dogs are animals.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "medium_001": {
+    "diff": "medium",
+    "original": "Sophie arrived late to meeting because traffic was heavy. She apologized.",
+    "protected_spans": [],
+    "redacted_text": "Sophie arrived late to meeting because traffic was heavy. She apologized.",
+    "cstl_redacted": "```cstl\nDEFINE Sophie AS agent [id=e1]\nDEFINE arrived AS event [id=e2, manner=late]\nDEFINE meeting AS event [id=e3]\nDEFINE traffic AS condition [id=e4]\nDEFINE apologized AS event [id=e5]\n\nRELATIONS [\n  (Sophie) PERFORM arrived [id=r1]\n  (arrived) CO_LOCATES meeting [id=r2]\n  (traffic) CATALYZE arrived [id=r3]\n  (Sophie) PERFORM apologized [id=r4]\n  (arrived) BEFORE apologized [id=r5]\n]\n\nCONSTRAINTS [\n  (MUST) traffic POSSESSES heavy [id=c1]\n]\n```",
+    "reconstruction_redacted": "Sophie arrived late to the meeting because of heavy traffic and apologized.",
+    "reconstruction": "Sophie arrived late to the meeting because of heavy traffic and apologized.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "medium_002": {
+    "diff": "medium",
+    "original": "Patient prescribed antibiotics, took for week to recover.",
+    "protected_spans": [],
+    "redacted_text": "Patient prescribed antibiotics, took for week to recover.",
+    "cstl_redacted": "```cstl\nDEFINE Patient AS agent [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE week AS duration [id=e3]\nDEFINE recover AS event [id=e4]\nDEFINE took AS event [id=e5]\nDEFINE prescribed AS event [id=e6]\n\nRELATIONS [\n  (Patient) PRESCRIBE antibiotics [id=r1]\n  (Patient) ADMINISTER antibiotics [id=r2]\n  (took) DURING week [id=r3]\n  (Patient) INTENT recover [id=r4]\n]\n```",
+    "reconstruction_redacted": "The patient took prescribed antibiotics during the week to recover.",
+    "reconstruction": "The patient took prescribed antibiotics during the week to recover.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "medium_003": {
+    "diff": "medium",
+    "original": "CEO announced layoffs. Employees were upset about decision.",
+    "protected_spans": [],
+    "redacted_text": "CEO announced layoffs. Employees were upset about decision.",
+    "cstl_redacted": "```cstl\nDEFINE CEO AS role [id=e1]\nDEFINE announced AS event [id=e2]\nDEFINE layoffs AS event [id=e3]\nDEFINE Employees AS role [id=e4]\nDEFINE decision AS event [id=e5]\n\nRELATIONS [\n  (CEO) PERFORM announced [id=r1]\n  (announced) TRANSMIT_FAITHFUL layoffs [id=r2]\n  (layoffs) EQUALS decision [id=r3]\n  (Employees) REACTS decision [id=r4, valence=negative, affect=upset]\n]\n```",
+    "reconstruction_redacted": "The CEO announced layoffs, and employees are upset about the decision.",
+    "reconstruction": "The CEO announced layoffs, and employees are upset about the decision.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "medium_004": {
+    "diff": "medium",
+    "original": "Climate change accelerating. Scientists warn of consequences.",
+    "protected_spans": [],
+    "redacted_text": "Climate change accelerating. Scientists warn of consequences.",
+    "cstl_redacted": "```cstl\nDEFINE climate_change AS process [id=e1]\nDEFINE accelerating AS state [id=e2]\nDEFINE scientists AS agent [id=e3]\nDEFINE consequences AS phenomenon [id=e4]\nDEFINE warning AS event [id=e5]\n\nRELATIONS [\n  (climate_change) TRANSFORM accelerating [id=r1]\n  (scientists) STATE warning [id=r2]\n  (warning) ARR consequences [id=r3]\n]\n```",
+    "reconstruction_redacted": "Scientists are warning about the consequences of accelerating climate change.",
+    "reconstruction": "Scientists are warning about the consequences of accelerating climate change.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "medium_005": {
+    "diff": "medium",
+    "original": "Contract signed by parties, confirming agreement on terms.",
+    "protected_spans": [],
+    "redacted_text": "Contract signed by parties, confirming agreement on terms.",
+    "cstl_redacted": "```cstl\nDEFINE Contract AS document [id=e1]\nDEFINE signing AS event [id=e2]\nDEFINE parties AS agent [id=e3]\nDEFINE agreement AS state [id=e4]\nDEFINE terms AS content [id=e5]\n\nRELATIONS [\n  (parties) PERFORM signing [id=r1]\n  (signing) TRANSMIT_FAITHFUL Contract [id=r2]\n  (signing) STATE agreement [id=r3]\n  (agreement) CO_LOCATES terms [id=r4]\n]\n```",
+    "reconstruction_redacted": "The parties signed the contract, which establishes an agreement on the terms.",
+    "reconstruction": "The parties signed the contract, which establishes an agreement on the terms.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "complex_001": {
+    "diff": "complex",
+    "original": "Article 42 GDPR: data controllers must implement measures.",
+    "protected_spans": [
+      "Article 42 GDPR"
+    ],
+    "redacted_text": "LIT0QZK: data controllers must implement measures.",
+    "cstl_redacted": "```cstl\nDEFINE LIT0QZK AS entity [id=e1, value=LIT0QZK]\nDEFINE data_controllers AS role [id=e2]\nDEFINE measures AS artifact [id=e3]\nDEFINE implementation AS event [id=e4]\n\nRELATIONS [\n  (LIT0QZK) CO_LOCATES data_controllers [id=r1]\n  (implementation) POSSESSES measures [id=r2]\n]\n\nCONSTRAINTS [\n  (REQUIRE) data_controllers PERFORM implementation [id=c1]\n]\n```",
+    "reconstruction_redacted": "LIT0QZK data controllers are required to perform implementation of measures.",
+    "reconstruction": "Article 42 GDPR data controllers are required to perform implementation of measures.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "complex_003": {
+    "diff": "complex",
+    "original": "Algorithm uses Bayesian optimization Thompson sampling.",
+    "protected_spans": [
+      "Bayesian optimization Thompson sampling"
+    ],
+    "redacted_text": "Algorithm uses LIT0QZK.",
+    "cstl_redacted": "```cstl\nDEFINE Algorithm AS agent [id=e1]\nDEFINE LIT0QZK AS resource [id=e2, value=LIT0QZK]\n\nRELATIONS [\n  (Algorithm) ARR.ACCESS LIT0QZK [id=r1]\n]\n```",
+    "reconstruction_redacted": "The algorithm accesses LIT0QZK.",
+    "reconstruction": "The algorithm accesses Bayesian optimization Thompson sampling.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "complex_004": {
+    "diff": "complex",
+    "original": "NDA prohibits disclosure without prior written consent.",
+    "protected_spans": [],
+    "redacted_text": "NDA prohibits disclosure without prior written consent.",
+    "cstl_redacted": "```cstl\nDEFINE NDA AS document [id=e1]\nDEFINE disclosure AS event [id=e2]\nDEFINE consent AS document [id=e3, value=prior_written]\n\nCONSTRAINTS [\n  (FORBID) NDA COMMAND disclosure [id=c1]\n  (UNLESS) disclosure POSSESSES consent [id=c2]\n]\n```",
+    "reconstruction_redacted": "Disclosure is forbidden unless it possesses prior_written consent.",
+    "reconstruction": "Disclosure is forbidden unless it possesses prior_written consent.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "complex_005": {
+    "diff": "complex",
+    "original": "Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.",
+    "protected_spans": [
+      "10 microns",
+      "0.1 microns"
+    ],
+    "redacted_text": "Three-stage filtration: LIT1QZK, membrane LIT0QZK, carbon.",
+    "cstl_redacted": "```cstl\nDEFINE three-stage_filtration AS process [id=e1]\nDEFINE stage_1 AS stage [id=e2, value=LIT1QZK]\nDEFINE stage_2 AS stage [id=e3, value=LIT0QZK]\nDEFINE stage_3 AS stage [id=e4, value=carbon]\nDEFINE membrane AS material [id=e5]\n\nRELATIONS [\n  (three-stage_filtration) POSSESSES stage_1 [id=r1]\n  (three-stage_filtration) POSSESSES stage_2 [id=r2]\n  (three-stage_filtration) POSSESSES stage_3 [id=r3]\n  (stage_2) POSSESSES membrane [id=r4]\n  (stage_1) BEFORE stage_2 [id=r5]\n  (stage_2) BEFORE stage_3 [id=r6]\n]\n```",
+    "reconstruction_redacted": "The three-stage filtration process has a LIT1QZK stage, followed by a LIT0QZK stage with a membrane,",
+    "reconstruction": "The three-stage filtration process has a 10 microns stage, followed by a 0.1 microns stage with a membrane,",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "edge_002": {
+    "diff": "edge",
+    "original": "Every student except Marie passed exam.",
+    "protected_spans": [],
+    "redacted_text": "Every student except Marie passed exam.",
+    "cstl_redacted": "```cstl\nDEFINE every_student AS group [id=e1]\nDEFINE Marie AS person [id=e2]\nDEFINE passed AS event [id=e3]\nDEFINE exam AS artifact [id=e4]\n\nRELATIONS [\n  (every_student) PERFORM passed [id=r1]\n  (passed) ARR.ACCESS exam [id=r2]\n]\n\nCONSTRAINTS [\n  (NOT) Marie PERFORM passed [id=c1]\n]\n```",
+    "reconstruction_redacted": "Every student passed the exam, but Marie did not.",
+    "reconstruction": "Every student passed the exam, but Marie did not.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "edge_003": {
+    "diff": "edge",
+    "original": "Neither manager nor employee knew about change.",
+    "protected_spans": [],
+    "redacted_text": "Neither manager nor employee knew about change.",
+    "cstl_redacted": "```CSTL\nDEFINE manager AS agent [id=e1]\nDEFINE employee AS agent [id=e2]\nDEFINE change AS event [id=e3]\n\nCONSTRAINTS [\n  (NOT) manager KNOWS change [id=c1]\n  (NOT) employee KNOWS change [id=c2]\n]\n```",
+    "reconstruction_redacted": "The manager and the employee do not know about the change.",
+    "reconstruction": "The manager and the employee do not know about the change.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "edge_004": {
+    "diff": "edge",
+    "original": "Hiring Sophie controversial, argued not qualified.",
+    "protected_spans": [],
+    "redacted_text": "Hiring Sophie controversial, argued not qualified.",
+    "cstl_redacted": "```cstl\nDEFINE hiring_Sophie AS event [id=e1]\nDEFINE Sophie AS person [id=e2]\nDEFINE controversial AS assessment [id=e3]\nDEFINE argued AS event [id=e4]\nDEFINE qualified AS state [id=e5]\n\nRELATIONS [\n  (hiring_Sophie) POSSESSES controversial [id=r1]\n  (argued) STATE qualified [id=r2]\n]\n\nCONSTRAINTS [\n  (NOT) Sophie POSSESSES qualified [id=c1]\n]\n```",
+    "reconstruction_redacted": "The controversial hiring of Sophie, who was argued to be qualified, though she was not.",
+    "reconstruction": "The controversial hiring of Sophie, who was argued to be qualified, though she was not.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  },
+  "edge_005": {
+    "diff": "edge",
+    "original": "If Alice and Bob leave, project fails.",
+    "protected_spans": [],
+    "redacted_text": "If Alice and Bob leave, project fails.",
+    "cstl_redacted": "DEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE leave AS event [id=e3]\nDEFINE project AS entity [id=e4]\nDEFINE fail AS event [id=e5]\n\nRELATIONS [\n(Alice) ARR (leave) [id=r1]\n(Bob) ARR (leave) [id=r2]\n(leave) ENTAILS (fail) [id=r3]\n]",
+    "reconstruction_redacted": "Alice and Bob leave, which causes the project to fail.",
+    "reconstruction": "Alice and Bob leave, which causes the project to fail.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
+  }
+}
