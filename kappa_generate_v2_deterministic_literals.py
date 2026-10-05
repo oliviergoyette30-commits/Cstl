@@ -71,24 +71,29 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # avant chaque nouvelle tentative, pas avant la premiere.
 
 # ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Neuvieme iteration : relance CIBLEE sur medium_004 seul -- dernier trou
-# non teste du dossier claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md. Deux
-# sous-problemes distincts sur le meme item ("Climate change accelerating.
-# Scientists warn of consequences."), deux instructions de prompt ajoutees
-# ci-dessous, aucun nouvel operateur ni mecanisme Rust (meme demarche que
-# EXCEPT/UNLESS/AND-OR, tous les trois retombes en angle mort de prompt) :
-#   1. Predication intransitive (le sujet change d'etat lui-meme, pas une
-#      relation a deux parties) -- reutilise manner= (deja existant) plutot
-#      qu'inventer un objet separe lie par TRANSFORM.
-#   2. Acte de parole WARN -- aucun operateur dedie dans le catalogue, mais
-#      compose correctement via PERFORM(sujet,evenement)+STATE(evenement,
-#      contenu), le patron que sonnet avait deja trouve spontanement lors
-#      du test cible precedent sans qu'on le lui enseigne.
-# But : lancer SUR LES DEUX MODELES (haiku par defaut, puis sonnet via
-# ANTHROPIC_MODEL) pour trancher si c'est enfin une vraie lacune de
-# grammaire ou encore un angle mort de prompt.
+# Dixieme iteration : relance de CONSOLIDATION sur les 13 items du
+# sous-ensemble de 18 qui n'ont PAS encore ete retestes individuellement
+# avec le prompt final (celui qui inclut toutes les instructions ajoutees
+# au fil du diagnostic : catalogue reel, EITHER_OR objet ET sujets,
+# value=, manner= adverbial ET predication intransitive,
+# PERFORM+STATE pour WARN, FORBID+UNLESS, selection d'objet epistemique,
+# REACTS). Exclus de ce lot, deja valides individuellement avec cette
+# version finale du prompt (voir
+# claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md pour le detail complet
+# de chaque test) :
+#   - medium_003  (commit f7a9d0a puis a37c931 -- REACTS)
+#   - complex_001 (commit f7a9d0a puis a37c931 -- litteral + PERFORM)
+#   - complex_004 (commit 2b6fe4a -- FORBID+UNLESS)
+#   - edge_005    (commit 6557ea3 -- EITHER_OR sujets)
+#   - medium_004  (commit 7cc372b -- manner= intransitif + WARN)
+# Lance sur sonnet-4-5 par defaut cette fois (pas de comparaison modele
+# recherchee ici, juste la version de production la plus fiable --
+# ANTHROPIC_MODEL=claude-sonnet-4-5 au lancement).
 RUN_SUBSET = {
-    "medium_004",
+    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
+    "medium_001", "medium_002", "medium_005",
+    "complex_003", "complex_005",
+    "edge_002", "edge_003", "edge_004",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
