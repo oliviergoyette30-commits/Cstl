@@ -1,16 +1,12 @@
 {
-  "complex_002": {
-    "diff": "complex",
-    "original": "Hypertension >160 mmHg requires ACE inhibitors or calcium channel blockers.",
-    "protected_spans": [
-      "160 mmHg",
-      "ACE inhibitors",
-      "calcium channel blockers"
-    ],
-    "redacted_text": "Hypertension >LIT2QZK requires LIT1QZK or LIT0QZK.",
-    "cstl_redacted": "```\nDEFINE Hypertension AS condition [id=e1, value=LIT2QZK]\nDEFINE LIT1QZK AS treatment [id=e2]\nDEFINE LIT0QZK AS treatment [id=e3]\n\nRELATIONS [\n(LIT1QZK) EITHER_OR (LIT0QZK) [id=r1]\n]\n\nCONSTRAINTS [\n(REQUIRE) Hypertension ADMINISTRER LIT1QZK [id=c1]\n(REQUIRE) Hypertension ADMINISTRER LIT0QZK [id=c2]\n]\n```",
-    "reconstruction_redacted": "Hypertension with value LIT2QZK requires administration of either LIT1QZK or LIT0QZK.",
-    "reconstruction": "Hypertension with value 160 mmHg requires administration of either ACE inhibitors or calcium channel blockers.",
+  "edge_001": {
+    "diff": "edge",
+    "original": "Alice does not believe Bob left early.",
+    "protected_spans": [],
+    "redacted_text": "Alice does not believe Bob left early.",
+    "cstl_redacted": "DEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE left_early AS event [id=e3]\nRELATIONS [\n(Bob) BEFORE (left_early) [id=r1]\n]\nCONSTRAINTS [\n(NOT) Alice BELIEVES Bob [id=c1]\n]",
+    "reconstruction_redacted": "Alice does not believe Bob left early.",
+    "reconstruction": "Alice does not believe Bob left early.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   }
