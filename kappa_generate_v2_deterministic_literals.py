@@ -61,24 +61,8 @@ import re
 from pathlib import Path
 import anthropic
 
-MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
+MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 MAX_RETRIES = 3
-
-# ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
-# Troisieme iteration : relance sur edge_001 SEUL, avec le meme prompt
-# encode_to_cstl() corrige (OFFICIAL_OPERATORS_SNAPSHOT inclut DISBELIEVES
-# depuis le 2026-09-23 -- jamais mentionne au premier run sur cet item,
-# commit 1cbfcda, ou le LLM avait improvise NEGATES, piochant dans
-# l'ancienne liste d'exemples inventee du prompt plutot que dans le vrai
-# catalogue). Objectif : verifier si DISBELIEVES sort spontanement
-# maintenant que le prompt reference le vrai OFFICIAL_OPERATORS, et si la
-# question laissee ouverte au run precedent (le modificateur temporel
-# "early" sur une relation, confondue par le biais de prompt a l'epoque)
-# se clarifie. edge_001 n'a AUCUN litteral protege (PROTECTED_SPANS vide,
-# volontaire -- cas de negation epistemique, pas de valeur numerique) --
-# donc l'instruction value= ajoutee a l'iteration precedente ne joue
-# aucun role ici, attendu.
-RUN_SUBSET = {"edge_001"}
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not API_KEY:
@@ -209,78 +193,18 @@ def restore(text: str, token_to_literal: dict[str, str]) -> tuple[str, list[str]
     return restored, lost
 
 
-# ===== CATALOGUE REEL, PAS INVENTE (correctif 2026-10-05) =====
-# La version precedente de ce prompt proposait une liste d'exemples
-# d'operateurs (KNOWS, LOCATED, WROTE, CAUSES, PRESCRIBED, ANNOUNCED,
-# REQUIRES, PROHIBITS, NEGATES, EXCEPT, NEITHER_NOR, CONDITIONAL) --
-# verifie apres coup contre src/semantic.rs::OFFICIAL_OPERATORS (commit
-# 0bcea13) : PAS UN SEUL de ces mots n'est un operateur officiel CSTL, ni
-# dans le noyau, ni dans l'extension de domaine medical
-# (src/domains.rs::get_domain_operators_slice). Les payloads generes
-# passaient quand meme (E101 est un avertissement, jamais bloquant) --
-# mais c'etait du CSTL non-conforme qui ressemble a du CSTL, pas la grammaire
-# reelle. Liste ci-dessous recopiee a la main depuis
-# src/semantic.rs::OFFICIAL_OPERATORS (38 operateurs, verifies le
-# 2026-10-05) -- a resynchroniser manuellement si ce fichier evolue, ce
-# script n'a pas acces au depot Rust pour l'importer dynamiquement.
-OFFICIAL_OPERATORS_SNAPSHOT = [
-    "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
-    "INTENT", "MAINTAIN", "TRANSFORM", "RESIST", "AMP", "INH",
-    "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
-    "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
-    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES",
-    "COMPARES", "ENTAILS", "CONTRADICTS",
-    "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
-    "BEFORE", "AFTER", "DURING", "EITHER_OR",
-]
-# Domaine medical (src/domains.rs) -- accepte EN PLUS du noyau quand le
-# texte est clairement clinique (c'est le cas de complex_002). Verbes en
-# francais dans le depot (ontologie d'origine), gardes tels quels.
-# Resynchronise le 2026-10-05 (commit 7fc522b a traduit domains.rs en
-# anglais -- cette snapshot etait restee en francais, desynchronisee,
-# exactement le genre d'erreur que la convention OFFICIAL_OPERATORS_SNAPSHOT
-# existe pour eviter. A resynchroniser manuellement a chaque evolution de
-# src/domains.rs, meme avertissement que ci-dessus.
-MEDICAL_DOMAIN_OPERATORS_SNAPSHOT = [
-    "PRESCRIBE", "DIAGNOSE", "CONTRAINDICATE", "ADMINISTER",
-    "OPERATE", "MONITOR", "REFER", "HOSPITALIZE", "TREAT",
-    "VACCINATE", "PREVENT",
-]
-
-
 def encode_to_cstl(redacted_text: str) -> str:
-    ops = ", ".join(OFFICIAL_OPERATORS_SNAPSHOT)
-    med_ops = ", ".join(MEDICAL_DOMAIN_OPERATORS_SNAPSHOT)
     prompt = f"""Represent the factual content of the following English text as a minimal CSTL payload.
 
-Use ONLY these blocks:
+Use ONLY these two blocks:
 DEFINE <entity> AS <type> [id=eNNN]
 RELATIONS [
 (subject) OPERATOR object [id=rNNN]
 ]
-CONSTRAINTS [
-(MODALITY) subject OPERATOR object [id=cNNN]
-]
 
-OPERATOR must be chosen from this EXACT closed list (CSTL's real operator catalogue -- do not invent, do not use English verbs not on this list):
-{ops}
+Pick operators freely (KNOWS, LOCATED, WROTE, CAUSES, PRESCRIBED, ANNOUNCED, REQUIRES, PROHIBITS, NEGATES, EXCEPT, NEITHER_NOR, CONDITIONAL, etc.) -- whatever best captures the logical structure, including negation, exceptions, and conditionals precisely. Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE and RELATIONS blocks.
 
-If the text is clearly clinical/medical, you may ALSO use these domain-specific operators (part of CSTL's medical domain extension), in addition to the list above:
-{med_ops}
-
-If the English text expresses an obligation or requirement ("must", "requires", "is required to"), do NOT invent a RELATIONS operator like REQUIRES. Instead use the CONSTRAINTS block with MODALITY=REQUIRE (other valid modalities: MUST, MUST_NOT, NOT, MAY, SHOULD, IF, IFF, UNLESS, FORBID), wrapping an operator from the lists above -- e.g. (REQUIRE) subject ADMINISTRER object [id=cNNN].
-
-If the English text expresses an alternative ("A or B", "either A or B"), do NOT collapse it into two separate parallel relations/constraints (that reads back as "both A and B", a conjunction -- wrong). Instead, after declaring the two relevant constraint/relation lines, add ONE additional RELATIONS line explicitly linking their two objects with EITHER_OR: (object_A) EITHER_OR (object_B) [id=rNNN]. This is the ONLY correct way to express disjunction in CSTL.
-
-If an entity carries a concrete value from the source text (a number, a threshold, a quantity, a named amount, a date) -- including an opaque placeholder token standing in for one -- do NOT leave it implicit in just the entity's name or type. Attach it explicitly with a `value=` attribute on its DEFINE line, e.g. DEFINE Hypertension AS condition [id=e1, value=LIT2QZK]. A DEFINE for an entity that has a concrete value in the source text but no `value=` attribute is INCOMPLETE -- this is a known failure mode, do not repeat it.
-
-If the source text has an adverbial/manner/relative-temporal modifier on an event or relation ("early", "late", "quickly", "reluctantly", etc.), do NOT force it into a BEFORE/AFTER/DURING relation (those are Allen temporal relations between two intervals -- they require a real second term to compare against, and using them for a bare modifier like "early" with nothing to compare to is a type error that silently drops the modifier's actual meaning). Instead attach it as a `manner=` attribute directly on the entity or relation it modifies, e.g. DEFINE left AS event [id=e3, manner=early].
-
-If the source text expresses an epistemic attitude (BELIEVES, KNOWS, DOUBTS, DISBELIEVES, ASSUMES) toward a PROPOSITION (something happening/being true), the object of that operator must be the entity/event that IS the proposition (e.g. `left`, already DEFINEd), never a bare agent name alone (e.g. `Bob`) -- "Alice does not believe Bob" (object=Bob, an agent) and "Alice does not believe [that] Bob left [early]" (object=left, a proposition/event) are different claims; only the second matches what these sentences normally mean. Pick the DEFINEd entity that represents the actual proposition as the object, not whichever agent happens to be nearby in the sentence.
-
-Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
-
-IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear -- never translate, paraphrase, explain, or guess what they might represent.
+IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear (e.g. as a value= field or inside an entity name) -- never translate, paraphrase, explain, or guess what they might represent.
 
 TEXT:
 {redacted_text}"""
@@ -290,14 +214,7 @@ TEXT:
 def reconstruct_from_cstl(cstl_payload: str) -> str:
     prompt = f"""You are given a CSTL payload (a structured semantic representation). You have NEVER seen the original text it came from.
 
-Write a single, natural, standalone English sentence (or two, if needed) that expresses exactly what this payload states -- nothing more, nothing less. Do not mention CSTL, DEFINE, RELATIONS, CONSTRAINTS, or any formatting. Just the plain-English reconstruction.
-
-Reading rules, important, do not default to the wrong one:
-- A CONSTRAINTS line with MODALITY=REQUIRE (or MUST) means that object is REQUIRED/obligatory.
-- Two separate CONSTRAINTS/RELATIONS lines that are NOT linked by an EITHER_OR line are each independently required -- read them as "and" (conjunction), e.g. "requires both X and Y".
-- If (and only if) two objects are explicitly linked by an EITHER_OR relation line, read THOSE TWO as alternatives -- "requires X or Y" (disjunction), NOT "both X and Y". The EITHER_OR line overrides the default conjunctive reading for exactly the two objects it names.
-- If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
-- If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier (e.g. "early", "quickly") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it.
+Write a single, natural, standalone English sentence (or two, if needed) that expresses exactly what this payload states -- nothing more, nothing less. Do not mention CSTL, DEFINE, RELATIONS, or any formatting. Just the plain-English reconstruction.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 
@@ -312,15 +229,13 @@ def main():
     total_lost_cstl = 0
     total_lost_reconstruction = 0
 
-    corpus_subset = {k: v for k, v in CORPUS.items() if k in RUN_SUBSET}
-
     print(f"Modele: {MODEL}")
-    print(f"Corpus: {len(corpus_subset)} textes (sous-ensemble restreint: {sorted(RUN_SUBSET)})\n")
+    print(f"Corpus: {len(CORPUS)} textes\n")
 
-    for i, (text_id, entry) in enumerate(corpus_subset.items(), 1):
+    for i, (text_id, entry) in enumerate(CORPUS.items(), 1):
         original = entry["text"]
         spans = PROTECTED_SPANS.get(text_id, [])
-        print(f"[{i}/{len(corpus_subset)}] {text_id} ({entry['diff']}, {len(spans)} litteral(aux) protege(s))")
+        print(f"[{i}/{len(CORPUS)}] {text_id} ({entry['diff']}, {len(spans)} litteral(aux) protege(s))")
 
         redacted_text, token_map = redact(original, spans)
         total_literals += len(token_map)
@@ -377,7 +292,7 @@ def main():
     # restauration des vraies valeurs, jamais les tokens opaques.
     lines = []
     lines.append("You are evaluating whether meaning was preserved through a text transformation pipeline.")
-    lines.append(f"For each of the {len(results)} items below, you are shown TEXT A (original) and TEXT B (a reconstruction).")
+    lines.append("For each of the 20 items below, you are shown TEXT A (original) and TEXT B (a reconstruction).")
     lines.append("Judge ONLY whether TEXT B preserves the essential factual/logical meaning of TEXT A -- ignore style, wording, or phrasing differences.")
     lines.append("")
     lines.append("Answer with EXACTLY one line per item, in this format, nothing else:")
@@ -385,7 +300,7 @@ def main():
     lines.append("or")
     lines.append("<item_id>: NOT_PRESERVED")
     lines.append("")
-    lines.append(f"Output all {len(results)} lines, in the order given, and nothing before or after them.")
+    lines.append("Output all 20 lines, in the order given, and nothing before or after them.")
     lines.append("")
     lines.append("=" * 60)
     lines.append("")
