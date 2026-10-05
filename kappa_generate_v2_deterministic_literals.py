@@ -139,11 +139,21 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # (ANTHROPIC_MODEL=claude-sonnet-4-5 au lancement) -- c'est le modele de
 # production etabli pour ce run final, pas de comparaison modele
 # recherchee ici.
+#
+# REGRESSION TROUVEE AU RUN CI-DESSUS (commit fb1621f) : edge_002 est
+# sorti casse -- "Marie opposes the students arriving to pass the exam"
+# -- plus de CONSTRAINTS du tout, le coeur du fait ("students passed
+# exam") perdu, remplace par une relation OPPOSES fausse et sans rapport.
+# L'instruction de prompt "every X except Y -> CONSTRAINTS[(NOT)...]"
+# documentee dans claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md comme
+# "confirmee deux fois" ETAIT ABSENTE de ce fichier -- verifie par grep,
+# aucune trace. Perdue a un moment non identifie (probablement l'incident
+# de regression Termux documente plus tot dans la session), jamais
+# retestee depuis faute de RUN_SUBSET repassant par edge_002.
+# Instruction rajoutee ci-dessus. RUN_SUBSET restreint a edge_002 seul
+# pour verifier le fix avant de relancer les 18 items au complet.
 RUN_SUBSET = {
-    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
-    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
-    "complex_001", "complex_003", "complex_004", "complex_005",
-    "edge_002", "edge_003", "edge_004", "edge_005",
+    "edge_002",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -388,6 +398,8 @@ If the source text expresses an EMOTIONAL/AFFECTIVE stance of a subject toward a
 
 If the source text expresses a prohibition that has a named EXCEPTION ("X is prohibited without Y", "X is forbidden unless Y", "not allowed except with Y"), do NOT invent a RELATIONS operator that doesn't exist in the closed list above (e.g. there is no "PROHIBITS"), and do NOT misuse a temporal operator like BEFORE/AFTER/DURING to express the exception (those are Allen temporal relations between two time intervals, not a conditional-exception relation -- "without prior written consent" is not a claim about temporal ordering). Instead use TWO CONSTRAINTS lines: one with MODALITY=FORBID for the base prohibition, and one with MODALITY=UNLESS naming the exception condition as its object, both using an operator from the closed list above -- e.g. CONSTRAINTS [ (FORBID) subject PERFORM disclosure [id=c1] (UNLESS) disclosure SATISFIES consent [id=c2] ]. This is the ONLY correct way to express a conditional exception to a prohibition in CSTL.
 
+If the source text makes an AFFIRMATIVE universal claim with a single named exception ("every X except Y", "all X but Y", "none of the X except Y", "X, with the exception of Y"), do NOT invent an unrelated RELATIONS operator for the excepted entity (e.g. do not use OPPOSES, CONTRADICTS, or anything implying conflict -- the source text says nothing about Y opposing or disagreeing with anything, it just says Y is the one exception to an otherwise-universal fact), and do NOT drop the general claim about the rest of the group. Instead: (1) in RELATIONS, state the general fact holding for the whole group exactly as you would if there were no exception at all (e.g. (students) PERFORM passed_exam); (2) in CONSTRAINTS, add ONE line with MODALITY=NOT naming the excepted individual and the SAME event/property being negated for them specifically (e.g. (NOT) Marie PERFORM passed_exam). Do not add any other relation involving the excepted individual beyond this one CONSTRAINTS line -- in particular, never add a RELATIONS line claiming the excepted individual belongs to, possesses, or is connected to the group in any other way; the CONSTRAINTS (NOT) line alone is sufficient and correct. Pattern: RELATIONS [ (students) PERFORM passed_exam [id=r1] ] CONSTRAINTS [ (NOT) Marie PERFORM passed_exam [id=c1] ].
+
 POSSESSES remains the CORRECT and NORMAL operator for literal possession and for attribute/quality ascription -- do not avoid it for this. Use it whenever an entity (person, document, event, anything) HAS a property, quality, or value directly, e.g. (patient) POSSESSES (risk), (renal_function) POSSESSES (value) [UNKNOWN=true], or (hiring) POSSESSES (controversial) -- that last one is correct even though "hiring" is an event, because "controversial" is a quality being ascribed to it, not a participant in it. Only TWO specific narrow cases should use a different operator instead of POSSESSES, and ONLY these two: (1) when the SUBJECT is an EVENT and the OBJECT is a separate PARTICIPANT in that event -- someone or something the event involves, acts upon, or is about, as opposed to a quality of the event itself (e.g. a signing event and the contract it is about, a "took medication" event and the medication/duration involved, a hiring event and the person who got hired) -- use INVOLVES instead, e.g. (signing) INVOLVES (contract) [id=rNNN, role=theme]; (2) when the relation expresses that some condition or authorization has been MET or OBTAINED (e.g. "has consent", "meets the requirement") rather than owning a thing -- use SATISFIES instead, e.g. (UNLESS) disclosure SATISFIES consent [id=cNNN]. Outside these two narrow cases, keep using POSSESSES exactly as before -- do not generalize away from it for ordinary possession or quality ascription.
 
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
@@ -411,6 +423,7 @@ Reading rules, important, do not default to the wrong one:
 - The same rule applies when multiple subjects each have their own relation line into the same shared event/object: with NO EITHER_OR line linking those subjects, read them as jointly/ALL of them (conjunction -- "Alice and Bob leave", never "Alice or Bob leave"). Only read it as a disjunction ("Alice or Bob leave") if an EITHER_OR line explicitly links those subjects. Do not default to "or" just because two separate lines point to the same object -- the default is always "and" unless EITHER_OR says otherwise.
 - A REACTS relation means the subject has an emotional/affective stance TOWARD the object -- the object is NOT caused or produced by the subject's state, it's the pre-existing target of the reaction. Reconstruct as "<subject> is/are <affect, or a generic word matching valence if affect is absent> about <object>" -- never phrase it as the subject producing, making, or causing the object.
 - A MODALITY=UNLESS line paired with a MODALITY=FORBID (or MUST_NOT) line on the same subject/action means the prohibition does NOT apply when the UNLESS line's condition holds -- reconstruct as "X is forbidden/prohibited unless Y" or "X is not allowed without Y", never as a temporal claim ("before Y") and never drop the exception entirely.
+- A MODALITY=NOT CONSTRAINTS line naming one specific individual, paired with a RELATIONS line stating the same event/property for a whole group that individual is part of, means "every member of the group except that individual" -- reconstruct as "every/all <group> except <individual> <verb-phrase>" (or equivalent), keeping BOTH the general claim about the group AND the named exception. Do not phrase the excepted individual as opposing, conflicting with, or otherwise relating to the group in any other way than being the one exception -- the source relation is purely "excluded from this one fact", nothing more.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
 - If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier OR a self-change/property the entity itself is undergoing (e.g. "early", "quickly", "accelerating", "worsening") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it, and do not phrase a self-change `manner=` as the entity acting on some other thing.
 - If an entity is PERFORMed as an event and that event in turn STATEs an object (a two-step chain: subject PERFORM event, event STATE content), and the event's own name/type suggests warning/cautioning rather than a neutral announcement, reconstruct it with "warn" (or an equivalent cautionary verb), not a flat neutral "state"/"say" -- preserve the urgency, don't flatten it to a bare declarative.
