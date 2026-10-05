@@ -1,5 +1,5 @@
 You are evaluating whether meaning was preserved through a text transformation pipeline.
-For each of the 1 items below, you are shown TEXT A (original) and TEXT B (a reconstruction).
+For each of the 18 items below, you are shown TEXT A (original) and TEXT B (a reconstruction).
 Judge ONLY whether TEXT B preserves the essential factual/logical meaning of TEXT A -- ignore style, wording, or phrasing differences.
 
 Answer with EXACTLY one line per item, in this format, nothing else:
@@ -7,10 +7,78 @@ Answer with EXACTLY one line per item, in this format, nothing else:
 or
 <item_id>: NOT_PRESERVED
 
-Output all 1 lines, in the order given, and nothing before or after them.
+Output all 18 lines, in the order given, and nothing before or after them.
 
 ============================================================
 
-[edge_001]
-TEXT A: Alice does not believe Bob left early.
-TEXT B: Bob left early, and Alice did not believe it.
+[easy_001]
+TEXT A: Alice knows Bob. Bob is in Paris.
+TEXT B: Alice knows that Bob is in Paris.
+
+[easy_002]
+TEXT A: The capital of France is Paris.
+TEXT B: France possesses Paris.
+
+[easy_003]
+TEXT A: Einstein wrote the theory of relativity.
+TEXT B: Einstein performed a writing event that entailed the theory of relativity.
+
+[easy_004]
+TEXT A: Water boils at 100 degrees Celsius.
+TEXT B: Water undergoes boiling at a temperature of 100 degrees Celsius.
+
+[easy_005]
+TEXT A: Dogs are animals.
+TEXT B: Dogs are animals.
+
+[medium_001]
+TEXT A: Sophie arrived late to meeting because traffic was heavy. She apologized.
+TEXT B: Sophie arrived late to the meeting because of heavy traffic, and she apologized.
+
+[medium_002]
+TEXT A: Patient prescribed antibiotics, took for week to recover.
+TEXT B: The patient was prescribed antibiotics, administered antibiotics over a week duration, with intake occurring before recovery.
+
+[medium_003]
+TEXT A: CEO announced layoffs. Employees were upset about decision.
+TEXT B: The CEO performed layoffs, and the employees believe the decision and are upset about it.
+
+[medium_004]
+TEXT A: Climate change accelerating. Scientists warn of consequences.
+TEXT B: Climate change is transforming acceleration, and scientists are stating consequences.
+
+[medium_005]
+TEXT A: Contract signed by parties, confirming agreement on terms.
+TEXT B: The parties perform the signing of the contract, which entails an agreement that possesses terms.
+
+[complex_001]
+TEXT A: Article 42 GDPR: data controllers must implement measures.
+TEXT B: Data controllers must produce an implementation that transforms measures.
+
+[complex_003]
+TEXT A: Algorithm uses Bayesian optimization Thompson sampling.
+TEXT B: The algorithm uses Bayesian optimization Thompson sampling.
+
+[complex_004]
+TEXT A: NDA prohibits disclosure without prior written consent.
+TEXT B: An NDA prohibits disclosure, which requires prior written consent.
+
+[complex_005]
+TEXT A: Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.
+TEXT B: The filtration process produces three stages: 10 microns, 0.1 microns, and carbon.
+
+[edge_002]
+TEXT A: Every student except Marie passed exam.
+TEXT B: The student passed the exam, which opposes Marie.
+
+[edge_003]
+TEXT A: Neither manager nor employee knew about change.
+TEXT B: The manager does not know about the change, and the employee does not know about the change.
+
+[edge_004]
+TEXT A: Hiring Sophie controversial, argued not qualified.
+TEXT B: Sophie was hired in a controversial manner, despite not being qualified.
+
+[edge_005]
+TEXT A: If Alice and Bob leave, project fails.
+TEXT B: Alice and Bob both leave the project, which entails that the project fails.
