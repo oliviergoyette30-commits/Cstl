@@ -61,8 +61,24 @@ import re
 from pathlib import Path
 import anthropic
 
-MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
 MAX_RETRIES = 3
+
+# ===== SOUS-ENSEMBLE RESTREINT (decision Olivier, 2026-10-05) =====
+# Au lieu des 20 textes, on ne relance QUE les 3 items ou le pipeline v1
+# original (kappa_generate_real.py, run du 2026-09-22, kappa=0.6296) a
+# mesure un desaccord entre juges: complex_002, complex_003, edge_001.
+# Motif: reduire le cout/volume d'appels API. Consequence methodologique
+# explicite: le kappa de Fleiss n'est PAS recalculable sur ce sous-ensemble
+# de 3 items de la meme facon statistiquement valide qu'avec les 20 (trop
+# peu d'items, marges degenerees) -- ce run sert a verifier item-par-item
+# si l'extraction deterministe change le verdict des juges sur CES 3 cas
+# precis, pas a produire un nouveau kappa global comparable au 0.6296.
+# edge_001 n'a aucun litteral protege (volontaire, voir plus haut) -- il
+# sert de temoin negatif: si son verdict change quand meme, c'est que le
+# changement vient d'autre chose que la protection des litteraux (ex: le
+# passage de claude-sonnet-4-5 a claude-haiku-4-5), signal a surveiller.
+RUN_SUBSET = {"complex_002", "complex_003", "edge_001"}
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not API_KEY:
@@ -229,13 +245,15 @@ def main():
     total_lost_cstl = 0
     total_lost_reconstruction = 0
 
-    print(f"Modele: {MODEL}")
-    print(f"Corpus: {len(CORPUS)} textes\n")
+    corpus_subset = {k: v for k, v in CORPUS.items() if k in RUN_SUBSET}
 
-    for i, (text_id, entry) in enumerate(CORPUS.items(), 1):
+    print(f"Modele: {MODEL}")
+    print(f"Corpus: {len(corpus_subset)} textes (sous-ensemble restreint: {sorted(RUN_SUBSET)})\n")
+
+    for i, (text_id, entry) in enumerate(corpus_subset.items(), 1):
         original = entry["text"]
         spans = PROTECTED_SPANS.get(text_id, [])
-        print(f"[{i}/{len(CORPUS)}] {text_id} ({entry['diff']}, {len(spans)} litteral(aux) protege(s))")
+        print(f"[{i}/{len(corpus_subset)}] {text_id} ({entry['diff']}, {len(spans)} litteral(aux) protege(s))")
 
         redacted_text, token_map = redact(original, spans)
         total_literals += len(token_map)
@@ -292,7 +310,7 @@ def main():
     # restauration des vraies valeurs, jamais les tokens opaques.
     lines = []
     lines.append("You are evaluating whether meaning was preserved through a text transformation pipeline.")
-    lines.append("For each of the 20 items below, you are shown TEXT A (original) and TEXT B (a reconstruction).")
+    lines.append(f"For each of the {len(results)} items below, you are shown TEXT A (original) and TEXT B (a reconstruction).")
     lines.append("Judge ONLY whether TEXT B preserves the essential factual/logical meaning of TEXT A -- ignore style, wording, or phrasing differences.")
     lines.append("")
     lines.append("Answer with EXACTLY one line per item, in this format, nothing else:")
@@ -300,7 +318,7 @@ def main():
     lines.append("or")
     lines.append("<item_id>: NOT_PRESERVED")
     lines.append("")
-    lines.append("Output all 20 lines, in the order given, and nothing before or after them.")
+    lines.append(f"Output all {len(results)} lines, in the order given, and nothing before or after them.")
     lines.append("")
     lines.append("=" * 60)
     lines.append("")
