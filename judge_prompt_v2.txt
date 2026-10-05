@@ -1,0 +1,24 @@
+You are evaluating whether meaning was preserved through a text transformation pipeline.
+For each of the 3 items below, you are shown TEXT A (original) and TEXT B (a reconstruction).
+Judge ONLY whether TEXT B preserves the essential factual/logical meaning of TEXT A -- ignore style, wording, or phrasing differences.
+
+Answer with EXACTLY one line per item, in this format, nothing else:
+<item_id>: PRESERVED
+or
+<item_id>: NOT_PRESERVED
+
+Output all 3 lines, in the order given, and nothing before or after them.
+
+============================================================
+
+[complex_002]
+TEXT A: Hypertension >160 mmHg requires ACE inhibitors or calcium channel blockers.
+TEXT B: Hypertension requires both ACE inhibitors and calcium channel blockers as treatments.
+
+[complex_003]
+TEXT A: Algorithm uses Bayesian optimization Thompson sampling.
+TEXT B: The Algorithm uses Bayesian optimization Thompson sampling.
+
+[edge_001]
+TEXT A: Alice does not believe Bob left early.
+TEXT B: Alice negates that Bob causes the departure.
