@@ -13,4 +13,4 @@ Output all 1 lines, in the order given, and nothing before or after them.
 
 [complex_002]
 TEXT A: Hypertension >160 mmHg requires ACE inhibitors or calcium channel blockers.
-TEXT B: Hypertension requires either ACE inhibitors or calcium channel blockers as treatment.
+TEXT B: Hypertension with value 160 mmHg requires administration of either ACE inhibitors or calcium channel blockers.

@@ -8,14 +8,10 @@
       "calcium channel blockers"
     ],
     "redacted_text": "Hypertension >LIT2QZK requires LIT1QZK or LIT0QZK.",
-    "cstl_redacted": "DEFINE Hypertension AS condition [id=e1]\nDEFINE LIT1QZK AS treatment [id=e2]\nDEFINE LIT0QZK AS treatment [id=e3]\n\nRELATIONS [\n(LIT1QZK) EITHER_OR (LIT0QZK) [id=r1]\n]\n\nCONSTRAINTS [\n(REQUIRE) Hypertension ENTAILS LIT1QZK [id=c1]\n(REQUIRE) Hypertension ENTAILS LIT0QZK [id=c2]\n]",
-    "reconstruction_redacted": "Hypertension requires either LIT1QZK or LIT0QZK as treatment.",
-    "reconstruction": "Hypertension requires either ACE inhibitors or calcium channel blockers as treatment.",
-    "literal_lost_at_cstl": [
-      "LIT2QZK"
-    ],
-    "literal_lost_at_reconstruction": [
-      "LIT2QZK"
-    ]
+    "cstl_redacted": "```\nDEFINE Hypertension AS condition [id=e1, value=LIT2QZK]\nDEFINE LIT1QZK AS treatment [id=e2]\nDEFINE LIT0QZK AS treatment [id=e3]\n\nRELATIONS [\n(LIT1QZK) EITHER_OR (LIT0QZK) [id=r1]\n]\n\nCONSTRAINTS [\n(REQUIRE) Hypertension ADMINISTRER LIT1QZK [id=c1]\n(REQUIRE) Hypertension ADMINISTRER LIT0QZK [id=c2]\n]\n```",
+    "reconstruction_redacted": "Hypertension with value LIT2QZK requires administration of either LIT1QZK or LIT0QZK.",
+    "reconstruction": "Hypertension with value 160 mmHg requires administration of either ACE inhibitors or calcium channel blockers.",
+    "literal_lost_at_cstl": [],
+    "literal_lost_at_reconstruction": []
   }
 }
