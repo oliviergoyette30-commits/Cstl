@@ -4,11 +4,13 @@
     "original": "Alice knows Bob. Bob is in Paris.",
     "protected_spans": [],
     "redacted_text": "Alice knows Bob. Bob is in Paris.",
-    "cstl_redacted": "```cstl\nDEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE Paris AS location [id=e3]\n\nRELATIONS [\n  (Alice) KNOWS Bob [id=r1]\n  (Bob) CO_LOCATES Paris [id=r2]\n]\n```",
+    "cstl_redacted": "```\nDEFINE Alice AS person [id=e1]\nDEFINE Bob AS person [id=e2]\nDEFINE Paris AS location [id=e3]\n\nRELATIONS [\n  (Alice) KNOWS Bob [id=r1]\n  (Bob) CO_LOCATES Paris [id=r2]\n]\n```",
     "reconstruction_redacted": "Alice knows Bob, and Bob is in Paris.",
     "reconstruction": "Alice knows Bob, and Bob is in Paris.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "easy_002": {
     "diff": "easy",
@@ -19,18 +21,22 @@
     "reconstruction_redacted": "France's capital is Paris.",
     "reconstruction": "France's capital is Paris.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "easy_003": {
     "diff": "easy",
     "original": "Einstein wrote the theory of relativity.",
     "protected_spans": [],
     "redacted_text": "Einstein wrote the theory of relativity.",
-    "cstl_redacted": "```cstl\nDEFINE Einstein AS person [id=e1]\nDEFINE theory_of_relativity AS theory [id=e2]\nDEFINE writing AS event [id=e3]\n\nRELATIONS [\n  (Einstein) PERFORM writing [id=r1]\n  (writing) ARR.PRODUCE theory_of_relativity [id=r2]\n]\n```",
+    "cstl_redacted": "```cstl\nDEFINE Einstein AS person [id=e1]\nDEFINE theory_of_relativity AS theory [id=e2]\nDEFINE wrote AS event [id=e3]\n\nRELATIONS [\n  (Einstein) PERFORM wrote [id=r1]\n  (wrote) INVOLVES theory_of_relativity [id=r2, role=theme]\n]\n```",
     "reconstruction_redacted": "Einstein wrote the theory of relativity.",
     "reconstruction": "Einstein wrote the theory of relativity.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "easy_004": {
     "diff": "easy",
@@ -39,42 +45,48 @@
       "100 degrees Celsius"
     ],
     "redacted_text": "Water boils at LIT0QZK.",
-    "cstl_redacted": "```CSTL\nDEFINE water AS substance [id=e1]\nDEFINE boiling AS event [id=e2, value=LIT0QZK]\n\nRELATIONS [\n  (water) TRANSFORM boiling [id=r1]\n]\n```",
+    "cstl_redacted": "```\nDEFINE water AS substance [id=e1]\nDEFINE boiling AS event [id=e2]\nDEFINE boiling_point AS value [id=e3, value=LIT0QZK]\n\nRELATIONS [\n  (water) PERFORM boiling [id=r1]\n  (boiling) POSSESSES boiling_point [id=r2]\n]\n```",
     "reconstruction_redacted": "Water boils at LIT0QZK.",
     "reconstruction": "Water boils at 100 degrees Celsius.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "easy_005": {
     "diff": "easy",
     "original": "Dogs are animals.",
     "protected_spans": [],
     "redacted_text": "Dogs are animals.",
-    "cstl_redacted": "```cstl\nDEFINE dogs AS category [id=e1]\nDEFINE animals AS category [id=e2]\n\nRELATIONS [\n  (dogs) INH animals [id=r1]\n]\n```",
+    "cstl_redacted": "```cstl\nDEFINE dogs AS taxon [id=e1]\nDEFINE animals AS taxon [id=e2]\n\nRELATIONS [\n  (dogs) INH animals [id=r1]\n]\n```",
     "reconstruction_redacted": "Dogs are animals.",
     "reconstruction": "Dogs are animals.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "medium_001": {
     "diff": "medium",
     "original": "Sophie arrived late to meeting because traffic was heavy. She apologized.",
     "protected_spans": [],
     "redacted_text": "Sophie arrived late to meeting because traffic was heavy. She apologized.",
-    "cstl_redacted": "```cstl\nDEFINE Sophie AS agent [id=e1]\nDEFINE arrived AS event [id=e2, manner=late]\nDEFINE meeting AS event [id=e3]\nDEFINE traffic AS phenomenon [id=e4, manner=heavy]\nDEFINE apologized AS event [id=e5]\n\nRELATIONS [\n  (Sophie) ARR arrived [id=r1]\n  (Sophie) ARR meeting [id=r2]\n  (traffic) CATALYZE arrived [id=r3]\n  (Sophie) PERFORM apologized [id=r4]\n]\n\nCONSTRAINTS [\n  (BEFORE) arrived BEFORE apologized [id=c1]\n]\n```",
-    "reconstruction_redacted": "Sophie arrived late to the meeting due to heavy traffic and apologized.",
-    "reconstruction": "Sophie arrived late to the meeting due to heavy traffic and apologized.",
+    "cstl_redacted": "```\nDEFINE Sophie AS person [id=e1]\nDEFINE arrived AS event [id=e2, manner=late]\nDEFINE meeting AS event [id=e3]\nDEFINE traffic AS phenomenon [id=e4, manner=heavy]\nDEFINE apologized AS event [id=e5]\n\nRELATIONS [\n  (Sophie) ARR arrived [id=r1]\n  (arrived) INVOLVES meeting [id=r2, role=goal]\n  (traffic) CATALYZE arrived [id=r3]\n  (Sophie) PERFORM apologized [id=r4]\n]\n```",
+    "reconstruction_redacted": "Sophie arrived late to the meeting because of heavy traffic and apologized.",
+    "reconstruction": "Sophie arrived late to the meeting because of heavy traffic and apologized.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "medium_002": {
     "diff": "medium",
     "original": "Patient prescribed antibiotics, took for week to recover.",
     "protected_spans": [],
     "redacted_text": "Patient prescribed antibiotics, took for week to recover.",
-    "cstl_redacted": "DEFINE patient AS entity [id=e1]\nDEFINE antibiotics AS entity [id=e2]\nDEFINE prescription AS event [id=e3]\nDEFINE taking AS event [id=e4, value=week]\nDEFINE recovery AS event [id=e5]\nRELATIONS [\n(patient) ARR.CREATE prescription [id=r1]\n(prescription) INVOLVES antibiotics [id=r2, role=theme]\n(patient) PERFORM taking [id=r3]\n(taking) INVOLVES antibiotics [id=r4, role=theme]\n(taking) BEFORE recovery [id=r5]\n]",
-    "reconstruction_redacted": "The patient created a prescription for antibiotics, and the patient took the antibiotics for a week before recovery.",
-    "reconstruction": "The patient created a prescription for antibiotics, and the patient took the antibiotics for a week before recovery.",
+    "cstl_redacted": "```cstl\nDEFINE patient AS agent [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE prescribing AS event [id=e3]\nDEFINE taking AS event [id=e4]\nDEFINE week AS duration [id=e5, value=week]\nDEFINE recovery AS event [id=e6]\n\nRELATIONS [\n  (patient) PRESCRIBE antibiotics [id=r1]\n  (patient) ADMINISTER antibiotics [id=r2]\n  (taking) INVOLVES week [id=r3, role=duration]\n  (taking) INTENT recovery [id=r4]\n]\n```",
+    "reconstruction_redacted": "The patient was prescribed antibiotics and took them for a week to aid recovery.",
+    "reconstruction": "The patient was prescribed antibiotics and took them for a week to aid recovery.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": [],
     "literal_hallucinated_at_cstl": [],
@@ -85,33 +97,39 @@
     "original": "CEO announced layoffs. Employees were upset about decision.",
     "protected_spans": [],
     "redacted_text": "CEO announced layoffs. Employees were upset about decision.",
-    "cstl_redacted": "```cstl\nDEFINE CEO AS role [id=e1]\nDEFINE announced AS event [id=e2]\nDEFINE layoffs AS event [id=e3]\nDEFINE Employees AS role [id=e4]\nDEFINE decision AS event [id=e5]\n\nRELATIONS [\n  (CEO) PERFORM announced [id=r1]\n  (announced) TRANSMIT_FAITHFUL layoffs [id=r2]\n  (layoffs) EQUALS decision [id=r3]\n  (Employees) REACTS decision [id=r4, valence=negative, affect=upset]\n]\n```",
+    "cstl_redacted": "```cstl\nDEFINE CEO AS role [id=e1]\nDEFINE announced AS event [id=e2]\nDEFINE layoffs AS event [id=e3]\nDEFINE employees AS role [id=e4]\nDEFINE decision AS abstract [id=e5]\n\nRELATIONS [\n  (CEO) PERFORM announced [id=r1]\n  (announced) STATE layoffs [id=r2]\n  (employees) REACTS decision [id=r3, valence=negative, affect=upset]\n]\n\nCONSTRAINTS [\n  (IFF) decision EQUALS layoffs [id=c1]\n]\n```",
     "reconstruction_redacted": "The CEO announced layoffs, and employees are upset about the decision.",
     "reconstruction": "The CEO announced layoffs, and employees are upset about the decision.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "medium_004": {
     "diff": "medium",
     "original": "Climate change accelerating. Scientists warn of consequences.",
     "protected_spans": [],
     "redacted_text": "Climate change accelerating. Scientists warn of consequences.",
-    "cstl_redacted": "```CSTL\nDEFINE climate_change AS phenomenon [id=e1, manner=accelerating]\nDEFINE scientists AS agent [id=e2]\nDEFINE warning AS event [id=e3]\nDEFINE consequences AS outcome [id=e4]\n\nRELATIONS [\n  (scientists) PERFORM warning [id=r1]\n  (warning) STATE consequences [id=r2]\n]\n```",
-    "reconstruction_redacted": "Scientists warn of the consequences of accelerating climate change.",
-    "reconstruction": "Scientists warn of the consequences of accelerating climate change.",
+    "cstl_redacted": "```\nDEFINE climate_change AS phenomenon [id=e1, manner=accelerating]\nDEFINE scientists AS agent [id=e2]\nDEFINE warning AS event [id=e3]\nDEFINE consequences AS proposition [id=e4]\n\nRELATIONS [\n  (scientists) PERFORM warning [id=r1]\n  (warning) STATE consequences [id=r2]\n]\n```",
+    "reconstruction_redacted": "Scientists are warning of the consequences of accelerating climate change.",
+    "reconstruction": "Scientists are warning of the consequences of accelerating climate change.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "medium_005": {
     "diff": "medium",
     "original": "Contract signed by parties, confirming agreement on terms.",
     "protected_spans": [],
     "redacted_text": "Contract signed by parties, confirming agreement on terms.",
-    "cstl_redacted": "```CSTL\nDEFINE contract AS document [id=e1]\nDEFINE signing AS event [id=e2]\nDEFINE parties AS agent [id=e3]\nDEFINE agreement AS state [id=e4]\nDEFINE terms AS content [id=e5]\n\nRELATIONS [\n  (parties) PERFORM signing [id=r1]\n  (signing) INVOLVES contract [id=r2, role=theme]\n  (signing) ENTAILS agreement [id=r3]\n  (agreement) INVOLVES terms [id=r4, role=theme]\n]\n```",
-    "reconstruction_redacted": "The parties sign the contract, which establishes agreement on the terms.",
-    "reconstruction": "The parties sign the contract, which establishes agreement on the terms.",
+    "cstl_redacted": "```\nDEFINE contract AS document [id=e1]\nDEFINE signing AS event [id=e2]\nDEFINE parties AS agent [id=e3]\nDEFINE agreement AS state [id=e4]\nDEFINE terms AS content [id=e5]\n\nRELATIONS [\n  (parties) PERFORM signing [id=r1]\n  (signing) INVOLVES contract [id=r2, role=theme]\n  (signing) STATE agreement [id=r3]\n  (agreement) INVOLVES terms [id=r4, role=theme]\n]\n```",
+    "reconstruction_redacted": "The parties sign the contract, stating agreement to the terms.",
+    "reconstruction": "The parties sign the contract, stating agreement to the terms.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "complex_001": {
     "diff": "complex",
@@ -120,11 +138,13 @@
       "Article 42 GDPR"
     ],
     "redacted_text": "LIT0QZK: data controllers must implement measures.",
-    "cstl_redacted": "```cstl\nDEFINE LIT0QZK AS entity [id=e1]\nDEFINE data_controllers AS role [id=e2]\nDEFINE measures AS artifact [id=e3]\n\nRELATIONS [\n  (LIT0QZK) POSSESSES data_controllers [id=r1]\n]\n\nCONSTRAINTS [\n  (REQUIRE) data_controllers TRANSFORM measures [id=c1]\n]\n```",
-    "reconstruction_redacted": "LIT0QZK's data controllers are required to transform measures.",
-    "reconstruction": "Article 42 GDPR's data controllers are required to transform measures.",
+    "cstl_redacted": "```\nDEFINE LIT0QZK AS entity [id=e1]\nDEFINE data_controllers AS agent [id=e2]\nDEFINE measures AS artifact [id=e3]\nDEFINE implementation AS event [id=e4]\n\nRELATIONS [\n  (LIT0QZK) STATE implementation [id=r1]\n  (implementation) INVOLVES data_controllers [id=r2, role=agent]\n  (implementation) INVOLVES measures [id=r3, role=theme]\n]\n\nCONSTRAINTS [\n  (REQUIRE) data_controllers PERFORM implementation [id=c1]\n]\n```",
+    "reconstruction_redacted": "LIT0QZK states that data controllers are required to implement measures.",
+    "reconstruction": "Article 42 GDPR states that data controllers are required to implement measures.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "complex_003": {
     "diff": "complex",
@@ -133,22 +153,26 @@
       "Bayesian optimization Thompson sampling"
     ],
     "redacted_text": "Algorithm uses LIT0QZK.",
-    "cstl_redacted": "```\nDEFINE Algorithm AS agent [id=e1]\nDEFINE LIT0QZK AS resource [id=e2, value=LIT0QZK]\n\nRELATIONS [\n  (Algorithm) ARR.ACCESS LIT0QZK [id=r1]\n]\n```",
-    "reconstruction_redacted": "The algorithm accesses LIT0QZK.",
-    "reconstruction": "The algorithm accesses Bayesian optimization Thompson sampling.",
+    "cstl_redacted": "```\nDEFINE algorithm AS agent [id=e1]\nDEFINE LIT0QZK AS resource [id=e2, value=LIT0QZK]\n\nRELATIONS [\n  (algorithm) POSSESSES LIT0QZK [id=r1]\n]\n```",
+    "reconstruction_redacted": "The algorithm has LIT0QZK.",
+    "reconstruction": "The algorithm has Bayesian optimization Thompson sampling.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "complex_004": {
     "diff": "complex",
     "original": "NDA prohibits disclosure without prior written consent.",
     "protected_spans": [],
     "redacted_text": "NDA prohibits disclosure without prior written consent.",
-    "cstl_redacted": "```cstl\nDEFINE NDA AS document [id=e1]\nDEFINE disclosure AS event [id=e2]\nDEFINE consent AS authorization [id=e3, manner=prior_written]\n\nRELATIONS [\n  (NDA) INVOLVES disclosure [id=r1, role=theme]\n]\n\nCONSTRAINTS [\n  (FORBID) NDA PERFORM disclosure [id=c1]\n  (UNLESS) disclosure SATISFIES consent [id=c2]\n]\n```",
+    "cstl_redacted": "```cstl\nDEFINE NDA AS document [id=e1]\nDEFINE disclosure AS event [id=e2]\nDEFINE consent AS authorization [id=e3, manner=prior_written]\n\nRELATIONS [\n  (NDA) ENTAILS disclosure [id=r1]\n]\n\nCONSTRAINTS [\n  (FORBID) NDA PERFORM disclosure [id=c1]\n  (UNLESS) disclosure SATISFIES consent [id=c2]\n]\n```",
     "reconstruction_redacted": "The NDA prohibits disclosure unless prior written consent has been obtained.",
     "reconstruction": "The NDA prohibits disclosure unless prior written consent has been obtained.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "complex_005": {
     "diff": "complex",
