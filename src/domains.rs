@@ -1,6 +1,6 @@
 //! CSTL v5.0.0 — Ontologies de domaine (port Rust de cstl_domains.py)
 //! 18 domaines avec opérateurs fixes et types d'entités.
-//! Miroir exact de la source Python — mêmes clés, mêmes opérateurs, français.
+//! Port Rust de la source Python -- mêmes clés, mêmes domaines.
 //! Auteur : Olivier Goyette + Claude Sonnet 5
 //! Date   : 9 juillet 2026
 //!
@@ -14,98 +14,103 @@
 //! live. `list_domains`/`is_known_domain`/`domain_operators`/
 //! `get_domain_operators` ont été retirées à la même date: aucun appelant
 //! réel, seulement leurs propres tests (voir CHANGELOG).
+//!
+//! Opérateurs traduits en anglais (2026-10-05, demande explicite
+//! d'Olivier) : la liste d'origine portait les verbes en français
+//! (`PRESCRIRE`, `NÉGOCIER`, etc.) alors que `OFFICIAL_OPERATORS`
+//! (`semantic.rs`, le noyau 38 opérateurs) est entièrement en anglais --
+//! incohérence corrigée ici. Vérifié avant traduction : `with_domain()`
+//! (seul point d'entrée reel de ce module, via `check_operator_whitelist`)
+//! n'est appelé nulle part dans le chemin serveur TCP (`grep -rn
+//! with_domain` ne retourne que sa propre définition et son propre test
+//! unitaire) -- donc aucun payload en production, aucun fichier de test
+//! du dépôt (`tests/test_medical.cstl` notamment, vérifié orphelin,
+//! référencé par aucun test) et aucun autre module ne dépendent des
+//! anciens verbes français. Traduction sans impact fonctionnel connu.
+//! Les clés de domaine (`"médical"`, `"juridique"`, etc.) ne sont PAS
+//! traduites ici -- seules les VALEURS (listes d'opérateurs) le sont ;
+//! demande explicite portait sur les opérateurs, pas les noms de domaine.
+//! Les paires accent/sans-accent de la liste française (ex: `NÉGOCIER`/
+//! `NEGOCIER`) n'ont plus de raison d'être en anglais (pas d'accents) --
+//! elles sont donc fusionnées en une seule entrée, pas dupliquées.
 
 /// Retourne les opérateurs officiels d'un domaine sous forme de slice statique.
 /// Fonction interne réutilisée par domain_operators() et is_domain_operator().
 fn get_domain_operators_slice(domain: &str) -> &'static [&'static str] {
     match domain.to_lowercase().as_str() {
         "diplomatique" => &[
-            "NÉGOCIER", "NEGOCIER", "RATIFIER", "SIGNER", "DIVULGUER", "DIVULGUE",
-            "SANCTIONNER", "MÉDIER", "MEDIER", "PROTESTER", "RECONNAÎTRE", "RECONNAITRE",
-            "OBTENIR", "OBTAIN", "EXPULSER", "RAPPELER",
+            "NEGOTIATE", "RATIFY", "SIGN", "DISCLOSE", "SANCTION", "MEDIATE",
+            "PROTEST", "RECOGNIZE", "OBTAIN", "EXPEL", "RECALL",
         ],
         "juridique" => &[
-            "CONTESTER", "RÉSILIER", "RESILIER", "NOTIFIER", "ESTER", "PLAIDER",
-            "CONDAMNER", "ACQUITTER", "DIVULGUER", "DIVULGUE", "SIGNER", "OBTENIR",
-            "OBTAIN", "MANDATER", "RÉCLAMER", "RECLAMER",
+            "CONTEST", "TERMINATE", "NOTIFY", "SUE", "PLEAD", "CONVICT",
+            "ACQUIT", "DISCLOSE", "SIGN", "OBTAIN", "MANDATE", "CLAIM",
         ],
         "médical" | "medical" => &[
-            "PRESCRIRE", "DIAGNOSTIQUER", "CONTRA_INDIQUER", "ADMINISTRER", "OPÉRER",
-            "OPERER", "SURVEILLER", "RÉFÉRER", "REFERER", "HOSPITALISER", "TRAITER",
-            "VACCINER", "PRÉVENIR", "PREVENIR",
+            "PRESCRIBE", "DIAGNOSE", "CONTRAINDICATE", "ADMINISTER", "OPERATE",
+            "MONITOR", "REFER", "HOSPITALIZE", "TREAT", "VACCINATE", "PREVENT",
         ],
         "corporate" => &[
-            "APPROUVER", "REJETER", "DÉLÉGUER", "DELEGUER", "REPORTER", "BUDGÉTER",
-            "BUDGETER", "AUDITER", "FUSIONNER", "ACQUÉRIR", "ACQUERIR", "LICENCIER",
-            "RECRUTER", "ÉVALUER", "EVALUER",
+            "APPROVE", "REJECT", "DELEGATE", "POSTPONE", "BUDGET", "AUDIT",
+            "MERGE", "ACQUIRE", "DISMISS", "RECRUIT", "EVALUATE",
         ],
         "archéologique" | "archeologique" => &[
-            "DÉCOUVRIR", "DECOUVRIR", "FOUILLER", "DATER", "CATALOGUER", "PRÉSERVER",
-            "PRESERVER", "PUBLIER", "CONTESTER", "ATTRIBUER", "RESTAURER", "EXCAVÉR",
-            "EXCAVER",
+            "DISCOVER", "SURVEY", "DATE", "CATALOG", "PRESERVE", "PUBLISH",
+            "CONTEST", "ATTRIBUTE", "RESTORE", "EXCAVATE",
         ],
         "astronomique" => &[
-            "OBSERVER", "DÉTECTER", "DETECTER", "MESURER", "CATALOGUER", "NOMMER",
-            "CONFIRMER", "RÉFUTER", "REFUTER", "PUBLIER", "SIMULER",
+            "OBSERVE", "DETECT", "MEASURE", "CATALOG", "NAME", "CONFIRM",
+            "REFUTE", "PUBLISH", "SIMULATE",
         ],
         "financier" => &[
-            "INVESTIR", "LIQUIDER", "AUDITER", "GARANTIR", "COUVRIR", "FINANCER",
-            "EMPRUNTER", "REMBOURSER", "ÉVALUER", "EVALUER", "ACQUÉRIR", "ACQUERIR",
-            "CÉDER", "CEDER", "CONSOLIDER", "PROVISIONNER",
+            "INVEST", "LIQUIDATE", "AUDIT", "GUARANTEE", "HEDGE", "FINANCE",
+            "BORROW", "REPAY", "APPRAISE", "ACQUIRE", "DIVEST", "CONSOLIDATE",
+            "PROVISION",
         ],
         "cyber_securite" => &[
-            "BREACH", "PATCH", "MONITOR", "ALERT", "CHIFFRER", "DÉCHIFFRER",
-            "DECHIFFRER", "AUTHENTIFIER", "BLOQUER", "DÉTECTER", "DETECTER",
-            "NEUTRALISER", "PATCHER", "SURVEILLER", "EXFILTRER", "COMPROMETTRE",
+            "BREACH", "PATCH", "MONITOR", "ALERT", "ENCRYPT", "DECRYPT",
+            "AUTHENTICATE", "BLOCK", "DETECT", "NEUTRALIZE", "EXFILTRATE",
+            "COMPROMISE",
         ],
         "reglementaire" => &[
-            "CERTIFIER", "SANCTIONNER", "NOTIFIER", "ABROGER", "HOMOLOGUER",
-            "CONTRÔLER", "CONTROLER", "AUTORISER", "INTERDIRE", "DÉCLARER",
-            "DECLARER", "AUDITER", "CONFORMER", "REPORTER",
+            "CERTIFY", "SANCTION", "NOTIFY", "REPEAL", "HOMOLOGATE", "INSPECT",
+            "AUTHORIZE", "PROHIBIT", "DECLARE", "AUDIT", "COMPLY", "POSTPONE",
         ],
         "supply_chain" => &[
-            "LIVRER", "ROUTER", "BLOQUER", "SOURCER", "TRACER", "STOCKER",
-            "EXPÉDIER", "EXPEDIER", "RÉCEPTIONNER", "RECEPTIONNER", "RETOURNER",
-            "APPROUVER", "COMMANDER",
+            "DELIVER", "ROUTE", "BLOCK", "SOURCE", "TRACK", "STORE", "SHIP",
+            "RECEIVE", "RETURN", "APPROVE", "ORDER",
         ],
         "rh" => &[
-            "RECRUTER", "ÉVALUER", "EVALUER", "LICENCIER", "PROMOUVOIR", "FORMER",
-            "MUTER", "RÉMUNÉRER", "REMUNERER", "SANCTIONNER", "INTÉGRER",
-            "INTEGRER", "OFFBOARDER",
+            "RECRUIT", "EVALUATE", "DISMISS", "PROMOTE", "TRAIN", "TRANSFER",
+            "COMPENSATE", "SANCTION", "ONBOARD", "OFFBOARD",
         ],
         "recherche" => &[
-            "HYPOTHÉSER", "HYPOTHESER", "VALIDER", "RÉFUTER", "REFUTER", "PUBLIER",
-            "CITER", "REPRODUIRE", "RÉTRACTER", "RETRACTER", "FINANCER",
-            "COLLABORER", "SOUMETTRE",
+            "HYPOTHESIZE", "VALIDATE", "REFUTE", "PUBLISH", "CITE", "REPRODUCE",
+            "RETRACT", "FUND", "COLLABORATE", "SUBMIT",
         ],
         "marketing" => &[
-            "CIBLER", "SEGMENTER", "CONVERTIR", "FIDÉLISER", "FIDELISER", "ACTIVER",
-            "DÉSACTIVER", "DESACTIVER", "PERSONNALISER", "MESURER", "TESTER",
-            "OPTIMISER",
+            "TARGET", "SEGMENT", "CONVERT", "RETAIN", "ACTIVATE", "DEACTIVATE",
+            "PERSONALIZE", "MEASURE", "TEST", "OPTIMIZE",
         ],
         "immobilier" => &[
-            "ACQUÉRIR", "ACQUERIR", "LOUER", "HYPOTHÉQUER", "HYPOTHEQUER",
-            "ÉVALUER", "EVALUER", "VENDRE", "GÉRER", "GERER", "RÉNOVER",
-            "RENOVER", "RÉSILIER", "RESILIER", "NOTARIER",
+            "ACQUIRE", "LEASE", "MORTGAGE", "APPRAISE", "SELL", "MANAGE",
+            "RENOVATE", "TERMINATE", "NOTARIZE",
         ],
         "assurance" => &[
-            "SOUSCRIRE", "INDEMNISER", "RÉSILIER", "RESILIER", "EXPERTISER",
-            "DÉCLARER", "DECLARER", "COUVRIR", "EXCLURE", "REMBOURSER",
-            "ÉVALUER", "EVALUER",
+            "SUBSCRIBE", "INDEMNIFY", "TERMINATE", "ASSESS", "DECLARE",
+            "COVER", "EXCLUDE", "REIMBURSE", "EVALUATE",
         ],
         "education" => &[
-            "ENSEIGNER", "ÉVALUER", "EVALUER", "CERTIFIER", "ORIENTER", "INSCRIRE",
-            "EXCLURE", "DÉLIBÉRER", "DELIBERER", "VALIDER", "NOTER",
+            "TEACH", "EVALUATE", "CERTIFY", "GUIDE", "ENROLL", "EXPEL",
+            "DELIBERATE", "VALIDATE", "GRADE",
         ],
         "journalisme" => &[
-            "SOURCER", "VÉRIFIER", "VERIFIER", "PUBLIER", "RECTIFIER", "ENQUÊTER",
-            "ENQUETER", "CITER", "RÉVÉLER", "REVELER", "DÉMENTIR", "DEMENTIR",
-            "COMMENTER",
+            "SOURCE", "VERIFY", "PUBLISH", "CORRECT", "INVESTIGATE", "CITE",
+            "REVEAL", "DENY", "COMMENT",
         ],
         "energie" => &[
-            "PRODUIRE", "DISTRIBUER", "STOCKER", "TARIFER", "CONNECTER",
-            "DÉCONNECTER", "DECONNECTER", "RÉGULER", "REGULER", "OPTIMISER",
-            "PRÉVOIR", "PREVOIR",
+            "PRODUCE", "DISTRIBUTE", "STORE", "PRICE", "CONNECT", "DISCONNECT",
+            "REGULATE", "OPTIMIZE", "FORECAST",
         ],
         _ => &[],
     }
@@ -124,23 +129,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_medical_prescrire_recognized() {
-        assert!(is_domain_operator("PRESCRIRE", "médical"));
+    fn test_medical_prescribe_recognized() {
+        // Operateur traduit en anglais le 2026-10-05 (etait "PRESCRIRE").
+        assert!(is_domain_operator("PRESCRIBE", "médical"));
     }
 
     #[test]
     fn test_medical_domain_ascii_fallback() {
-        assert!(is_domain_operator("PRESCRIRE", "medical"));
+        assert!(is_domain_operator("PRESCRIBE", "medical"));
     }
 
     #[test]
     fn test_unknown_operator_rejected() {
-        assert!(!is_domain_operator("INVENTER", "juridique"));
+        assert!(!is_domain_operator("INVENT", "juridique"));
     }
 
     #[test]
     fn test_unknown_domain_returns_no_operators() {
-        assert!(!is_domain_operator("PRESCRIRE", "domaine_inexistant"));
+        assert!(!is_domain_operator("PRESCRIBE", "domaine_inexistant"));
     }
 
     #[test]

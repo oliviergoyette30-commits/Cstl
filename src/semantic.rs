@@ -14,7 +14,8 @@
 //!
 //! Session du 9 juillet 2026 : ajout du support domaine (with_domain), qui
 //! délègue à crate::domains::is_domain_operator pour accepter les verbes
-//! d'un domaine (ex. PRESCRIRE en médical) en plus des 36 opérateurs du noyau.
+//! d'un domaine (ex. PRESCRIBE en médical, anglais depuis le 2026-10-05) en
+//! plus des opérateurs du noyau.
 
 use crate::ast::Relation;
 
@@ -1076,13 +1077,15 @@ mod tests {
     #[test]
     fn test_clean_medical_payload_no_errors() {
         // Corrigé le 9 juillet 2026 : PRESCRIBE/TAKE n'existaient dans aucune
-        // liste (ni noyau, ni domaine médical qui utilise le français).
-        // PRESCRIRE et ADMINISTRER sont les vrais opérateurs du domaine médical
-        // (voir cstl_domains.py / domains.rs). Le domaine doit être précisé
-        // via with_domain() pour que ces verbes soient acceptés.
+        // liste (ni noyau, ni domaine médical). PRESCRIBE et ADMINISTER sont
+        // les vrais opérateurs du domaine médical (domains.rs). Le domaine
+        // doit être précisé via with_domain() pour que ces verbes soient
+        // acceptés.
+        // Operateurs de domaine traduits en anglais le 2026-10-05 (etaient
+        // PRESCRIRE/ADMINISTRER en francais) -- mise a jour en miroir.
         let data = vec![
-            rel("physician", "PRESCRIRE", "drug_A", 0.92, "n", Some("MUST")),
-            rel("patient", "ADMINISTRER", "drug_A", 1.0, "n", Some("MUST_NOT")),
+            rel("physician", "PRESCRIBE", "drug_A", 0.92, "n", Some("MUST")),
+            rel("patient", "ADMINISTER", "drug_A", 1.0, "n", Some("MUST_NOT")),
             rel("patient", "POSSESSES", "risk", 0.85, "n", None),
             rel("physician", "KNOWS", "diagnosis", 0.97, "n", None),
         ];
