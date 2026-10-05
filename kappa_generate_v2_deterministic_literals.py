@@ -240,9 +240,12 @@ def restore(text: str, token_to_literal: dict[str, str]) -> tuple[str, list[str]
 # passaient quand meme (E101 est un avertissement, jamais bloquant) --
 # mais c'etait du CSTL non-conforme qui ressemble a du CSTL, pas la grammaire
 # reelle. Liste ci-dessous recopiee a la main depuis
-# src/semantic.rs::OFFICIAL_OPERATORS (38 operateurs, verifies le
-# 2026-10-05) -- a resynchroniser manuellement si ce fichier evolue, ce
-# script n'a pas acces au depot Rust pour l'importer dynamiquement.
+# src/semantic.rs::OFFICIAL_OPERATORS (41 operateurs, verifies le
+# 2026-10-05, resynchronise apres ajout de INVOLVES/SATISFIES -- split de
+# POSSESSES, voir claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md et
+# CSTL_SPEC_v5_0.md §10.3quater) -- a resynchroniser manuellement si ce
+# fichier evolue, ce script n'a pas acces au depot Rust pour l'importer
+# dynamiquement.
 OFFICIAL_OPERATORS_SNAPSHOT = [
     "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
     "INTENT", "MAINTAIN", "TRANSFORM", "RESIST", "AMP", "INH",
@@ -252,6 +255,7 @@ OFFICIAL_OPERATORS_SNAPSHOT = [
     "COMPARES", "ENTAILS", "CONTRADICTS",
     "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
     "BEFORE", "AFTER", "DURING", "EITHER_OR", "REACTS",
+    "INVOLVES", "SATISFIES",
 ]
 # Domaine medical (src/domains.rs) -- accepte EN PLUS du noyau quand le
 # texte est clairement clinique (c'est le cas de complex_002). Verbes en
@@ -306,7 +310,9 @@ If the source text expresses an epistemic attitude (BELIEVES, KNOWS, DOUBTS, DIS
 
 If the source text expresses an EMOTIONAL/AFFECTIVE stance of a subject toward an object or event that already exists (e.g. "upset about", "angry about", "pleased with", "worried about"), use REACTS -- do NOT use CATALYZE (that implies the subject's state causally PRODUCES the object, inverting the direction when the object already happened) and do NOT use BELIEVES/KNOWS (those are epistemic/cognitive, not affective). Pattern: (subject) REACTS (object) [id=rNNN, valence=negative|positive|neutral|mixed, affect=<short free-text label, e.g. upset/angry/pleased>]. valence is required; affect is optional but encouraged when the source text names the specific emotion.
 
-If the source text expresses a prohibition that has a named EXCEPTION ("X is prohibited without Y", "X is forbidden unless Y", "not allowed except with Y"), do NOT invent a RELATIONS operator that doesn't exist in the closed list above (e.g. there is no "PROHIBITS"), and do NOT misuse a temporal operator like BEFORE/AFTER/DURING to express the exception (those are Allen temporal relations between two time intervals, not a conditional-exception relation -- "without prior written consent" is not a claim about temporal ordering). Instead use TWO CONSTRAINTS lines: one with MODALITY=FORBID for the base prohibition, and one with MODALITY=UNLESS naming the exception condition as its object, both using an operator from the closed list above -- e.g. CONSTRAINTS [ (FORBID) subject PERFORM disclosure [id=c1] (UNLESS) disclosure POSSESSES consent [id=c2] ]. This is the ONLY correct way to express a conditional exception to a prohibition in CSTL.
+If the source text expresses a prohibition that has a named EXCEPTION ("X is prohibited without Y", "X is forbidden unless Y", "not allowed except with Y"), do NOT invent a RELATIONS operator that doesn't exist in the closed list above (e.g. there is no "PROHIBITS"), and do NOT misuse a temporal operator like BEFORE/AFTER/DURING to express the exception (those are Allen temporal relations between two time intervals, not a conditional-exception relation -- "without prior written consent" is not a claim about temporal ordering). Instead use TWO CONSTRAINTS lines: one with MODALITY=FORBID for the base prohibition, and one with MODALITY=UNLESS naming the exception condition as its object, both using an operator from the closed list above -- e.g. CONSTRAINTS [ (FORBID) subject PERFORM disclosure [id=c1] (UNLESS) disclosure SATISFIES consent [id=c2] ]. This is the ONLY correct way to express a conditional exception to a prohibition in CSTL.
+
+POSSESSES means literal possession or attribute/value ascription ONLY (an entity has a property or a value, e.g. (patient) POSSESSES (risk) or (renal_function) POSSESSES (value) [UNKNOWN=true]) -- it does NOT mean "an event has this argument" and it does NOT mean "a precondition is met". Two specific cases that are NOT POSSESSES: (1) when the SUBJECT of the relation is an EVENT (not a person/entity) and the OBJECT is that event's participant/theme/patient/duration (e.g. a signing event and the contract it is about, a "took medication" event and the medication/duration involved, a hiring event and the person hired) -- use INVOLVES instead, e.g. (signing) INVOLVES (contract) [id=rNNN, role=theme]; (2) when the relation expresses that some condition or authorization has been MET or OBTAINED (e.g. "has consent", "meets the requirement") rather than owning a thing -- use SATISFIES instead, e.g. (UNLESS) disclosure SATISFIES consent [id=cNNN]. If you are about to write POSSESSES and the subject is an event or the object is a condition being met, stop and use INVOLVES or SATISFIES instead.
 
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
 
@@ -332,6 +338,8 @@ Reading rules, important, do not default to the wrong one:
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
 - If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier OR a self-change/property the entity itself is undergoing (e.g. "early", "quickly", "accelerating", "worsening") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it, and do not phrase a self-change `manner=` as the entity acting on some other thing.
 - If an entity is PERFORMed as an event and that event in turn STATEs an object (a two-step chain: subject PERFORM event, event STATE content), and the event's own name/type suggests warning/cautioning rather than a neutral announcement, reconstruct it with "warn" (or an equivalent cautionary verb), not a flat neutral "state"/"say" -- preserve the urgency, don't flatten it to a bare declarative.
+- An INVOLVES relation means the subject (normally an event) has the object as its participant/theme/patient/duration -- reconstruct it as a normal verb phrase binding the event to that argument (e.g. "the parties sign the contract", "the patient took the antibiotics for a week"), never as "possesses"/"has" (INVOLVES is not possession).
+- A SATISFIES relation means the subject meets/fulfills the object as a condition or authorization -- reconstruct it as "has met/obtained/fulfilled <object>" or similar (e.g. "unless it has obtained prior written consent"), never as "possesses"/"has" in the literal-ownership sense.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 

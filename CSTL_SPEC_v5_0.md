@@ -339,12 +339,14 @@ Type hors de cette liste → **warning R5**. Le type inconnu est accepté avec w
 
 ## 10. Bloc RELATIONS — graphe sémantique
 
-**Total : 39 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
+**Total : 41 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
 ajouté le 2026-09-23, antonyme de `BELIEVES` — voir §16.4, code E703, pour
 pourquoi — + `EITHER_OR` ajouté le 2026-10-05, voir §10.3bis + `REACTS`
-ajouté le 2026-10-05, voir §10.3ter. Note : §21/§22 ci-dessous, écrits avant
-ces ajouts, couvrent encore les 36 opérateurs d'origine et n'incluent ni
-`DISBELIEVES`, ni `EITHER_OR`, ni `REACTS` en exemple).
+ajouté le 2026-10-05, voir §10.3ter + `INVOLVES`/`SATISFIES` ajoutés le
+2026-10-05, voir §10.3quater. Note : §21/§22 ci-dessous, écrits avant ces
+ajouts, couvrent encore les 36 opérateurs d'origine et n'incluent ni
+`DISBELIEVES`, ni `EITHER_OR`, ni `REACTS`, ni `INVOLVES`/`SATISFIES` en
+exemple).
 
 > **✅ STATUT D'IMPLÉMENTATION (mise à jour 2026-09-27)** — la divergence
 > spec/moteur découverte et documentée le 2026-09-23 (voir
@@ -481,6 +483,57 @@ encodeurs. Aucune vérification sémantique n'exploite encore `valence=`/
 `affect=` — pas de détection de contradiction affective, pas de propagation
 dans `ExecutionLab`. Câbler cette exploitation reste un travail séparé, non
 fait ici.
+
+### 10.3quater Split de POSSESSES : INVOLVES et SATISFIES (2 opérateurs, ajoutés 2026-10-05)
+
+| Opérateur | Sens | Symétrie | Remplace POSSESSES quand |
+|---|---|---|---|
+| `INVOLVES` | Rôle thématique événement→argument (patient/thème/durée/instrument) | Asymétrique | Le sujet grammatical est un événement et l'objet son argument, pas une possession |
+| `SATISFIES` | Satisfaction d'une précondition ou d'une autorisation | Asymétrique | L'objet est une condition remplie, pas un bien possédé |
+
+**Motif de l'ajout** : audit des 4 items de désaccord (2 contre 1) du
+calcul de kappa final à 3 juges externes (ChatGPT, Gemini, Mistral) sur le
+run de consolidation 18 items
+(`claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md` dans le projet). Un grep
+sur l'ensemble du corpus déjà généré a confirmé que `POSSESSES` — né lui-
+même d'un split de `MUTUAL` en §10.2 pour « possession ou containment »,
+un seul sens — avait réabsorbé au moins deux sens distincts en plus de son
+sens fondateur :
+
+1. **Ascription attribut/valeur** (sens fondateur, inchangé) :
+   `renal_function POSSESSES value [UNKNOWN=true, ...]` — voir
+   `PRINCIPES.md`, « le vide qui parle », seule capacité démontrée
+   empiriquement différenciant CSTL des formats natifs (JSON/MCP/A2A).
+2. **Rôle thématique événement→argument**, mesuré sur `medium_005`
+   (`(signing) POSSESSES (contract)`, reconstruit en « which entails an
+   agreement » — bancal), `medium_002` (`(took) POSSESSES
+   (antibiotics/week)`), `edge_004` (`(hiring) POSSESSES (Sophie)`),
+   `complex_001` (`(implementation) POSSESSES (measures)`). Un événement
+   ne « possède » pas son argument, il le porte.
+3. **Satisfaction de précondition**, mesuré sur `complex_004`
+   (`(disclosure) POSSESSES (consent)`, reconstruit en « it possesses
+   prior_written consent » — formulation ambiguë qui a directement
+   contribué au désaccord d'un juge sur trois sur cet item).
+
+**Usage attendu** :
+```
+(signing) INVOLVES (contract) [id=rNNN, role=theme]
+(UNLESS) disclosure SATISFIES consent [id=cNNN]
+```
+
+**Rétrocompatibilité** : même discipline que `MUTUAL` (§10.2). `POSSESSES`
+reste syntaxiquement accepté pour les usages 2 et 3 ci-dessus — rien ne
+casse sur le corpus déjà généré. La migration vers `INVOLVES`/`SATISFIES`
+est recommandée, pas forcée.
+
+**Portée honnête, même esprit que §10.3bis/§10.3ter** : cet ajout fait
+passer `INVOLVES` et `SATISFIES` la whitelist (E101) et les rend
+disponibles aux encodeurs/prompts qui référencent `OFFICIAL_OPERATORS`.
+AUCUNE détection automatique ne distingue un usage légitime de `POSSESSES`
+(ascription attribut/valeur) d'un usage qui aurait dû migrer vers
+`INVOLVES`/`SATISFIES` — pas de warning W60x câblé pour l'instant,
+contrairement à `MUTUAL` qui en émet un (W601) à chaque occurrence. Câbler
+cette détection reste un travail séparé, non fait ici.
 
 ### 10.4 Opérateurs épistémiques v5.0 (4 opérateurs)
 

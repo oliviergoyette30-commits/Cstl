@@ -49,6 +49,8 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
     // insertion sure.
     "EITHER_OR",
     "REACTS",
+    "INVOLVES",
+    "SATISFIES",
 ];
 
 /// `EITHER_OR` (2026-10-05) -- trouvaille du run restreint du pipeline kappa
@@ -126,6 +128,60 @@ pub const DISJUNCTION_OPERATOR: &str = "EITHER_OR";
 /// contradiction affective, pas de propagation dans ExecutionLab. Cable
 /// cette exploitation reste un travail separe, non fait ici.
 pub const AFFECTIVE_STANCE_OPERATOR: &str = "REACTS";
+
+/// `INVOLVES` (2026-10-05) -- trouvaille de l'audit des 4 items de
+/// desaccord du kappa final a 3 juges externes
+/// (claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md), confirmee par grep sur
+/// tout le corpus existant. `POSSESSES` etait utilise pour DEUX sens
+/// distincts : (a) ascription attribut/valeur, le sens fondateur documente
+/// dans PRINCIPES.md ("le vide qui parle" -- renal_function POSSESSES
+/// value [UNKNOWN=true, ...]), et (b) le role thematique d'un evenement
+/// envers son argument (patient/theme/duree), ex. mesure concretement :
+/// `(signing) POSSESSES (contract)` [medium_005], `(took) POSSESSES
+/// (antibiotics/week)` [medium_002], `(hiring) POSSESSES (Sophie)`
+/// [edge_004], `(implementation) POSSESSES (measures)` [complex_001]. Le
+/// sens (b) n'est pas de la possession -- un evenement de signature ne
+/// "possede" pas un contrat, il le porte comme argument -- et produit des
+/// reconstructions bancales ("which entails an agreement" pour
+/// medium_005) qui ont contribue aux desaccords de juges sur ce run.
+/// `POSSESSES` reste accepte pour l'usage (b) par retrocompatibilite
+/// (meme discipline que MUTUAL en son temps, §10.2 du spec) mais la
+/// migration recommandee est `INVOLVES`.
+///
+/// Usage attendu : `(event) INVOLVES (argument) [id=rNNN, role=theme|
+/// patient|duration|instrument]`. `role` est optionnel, suit le meme
+/// patron que `valence=`/`manner=` -- aucune validation supplementaire,
+/// `take_trailing_attrs` (parser.rs) l'accepte sans modification.
+///
+/// Honnetete sur la portee, meme pattern que EITHER_OR/REACTS ci-dessus :
+/// cet ajout fait passer INVOLVES la whitelist (E101). AUCUNE detection
+/// automatique ne distingue encore un usage (a) legitime de POSSESSES d'un
+/// usage (b) qui AURAIT DU etre INVOLVES -- rien ne force la migration,
+/// rien ne l'empeche. Cable cette detection reste un travail separe.
+pub const THEMATIC_ARGUMENT_OPERATOR: &str = "INVOLVES";
+
+/// `SATISFIES` (2026-10-05) -- meme audit que INVOLVES ci-dessus. Troisieme
+/// sens trouve sous `POSSESSES` : la satisfaction d'une precondition ou
+/// d'une autorisation, mesure concretement sur `complex_004` --
+/// `(disclosure) POSSESSES (consent)` reconstruit en "disclosure is
+/// forbidden unless **it possesses** prior_written consent", une
+/// formulation de surface ambigue (sujet grammatical de "possesses" peu
+/// clair) qui a directement contribue au desaccord d'un des trois juges
+/// sur cet item. "La divulgation possede le consentement" n'est pas une
+/// relation de possession -- c'est "la condition est remplie". `POSSESSES`
+/// reste accepte pour cet usage par retrocompatibilite ; migration
+/// recommandee vers `SATISFIES`.
+///
+/// Usage attendu : `(subject) SATISFIES (condition) [id=rNNN]`, typiquement
+/// a l'interieur d'une clause `(UNLESS)` ou `(IF)` de CONSTRAINTS -- ex.
+/// `(UNLESS) disclosure SATISFIES consent [id=c2]` au lieu de `(UNLESS)
+/// disclosure POSSESSES consent [id=c2]`.
+///
+/// Honnetete sur la portee, meme pattern que ci-dessus : passe la
+/// whitelist (E101) uniquement. Aucune verification semantique cablee --
+/// pas de detection qu'une CONSTRAINTS (UNLESS)/(IF) AURAIT DU utiliser
+/// SATISFIES plutot que POSSESSES, pas de propagation dans ExecutionLab.
+pub const CONDITION_SATISFACTION_OPERATOR: &str = "SATISFIES";
 
 /// Antonyme officiel de `BELIEVES` (2026-09-23) -- trouvaille du test de
 /// comprehension AI-to-AI (`cstl_comprehension_test.py`, item edge_001,
@@ -1118,6 +1174,27 @@ mod tests {
         // sonnet, item medium_003) -- verifie qu'il ne genere aucun warning
         // E101, meme patron que test_either_or_passes_whitelist ci-dessus.
         let data = vec![rel("employees", "REACTS", "decision", 0.80, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_involves_passes_whitelist() {
+        // INVOLVES est officiel depuis le 2026-10-05 (audit des 4 items de
+        // desaccord du kappa final a 3 juges -- POSSESSES surcharge par le
+        // role thematique evenement/argument, ex. medium_005, medium_002,
+        // edge_004, complex_001) -- meme patron que REACTS ci-dessus.
+        let data = vec![rel("signing", "INVOLVES", "contract", 0.90, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_satisfies_passes_whitelist() {
+        // SATISFIES est officiel depuis le 2026-10-05, meme audit --
+        // POSSESSES surcharge par la satisfaction de precondition, ex.
+        // complex_004 ("disclosure POSSESSES consent" -> desaccord de juge).
+        let data = vec![rel("disclosure", "SATISFIES", "consent", 0.90, "n", Some("UNLESS"))];
         let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E101"));
     }

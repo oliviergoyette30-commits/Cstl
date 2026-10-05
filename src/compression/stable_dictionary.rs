@@ -60,7 +60,18 @@ use std::sync::OnceLock;
 /// (38 -> 39 operateurs), meme raisonnement -- `build_reference_messages`
 /// couvre le nouvel operateur dynamiquement, seul le numero de version
 /// change.
-pub const STABLE_DICTIONARY_VERSION: u8 = 3;
+///
+/// v3 -> v4 (2026-10-05) : ajout de `INVOLVES` et `SATISFIES` a
+/// `OFFICIAL_OPERATORS` (39 -> 41 operateurs) -- split de `POSSESSES`,
+/// trouvaille de l'audit des 4 items de desaccord du kappa final a 3
+/// juges externes (claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md) :
+/// `POSSESSES` encodait a la fois l'ascription attribut/valeur (sens
+/// fondateur, PRINCIPES.md) ET le role thematique evenement/argument
+/// (INVOLVES) ET la satisfaction de precondition (SATISFIES), meme piege
+/// que `MUTUAL` en son temps (§10.2 du spec). Meme raisonnement de
+/// version -- `build_reference_messages` couvre les deux nouveaux
+/// operateurs dynamiquement, seul le numero de version change.
+pub const STABLE_DICTIONARY_VERSION: u8 = 4;
 
 const MODE_PRETRAINED: u8 = 0;
 const MODE_RAW_FALLBACK: u8 = 1;
