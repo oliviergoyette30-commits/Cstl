@@ -4,9 +4,9 @@
     "original": "Alice does not believe Bob left early.",
     "protected_spans": [],
     "redacted_text": "Alice does not believe Bob left early.",
-    "cstl_redacted": "DEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE left_early AS event [id=e3]\nRELATIONS [\n(Bob) BEFORE (left_early) [id=r1]\n]\nCONSTRAINTS [\n(NOT) Alice BELIEVES Bob [id=c1]\n]",
-    "reconstruction_redacted": "Alice does not believe Bob left early.",
-    "reconstruction": "Alice does not believe Bob left early.",
+    "cstl_redacted": "```\nDEFINE Alice AS agent [id=e1]\nDEFINE Bob AS agent [id=e2]\nDEFINE left AS event [id=e3, manner=early]\n\nRELATIONS [\n(Bob) PERFORM left [id=r1]\n]\n\nCONSTRAINTS [\n(NOT) Alice BELIEVES left [id=c1]\n]\n```",
+    "reconstruction_redacted": "Bob left early, and Alice did not believe it.",
+    "reconstruction": "Bob left early, and Alice did not believe it.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": []
   }
