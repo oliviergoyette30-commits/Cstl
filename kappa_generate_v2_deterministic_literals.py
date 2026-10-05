@@ -103,6 +103,19 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # "ne pas utiliser POSSESSES ici", donc cette fois l'instruction EST deja
 # dans le prompt -- ce test verifie qu'elle est suivie, pas qu'un angle
 # mort est comble).
+#
+# RETEST apres correctif de surgeneralisation (2026-10-05, post-9f47de2) --
+# le premier test a confirme INVOLVES/SATISFIES sur medium_002/medium_005/
+# complex_004 (2 modeles), mais sur edge_004 haiku a surgeneralise
+# l'instruction et evite POSSESSES meme pour l'ascription de qualite
+# legitime ((hiring) POSSESSES (controversial) -> remplace par RESEMBLES,
+# pire semantiquement). Le prompt a ete reecrit pour dire explicitement
+# que POSSESSES reste correct pour possession/qualite, avec le cas
+# (hiring) POSSESSES (controversial) donne comme exemple correct en toutes
+# lettres. Memes 5 items relances sur les deux modeles pour confirmer (a)
+# qu'edge_004 garde POSSESSES pour la qualite sur haiku cette fois, et (b)
+# qu'aucun des 3 items deja corriges (medium_002/medium_005/complex_004)
+# n'a regresse avec la reformulation.
 RUN_SUBSET = {
     "medium_002", "medium_005", "complex_001", "complex_004", "edge_004",
 }
@@ -323,7 +336,7 @@ If the source text expresses an EMOTIONAL/AFFECTIVE stance of a subject toward a
 
 If the source text expresses a prohibition that has a named EXCEPTION ("X is prohibited without Y", "X is forbidden unless Y", "not allowed except with Y"), do NOT invent a RELATIONS operator that doesn't exist in the closed list above (e.g. there is no "PROHIBITS"), and do NOT misuse a temporal operator like BEFORE/AFTER/DURING to express the exception (those are Allen temporal relations between two time intervals, not a conditional-exception relation -- "without prior written consent" is not a claim about temporal ordering). Instead use TWO CONSTRAINTS lines: one with MODALITY=FORBID for the base prohibition, and one with MODALITY=UNLESS naming the exception condition as its object, both using an operator from the closed list above -- e.g. CONSTRAINTS [ (FORBID) subject PERFORM disclosure [id=c1] (UNLESS) disclosure SATISFIES consent [id=c2] ]. This is the ONLY correct way to express a conditional exception to a prohibition in CSTL.
 
-POSSESSES means literal possession or attribute/value ascription ONLY (an entity has a property or a value, e.g. (patient) POSSESSES (risk) or (renal_function) POSSESSES (value) [UNKNOWN=true]) -- it does NOT mean "an event has this argument" and it does NOT mean "a precondition is met". Two specific cases that are NOT POSSESSES: (1) when the SUBJECT of the relation is an EVENT (not a person/entity) and the OBJECT is that event's participant/theme/patient/duration (e.g. a signing event and the contract it is about, a "took medication" event and the medication/duration involved, a hiring event and the person hired) -- use INVOLVES instead, e.g. (signing) INVOLVES (contract) [id=rNNN, role=theme]; (2) when the relation expresses that some condition or authorization has been MET or OBTAINED (e.g. "has consent", "meets the requirement") rather than owning a thing -- use SATISFIES instead, e.g. (UNLESS) disclosure SATISFIES consent [id=cNNN]. If you are about to write POSSESSES and the subject is an event or the object is a condition being met, stop and use INVOLVES or SATISFIES instead.
+POSSESSES remains the CORRECT and NORMAL operator for literal possession and for attribute/quality ascription -- do not avoid it for this. Use it whenever an entity (person, document, event, anything) HAS a property, quality, or value directly, e.g. (patient) POSSESSES (risk), (renal_function) POSSESSES (value) [UNKNOWN=true], or (hiring) POSSESSES (controversial) -- that last one is correct even though "hiring" is an event, because "controversial" is a quality being ascribed to it, not a participant in it. Only TWO specific narrow cases should use a different operator instead of POSSESSES, and ONLY these two: (1) when the SUBJECT is an EVENT and the OBJECT is a separate PARTICIPANT in that event -- someone or something the event involves, acts upon, or is about, as opposed to a quality of the event itself (e.g. a signing event and the contract it is about, a "took medication" event and the medication/duration involved, a hiring event and the person who got hired) -- use INVOLVES instead, e.g. (signing) INVOLVES (contract) [id=rNNN, role=theme]; (2) when the relation expresses that some condition or authorization has been MET or OBTAINED (e.g. "has consent", "meets the requirement") rather than owning a thing -- use SATISFIES instead, e.g. (UNLESS) disclosure SATISFIES consent [id=cNNN]. Outside these two narrow cases, keep using POSSESSES exactly as before -- do not generalize away from it for ordinary possession or quality ascription.
 
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
 
