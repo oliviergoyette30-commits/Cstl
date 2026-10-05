@@ -252,7 +252,7 @@ OFFICIAL_OPERATORS_SNAPSHOT = [
     "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES",
     "COMPARES", "ENTAILS", "CONTRADICTS",
     "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
-    "BEFORE", "AFTER", "DURING", "EITHER_OR",
+    "BEFORE", "AFTER", "DURING", "EITHER_OR", "REACTS",
 ]
 # Domaine medical (src/domains.rs) -- accepte EN PLUS du noyau quand le
 # texte est clairement clinique (c'est le cas de complex_002). Verbes en
@@ -299,6 +299,8 @@ If the source text has an adverbial/manner/relative-temporal modifier on an even
 
 If the source text expresses an epistemic attitude (BELIEVES, KNOWS, DOUBTS, DISBELIEVES, ASSUMES) toward a PROPOSITION (something happening/being true), the object of that operator must be the entity/event that IS the proposition (e.g. `left`, already DEFINEd), never a bare agent name alone (e.g. `Bob`) -- "Alice does not believe Bob" (object=Bob, an agent) and "Alice does not believe [that] Bob left [early]" (object=left, a proposition/event) are different claims; only the second matches what these sentences normally mean. Pick the DEFINEd entity that represents the actual proposition as the object, not whichever agent happens to be nearby in the sentence.
 
+If the source text expresses an EMOTIONAL/AFFECTIVE stance of a subject toward an object or event that already exists (e.g. "upset about", "angry about", "pleased with", "worried about"), use REACTS -- do NOT use CATALYZE (that implies the subject's state causally PRODUCES the object, inverting the direction when the object already happened) and do NOT use BELIEVES/KNOWS (those are epistemic/cognitive, not affective). Pattern: (subject) REACTS (object) [id=rNNN, valence=negative|positive|neutral|mixed, affect=<short free-text label, e.g. upset/angry/pleased>]. valence is required; affect is optional but encouraged when the source text names the specific emotion.
+
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
 
 IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear -- never translate, paraphrase, explain, or guess what they might represent.
@@ -317,6 +319,7 @@ Reading rules, important, do not default to the wrong one:
 - A CONSTRAINTS line with MODALITY=REQUIRE (or MUST) means that object is REQUIRED/obligatory.
 - Two separate CONSTRAINTS/RELATIONS lines that are NOT linked by an EITHER_OR line are each independently required -- read them as "and" (conjunction), e.g. "requires both X and Y".
 - If (and only if) two objects are explicitly linked by an EITHER_OR relation line, read THOSE TWO as alternatives -- "requires X or Y" (disjunction), NOT "both X and Y". The EITHER_OR line overrides the default conjunctive reading for exactly the two objects it names.
+- A REACTS relation means the subject has an emotional/affective stance TOWARD the object -- the object is NOT caused or produced by the subject's state, it's the pre-existing target of the reaction. Reconstruct as "<subject> is/are <affect, or a generic word matching valence if affect is absent> about <object>" -- never phrase it as the subject producing, making, or causing the object.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
 - If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier (e.g. "early", "quickly") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it.
 

@@ -48,6 +48,7 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
     // avec une version anterieure de cette liste. Appender est la seule
     // insertion sure.
     "EITHER_OR",
+    "REACTS",
 ];
 
 /// `EITHER_OR` (2026-10-05) -- trouvaille du run restreint du pipeline kappa
@@ -81,6 +82,50 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
 /// fait pas apparaitre). Cable cette exploitation reste un travail separe,
 /// non fait ici.
 pub const DISJUNCTION_OPERATOR: &str = "EITHER_OR";
+
+/// `REACTS` (2026-10-05) -- trouvaille de la comparaison haiku/sonnet sur
+/// les 5 items d'echec du run kappa v2 (voir
+/// claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md dans le projet), item
+/// medium_003 : "Employees were upset about decision" (CEO announced
+/// layoffs). Avant cet ajout, OFFICIAL_OPERATORS n'avait AUCUN operateur
+/// de stance affective (un sujet oriente emotionnellement vers un objet,
+/// sans le produire ni le causer) -- les deux modeles testes ont improvise
+/// des contournements faux : haiku a hallucine un contenu epistemique
+/// absent de l'original ("employees believe the decision"), sonnet a
+/// invente `POSSESSES(Employees,upset) + CATALYZE(upset,decision)`, ce qui
+/// INVERSE la causalite (laisse croire que l'etat "upset" PRODUIT une
+/// nouvelle decision, alors que l'original dit l'inverse : les employes
+/// sont contraries PAR une decision deja prise). Deux modeles, deux erreurs
+/// differentes sur le meme trou structurel -- signal que ce n'est pas une
+/// faiblesse d'un modele en particulier.
+///
+/// Usage attendu : `(subject) REACTS (object) [id=rNNN, valence=negative|
+/// positive|neutral|mixed, affect=<libre>]`. `valence` porte l'information
+/// structurellement utile (polarite, exploitable en aval sans dependre du
+/// mot exact) ; `affect` est un descriptif libre optionnel pour la
+/// precision (ex: "upset", "angry", "delighted"), suivant exactement le
+/// meme patron que `manner=` (§13.2 du spec) -- aucune validation de ces
+/// attributs n'est faite ici, `take_trailing_attrs` (parser.rs) est deja
+/// generique et les accepte sans modification.
+///
+/// Choix delibere d'UN SEUL operateur generique plutot qu'une famille
+/// (UPSET/ANGRY/PLEASED/...) : contrairement a la famille epistemique (5
+/// verbes distincts, structurellement necessaires pour la detection de
+/// contradiction via `EPISTEMIC_ANTONYMS`), l'emotion est un ensemble
+/// ouvert sans valeur ajoutee mesuree pour le raisonnement deontique de
+/// CSTL au-dela de la polarite et de la cible -- exploser le catalogue en
+/// dizaines d'operateurs d'emotion violerait l'economie deja etablie par
+/// `value=`/`manner=`, et chaque entree supplementaire dans
+/// OFFICIAL_OPERATORS coute un octet d'encodage positionnel irreversible
+/// (voir le commentaire d'EITHER_OR ci-dessus).
+///
+/// Honnetete sur la portee, meme pattern que `EITHER_OR` et
+/// `EPISTEMIC_ANTONYMS` : cet ajout fait passer `REACTS` la whitelist
+/// (E101) et le rend disponible aux encodeurs/prompts. AUCUNE verification
+/// semantique n'exploite encore `valence=`/`affect=` -- pas de detection de
+/// contradiction affective, pas de propagation dans ExecutionLab. Cable
+/// cette exploitation reste un travail separe, non fait ici.
+pub const AFFECTIVE_STANCE_OPERATOR: &str = "REACTS";
 
 /// Antonyme officiel de `BELIEVES` (2026-09-23) -- trouvaille du test de
 /// comprehension AI-to-AI (`cstl_comprehension_test.py`, item edge_001,
@@ -1063,6 +1108,16 @@ mod tests {
             "n",
             None,
         )];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_reacts_passes_whitelist() {
+        // REACTS est officiel depuis le 2026-10-05 (comparaison haiku/
+        // sonnet, item medium_003) -- verifie qu'il ne genere aucun warning
+        // E101, meme patron que test_either_or_passes_whitelist ci-dessus.
+        let data = vec![rel("employees", "REACTS", "decision", 0.80, "n", None)];
         let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E101"));
     }

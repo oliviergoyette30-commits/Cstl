@@ -339,11 +339,12 @@ Type hors de cette liste → **warning R5**. Le type inconnu est accepté avec w
 
 ## 10. Bloc RELATIONS — graphe sémantique
 
-**Total : 38 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
+**Total : 39 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
 ajouté le 2026-09-23, antonyme de `BELIEVES` — voir §16.4, code E703, pour
-pourquoi — + `EITHER_OR` ajouté le 2026-10-05, voir §10.3bis. Note : §21/§22
-ci-dessous, écrits avant ces ajouts, couvrent encore les 36 opérateurs
-d'origine et n'incluent ni `DISBELIEVES` ni `EITHER_OR` en exemple).
+pourquoi — + `EITHER_OR` ajouté le 2026-10-05, voir §10.3bis + `REACTS`
+ajouté le 2026-10-05, voir §10.3ter. Note : §21/§22 ci-dessous, écrits avant
+ces ajouts, couvrent encore les 36 opérateurs d'origine et n'incluent ni
+`DISBELIEVES`, ni `EITHER_OR`, ni `REACTS` en exemple).
 
 > **✅ STATUT D'IMPLÉMENTATION (mise à jour 2026-09-27)** — la divergence
 > spec/moteur découverte et documentée le 2026-09-23 (voir
@@ -433,6 +434,53 @@ DÛ être reliée par `EITHER_OR`, et rien ne garantit qu'un encodeur
 l'utilise spontanément sans qu'on le lui demande explicitement dans le
 prompt. Câbler cette exploitation (détection + reconstruction correcte)
 reste un travail séparé, non fait ici.
+
+### 10.3ter Opérateur de stance affective (1 opérateur, ajouté 2026-10-05)
+
+| Opérateur | Sens | Symétrie | Attributs |
+|---|---|---|---|
+| `REACTS` | Le sujet est orienté émotionnellement vers l'objet, sans le produire ni le causer | Asymétrique | `valence=negative\|positive\|neutral\|mixed` (requis en pratique), `affect=<libre>` (optionnel) |
+
+**Motif de l'ajout** : trouvaille de la comparaison `haiku-4-5`/`sonnet-4-5`
+sur les 5 items d'échec du run kappa v2 (voir
+`claude/KAPPA_V2_18ITEMS_FINDINGS_2026-10-05.md` dans le projet), item
+`medium_003` : "Employees were upset about decision" (CEO announced
+layoffs). Avant ce fix, `OFFICIAL_OPERATORS` n'avait aucun opérateur de
+stance affective. Les deux modèles testés ont improvisé des contournements
+faux et DIFFÉRENTS : `haiku` a halluciné un contenu épistémique absent de
+l'original ("employees believe the decision"), `sonnet` a produit
+`POSSESSES(Employees,upset) + CATALYZE(upset,decision)`, ce qui **inverse
+la causalité** — laisse croire que l'état "upset" produit une nouvelle
+décision, alors que l'original dit l'inverse (les employés sont contrariés
+PAR une décision déjà prise). Deux modèles, deux erreurs différentes sur le
+même trou structurel — signal que ce n'est pas une faiblesse d'un modèle en
+particulier mais un vrai trou de grammaire.
+
+**Usage attendu** : `(subject) REACTS (object) [id=rNNN, valence=negative,
+affect=upset]`. `valence` porte l'information structurellement utile
+(polarité, exploitable en aval sans dépendre du mot exact) ; `affect` est
+un descriptif libre optionnel pour la précision, suivant exactement le même
+patron que `manner=` (§13.2) — aucune nouvelle validation nécessaire,
+`take_trailing_attrs` (parser.rs) est déjà générique et les accepte sans
+modification.
+
+**Pourquoi un seul opérateur générique plutôt qu'une famille**
+(`UPSET`/`ANGRY`/`PLEASED`/...) : contrairement à la famille épistémique (5
+verbes distincts, structurellement nécessaires pour la détection de
+contradiction via `EPISTEMIC_ANTONYMS`, §16.4), l'émotion est un ensemble
+ouvert sans valeur ajoutée mesurée pour le raisonnement déontique de CSTL
+au-delà de la polarité et de la cible. Exploser le catalogue en dizaines
+d'opérateurs d'émotion violerait l'économie déjà établie par `value=`/
+`manner=`, et chaque entrée supplémentaire dans `OFFICIAL_OPERATORS` coûte
+un octet d'encodage positionnel irréversible (voir §10.3bis sur
+`EITHER_OR`).
+
+**Portée honnête, même esprit que `EITHER_OR`/`UNCERTAINTY`** : cet ajout
+fait passer `REACTS` la whitelist (E101) et le rend disponible aux
+encodeurs. Aucune vérification sémantique n'exploite encore `valence=`/
+`affect=` — pas de détection de contradiction affective, pas de propagation
+dans `ExecutionLab`. Câbler cette exploitation reste un travail séparé, non
+fait ici.
 
 ### 10.4 Opérateurs épistémiques v5.0 (4 opérateurs)
 

@@ -55,7 +55,12 @@ use std::sync::OnceLock;
 /// de ce numero de version -- seul le numero change, pour qu'un decodeur
 /// qui ne connaitrait que l'ancienne table detecte la divergence au lieu
 /// de decoder du bruit silencieusement.
-pub const STABLE_DICTIONARY_VERSION: u8 = 2;
+///
+/// v2 -> v3 (2026-10-05) : ajout de `REACTS` a `OFFICIAL_OPERATORS`
+/// (38 -> 39 operateurs), meme raisonnement -- `build_reference_messages`
+/// couvre le nouvel operateur dynamiquement, seul le numero de version
+/// change.
+pub const STABLE_DICTIONARY_VERSION: u8 = 3;
 
 const MODE_PRETRAINED: u8 = 0;
 const MODE_RAW_FALLBACK: u8 = 1;
