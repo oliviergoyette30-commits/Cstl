@@ -47,7 +47,15 @@ use std::sync::OnceLock;
 /// VALID_CONSTRAINT_MODALITIES, VALID_UNCERTAINTY_STATUSES) change un
 /// jour -- documente l'intention, pas encore applique a une verification
 /// automatique (v1, meme portee assumee que le reste de ce module).
-pub const STABLE_DICTIONARY_VERSION: u8 = 1;
+///
+/// v1 -> v2 (2026-10-05) : ajout de `EITHER_OR` a `OFFICIAL_OPERATORS`
+/// (37 -> 38 operateurs). `build_reference_messages` ci-dessous itere sur
+/// `OFFICIAL_OPERATORS` dynamiquement, donc le corpus d'entrainement
+/// couvre deja le nouvel operateur sans modification de ce fichier au-dela
+/// de ce numero de version -- seul le numero change, pour qu'un decodeur
+/// qui ne connaitrait que l'ancienne table detecte la divergence au lieu
+/// de decoder du bruit silencieusement.
+pub const STABLE_DICTIONARY_VERSION: u8 = 2;
 
 const MODE_PRETRAINED: u8 = 0;
 const MODE_RAW_FALLBACK: u8 = 1;

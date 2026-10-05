@@ -339,10 +339,11 @@ Type hors de cette liste → **warning R5**. Le type inconnu est accepté avec w
 
 ## 10. Bloc RELATIONS — graphe sémantique
 
-**Total : 37 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
+**Total : 38 opérateurs officiels** (21 core v4 + 15 v5.0 + `DISBELIEVES`
 ajouté le 2026-09-23, antonyme de `BELIEVES` — voir §16.4, code E703, pour
-pourquoi. Note : §21/§22 ci-dessous, écrits avant cet ajout, couvrent encore
-les 36 opérateurs d'origine et n'incluent pas d'exemple `DISBELIEVES`).
+pourquoi — + `EITHER_OR` ajouté le 2026-10-05, voir §10.3bis. Note : §21/§22
+ci-dessous, écrits avant ces ajouts, couvrent encore les 36 opérateurs
+d'origine et n'incluent ni `DISBELIEVES` ni `EITHER_OR` en exemple).
 
 > **✅ STATUT D'IMPLÉMENTATION (mise à jour 2026-09-27)** — la divergence
 > spec/moteur découverte et documentée le 2026-09-23 (voir
@@ -402,6 +403,36 @@ MUTUAL reste syntaxiquement accepté pour rétrocompatibilité.
 |---|---|---|---|
 | `ENTAILS` | A ⊨ B : A implique logiquement B | Asymétrique | Transitif — W603 si fermeture incomplète |
 | `CONTRADICTS` | A ⊥ B : incohérence mutuelle | Anti-symétrique | W602 si A⊥B et B⊥A tous deux déclarés |
+
+### 10.3bis Opérateur de disjonction (1 opérateur, ajouté 2026-10-05)
+
+| Opérateur | Sens | Symétrie | Propriété |
+|---|---|---|---|
+| `EITHER_OR` | A ⊕ B (inclusif ou exclusif selon contexte) : A et B sont des alternatives | Symétrique | Aucune vérification sémantique câblée pour l'instant (voir ci-dessous) |
+
+**Motif de l'ajout** : trouvaille du run restreint du pipeline kappa v2
+(`kappa_generate_v2_deterministic_literals.py`, item `complex_002`,
+2026-10-05) — `OFFICIAL_OPERATORS` n'avait aucun opérateur de disjonction
+avant ce fix. Un texte source "A requires X **or** Y" n'avait d'autre choix
+qu'une paire de relations `REQUIRES` parallèles, qu'un reconstructeur (ou
+tout lecteur) lit par défaut comme une **conjonction** ("requires both X
+and Y") — mesuré concrètement sur "ACE inhibitors or calcium channel
+blockers" reconstruit en "requires both ... and ...", une différence
+matérielle en contexte clinique (un des deux suffit vs. les deux obligent).
+
+**Usage attendu** : `(X) EITHER_OR (Y) [id=rNNN]`, une relation séparée qui
+déclare deux objets d'un même `REQUIRES` (ou autre opérateur) comme
+alternatives — même patron que `ENTAILS`/`CONTRADICTS` ci-dessus (relation
+logique entre deux propositions, pas entre deux relations entières).
+
+**Portée honnête, même esprit que `UNCERTAINTY` (§8)** : cet ajout fait
+passer `EITHER_OR` la whitelist (E101) et le rend disponible aux
+encodeurs. Aucune vérification sémantique n'exploite encore cette
+disjonction — rien ne détecte qu'une paire de relations parallèles AURAIT
+DÛ être reliée par `EITHER_OR`, et rien ne garantit qu'un encodeur
+l'utilise spontanément sans qu'on le lui demande explicitement dans le
+prompt. Câbler cette exploitation (détection + reconstruction correcte)
+reste un travail séparé, non fait ici.
 
 ### 10.4 Opérateurs épistémiques v5.0 (4 opérateurs)
 

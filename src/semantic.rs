@@ -39,7 +39,47 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
     "COMPARES", "ENTAILS", "CONTRADICTS",
     "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
     "BEFORE", "AFTER", "DURING",
+    // AJOUTE EN DERNIER, JAMAIS INSERE AU MILIEU : structural.rs encode cet
+    // operateur par SA POSITION dans ce tableau (un octet, voir
+    // `OFFICIAL_OPERATORS.iter().position(...)` / `.get(op_byte as usize)`
+    // dans compression/structural.rs) -- inserer au milieu decalerait tous
+    // les index suivants et casserait le decodage de tout payload compresse
+    // avec une version anterieure de cette liste. Appender est la seule
+    // insertion sure.
+    "EITHER_OR",
 ];
+
+/// `EITHER_OR` (2026-10-05) -- trouvaille du run restreint du pipeline kappa
+/// v2 (`kappa_generate_v2_deterministic_literals.py`, item complex_002,
+/// "Hypertension >160 mmHg requires ACE inhibitors OR calcium channel
+/// blockers"). Avant cet ajout, OFFICIAL_OPERATORS n'avait AUCUN operateur
+/// de disjonction pour RELATIONS -- un encodeur qui voit "A requires X or Y"
+/// n'avait d'autre choix que deux relations REQUIRES paralleles, que l'etape
+/// de reconstruction (et tout lecteur humain) lit par defaut comme une
+/// CONJONCTION ("requires both X and Y"). Mesure concretement : "ACE
+/// inhibitors or calcium channel blockers" (un des deux suffit) reconstruit
+/// en "requires both ACE inhibitors and calcium channel blockers" (les deux
+/// obligatoires) -- dans un contexte clinique, une instruction materiellement
+/// differente, pas cosmetique.
+///
+/// Usage attendu : `(objet_A) EITHER_OR (objet_B) [id=rNNN]`, une relation
+/// SEPAREE qui declare deux objets d'un meme REQUIRES (ou autre operateur)
+/// comme alternatives mutuellement satisfaisantes, suivant le meme patron
+/// que `ENTAILS`/`CONTRADICTS` (relation logique entre deux propositions,
+/// pas entre deux RELATIONS entieres -- voir §10.3 du spec).
+///
+/// Honnetete sur la portee, meme pattern que `UNCERTAINTY` (§8) et
+/// `EPISTEMIC_ANTONYMS` au-dessus : cet ajout fait passer `EITHER_OR` la
+/// whitelist (E101) et le rend disponible aux encodeurs/prompts qui
+/// referencent `OFFICIAL_OPERATORS`. AUCUNE verification semantique
+/// n'exploite encore cette disjonction -- rien ne detecte aujourd'hui qu'un
+/// payload avec deux REQUIRES paralleles AURAIT DU etre relie par
+/// `EITHER_OR`, et rien ne garantit qu'un encodeur l'utilise spontanement
+/// sans qu'on le lui demande explicitement dans le prompt (c'est exactement
+/// la lecon du meme run : un prompt qui ne mentionne pas un operateur ne le
+/// fait pas apparaitre). Cable cette exploitation reste un travail separe,
+/// non fait ici.
+pub const DISJUNCTION_OPERATOR: &str = "EITHER_OR";
 
 /// Antonyme officiel de `BELIEVES` (2026-09-23) -- trouvaille du test de
 /// comprehension AI-to-AI (`cstl_comprehension_test.py`, item edge_001,
@@ -1005,6 +1045,23 @@ mod tests {
         // il passait quand meme (E101 est un warning, jamais bloquant), mais
         // ce test verifie explicitement qu'il ne genere plus AUCUN warning.
         let data = vec![rel("alice", "DISBELIEVES", "bob_left_early", 0.80, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E101"));
+    }
+
+    #[test]
+    fn test_either_or_passes_whitelist() {
+        // EITHER_OR est officiel depuis le 2026-10-05 (trouvaille run kappa
+        // v2, item complex_002) -- verifie qu'il ne genere aucun warning
+        // E101, meme patron que test_disbelieves_passes_whitelist ci-dessus.
+        let data = vec![rel(
+            "ace_inhibitors",
+            "EITHER_OR",
+            "calcium_channel_blockers",
+            0.80,
+            "n",
+            None,
+        )];
         let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E101"));
     }
