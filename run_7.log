@@ -1,0 +1,21 @@
+Modele: claude-haiku-4-5
+Corpus: 1 textes (sous-ensemble restreint: ['medium_002'])
+
+[1/1] medium_002 (medium, 0 litteral(aux) protege(s))
+    encode -> CSTL (litteraux masques)...
+    [LITERAL_HALLUCINATED @ CSTL] ['LIT0QZK'] -- token sans antecedent dans protected_spans
+    reconstruct <- CSTL (a l'aveugle)...
+    [LITERAL_HALLUCINATED @ reconstruction] ['LIT0QZK'] -- token sans antecedent dans protected_spans
+    reconstruction (litteraux restaures): The patient took antibiotics for LIT0QZK weeks before achieving recovery....
+
+============================================================
+Litteraux proteges au total: 0
+Perdus a l'etape CSTL: 0
+Perdus a l'etape reconstruction: 0
+Tokens LITnQZK HALLUCINES (sans antecedent, verif #3): 2 (CSTL: 1, reconstruction: 1)
+  -> items affectes: ['medium_002']
+============================================================
+Audit complet: kappa_v2_pipeline_results.json
+Prompt a coller dans les 3 chatbots: judge_prompt_v2.txt
+Rappel: edge_001 n'a AUCUN litteral protege -- si le desaccord y persiste,
+c'est un vrai signal sur la negation epistemique, pas corrige par ce script.

@@ -1,0 +1,20 @@
+Modele: claude-haiku-4-5
+Corpus: 1 textes (sous-ensemble restreint: ['medium_002'])
+
+[1/1] medium_002 (medium, 0 litteral(aux) protege(s))
+    encode -> CSTL (litteraux masques)...
+    [retry 1/3] Request timed out or interrupted. This could be due to a network timeout, dropped connection, or request cancellation. See https://docs.anthropic.com/en/api/errors#long-requests for more details.
+    [attente 5s avant nouvelle tentative]
+    reconstruct <- CSTL (a l'aveugle)...
+    reconstruction (litteraux restaures): The patient was prescribed antibiotics, took the antibiotics over a week, and th...
+
+============================================================
+Litteraux proteges au total: 0
+Perdus a l'etape CSTL: 0
+Perdus a l'etape reconstruction: 0
+Tokens LITnQZK HALLUCINES (sans antecedent, verif #3): 0 (CSTL: 0, reconstruction: 0)
+============================================================
+Audit complet: kappa_v2_pipeline_results.json
+Prompt a coller dans les 3 chatbots: judge_prompt_v2.txt
+Rappel: edge_001 n'a AUCUN litteral protege -- si le desaccord y persiste,
+c'est un vrai signal sur la negation epistemique, pas corrige par ce script.

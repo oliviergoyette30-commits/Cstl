@@ -72,17 +72,13 @@
     "original": "Patient prescribed antibiotics, took for week to recover.",
     "protected_spans": [],
     "redacted_text": "Patient prescribed antibiotics, took for week to recover.",
-    "cstl_redacted": "DEFINE Patient AS entity [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE prescription AS event [id=e3]\nDEFINE administration AS event [id=e4]\nDEFINE recovery AS event [id=e5]\nDEFINE week AS duration [id=e6, value=LIT0QZK]\n\nRELATIONS [\n(Patient) PRESCRIBE antibiotics [id=r1]\n(Patient) ADMINISTER antibiotics [id=r2, manner=for_week]\n(administration) BEFORE recovery [id=r3]\n]",
-    "reconstruction_redacted": "The patient was prescribed antibiotics, administered them for LIT0QZK week, and then recovered.",
-    "reconstruction": "The patient was prescribed antibiotics, administered them for LIT0QZK week, and then recovered.",
+    "cstl_redacted": "DEFINE patient AS entity [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE prescription AS event [id=e3]\nDEFINE intake AS event [id=e4, manner=week]\nDEFINE recovery AS event [id=e5]\n\nRELATIONS [\n(patient) PRESCRIBE antibiotics [id=r1]\n(patient) PERFORM intake [id=r2]\n(intake) INVOLVES antibiotics [id=r3, role=theme]\n(intake) BEFORE recovery [id=r4]\n]",
+    "reconstruction_redacted": "The patient was prescribed antibiotics, took the antibiotics over a week, and this intake occurred before recovery.",
+    "reconstruction": "The patient was prescribed antibiotics, took the antibiotics over a week, and this intake occurred before recovery.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": [],
-    "literal_hallucinated_at_cstl": [
-      "LIT0QZK"
-    ],
-    "literal_hallucinated_at_reconstruction": [
-      "LIT0QZK"
-    ]
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "medium_003": {
     "diff": "medium",
