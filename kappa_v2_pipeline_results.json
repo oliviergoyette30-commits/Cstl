@@ -72,11 +72,13 @@
     "original": "Patient prescribed antibiotics, took for week to recover.",
     "protected_spans": [],
     "redacted_text": "Patient prescribed antibiotics, took for week to recover.",
-    "cstl_redacted": "```cstl\nDEFINE patient AS agent [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE prescribing AS event [id=e3]\nDEFINE took AS event [id=e4]\nDEFINE week AS duration [id=e5]\nDEFINE recover AS event [id=e6]\n\nRELATIONS [\n  (patient) PRESCRIBE antibiotics [id=r1]\n  (patient) PERFORM took [id=r2]\n  (took) INVOLVES antibiotics [id=r3, role=theme]\n  (took) INVOLVES week [id=r4, role=duration]\n  (patient) INTENT recover [id=r5]\n]\n```",
-    "reconstruction_redacted": "The patient was prescribed antibiotics and took the antibiotics for a week in order to recover.",
-    "reconstruction": "The patient was prescribed antibiotics and took the antibiotics for a week in order to recover.",
+    "cstl_redacted": "DEFINE patient AS entity [id=e1]\nDEFINE antibiotics AS medication [id=e2]\nDEFINE prescription AS event [id=e3]\nDEFINE recovery AS event [id=e4]\nDEFINE week AS duration [id=e5, value=7days]\nRELATIONS [\n(patient) PRESCRIBE antibiotics [id=r1]\n(patient) ADMINISTER antibiotics [id=r2, duration=week]\n(antibiotics) CATALYZE recovery [id=r3]\n]",
+    "reconstruction_redacted": "The patient was prescribed antibiotics, administered them over a week, and the antibiotics catalyzed the patient's recovery.",
+    "reconstruction": "The patient was prescribed antibiotics, administered them over a week, and the antibiotics catalyzed the patient's recovery.",
     "literal_lost_at_cstl": [],
-    "literal_lost_at_reconstruction": []
+    "literal_lost_at_reconstruction": [],
+    "literal_hallucinated_at_cstl": [],
+    "literal_hallucinated_at_reconstruction": []
   },
   "medium_003": {
     "diff": "medium",
