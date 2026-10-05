@@ -152,8 +152,17 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # retestee depuis faute de RUN_SUBSET repassant par edge_002.
 # Instruction rajoutee ci-dessus. RUN_SUBSET restreint a edge_002 seul
 # pour verifier le fix avant de relancer les 18 items au complet.
+#
+# FIX CONFIRME (commit fbc3091) : edge_002 ressort propre --
+# RELATIONS[(students) PERFORM passed_exam] + CONSTRAINTS[(NOT) Marie
+# PERFORM passed_exam], reconstruction "All the students except Marie
+# passed the exam." Relance des 18 items au complet, meme run que
+# fb1621f mais avec l'instruction EXCEPT desormais presente.
 RUN_SUBSET = {
-    "edge_002",
+    "easy_001", "easy_002", "easy_003", "easy_004", "easy_005",
+    "medium_001", "medium_002", "medium_003", "medium_004", "medium_005",
+    "complex_001", "complex_003", "complex_004", "complex_005",
+    "edge_002", "edge_003", "edge_004", "edge_005",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
