@@ -41,7 +41,7 @@ TEXT B: The patient was prescribed antibiotics and took them for a week to recov
 
 [medium_003]
 TEXT A: CEO announced layoffs. Employees were upset about decision.
-TEXT B: The CEO announced layoffs, and the employees are upset about the layoffs.
+TEXT B: The CEO announced layoffs, and the employees were upset about the decision.
 
 [medium_004]
 TEXT A: Climate change accelerating. Scientists warn of consequences.
@@ -49,7 +49,7 @@ TEXT B: Scientists are warning about the consequences of accelerating climate ch
 
 [medium_005]
 TEXT A: Contract signed by parties, confirming agreement on terms.
-TEXT B: The parties sign the contract, agreeing to the terms.
+TEXT B: The parties signed the contract, which entailed agreement to the terms.
 
 [complex_001]
 TEXT A: Article 42 GDPR: data controllers must implement measures.
@@ -57,7 +57,7 @@ TEXT B: Article 42 GDPR states that data controllers are required to implement m
 
 [complex_003]
 TEXT A: Algorithm uses Bayesian optimization Thompson sampling.
-TEXT B: The algorithm accesses Bayesian optimization Thompson sampling.
+TEXT B: The algorithm uses Bayesian optimization Thompson sampling.
 
 [complex_004]
 TEXT A: NDA prohibits disclosure without prior written consent.
@@ -73,7 +73,7 @@ TEXT B: All students except Marie passed the exam.
 
 [edge_003]
 TEXT A: Neither manager nor employee knew about change.
-TEXT B: Neither the manager nor the employee knows about the change.
+TEXT B: The manager and the employee did not know about the change.
 
 [edge_004]
 TEXT A: Hiring Sophie controversial, argued not qualified.

@@ -212,8 +212,25 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # generale plutot que par liste fermee, pour eviter de devoir reperer un
 # nouvel operateur stative a chaque fois qu'un juge le detecte. RUN_SUBSET
 # restreint a medium_003 seul pour verifier avant d'etendre.
+# CONFIRME (commit 9ff7aed) : medium_003 corrige. Kappa #3 soumis aux 3
+# juges (2026-10-06) -- 16/18 unanimes PRESERVED desormais (medium_003,
+# medium_005, complex_003, edge_003 TOUS unanimes). Fleiss kappa=0.2941,
+# AC1=0.9172, PABAK=0.8519 (voir compute_kappa_metrics.py). Deux
+# desaccords restants :
+# - edge_004 (NP, NP, P) : toujours le cas connu, volontairement non
+#   attaque (ambiguite de l'original, pas un defaut du pipeline).
+# - complex_005 (P, NP, P), NOUVEAU : le defaut cosmetique deja note
+#   ("membrane_0.1 microns", concatenation underscore d'un label
+#   qualitatif et d'une valeur numerique dans un seul attribut value=)
+#   fait maintenant trebucher un juge sur 3. Cause reelle trouvee dans le
+#   cstl_redacted : DEFINE stage2 AS stage [id=e3, value=membrane_LIT0QZK]
+#   -- defaut d'ENCODAGE (value= ne doit porter que la quantite pure), pas
+#   seulement de reconstruction. Correctif : value= ne doit jamais
+#   concatener un label qualitatif et une quantite ; nouvel attribut
+#   kind= introduit pour le label, value= reste pur. RUN_SUBSET restreint
+#   a complex_005 seul pour verifier.
 RUN_SUBSET = {
-    "medium_003",
+    "complex_005",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -444,6 +461,8 @@ This EITHER_OR default also applies when MULTIPLE SUBJECTS jointly participate i
 
 If an entity carries a concrete value from the source text (a number, a threshold, a quantity, a named amount, a date), do NOT leave it implicit in just the entity's name or type. Attach it explicitly with a `value=` attribute on its DEFINE line, using the EXACT text that already appears in the source text you were given -- e.g. if the source text literally contains the characters "LIT2QZK" (an opaque placeholder already present in the input), write value=LIT2QZK; if the source text says "a week", write value=a_week or value=week (plain words from the input, with spaces replaced by underscores if needed), never a LITnQZK-shaped token. A DEFINE for an entity that has a concrete value in the source text but no `value=` attribute is INCOMPLETE -- this is a known failure mode, do not repeat it.
 
+If an entity has BOTH a qualitative/descriptive label (a material, a kind, a name -- e.g. "membrane", "carbon") AND a separate numeric value/quantity (e.g. "0.1 microns") attached to it in the source text, do NOT concatenate the two into a single compound `value=` attribute (e.g. do NOT write value=membrane_0.1microns or value=membrane_LIT0QZK) -- this produces an unreadable, ungrammatical compound when the reconstruction restores it. Instead, keep them as two separate attributes on the same DEFINE line: the qualitative label goes in a `kind=` attribute, and `value=` holds ONLY the pure numeric value/quantity on its own, e.g. DEFINE stage2 AS stage [id=e3, kind=membrane, value=LIT0QZK]. `value=` must never contain an underscore-joined compound of a label and a quantity -- if you find yourself about to write that, split it into `kind=` + `value=` instead.
+
 CRITICAL: tokens of the exact shape LITnQZK (a number between LIT and QZK, e.g. LIT0QZK, LIT1QZK) are NOT a generic notation for "any numeric or quantity value" -- they are opaque placeholders that the surrounding pipeline inserts into the input text BEFORE you see it, standing in for a specific literal span that was masked out. You must NEVER invent, write, or use a LITnQZK-shaped token yourself unless that EXACT token already appears, character-for-character, in the source text you were given. If the source text you received contains no token of the shape LITnQZK anywhere in it, do not write one anywhere in your output -- not as a value=, not anywhere -- even if the text mentions a quantity, a duration, or a number in plain words (e.g. "a week", "three days", "100 degrees"). Plain-word quantities like these get a plain-word value= (value=a_week), never a fabricated LITnQZK token. Writing a LITnQZK-shaped token that was not already in the input is a serious error -- it fabricates a reference to a masked literal that was never masked, and it will show up unresolved and meaningless in the final output.
 
 If the source text has an adverbial/manner/relative-temporal modifier on an event or relation ("early", "late", "quickly", "reluctantly", etc.), do NOT force it into a BEFORE/AFTER/DURING relation (those are Allen temporal relations between two intervals -- they require a real second term to compare against, and using them for a bare modifier like "early" with nothing to compare to is a type error that silently drops the modifier's actual meaning). Instead attach it as a `manner=` attribute directly on the entity or relation it modifies, e.g. DEFINE left AS event [id=e3, manner=early].
@@ -487,6 +506,7 @@ Reading rules, important, do not default to the wrong one:
 - A MODALITY=UNLESS line paired with a MODALITY=FORBID (or MUST_NOT) line on the same subject/action means the prohibition does NOT apply when the UNLESS line's condition holds -- reconstruct as "X is forbidden/prohibited unless Y" or "X is not allowed without Y", never as a temporal claim ("before Y") and never drop the exception entirely.
 - A MODALITY=NOT CONSTRAINTS line naming one specific individual, paired with a RELATIONS line stating the same event/property for a whole group that individual is part of, means "every member of the group except that individual" -- reconstruct as "every/all <group> except <individual> <verb-phrase>" (or equivalent), keeping BOTH the general claim about the group AND the named exception. Do not phrase the excepted individual as opposing, conflicting with, or otherwise relating to the group in any other way than being the one exception -- the source relation is purely "excluded from this one fact", nothing more.
 - If a DEFINE line has a `value=` attribute, that is concrete data from the source text (a number, threshold, quantity, date) and MUST appear in your reconstruction wherever that entity is mentioned -- do not drop it, do not reconstruct the entity as if it were a bare unqualified concept.
+- If a DEFINE line has BOTH a `kind=` attribute AND a `value=` attribute, phrase them as a natural noun phrase with the value attached to the kind (e.g. kind=membrane, value=0.1microns -> "a membrane stage of 0.1 microns" or "a 0.1-micron membrane stage") -- never glue the two raw attribute strings together with an underscore or write them as a single compound word (never "membrane_0.1microns stage").
 - If a DEFINE or RELATIONS line has a `manner=` attribute, that is an adverbial/manner/relative-temporal modifier OR a self-change/property the entity itself is undergoing (e.g. "early", "quickly", "accelerating", "worsening") and MUST appear in your reconstruction attached to the entity/event it modifies -- do not drop it, and do not phrase a self-change `manner=` as the entity acting on some other thing.
 - If an entity is PERFORMed as an event and that event in turn STATEs an object (a two-step chain: subject PERFORM event, event STATE content), and the event's own name/type suggests warning/cautioning rather than a neutral announcement, reconstruct it with "warn" (or an equivalent cautionary verb), not a flat neutral "state"/"say" -- preserve the urgency, don't flatten it to a bare declarative.
 - An INVOLVES relation means the subject (normally an event) has the object as its participant/theme/patient/duration -- reconstruct it as a normal verb phrase binding the event to that argument (e.g. "the parties sign the contract", "the patient took the antibiotics for a week"), never as "possesses"/"has" (INVOLVES is not possession).
