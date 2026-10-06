@@ -1,0 +1,92 @@
+{
+  "easy_001": {
+    "diff": "easy",
+    "original": "Alice knows Bob. Bob is in Paris.",
+    "paraphrase": "Bob is located in Paris. Alice is acquainted with Bob."
+  },
+  "easy_002": {
+    "diff": "easy",
+    "original": "The capital of France is Paris.",
+    "paraphrase": "Paris is the capital city of France."
+  },
+  "easy_003": {
+    "diff": "easy",
+    "original": "Einstein wrote the theory of relativity.",
+    "paraphrase": "The theory of relativity was written by Einstein."
+  },
+  "easy_004": {
+    "diff": "easy",
+    "original": "Water boils at 100 degrees Celsius.",
+    "paraphrase": "At 100 degrees Celsius, water reaches its boiling point."
+  },
+  "easy_005": {
+    "diff": "easy",
+    "original": "Dogs are animals.",
+    "paraphrase": "Animals include dogs."
+  },
+  "medium_001": {
+    "diff": "medium",
+    "original": "Sophie arrived late to meeting because traffic was heavy. She apologized.",
+    "paraphrase": "Traffic congestion caused Sophie to show up tardy to the meeting, for which she expressed regret."
+  },
+  "medium_002": {
+    "diff": "medium",
+    "original": "Patient prescribed antibiotics, took for week to recover.",
+    "paraphrase": "A patient was given antibiotics and required a week of taking them in order to recover."
+  },
+  "medium_003": {
+    "diff": "medium",
+    "original": "CEO announced layoffs. Employees were upset about decision.",
+    "paraphrase": "The chief executive officer made an announcement regarding workforce reductions. The staff members expressed displeasure with the choice that was made."
+  },
+  "medium_004": {
+    "diff": "medium",
+    "original": "Climate change accelerating. Scientists warn of consequences.",
+    "paraphrase": "The pace of climate change is increasing. Researchers caution about the resulting effects."
+  },
+  "medium_005": {
+    "diff": "medium",
+    "original": "Contract signed by parties, confirming agreement on terms.",
+    "paraphrase": "Parties have affixed their signatures to a contract, thereby substantiating their mutual accord regarding the specified conditions."
+  },
+  "complex_001": {
+    "diff": "complex",
+    "original": "Article 42 GDPR: data controllers must implement measures.",
+    "paraphrase": "Pursuant to Article 42 of the GDPR, those responsible for processing data are required to put in place safeguards."
+  },
+  "complex_003": {
+    "diff": "complex",
+    "original": "Algorithm uses Bayesian optimization Thompson sampling.",
+    "paraphrase": "Thompson sampling is employed by the algorithm through Bayesian optimization."
+  },
+  "complex_004": {
+    "diff": "complex",
+    "original": "NDA prohibits disclosure without prior written consent.",
+    "paraphrase": "The NDA prevents sharing of information unless authorization in written form has been obtained beforehand."
+  },
+  "complex_005": {
+    "diff": "complex",
+    "original": "Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.",
+    "paraphrase": "A filtration system with three stages consisting of a 10-micron filter, a 0.1-micron membrane, and carbon filtration."
+  },
+  "edge_002": {
+    "diff": "edge",
+    "original": "Every student except Marie passed exam.",
+    "paraphrase": "All students other than Marie succeeded in passing the exam."
+  },
+  "edge_003": {
+    "diff": "edge",
+    "original": "Neither manager nor employee knew about change.",
+    "paraphrase": "The change was unknown to both the manager and the employee."
+  },
+  "edge_004": {
+    "diff": "edge",
+    "original": "Hiring Sophie controversial, argued not qualified.",
+    "paraphrase": "The hiring of Sophie sparked disagreement, with critics claiming she lacked the necessary qualifications."
+  },
+  "edge_005": {
+    "diff": "edge",
+    "original": "If Alice and Bob leave, project fails.",
+    "paraphrase": "The project will fail if both Alice and Bob depart."
+  }
+}
