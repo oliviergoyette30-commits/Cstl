@@ -167,8 +167,25 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 # reseau/API non remontee comme exception par call_claude). RUN_SUBSET
 # restreint a cet item seul pour regenerer une reconstruction complete
 # avant d'assembler le lot final pour les juges.
+# COUCHE RECONSTRUCTION EN PROSE (2026-10-06) -- le recalcul final du kappa
+# (3 juges, voir judge_prompt_v2.txt livre) a montre que les desaccords
+# residuels ne portent presque plus sur la structure CSTL : medium_005
+# ("signed"->"sign") et edge_003 ("knew"->"knows") sont des pertes de temps
+# grammatical -- CSTL n'avait jamais ete instruit d'utiliser l'attribut
+# tau= (deja present dans la grammaire reelle, src/semantic.rs, jamais
+# enseigne dans ce script) ; complex_003 ("uses"->"accesses") vient du
+# choix d'operateur ARR.ACCESS, dont la reconstruction par defaut colle au
+# nom technique de l'operateur plutot qu'a un verbe neutre. Deux
+# correctifs ajoutes : (1) encode_to_cstl enseigne tau=past|present|future
+# sur l'evenement quand le temps est marque dans le texte source,
+# reconstruct_from_cstl le lit et accorde le verbe en consequence ; (2)
+# reconstruct_from_cstl par defaut ARR.ACCESS vers "uses" sauf ressource
+# manifestement restreinte. RUN_SUBSET restreint aux 3 items cibles pour
+# verifier avant d'etendre a un run complet.
 RUN_SUBSET = {
-    "complex_005",
+    "medium_005",
+    "complex_003",
+    "edge_003",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -417,6 +434,8 @@ If the source text makes an AFFIRMATIVE universal claim with a single named exce
 
 POSSESSES remains the CORRECT and NORMAL operator for literal possession and for attribute/quality ascription -- do not avoid it for this. Use it whenever an entity (person, document, event, anything) HAS a property, quality, or value directly, e.g. (patient) POSSESSES (risk), (renal_function) POSSESSES (value) [UNKNOWN=true], or (hiring) POSSESSES (controversial) -- that last one is correct even though "hiring" is an event, because "controversial" is a quality being ascribed to it, not a participant in it. Only TWO specific narrow cases should use a different operator instead of POSSESSES, and ONLY these two: (1) when the SUBJECT is an EVENT and the OBJECT is a separate PARTICIPANT in that event -- someone or something the event involves, acts upon, or is about, as opposed to a quality of the event itself (e.g. a signing event and the contract it is about, a "took medication" event and the medication/duration involved, a hiring event and the person who got hired) -- use INVOLVES instead, e.g. (signing) INVOLVES (contract) [id=rNNN, role=theme]; (2) when the relation expresses that some condition or authorization has been MET or OBTAINED (e.g. "has consent", "meets the requirement") rather than owning a thing -- use SATISFIES instead, e.g. (UNLESS) disclosure SATISFIES consent [id=cNNN]. Outside these two narrow cases, keep using POSSESSES exactly as before -- do not generalize away from it for ordinary possession or quality ascription.
 
+If the source text's main event/action has a grammatical tense that is clearly marked by the verb form (e.g. "signed" = past, "signs"/"is signing" = present, "will sign" = future), attach it explicitly as a `tau=` attribute (an existing CSTL attribute, not a new one) on that event's DEFINE line, using one of exactly three values: tau=past, tau=present, or tau=future, e.g. DEFINE signing AS event [id=e2, tau=past]. CSTL itself carries no tense information unless you attach it this way -- omitting `tau=` when the source text clearly marks a tense is a loss of information, the same class of omission as leaving out a `value=` or `manner=` that the source text clearly provides. If the source text is a tenseless general statement (a definition, a standing rule, "dogs are animals") with no single marked event tense, omit `tau=` entirely -- do not force a tense onto a timeless claim.
+
 Do not add prose, do not add a hashbang, do not add META. Output ONLY the DEFINE/RELATIONS/CONSTRAINTS blocks that are actually needed (omit a block entirely if the text needs none of it).
 
 IMPORTANT: the text below may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS for values you cannot see. Copy them EXACTLY, character-for-character, wherever they appear -- never translate, paraphrase, explain, or guess what they might represent.
@@ -444,6 +463,8 @@ Reading rules, important, do not default to the wrong one:
 - If an entity is PERFORMed as an event and that event in turn STATEs an object (a two-step chain: subject PERFORM event, event STATE content), and the event's own name/type suggests warning/cautioning rather than a neutral announcement, reconstruct it with "warn" (or an equivalent cautionary verb), not a flat neutral "state"/"say" -- preserve the urgency, don't flatten it to a bare declarative.
 - An INVOLVES relation means the subject (normally an event) has the object as its participant/theme/patient/duration -- reconstruct it as a normal verb phrase binding the event to that argument (e.g. "the parties sign the contract", "the patient took the antibiotics for a week"), never as "possesses"/"has" (INVOLVES is not possession).
 - A SATISFIES relation means the subject meets/fulfills the object as a condition or authorization -- reconstruct it as "has met/obtained/fulfilled <object>" or similar (e.g. "unless it has obtained prior written consent"), never as "possesses"/"has" in the literal-ownership sense.
+- If an event's DEFINE line carries a `tau=` attribute, render every verb phrase built on that event in the matching grammatical tense: tau=past -> simple past ("signed", "knew"), tau=present -> simple present ("signs", "knows"), tau=future -> "will" + base form ("will sign", "will know"). If an event has NO `tau=` attribute, default to simple present, exactly as before -- do not guess a tense that isn't marked.
+- An ARR.ACCESS relation, by itself, does not necessarily mean "accesses" in the narrow technical sense (reaching a restricted system, file, or permission) -- it is also used for an agent employing/using a tool, method, or resource more generally. Unless the object is clearly a restricted/gated resource (a system, an account, a permission), reconstruct ARR.ACCESS with the neutral verb "uses" rather than "accesses" -- "uses" is the more natural default reading for this relation.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 
