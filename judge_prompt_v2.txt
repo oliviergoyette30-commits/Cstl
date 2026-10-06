@@ -17,7 +17,7 @@ TEXT B: Alice knows Bob, and Bob is in Paris.
 
 [easy_002]
 TEXT A: The capital of France is Paris.
-TEXT B: Paris is the capital of France.
+TEXT B: France's capital is Paris.
 
 [easy_003]
 TEXT A: Einstein wrote the theory of relativity.
@@ -25,7 +25,7 @@ TEXT B: Einstein wrote the theory of relativity.
 
 [easy_004]
 TEXT A: Water boils at 100 degrees Celsius.
-TEXT B: Water boils at 100 degrees Celsius.
+TEXT B: Water boils at a temperature of 100 degrees Celsius.
 
 [easy_005]
 TEXT A: Dogs are animals.
@@ -37,15 +37,15 @@ TEXT B: Sophie arrived late to the meeting because of heavy traffic and apologiz
 
 [medium_002]
 TEXT A: Patient prescribed antibiotics, took for week to recover.
-TEXT B: The patient was prescribed antibiotics and took them for a week in order to recover.
+TEXT B: The patient was prescribed antibiotics and took them for a week to recover.
 
 [medium_003]
 TEXT A: CEO announced layoffs. Employees were upset about decision.
-TEXT B: The CEO announced layoffs, and employees are upset about the decision.
+TEXT B: The CEO announced layoffs, and the employees are upset about the layoffs.
 
 [medium_004]
 TEXT A: Climate change accelerating. Scientists warn of consequences.
-TEXT B: Scientists are warning of the consequences of accelerating climate change.
+TEXT B: Scientists are warning about the consequences of accelerating climate change.
 
 [medium_005]
 TEXT A: Contract signed by parties, confirming agreement on terms.
@@ -65,20 +65,20 @@ TEXT B: The NDA prohibits disclosure unless prior written consent has been obtai
 
 [complex_005]
 TEXT A: Three-stage filtration: 10 microns, membrane 0.1 microns, carbon.
-TEXT B: The filt
+TEXT B: The three-stage filtration process involves a 10 microns stage, followed by a membrane_0.1 microns stage, and then a carbon stage.
 
 [edge_002]
 TEXT A: Every student except Marie passed exam.
-TEXT B: All the students except Marie passed the exam.
+TEXT B: All students except Marie passed the exam.
 
 [edge_003]
 TEXT A: Neither manager nor employee knew about change.
-TEXT B: Every manager and every employee does not know about the change.
+TEXT B: Neither the manager nor the employee knows about the change.
 
 [edge_004]
 TEXT A: Hiring Sophie controversial, argued not qualified.
-TEXT B: Sophie's controversial hiring sparked an argument that she was not qualified.
+TEXT B: Sophie's controversial hiring argued she was not qualified.
 
 [edge_005]
 TEXT A: If Alice and Bob leave, project fails.
-TEXT B: If Alice and Bob leave, the project will fail.
+TEXT B: If Alice leaves and Bob leaves, the project fails.
