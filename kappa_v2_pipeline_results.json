@@ -182,9 +182,9 @@
       "0.1 microns"
     ],
     "redacted_text": "Three-stage filtration: LIT1QZK, membrane LIT0QZK, carbon.",
-    "cstl_redacted": "```cstl\nDEFINE filtration AS process [id=e1, value=Three-stage]\nDEFINE stage1 AS stage [id=e2, value=LIT1QZK]\nDEFINE stage2 AS stage [id=e3, value=membrane_LIT0QZK]\nDEFINE stage3 AS stage [id=e4, value=carbon]\n\nRELATIONS [\n  (filtration) INVOLVES stage1 [id=r1, role=component]\n  (filtration) INVOLVES stage2 [id=r2, role=component]\n  (filtration) INVOLVES stage3 [id=r3, role=component]\n  (stage1) BEFORE stage2 [id=r4]\n  (stage2) BEFORE stage3 [id=r5]\n]\n```",
-    "reconstruction_redacted": "The three-stage filtration process involves a LIT1QZK stage, followed by a membrane_LIT0QZK stage, and then a carbon stage.",
-    "reconstruction": "The three-stage filtration process involves a 10 microns stage, followed by a membrane_0.1 microns stage, and then a carbon stage.",
+    "cstl_redacted": "DEFINE stage1 AS stage [id=e1, value=LIT1QZK]\nDEFINE stage2 AS stage [id=e2, kind=membrane, value=LIT0QZK]\nDEFINE stage3 AS stage [id=e3, kind=carbon]\nDEFINE filtration AS process [id=e4]\nRELATIONS [\n(filtration) INVOLVES stage1 [id=r1, role=component]\n(filtration) INVOLVES stage2 [id=r2, role=component]\n(filtration) INVOLVES stage3 [id=r3, role=component]\n]",
+    "reconstruction_redacted": "The filtration process involves three stages: stage LIT1QZK, a membrane stage of LIT0QZK, and a carbon stage.",
+    "reconstruction": "The filtration process involves three stages: stage 10 microns, a membrane stage of 0.1 microns, and a carbon stage.",
     "literal_lost_at_cstl": [],
     "literal_lost_at_reconstruction": [],
     "literal_hallucinated_at_cstl": [],
