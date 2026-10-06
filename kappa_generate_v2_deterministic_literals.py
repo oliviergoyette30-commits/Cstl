@@ -229,8 +229,26 @@ RETRY_BACKOFF_SECONDS = 5  # ajoute 2026-10-05: run sur 18 items a crashe sur
 #   concatener un label qualitatif et une quantite ; nouvel attribut
 #   kind= introduit pour le label, value= reste pur. RUN_SUBSET restreint
 #   a complex_005 seul pour verifier.
+#
+# 2026-10-06 (round universel) : edge_004 reste le seul desaccord de kappa
+#   #3 non attaque -- ChatGPT+Gemini NOT_PRESERVED, Mistral PRESERVED.
+#   Cause reelle (pas un trou de grammaire, pas un trou de temps) : le
+#   payload CSTL est correct et honnete -- (argued) STATE not_qualified
+#   n'a AUCUNE ligne (X) PERFORM argued, parce que le texte source
+#   lui-meme ("argued not qualified", style telegraphique) ne dit jamais
+#   qui argue. Le bug est dans reconstruct_from_cstl : faute d'agent
+#   explicite, le modele a grammaticalement greffe "Sophie's controversial
+#   hiring" (empruntee a une AUTRE ligne RELATIONS) comme sujet de
+#   "argued" -- "Sophie's controversial hiring argued she was not
+#   qualified", un evenement qui "argue" n'a aucun sens. Correctif
+#   generalise (pas specifique a STATE ni a "argued") : une regle
+#   universelle ajoutee a reconstruct_from_cstl -- si aucune ligne
+#   PERFORM n'assigne d'agent a un evenement utilise comme sujet, ne JAMAIS
+#   inventer un sujet en empruntant une entite d'une autre relation ;
+#   rendre la phrase impersonnelle/passive ("it was argued that...").
+#   RUN_SUBSET restreint a edge_004 seul pour verifier.
 RUN_SUBSET = {
-    "complex_005",
+    "edge_004",
 }
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -513,6 +531,7 @@ Reading rules, important, do not default to the wrong one:
 - A SATISFIES relation means the subject meets/fulfills the object as a condition or authorization -- reconstruct it as "has met/obtained/fulfilled <object>" or similar (e.g. "unless it has obtained prior written consent"), never as "possesses"/"has" in the literal-ownership sense.
 - If an event's DEFINE line, OR the RELATIONS/CONSTRAINTS line itself (for a relation used directly between subject and object with no separate event entity -- stative/epistemic like KNOWS/BELIEVES/POSSESSES, or affective/reactive like REACTS), carries a `tau=` attribute, render that verb phrase in the matching grammatical tense: tau=past -> simple past ("signed", "knew", "was/were upset"), tau=present -> simple present ("signs", "knows", "is/are upset"), tau=future -> "will" + base form ("will sign", "will know", "will be upset"). Check BOTH places for `tau=` -- it is not always on the same line. If neither carries a `tau=` attribute, default to simple present, exactly as before -- do not guess a tense that isn't marked.
 - An ARR.ACCESS relation, by itself, does not necessarily mean "accesses" in the narrow technical sense (reaching a restricted system, file, or permission) -- it is also used for an agent employing/using a tool, method, or resource more generally. Unless the object is clearly a restricted/gated resource (a system, an account, a permission), reconstruct ARR.ACCESS with the neutral verb "uses" rather than "accesses" -- "uses" is the more natural default reading for this relation.
+- UNIVERSAL RULE for agentless events (not limited to any one verb): before writing any sentence where an event (a DEFINE'd entity of type event, or any entity acting as the subject of a RELATIONS/CONSTRAINTS line such as STATE) is the grammatical subject, check whether ANY relation line anywhere in the payload actually assigns that event an agent -- i.e. a line of the form (some_entity) PERFORM <that_event> [...], or an equivalent operator naming who performs/triggers/utters it. If NO such line exists anywhere in the payload, that event has NO agent in the source -- this is not missing data to patch over, it is the payload faithfully encoding that the source text itself never said who did it. In that case you MUST NOT invent a subject for it by grammatically borrowing an unrelated nearby entity from a DIFFERENT relation (e.g. do not write "X's hiring argued..." just because "hiring" and "X" appear elsewhere in the payload -- an event cannot itself be the one who argues, knows, or states something unless a PERFORM line says so). Instead render that event agentlessly/impersonally in English, using an impersonal or passive construction with no invented grammatical subject: "it was <verb>ed that <content>", "it is <verb>ed that <content>", etc. (tense per any `tau=` on that line, default past if unmarked and the rest of the sentence is past-oriented, else present). This is the general case; REACTS/KNOWS/BELIEVES/etc. used directly between an explicit subject and object are unaffected by this rule since they already name their own subject on the same line -- this rule applies ONLY when the grammatical subject would otherwise have to be invented from scratch.
 
 IMPORTANT: the payload may contain tokens that look like LIT0QZK, LIT1QZK, etc. These are OPAQUE PLACEHOLDERS. Copy them EXACTLY, character-for-character, into your reconstruction wherever the meaning calls for that value -- never translate, paraphrase, explain, or guess what they might represent.
 
