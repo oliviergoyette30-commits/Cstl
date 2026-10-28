@@ -50,11 +50,29 @@ use super::quorum::{compute_threshold, QuorumState, VoteMessage};
 use super::ServerContext;
 use crate::signing::SignatureCheck;
 
-/// Verifie que `sender` est un agent enregistre, avec `public_key`, ET que
-/// la cle embarquee dans CE message (`META.public_key`) correspond
-/// exactement a celle enregistree -- meme garde que `council_decision`
-/// dans `handler.rs`, extraite ici pour etre partagee par les trois
-/// purposes de ce module.
+/// Verifie que `sender` est un agent enregistre, avec `public_key`, que la
+/// cle embarquee dans CE message (`META.public_key`) correspond exactement
+/// a celle enregistree -- meme garde que `council_decision` dans
+/// `handler.rs` -- ET, depuis le fix 2026-10-28 ci-dessous, que `sender`
+/// fait partie de `RestrictedCouncil` (meme porte d'autorite que
+/// `council_decision`/`quorum_circuit_breaker`, voir restricted_council.rs).
+///
+/// FIX 2026-10-28 (session Olivier, audit live multi-angle) : avant ce
+/// fix, "membre eligible" se reduisait a "agent enregistre avec une
+/// public_key" -- et `purpose=agent_register` n'exige, pour un nom
+/// nouveau, que la preuve de possession d'une cle Ed25519 FRAICHEMENT
+/// GENEREE (auto-signature), sans aucun cout ni verification d'identite
+/// (voir handler.rs, bloc agent_register). Un seul acteur pouvait donc
+/// enregistrer N agents et devenir lui-meme la totalite du "quorum" dont
+/// `member_count`/`threshold` dependent -- confirme en direct
+/// (examples/quorum_sybil_test.rs, AVANT ce fix: 1 acteur, 3 cles
+/// fraiches, consensus BFT "atteint" avec 2 votes de lui-meme sur un
+/// seuil de 2/3). Le commentaire de tete de ce module revendiquait deja
+/// que `quorum_circuit_breaker` est "Reservee a RestrictedCouncil (meme
+/// porte d'autorite que council_decision)" -- ce fix applique
+/// exactement la MEME discipline a l'eligibilite de propose/vote
+/// elle-meme, au lieu de la laisser ouverte a n'importe quel
+/// auto-enregistrement.
 async fn verify_registered_voter(
     payload: &CstlPayload,
     ctx: &Arc<ServerContext>,
@@ -63,6 +81,9 @@ async fn verify_registered_voter(
 ) -> Option<&'static str> {
     if *sig_check != SignatureCheck::Valid {
         return Some("signature_required");
+    }
+    if !ctx.restricted_council.is_authorized(sender) {
+        return Some("not_a_restricted_council_member");
     }
     let embedded_pubkey = payload.meta.get("public_key").cloned();
     let registered_pubkey = {
@@ -76,6 +97,20 @@ async fn verify_registered_voter(
         return Some("public_key_mismatch");
     }
     None
+}
+
+/// Meme filtre que `verify_registered_voter` (cle enregistree + membre
+/// RestrictedCouncil), applique a TOUT le registre -- utilise par
+/// `handle_quorum_propose` pour calculer `member_count`/`threshold` sur la
+/// base reelle d'eligibilite, pas sur "n'importe qui s'est enregistre avec
+/// une cle" (voir le commentaire de `verify_registered_voter` ci-dessus
+/// pour la trouvaille qui motive ce fix).
+async fn eligible_member_count(ctx: &Arc<ServerContext>) -> u64 {
+    let reg = ctx.agent_registry.read().await;
+    reg.agents
+        .iter()
+        .filter(|a| a.public_key.is_some() && ctx.restricted_council.is_authorized(&a.name))
+        .count() as u64
 }
 
 /// `purpose=quorum_propose` -- cree une nouvelle proposition. Champs
@@ -116,10 +151,7 @@ pub async fn handle_quorum_propose(
         );
     }
 
-    let member_count = {
-        let reg = ctx.agent_registry.read().await;
-        reg.agents.iter().filter(|a| a.public_key.is_some()).count() as u64
-    };
+    let member_count = eligible_member_count(ctx).await;
     let threshold = compute_threshold(member_count);
     let state = QuorumState::new(proposal_id.clone(), threshold);
 
@@ -332,12 +364,26 @@ mod tests {
     /// mirroir reduit de ce que `CstlNativeServer::start()` construit
     /// reellement, juste assez pour exercer quorum_wire.rs en isolation.
     fn test_ctx() -> Arc<ServerContext> {
+        test_ctx_with_council(&["olivier"])
+    }
+
+    /// Meme construction que `test_ctx()`, mais avec une liste explicite de
+    /// membres `RestrictedCouncil` -- necessaire depuis le fix Sybil
+    /// (2026-10-28): `handle_quorum_propose`/`handle_quorum_vote` exigent
+    /// desormais `ctx.restricted_council.is_authorized(sender)` (voir
+    /// ligne ~85), plus seulement un agent enregistre avec une cle. Les
+    /// tests qui font proposer/voter alice/bob/carol doivent donc les
+    /// inclure ici, sans quoi ils se font rejeter en
+    /// `not_a_restricted_council_member` -- exactement la garantie que ce
+    /// fix verifie.
+    fn test_ctx_with_council(members: &[&str]) -> Arc<ServerContext> {
+        let council_members: Vec<String> = members.iter().map(|m| m.to_string()).collect();
         Arc::new(ServerContext {
             agent_registry: Arc::new(RwLock::new(AgentRegistry::new())),
             chain: Arc::new(Mutex::new(HashChain::new())),
             kb_verifier: Arc::new(crate::kb_verify::KbVerifier::new()),
             adn_store: Arc::new(Mutex::new(AdnStore::open(":memory:").unwrap())),
-            restricted_council: Arc::new(RestrictedCouncil::single_member("olivier")),
+            restricted_council: Arc::new(RestrictedCouncil::new(council_members.clone())),
             telegram: None,
             obsidian: None,
             governance: Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
@@ -346,7 +392,7 @@ mod tests {
                 256,
                 Arc::new(Mutex::new(AdnStore::open(":memory:").unwrap())),
                 Arc::new(Mutex::new(GovernanceTracker::with_defaults())),
-                Arc::new(RestrictedCouncil::single_member("olivier")),
+                Arc::new(RestrictedCouncil::new(council_members)),
             )),
             collect_response_corpus: false,
         })
@@ -435,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_full_propose_vote_consensus_flow() {
-        let ctx = test_ctx();
+        let ctx = test_ctx_with_council(&["alice", "bob", "carol"]);
 
         // Trois agents enregistres -- threshold BFT attendu: compute_threshold(3) = 2.
         let alice_key = register_test_agent(&ctx, "alice").await;
@@ -491,7 +537,7 @@ mod tests {
         // Un attaquant signe valablement avec SA PROPRE cle tout en
         // revendiquant sender=alice -- doit etre rejete, meme garde que
         // council_decision (voir le commentaire de module).
-        let ctx = test_ctx();
+        let ctx = test_ctx_with_council(&["alice"]);
         let alice_key = register_test_agent(&ctx, "alice").await;
         let alice_pub = hex::encode(alice_key.verifying_key().to_bytes());
 
@@ -518,7 +564,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_duplicate_vote_rejected() {
-        let ctx = test_ctx();
+        let ctx = test_ctx_with_council(&["alice", "bob"]);
         let alice_key = register_test_agent(&ctx, "alice").await;
         let bob_key = register_test_agent(&ctx, "bob").await;
         let alice_pub = hex::encode(alice_key.verifying_key().to_bytes());
@@ -549,9 +595,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_circuit_breaker_requires_restricted_council_authorization() {
-        let ctx = test_ctx(); // RestrictedCouncil::single_member("olivier")
+        // Depuis le fix Sybil, is_authorized() gate desormais propose/vote
+        // ET circuit_breaker sur le MEME RestrictedCouncil -- alice doit
+        // donc en etre membre pour proposer/voter. Pour demontrer que
+        // l'autorisation du circuit breaker reste bien verifiee (et pas
+        // juste "n'importe quel agent enregistre"), c'est un agent
+        // DIFFERENT, mallory, enregistre mais absent du council, qui
+        // tente le circuit breaker.
+        let ctx = test_ctx_with_council(&["alice"]); // mallory n'en est pas membre
         let alice_key = register_test_agent(&ctx, "alice").await;
         let alice_pub = hex::encode(alice_key.verifying_key().to_bytes());
+        let mallory_key = register_test_agent(&ctx, "mallory").await;
+        let mallory_pub = hex::encode(mallory_key.verifying_key().to_bytes());
 
         let propose_payload = build_signed_payload(
             "alice", &alice_pub, &alice_key, "quorum_propose",
@@ -560,16 +615,17 @@ mod tests {
         let sig_check = signing::check_signature(&propose_payload);
         handle_quorum_propose(&propose_payload, &ctx, &sig_check).await;
 
-        // alice n'est pas membre de RestrictedCouncil (seul "olivier" l'est).
+        // mallory n'est pas membre de RestrictedCouncil (seule "alice" l'est).
         let cb_attempt = build_signed_payload(
-            "alice", &alice_pub, &alice_key, "quorum_circuit_breaker",
+            "mallory", &mallory_pub, &mallory_key, "quorum_circuit_breaker",
             &[("proposal_id", "prop_cb"), ("reason", "test")],
         );
         let sig2 = signing::check_signature(&cb_attempt);
         let r = handle_quorum_circuit_breaker(&cb_attempt, &ctx, &sig2).await;
         assert!(r.contains("not_authorized"), "reponse inattendue: {r}");
 
-        // Un vote sur la proposition encore ouverte doit toujours marcher.
+        // Un vote d'alice (membre legitime) sur la proposition encore
+        // ouverte doit toujours marcher.
         let vote = build_signed_payload(
             "alice", &alice_pub, &alice_key, "quorum_vote",
             &[("proposal_id", "prop_cb"), ("decision", "yea")],
