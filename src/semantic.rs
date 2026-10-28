@@ -91,22 +91,45 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
 ///   - KNOWS               -> check_knows_calibration
 ///   - DOUBTS              -> check_doubts_calibration
 ///   - BELIEVES/DISBELIEVES -> check_epistemic_antonym_consistency
-///   - BEFORE/AFTER        -> check_temporal_pair_consistency
+///   - BEFORE/AFTER/DURING -> check_temporal_pair_consistency (DURING ajoute
+///     2026-10-28 : exclusion structurelle pure avec BEFORE/AFTER, Allen
+///     interval algebra, pas un motif d'usage mesure)
 ///   - MAINTAIN            -> check_maintain_tau
 ///   - AMP/INH             -> check_amp_inh_conflict
-///   - PERFORM/ARR/ARR.CREATE/ARR.PRODUCE -> check_temporal_contradiction
-///     (via `PERFORMED_OPERATORS`)
+///   - PERFORM/ARR/ARR.CREATE/ARR.PRODUCE/ARR.JOIN/ARR.ACCESS ->
+///     check_temporal_contradiction (via `PERFORMED_OPERATORS` ; ARR.JOIN/
+///     ARR.ACCESS ajoutes 2026-10-28, meme famille "Causalite" que les 3
+///     autres au spec CSTL_SPEC_v5_0.md:378, oubli corrige, pas une
+///     distinction nouvelle)
+///   - RESEMBLES/CO_LOCATES -> check_symmetric_operator_redundancy
+///     (2026-10-28 : symetrie par definition du predicat, meme caractere
+///     que W602/CONTRADICTS)
+///   - EQUALS/OPPOSES      -> check_equals_vs_opposition,
+///     check_equals_transitivity (2026-10-28 : identite totale vs exclusion
+///     mutuelle sur la meme paire est une impossibilite logique pure, pas
+///     une regle d'usage)
+///   - REACTS              -> check_reacts_valence (2026-10-28 : applique
+///     l'enumeration valence= que l'operateur s'est deja donnee dans sa
+///     propre doc d'ajout, jamais verifiee avant)
+///   - INVOLVES            -> check_involves_role (2026-10-28 : meme
+///     logique pour role=, optionnel mais verifie quand present)
+///   - EITHER_OR           -> check_either_or_wellformed (2026-10-28 :
+///     sujet=objet est une malformation structurelle, pas une regle
+///     d'usage)
 // `allow(dead_code)` : consommee uniquement par le garde-fou
 // `test_every_official_operator_is_classified` (#[cfg(test)]), donc invisible
 // a l'analyse dead_code d'un `cargo build` normal -- ce n'est pas du code
 // mort par accident, retirer ce const casserait le garde-fou en silence.
 #[allow(dead_code)]
 pub(crate) const OPERATORS_WITH_FORMAL_SEMANTICS: &[&str] = &[
-    "ARR", "ARR.CREATE", "ARR.PRODUCE", "PERFORM",
+    "ARR", "ARR.CREATE", "ARR.PRODUCE", "ARR.JOIN", "ARR.ACCESS", "PERFORM",
     "MAINTAIN", "AMP", "INH",
-    "ENTAILS", "CONTRADICTS",
+    "ENTAILS", "CONTRADICTS", "OPPOSES", "EQUALS",
     "KNOWS", "BELIEVES", "DISBELIEVES", "DOUBTS",
-    "BEFORE", "AFTER",
+    "BEFORE", "AFTER", "DURING",
+    "RESEMBLES", "CO_LOCATES",
+    "REACTS", "INVOLVES",
+    "EITHER_OR",
 ];
 
 /// Dette semantique EXISTANTE, reconnue a decouvert plutot que silencieuse.
@@ -118,18 +141,46 @@ pub(crate) const OPERATORS_WITH_FORMAL_SEMANTICS: &[&str] = &[
 /// -- c'est le but -- a mesure qu'un `check_xxx` dedie est ecrit pour l'un
 /// de ces operateurs et que son nom migre vers
 /// `OPERATORS_WITH_FORMAL_SEMANTICS` ci-dessus.
-// `allow(dead_code)` : meme raison que OPERATORS_WITH_FORMAL_SEMANTICS
-// ci-dessus -- consommee uniquement par le garde-fou de test.
+///
+/// 2026-10-28 : retrecie de 25 a 15 ce soir (voir les 10 operateurs listes
+/// ci-dessus avec leur date d'ajout). Les 15 restants ne sont PAS laisses
+/// ici par manque de temps -- chacun a ete considere et ecarte pour une
+/// raison precise :
+///   - COMMAND/ASK/STATE/RECOMMEND : actes de parole (FIPA-ACL). Une regle
+///     du genre "COMMAND(x) + FORBID(x) par le meme emetteur = contradiction"
+///     exigerait d'inventer une inference COMMAND => MUST implicite qui
+///     n'existe nulle part ailleurs dans cette grammaire -- de la semantique
+///     speculative, pas une application d'une regle deja posee.
+///   - TRANSMIT_FAITHFUL/TRANSMIT_INFER : paire candidate a un antonyme
+///     (meme patron qu'EPISTEMIC_ANTONYMS), mais AUCUN cas d'echec mesure
+///     ne la justifie (contrairement a BELIEVES/DISBELIEVES, trouvaille
+///     empirique documentee a `EPISTEMIC_ANTONYMS` ci-dessous). Meme
+///     discipline que ce commentaire applique deja a KNOWS/ASSUMES :
+///     "pas oublie, juste non mesure".
+///   - ASSUMES : meme raison, deja documentee a `EPISTEMIC_ANTONYMS`.
+///   - POSSESSES : usage double documente (attribut/valeur vs role
+///     thematique, voir THEMATIC_ARGUMENT_OPERATOR) -- aucune detection
+///     automatique ne distingue les deux sens, donc aucune regle fiable
+///     n'est postulable sans la construire d'abord (deja note comme
+///     "travail separe" a l'endroit meme ou POSSESSES est documente).
+///   - COMPARES : aucune contrainte logique evidente au-dela du typage de
+///     base ; inventer une regle ici serait pure decoration.
+///   - SATISFIES : couple naturellement a CONSTRAINTS (REQUIRE/UNLESS),
+///     mais cable cette interaction correctement est un vrai chantier, pas
+///     une regle d'une ligne -- laisse pour une session dediee.
+///   - INTENT, TRANSFORM, RESIST, PRESSURE, CATALYZE : aucun antonyme ou
+///     contrainte structurelle evidente trouvee ce soir ; pourraient en
+///     avoir une, pas identifiee avec assez de confiance pour l'ecrire
+///     sans tomber dans la meme ambiguite deguisee que ce garde-fou existe
+///     pour prevenir.
 #[allow(dead_code)]
 pub(crate) const GRANDFATHERED_UNDEFINED_OPERATORS: &[&str] = &[
-    "ARR.JOIN", "ARR.ACCESS",
     "INTENT", "TRANSFORM", "RESIST",
     "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
     "COMMAND", "ASK", "STATE", "RECOMMEND",
-    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES", "COMPARES",
+    "POSSESSES", "COMPARES",
     "ASSUMES",
-    "DURING",
-    "EITHER_OR", "REACTS", "INVOLVES", "SATISFIES",
+    "SATISFIES",
 ];
 
 /// `EITHER_OR` (2026-10-05) -- trouvaille du run restreint du pipeline kappa
@@ -377,7 +428,19 @@ pub fn negotiation_status_for(purpose: &str) -> Option<&'static str> {
 // (check_axiom_d ci-dessous).
 pub const FORBIDDEN_MODALITIES: &[&str] = &["MUST_NOT", "FORBID"];
 pub const REQUIRED_MODALITIES:  &[&str] = &["MUST", "REQUIRE"];
-const PERFORMED_OPERATORS:  &[&str] = &["PERFORM", "ARR", "ARR.CREATE", "ARR.PRODUCE"];
+// FIX 2026-10-28 : ARR.JOIN et ARR.ACCESS manquaient ici alors que
+// CSTL_SPEC_v5_0.md ligne 378 les classe explicitement dans la MEME
+// categorie "Causalite" que ARR/ARR.CREATE/ARR.PRODUCE (les 5 ARR.*
+// representent tous un agent qui PERFORME une action causale -- creer,
+// rejoindre, produire, acceder). Ce n'etait pas une distinction semantique
+// deliberee, juste un oubli : 2 des 5 operateurs de la meme famille
+// n'avaient jamais ete branches sur E108 (contradiction tau-locale entre un
+// FORBID/MUST_NOT et l'action reellement performee au meme instant), donc
+// "(monitor) MUST_NOT ARR.ACCESS patient_record" suivi de
+// "(monitor) ARR.ACCESS patient_record" au meme tau passait sans
+// detection -- exactement le genre de contradiction que ce check existe
+// pour attraper pour les 3 autres membres de la meme famille.
+const PERFORMED_OPERATORS:  &[&str] = &["PERFORM", "ARR", "ARR.CREATE", "ARR.PRODUCE", "ARR.JOIN", "ARR.ACCESS"];
 const VALID_TAU: &[&str] = &["p", "n", "f", "p_past", "n_present", "f_future"];
 
 /// R9 (port depuis parser.py ATTRIBUTE_ONTOLOGY) — valeurs canoniques pour
@@ -492,6 +555,17 @@ impl<'a> SemanticValidator<'a> {
         errors.extend(self.check_doubts_calibration());
         errors.extend(self.check_temporal_pair_consistency());
         errors.extend(self.check_epistemic_antonym_consistency());
+        // Ajouts 2026-10-28 (garde-fou + fermeture de dette semantique
+        // ciblee, session "On fix tout") -- meme politique que tout ce qui
+        // precede : avertissement/erreur selon le code, jamais branche nulle
+        // part ailleurs que cette liste, donc inerte sur le vrai chemin TCP
+        // tant qu'il n'est pas ici.
+        errors.extend(self.check_symmetric_operator_redundancy());
+        errors.extend(self.check_equals_vs_opposition());
+        errors.extend(self.check_equals_transitivity());
+        errors.extend(self.check_reacts_valence());
+        errors.extend(self.check_involves_role());
+        errors.extend(self.check_either_or_wellformed());
         errors
     }
 
@@ -714,6 +788,195 @@ impl<'a> SemanticValidator<'a> {
         errors
     }
 
+    /// W609 (2026-10-28) -- RESEMBLES et CO_LOCATES sont symetriques par
+    /// DEFINITION du predicat lui-meme (si A ressemble a B en apparence, B
+    /// ressemble a A en apparence ; si A est co-localise avec B, B est
+    /// co-localise avec A) -- meme necessite logique pure que la redondance
+    /// anti-symetrique deja detectee pour CONTRADICTS ci-dessus (W602), pas
+    /// une regle inventee sur un usage agent mesure. Avertissement seul,
+    /// jamais un rejet : declarer les deux sens n'est pas une erreur, juste
+    /// redondant.
+    fn check_symmetric_operator_redundancy(&self) -> Vec<SemanticError> {
+        const SYMMETRIC_OPERATORS: &[&str] = &["RESEMBLES", "CO_LOCATES"];
+        let mut errors = Vec::new();
+        for op in SYMMETRIC_OPERATORS {
+            let mut pairs: Vec<(String, String)> = Vec::new();
+            for r in self.relations() {
+                if &r.operator != op {
+                    continue;
+                }
+                let src = r.subject.clone();
+                let tgt = r.object.clone();
+                if pairs.iter().any(|(a, b)| a == &tgt && b == &src) {
+                    errors.push(SemanticError {
+                        code: "W609".to_string(),
+                        message: format!(
+                            "({}) {} ({}) — reverse already declared; {} is symmetric by definition, one direction sufficient",
+                            src, op, tgt, op
+                        ),
+                        line: r.line,
+                    });
+                }
+                pairs.push((src, tgt));
+            }
+        }
+        errors
+    }
+
+    /// E704 (2026-10-28) -- EQUALS affirme une identite totale entre sujet
+    /// et objet ; CONTRADICTS et OPPOSES affirment une exclusion mutuelle.
+    /// Les deux a la fois sur la MEME paire est une contradiction logique
+    /// pure (pas une regle de style, une impossibilite : A ne peut pas etre
+    /// a la fois identique a B et en opposition avec B), independamment de
+    /// tout usage agent mesure -- meme caractere que l'Axiome D deja cable.
+    fn check_equals_vs_opposition(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let mut equals_pairs: Vec<(String, String, usize)> = Vec::new();
+        let mut opposing_pairs: Vec<(String, String, &str)> = Vec::new();
+        for r in self.relations() {
+            if r.operator == "EQUALS" {
+                equals_pairs.push((r.subject.clone(), r.object.clone(), r.line));
+            } else if r.operator == "CONTRADICTS" {
+                opposing_pairs.push((r.subject.clone(), r.object.clone(), "CONTRADICTS"));
+            } else if r.operator == "OPPOSES" {
+                opposing_pairs.push((r.subject.clone(), r.object.clone(), "OPPOSES"));
+            }
+        }
+        for (a, b, line) in &equals_pairs {
+            for (x, y, op) in &opposing_pairs {
+                let same_pair = (x == a && y == b) || (x == b && y == a);
+                if same_pair {
+                    errors.push(SemanticError {
+                        code: "E704".to_string(),
+                        message: format!(
+                            "({}) EQUALS ({}) but also {} declared between them — cannot be simultaneously identical and mutually exclusive",
+                            a, b, op
+                        ),
+                        line: *line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// W610 (2026-10-28) -- EQUALS est une relation d'equivalence ; la
+    /// cloture transitive (A=B, B=C => A=C) devrait etre declaree
+    /// explicitement pour rester verifiable sans inference cachee -- meme
+    /// politique exacte que W603 (cloture ENTAILS) juste au-dessus dans ce
+    /// fichier, reutilisee a l'identique pour EQUALS. Avertissement seul.
+    fn check_equals_transitivity(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        let mut equals: Vec<(String, String, usize)> = Vec::new();
+        for r in self.relations() {
+            if r.operator == "EQUALS" {
+                equals.push((r.subject.clone(), r.object.clone(), r.line));
+            }
+        }
+        for (a, b, line_ab) in &equals {
+            for (b2, c, _) in &equals {
+                if b == b2 && a != c {
+                    let declared = equals.iter().any(|(x, y, _)| x == a && y == c);
+                    if !declared {
+                        errors.push(SemanticError {
+                            code: "W610".to_string(),
+                            message: format!(
+                                "EQUALS closure: ({})=({})=({}) but ({})=({}) not declared (recommended)",
+                                a, b, c, a, c
+                            ),
+                            line: *line_ab,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    /// W611 (2026-10-28) -- `REACTS` promet dans sa propre documentation
+    /// d'ajout (voir AFFECTIVE_STANCE_OPERATOR plus haut) un attribut
+    /// `valence=negative|positive|neutral|mixed` -- jamais verifie nulle
+    /// part jusqu'ici. Ce n'est pas de la semantique inventee : c'est
+    /// l'application du contrat que l'operateur s'est deja donne au moment
+    /// de son ajout, meme caractere que R9 (ontologie d'attributs) pour les
+    /// 8 cles generiques, juste scope a cet operateur precis.
+    const REACTS_VALID_VALENCE: &'static [&'static str] = &["negative", "positive", "neutral", "mixed"];
+
+    fn check_reacts_valence(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.all.iter() {
+            if r.operator != "REACTS" {
+                continue;
+            }
+            if let Some(f) = r.attrs.iter().find(|f| f.name == "valence") {
+                if !Self::REACTS_VALID_VALENCE.contains(&f.value.as_str()) {
+                    errors.push(SemanticError {
+                        code: "W611".to_string(),
+                        message: format!(
+                            "REACTS valence='{}' hors de l'enumeration documentee {:?} (ligne {})",
+                            f.value, Self::REACTS_VALID_VALENCE, f.line
+                        ),
+                        line: f.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// W612 (2026-10-28) -- meme logique que check_reacts_valence
+    /// ci-dessus, pour `INVOLVES` et son attribut documente
+    /// `role=theme|patient|duration|instrument` (voir
+    /// THEMATIC_ARGUMENT_OPERATOR plus haut). `role` est optionnel (le
+    /// commentaire d'ajout le dit explicitement), donc l'absence de
+    /// l'attribut n'est jamais une erreur -- seulement une valeur presente
+    /// mais hors de l'enumeration documentee.
+    const INVOLVES_VALID_ROLE: &'static [&'static str] = &["theme", "patient", "duration", "instrument"];
+
+    fn check_involves_role(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.all.iter() {
+            if r.operator != "INVOLVES" {
+                continue;
+            }
+            if let Some(f) = r.attrs.iter().find(|f| f.name == "role") {
+                if !Self::INVOLVES_VALID_ROLE.contains(&f.value.as_str()) {
+                    errors.push(SemanticError {
+                        code: "W612".to_string(),
+                        message: format!(
+                            "INVOLVES role='{}' hors de l'enumeration documentee {:?} (ligne {})",
+                            f.value, Self::INVOLVES_VALID_ROLE, f.line
+                        ),
+                        line: f.line,
+                    });
+                }
+            }
+        }
+        errors
+    }
+
+    /// E705 (2026-10-28) -- bien-forme structurel minimal pour EITHER_OR :
+    /// un sujet et un objet identiques rendent la disjonction vide de sens
+    /// ("A ou A" n'est pas un choix). Pas une regle sur l'usage, une
+    /// malformation evidente -- meme caractere que R10 (anti-bombing
+    /// d'attributs), hygiene structurelle plutot que profondeur semantique.
+    fn check_either_or_wellformed(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.relations() {
+            if r.operator == "EITHER_OR" && r.subject == r.object {
+                errors.push(SemanticError {
+                    code: "E705".to_string(),
+                    message: format!(
+                        "EITHER_OR ({}, {}) — identical subject and object, degenerate disjunction (ligne {})",
+                        r.subject, r.object, r.line
+                    ),
+                    line: r.line,
+                });
+            }
+        }
+        errors
+    }
+
     fn check_entails_transitivity(&self) -> Vec<SemanticError> {
         let mut errors = Vec::new();
         let mut entails: Vec<(String, String, usize)> = Vec::new();
@@ -788,11 +1051,24 @@ impl<'a> SemanticValidator<'a> {
         let mut errors = Vec::new();
         let mut before_pairs: Vec<(String, String, usize)> = Vec::new();
         let mut after_pairs: Vec<(String, String)> = Vec::new();
+        // DURING (2026-10-28) : couvert ici plutot que dans un check
+        // separe, parce que sa contradiction est avec EXACTEMENT les memes
+        // paires BEFORE/AFTER deja collectees ci-dessus -- pas de la
+        // speculation sur un usage agent, de la geometrie d'intervalle pure
+        // (Allen interval algebra, "during" exclut structurellement
+        // "before"/"after" pour la MEME paire ordonnee) : si l'intervalle de
+        // A est contenu dans celui de B, A ne peut pas AUSSI etre
+        // entierement avant ou apres B. Meme caractere logique que E701
+        // (BEFORE vs AFTER) juste au-dessus -- necessite structurelle, pas
+        // motif d'usage mesure empiriquement comme EPISTEMIC_ANTONYMS.
+        let mut during_pairs: Vec<(String, String, usize)> = Vec::new();
         for r in self.relations() {
             if r.operator == "BEFORE" {
                 before_pairs.push((r.subject.clone(), r.object.clone(), r.line));
             } else if r.operator == "AFTER" {
                 after_pairs.push((r.subject.clone(), r.object.clone()));
+            } else if r.operator == "DURING" {
+                during_pairs.push((r.subject.clone(), r.object.clone(), r.line));
             }
         }
         for (a, b, line) in &before_pairs {
@@ -801,6 +1077,28 @@ impl<'a> SemanticValidator<'a> {
                     code: "E701".to_string(),
                     message: format!(
                         "({}) declared both BEFORE and AFTER ({}) — temporal contradiction",
+                        a, b
+                    ),
+                    line: *line,
+                });
+            }
+        }
+        for (a, b, line) in &during_pairs {
+            if before_pairs.iter().any(|(x, y, _)| x == a && y == b) {
+                errors.push(SemanticError {
+                    code: "E702".to_string(),
+                    message: format!(
+                        "({}) declared both DURING and BEFORE ({}) — an interval contained within another cannot also entirely precede it",
+                        a, b
+                    ),
+                    line: *line,
+                });
+            }
+            if after_pairs.iter().any(|(x, y)| x == a && y == b) {
+                errors.push(SemanticError {
+                    code: "E702".to_string(),
+                    message: format!(
+                        "({}) declared both DURING and AFTER ({}) — an interval contained within another cannot also entirely follow it",
                         a, b
                     ),
                     line: *line,
@@ -1370,6 +1668,198 @@ mod tests {
         let v = SemanticValidator::new(&data);
         assert!(v.validate().iter().any(|e| e.code == "R10"));
     }
+
+    // ── 2026-10-28 : fermeture ciblee de dette semantique (session "On fix
+    // tout") -- ARR.JOIN/ARR.ACCESS, DURING, EQUALS/OPPOSES, RESEMBLES/
+    // CO_LOCATES, REACTS, INVOLVES, EITHER_OR. Voir le commentaire au-dessus
+    // de OPERATORS_WITH_FORMAL_SEMANTICS pour le detail par operateur, et
+    // celui au-dessus de GRANDFATHERED_UNDEFINED_OPERATORS pour ce qui a ete
+    // delibertement ECARTE ce soir plutot que precipite.
+
+    #[test]
+    fn test_arr_join_now_covered_by_temporal_contradiction_e108() {
+        // Avant le fix : ARR.JOIN n'etait pas dans PERFORMED_OPERATORS, donc
+        // cette contradiction (interdit de rejoindre l'equipe au meme tau
+        // que l'acte reellement performe) passait inapercue.
+        let data = vec![
+            rel("physician", "ARR.JOIN", "restricted_team", 0.9, "p", Some("MUST_NOT")),
+            rel("physician", "ARR.JOIN", "restricted_team", 0.9, "p", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E108"));
+    }
+
+    #[test]
+    fn test_arr_access_now_covered_by_temporal_contradiction_e108() {
+        let data = vec![
+            rel("monitor", "ARR.ACCESS", "patient_record", 0.9, "p", Some("MUST_NOT")),
+            rel("monitor", "ARR.ACCESS", "patient_record", 0.9, "p", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E108"));
+    }
+
+    #[test]
+    fn test_during_before_contradiction_e702() {
+        let data = vec![
+            rel("meeting_a", "DURING", "meeting_b", 0.9, "n", None),
+            rel("meeting_a", "BEFORE", "meeting_b", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E702"));
+    }
+
+    #[test]
+    fn test_during_after_contradiction_e702() {
+        let data = vec![
+            rel("meeting_a", "DURING", "meeting_b", 0.9, "n", None),
+            rel("meeting_a", "AFTER", "meeting_b", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E702"));
+    }
+
+    #[test]
+    fn test_during_alone_no_contradiction() {
+        let data = vec![rel("meeting_a", "DURING", "meeting_b", 0.9, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E702"));
+    }
+
+    #[test]
+    fn test_equals_contradicts_conflict_e704() {
+        let data = vec![
+            rel("x", "EQUALS", "y", 0.9, "n", None),
+            rel("x", "CONTRADICTS", "y", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E704"));
+    }
+
+    #[test]
+    fn test_equals_opposes_conflict_e704() {
+        let data = vec![
+            rel("x", "EQUALS", "y", 0.9, "n", None),
+            rel("y", "OPPOSES", "x", 0.9, "n", None), // sens inverse, meme paire
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E704"));
+    }
+
+    #[test]
+    fn test_equals_alone_no_conflict() {
+        let data = vec![rel("x", "EQUALS", "y", 0.9, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E704"));
+    }
+
+    #[test]
+    fn test_equals_transitivity_w610() {
+        let data = vec![
+            rel("a", "EQUALS", "b", 0.9, "n", None),
+            rel("b", "EQUALS", "c", 0.9, "n", None),
+            // (a) EQUALS (c) jamais declare -> W610
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W610"));
+    }
+
+    #[test]
+    fn test_equals_transitivity_satisfied_no_warning() {
+        let data = vec![
+            rel("a", "EQUALS", "b", 0.9, "n", None),
+            rel("b", "EQUALS", "c", 0.9, "n", None),
+            rel("a", "EQUALS", "c", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W610"));
+    }
+
+    #[test]
+    fn test_resembles_reverse_redundancy_w609() {
+        let data = vec![
+            rel("a", "RESEMBLES", "b", 0.9, "n", None),
+            rel("b", "RESEMBLES", "a", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W609"));
+    }
+
+    #[test]
+    fn test_co_locates_reverse_redundancy_w609() {
+        let data = vec![
+            rel("a", "CO_LOCATES", "b", 0.9, "n", None),
+            rel("b", "CO_LOCATES", "a", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W609"));
+    }
+
+    #[test]
+    fn test_resembles_one_direction_no_warning() {
+        let data = vec![rel("a", "RESEMBLES", "b", 0.9, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W609"));
+    }
+
+    #[test]
+    fn test_reacts_valid_valence_no_warning() {
+        let data = vec![rel_with_attrs("employees", "REACTS", "decision", vec![("valence", "negative")])];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W611"));
+    }
+
+    #[test]
+    fn test_reacts_invalid_valence_warns_w611() {
+        let data = vec![rel_with_attrs("employees", "REACTS", "decision", vec![("valence", "furious")])];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W611"));
+    }
+
+    #[test]
+    fn test_reacts_no_valence_attr_no_warning() {
+        // valence est documente mais pas obligatoire -- son absence n'est
+        // jamais une erreur, seulement une valeur presente et hors-liste.
+        let data = vec![rel("employees", "REACTS", "decision", 0.8, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W611"));
+    }
+
+    #[test]
+    fn test_involves_valid_role_no_warning() {
+        let data = vec![rel_with_attrs("signing", "INVOLVES", "contract", vec![("role", "theme")])];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W612"));
+    }
+
+    #[test]
+    fn test_involves_invalid_role_warns_w612() {
+        let data = vec![rel_with_attrs("signing", "INVOLVES", "contract", vec![("role", "bystander")])];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W612"));
+    }
+
+    #[test]
+    fn test_involves_no_role_attr_no_warning() {
+        let data = vec![rel("signing", "INVOLVES", "contract", 0.8, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W612"));
+    }
+
+    #[test]
+    fn test_either_or_degenerate_same_subject_object_e705() {
+        let data = vec![rel("alice", "EITHER_OR", "alice", 0.8, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "E705"));
+    }
+
+    #[test]
+    fn test_either_or_distinct_subject_object_no_error() {
+        let data = vec![rel("alice", "EITHER_OR", "bob", 0.8, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "E705"));
+    }
+
     // test_r8_coref_with_valid_reference_no_warning /
     // test_r8_coref_with_undefined_reference_warns ont ete retires le
     // 2026-09-04 avec check_coref_with lui-meme (voir le commentaire a sa
