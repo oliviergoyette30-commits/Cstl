@@ -945,9 +945,30 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let capabilities: Vec<String> = payload.intent.get("capabilities")
                             .map(|c| c.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
                             .unwrap_or_default();
+                        // FIX 2026-10-28 (session Olivier, meme audit que F5 juste
+                        // au-dessus) : `trust_score` est self-declare par l'agent qui
+                        // s'enregistre, et jusqu'ici stocke TEL QUEL dans AgentCard,
+                        // sans aucune borne -- alors que le MEME concept porte deja un
+                        // `CHECK (agent_trust_score_at_time >= 0.0 AND <= 1.0)` SQL
+                        // ailleurs dans ce depot (adn_store.rs:376, adn_sigma_audit_log),
+                        // confirmant que [0,1] est bien l'invariant voulu, juste absent
+                        // ici. Tant que `AgentRegistry::route()` (max par trust_score)
+                        // n'influencait rien d'observable (F5, juste au-dessus dans ce
+                        // meme fichier), cette absence de borne etait cosmetique. Le fix
+                        // de F5 la rend reelle: `receiver=` de l'accuse de reception
+                        // suit maintenant VRAIMENT route() -- sans ce clamp, n'importe
+                        // quel agent pourrait s'auto-enregistrer avec trust_score=999999
+                        // et capturer tout le routage "communication" (confirme en
+                        // direct, examples/trust_score_poisoning_test.rs, AVANT ce
+                        // clamp). `.clamp()` plutot qu'un rejet: une valeur hors bornes
+                        // est un signal de mauvaise foi ou d'erreur de calibration chez
+                        // l'expediteur, pas une raison de casser un enregistrement
+                        // par ailleurs legitime (meme politique "jamais de rejet pour un
+                        // signal de qualite" que le reste de ce pipeline).
                         let trust_score: f64 = payload.intent.get("trust_score")
-                            .and_then(|s| s.parse().ok())
-                            .unwrap_or(0.5);
+                            .and_then(|s| s.parse::<f64>().ok())
+                            .unwrap_or(0.5)
+                            .clamp(0.0, 1.0);
 
                         let response = if name.is_empty() || public_key.is_none() {
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=missing_name_or_public_key]\n---END---\n".to_string()
@@ -1950,6 +1971,24 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     if let Some(agent_name) = routed_agent_name {
                         info!("[Handler] Found agent: {}", agent_name);
 
+                        // FIX 2026-10-28 (session Olivier, audit live multi-angle) :
+                        // `agent_name` (resultat REEL de `reg.route("communication")`,
+                        // selection trust-weighted sur le registre) etait calcule et
+                        // logue ici, puis jamais utilise dans la reponse reseau
+                        // construite juste en dessous -- le champ `receiver=` y
+                        // echoait simplement `payload.intent.get("sender")` (l'EXPEDITEUR
+                        // original), jamais l'agent route. Confirme en direct (exemple
+                        // TCP ad hoc, registre realiste alice/bob) : un agent tiers
+                        // enregistre avec un trust_score superieur n'avait AUCUN effet
+                        // observable sur `receiver`, quel que soit son score -- toute la
+                        // logique de selection de `route()` etait jetee avant d'atteindre
+                        // le fil. `sender=` de l'expediteur original reste par ailleurs
+                        // disponible dans le bloc GOVERNANCE plus bas (`GOVERNANCE
+                        // [sender=...]`), donc cable `receiver` sur le vrai agent route ne
+                        // fait perdre aucune information deja presente ailleurs dans la
+                        // reponse.
+                        let routed_agent_name_for_response = agent_name.clone();
+
                         // STEP 5: Build response
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\n\
@@ -1975,7 +2014,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
-                            payload.intent.get("sender").cloned().unwrap_or_else(|| "unknown".to_string()),
+                            routed_agent_name_for_response,
                             purpose,
                             verification_lines,
                             consistency_line,
