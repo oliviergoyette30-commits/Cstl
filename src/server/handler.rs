@@ -277,6 +277,48 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // remonte aussi l'avertissement au client plutot que de
                     // le laisser uniquement dans les logs serveur (eprintln!).
                     semantic_warnings.extend(payload.parse_warnings.iter().cloned());
+
+                    // FIX 2026-10-28 (test ai-to-ai live, session en cours) :
+                    // jusqu'ici E101 ("Operateur invalide '<X>' -- absent des
+                    // 36 operateurs officiels") etait un AVERTISSEMENT PUR,
+                    // au meme titre que W601 (MUTUAL deprecie) -- confirme en
+                    // envoyant reellement un payload avec type=FOOBAR au
+                    // serveur TCP vivant : verdict=PASS, la relation hallucinee
+                    // entrait dans le graphe/l'audit chain comme n'importe
+                    // quelle relation legitime. C'etait une politique
+                    // deliberee (voir le commentaire de check_sdl_operator_whitelist :
+                    // "ces checks n'ont jamais ete conçus ni testes comme des
+                    // motifs de rejet"), mais elle traitait un opérateur
+                    // GARBAGE (sans aucune semantique definie nulle part dans
+                    // le code) comme un simple signal consultatif -- alors
+                    // qu'un token qui RESSEMBLE a un operateur SDL revendique
+                    // (heuristique looks_like_sdl_operator, donc jamais un
+                    // predicat KB minuscule legitime comme part_of/born_in)
+                    // mais n'existe dans aucun des 39 operateurs officiels ni
+                    // dans DEPRECATED_OPERATORS ni dans un vocabulaire de
+                    // domaine n'a, par construction, aucune semantique
+                    // verifiable -- exactement la meme categorie de probleme
+                    // qu'une signature invalide (sig_rejection ci-dessus) :
+                    // une tentative d'entree non autorisee dans le vocabulaire
+                    // fige, pas un signal d'amelioration optionnel. W601
+                    // (MUTUAL deprecie) reste un AVERTISSEMENT : operateur
+                    // deprecie != operateur sans semantique, il a un
+                    // remplacement documente (EQUALS/POSSESSES/RESEMBLES/
+                    // CO_LOCATES/OPPOSES/COMPARES) et le rejeter casserait du
+                    // trafic existant qui l'utilise encore sans gain reel.
+                    let (blocking_operator_errors, semantic_warnings): (Vec<String>, Vec<String>) =
+                        semantic_warnings.into_iter().partition(|w| w.starts_with("E101:"));
+                    if !blocking_operator_errors.is_empty() {
+                        error!("[Handler] Operateur(s) hors whitelist rejete(s): {:?}", blocking_operator_errors);
+                        let detail = blocking_operator_errors.join("; ").replace(',', ";").replace('[', "(").replace(']', ")");
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=operator_whitelist_rejected, detail={}]\n---END---\n",
+                            detail
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     let mut semantic_warning_lines = String::new();
                     if !semantic_warnings.is_empty() {
                         warn!("[Handler] Semantic operator warnings: {:?}", semantic_warnings);

@@ -99,15 +99,28 @@ fn born_in_payload(sender: &str, subject: &str, city: &str) -> String {
     )
 }
 
-/// Un operateur SDL uppercase inconnu -- declenche EventReason::SemanticWarning
-/// via `validator::check_sdl_operator_whitelist` (purement consultatif, ne
-/// bloque jamais le payload).
+/// Un operateur SDL uppercase DEPRECIE (MUTUAL, W601) -- declenche
+/// EventReason::SemanticWarning via `validator::check_sdl_operator_whitelist`,
+/// purement consultatif, ne bloque jamais le payload.
+///
+/// FIX 2026-10-28 : utilisait `UNKNOWN_OPERATOR_XYZ` (E101) avant ce
+/// commit. Depuis `handler.rs` (partition `blocking_operator_errors` /
+/// `semantic_warnings` juste apres `check_sdl_operator_whitelist`), un
+/// vrai E101 (operateur absent des 39 officiels) fait maintenant rejeter
+/// le payload ENTIER avant meme d'atteindre le code de gouvernance
+/// (circuit breaker / drift) plus bas dans `handler.rs` -- ce test
+/// mesurait la PERSISTANCE de l'etat de drift a travers un redemarrage,
+/// pas la politique de rejet des operateurs, donc `UNKNOWN_OPERATOR_XYZ`
+/// n'atteindrait plus jamais `gov_state` et casserait silencieusement
+/// l'assertion `drift_ratio=1.00`. `MUTUAL` reste W601 (deprecie, jamais
+/// bloquant) et produit exactement le meme `semantic_warnings` non-vide
+/// que l'ancien probe, sans dependre d'un comportement qui a change.
 fn semantic_warning_payload(sender: &str, subject: &str) -> String {
     format!(
         "#!CSTL v5.0.0 MODE=A\n\
          META [encoder=SmokeTest, produced_by=SmokeTest]\n\
          INTENT_PAYLOAD [purpose=governance_persistence_smoke, sender={sender}, receiver=server]\n\
-         RELATION [type=UNKNOWN_OPERATOR_XYZ, subject={subject}, object=target]\n\
+         RELATION [type=MUTUAL, subject={subject}, object=target]\n\
          ---END---\n"
     )
 }
