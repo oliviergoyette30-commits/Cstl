@@ -101,10 +101,11 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
 ///     ARR.ACCESS ajoutes 2026-10-28, meme famille "Causalite" que les 3
 ///     autres au spec CSTL_SPEC_v5_0.md:378, oubli corrige, pas une
 ///     distinction nouvelle)
-///   - RESEMBLES/CO_LOCATES -> check_symmetric_operator_redundancy
-///     (2026-10-28 : symetrie par definition du predicat, meme caractere
+///   - RESEMBLES/CO_LOCATES/OPPOSES -> check_symmetric_operator_redundancy
+///     (2026-10-28 : symetrie par definition du predicat ET confirmee
+///     explicitement par CSTL_SPEC_v5_0.md:396 pour OPPOSES, meme caractere
 ///     que W602/CONTRADICTS)
-///   - EQUALS/OPPOSES      -> check_equals_vs_opposition,
+///   - EQUALS/OPPOSES      -> aussi check_equals_vs_opposition,
 ///     check_equals_transitivity (2026-10-28 : identite totale vs exclusion
 ///     mutuelle sur la meme paire est une impossibilite logique pure, pas
 ///     une regle d'usage)
@@ -116,6 +117,11 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
 ///   - EITHER_OR           -> check_either_or_wellformed (2026-10-28 :
 ///     sujet=objet est une malformation structurelle, pas une regle
 ///     d'usage)
+///   - ASSUMES             -> check_assumes_calibration (2026-10-28 :
+///     applique le contrat sigma deja promis par CSTL_SPEC_v5_0.md §10.4
+///     (0.30-0.75), meme famille que KNOWS/DOUBTS deja câbles ; distinct de
+///     l'antonyme manquant, volontairement laisse de cote, voir
+///     GRANDFATHERED_UNDEFINED_OPERATORS ci-dessous)
 // `allow(dead_code)` : consommee uniquement par le garde-fou
 // `test_every_official_operator_is_classified` (#[cfg(test)]), donc invisible
 // a l'analyse dead_code d'un `cargo build` normal -- ce n'est pas du code
@@ -130,6 +136,7 @@ pub(crate) const OPERATORS_WITH_FORMAL_SEMANTICS: &[&str] = &[
     "RESEMBLES", "CO_LOCATES",
     "REACTS", "INVOLVES",
     "EITHER_OR",
+    "ASSUMES",
 ];
 
 /// Dette semantique EXISTANTE, reconnue a decouvert plutot que silencieuse.
@@ -155,9 +162,13 @@ pub(crate) const OPERATORS_WITH_FORMAL_SEMANTICS: &[&str] = &[
 ///     (meme patron qu'EPISTEMIC_ANTONYMS), mais AUCUN cas d'echec mesure
 ///     ne la justifie (contrairement a BELIEVES/DISBELIEVES, trouvaille
 ///     empirique documentee a `EPISTEMIC_ANTONYMS` ci-dessous). Meme
-///     discipline que ce commentaire applique deja a KNOWS/ASSUMES :
-///     "pas oublie, juste non mesure".
-///   - ASSUMES : meme raison, deja documentee a `EPISTEMIC_ANTONYMS`.
+///     discipline que ce commentaire appliquait deja a KNOWS/ASSUMES pour
+///     l'ANTONYME : "pas oublie, juste non mesure" -- note bien, ceci ne
+///     concerne QUE l'antonyme manquant, pas toute semantique pour cet
+///     operateur ; ASSUMES lui-meme vient d'en gagner une (calibration
+///     sigma, voir ci-dessus) sur un fondement totalement different
+///     (contrat sigma deja promis par CSTL_SPEC_v5_0.md §10.4, pas un
+///     antonyme speculatif).
 ///   - POSSESSES : usage double documente (attribut/valeur vs role
 ///     thematique, voir THEMATIC_ARGUMENT_OPERATOR) -- aucune detection
 ///     automatique ne distingue les deux sens, donc aucune regle fiable
@@ -179,7 +190,6 @@ pub(crate) const GRANDFATHERED_UNDEFINED_OPERATORS: &[&str] = &[
     "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
     "COMMAND", "ASK", "STATE", "RECOMMEND",
     "POSSESSES", "COMPARES",
-    "ASSUMES",
     "SATISFIES",
 ];
 
@@ -566,6 +576,7 @@ impl<'a> SemanticValidator<'a> {
         errors.extend(self.check_reacts_valence());
         errors.extend(self.check_involves_role());
         errors.extend(self.check_either_or_wellformed());
+        errors.extend(self.check_assumes_calibration());
         errors
     }
 
@@ -797,7 +808,13 @@ impl<'a> SemanticValidator<'a> {
     /// jamais un rejet : declarer les deux sens n'est pas une erreur, juste
     /// redondant.
     fn check_symmetric_operator_redundancy(&self) -> Vec<SemanticError> {
-        const SYMMETRIC_OPERATORS: &[&str] = &["RESEMBLES", "CO_LOCATES"];
+        // OPPOSES ajoute 2026-10-28 : CSTL_SPEC_v5_0.md:396 le classe
+        // explicitement "Symetrique" dans le MEME tableau que RESEMBLES/
+        // CO_LOCATES ci-dessous -- oublie initialement ici malgre une
+        // couverture deja donnee a OPPOSES par check_equals_vs_opposition
+        // (E704), qui est un check DIFFERENT (conflit avec EQUALS, pas
+        // redondance de sens inverse).
+        const SYMMETRIC_OPERATORS: &[&str] = &["RESEMBLES", "CO_LOCATES", "OPPOSES"];
         let mut errors = Vec::new();
         for op in SYMMETRIC_OPERATORS {
             let mut pairs: Vec<(String, String)> = Vec::new();
@@ -1036,6 +1053,34 @@ impl<'a> SemanticValidator<'a> {
                             code: "W605".to_string(),
                             message: format!(
                                 "DOUBTS with sigma={:.2} — DOUBTS implies low confidence; expected sigma <= 0.5",
+                                s
+                            ),
+                            line: r.line,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    /// W613 (2026-10-28) -- CSTL_SPEC_v5_0.md §10.4 promet deja
+    /// "ASSUMES | Hypothese de travail | Non | 0.30-0.75" dans le MEME
+    /// tableau qui documente KNOWS (>=0.80, W604 ci-dessus) et DOUBTS
+    /// (<=0.50, W605 juste au-dessus) -- un contrat deja pose par le spec
+    /// lui-meme, jamais applique pour ASSUMES specifiquement. Meme
+    /// caractere que check_reacts_valence/check_involves_role : on applique
+    /// une promesse deja faite, pas une regle inventee sur un usage mesure.
+    fn check_assumes_calibration(&self) -> Vec<SemanticError> {
+        let mut errors = Vec::new();
+        for r in self.relations() {
+            if r.operator == "ASSUMES" {
+                if let Some(s) = attr_sigma(r) {
+                    if !(0.30..=0.75).contains(&s) {
+                        errors.push(SemanticError {
+                            code: "W613".to_string(),
+                            message: format!(
+                                "ASSUMES with sigma={:.2} — ASSUMES implies a working hypothesis; expected sigma in [0.30, 0.75] (CSTL_SPEC_v5_0.md §10.4)",
                                 s
                             ),
                             line: r.line,
@@ -1803,6 +1848,18 @@ mod tests {
     }
 
     #[test]
+    fn test_opposes_reverse_redundancy_w609() {
+        // CSTL_SPEC_v5_0.md:396 classe OPPOSES "Symetrique" -- oubli
+        // dans SYMMETRIC_OPERATORS corrige le meme soir.
+        let data = vec![
+            rel("a", "OPPOSES", "b", 0.9, "n", None),
+            rel("b", "OPPOSES", "a", 0.9, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W609"));
+    }
+
+    #[test]
     fn test_reacts_valid_valence_no_warning() {
         let data = vec![rel_with_attrs("employees", "REACTS", "decision", vec![("valence", "negative")])];
         let v = SemanticValidator::new(&data);
@@ -1858,6 +1915,37 @@ mod tests {
         let data = vec![rel("alice", "EITHER_OR", "bob", 0.8, "n", None)];
         let v = SemanticValidator::new(&data);
         assert!(!v.validate().iter().any(|e| e.code == "E705"));
+    }
+
+    #[test]
+    fn test_assumes_sigma_too_high_warns_w613() {
+        let data = vec![rel("analyst", "ASSUMES", "market_stable", 0.90, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W613"));
+    }
+
+    #[test]
+    fn test_assumes_sigma_too_low_warns_w613() {
+        let data = vec![rel("analyst", "ASSUMES", "market_stable", 0.10, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(v.validate().iter().any(|e| e.code == "W613"));
+    }
+
+    #[test]
+    fn test_assumes_sigma_in_range_no_warning() {
+        let data = vec![rel("analyst", "ASSUMES", "market_stable", 0.55, "n", None)];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W613"));
+    }
+
+    #[test]
+    fn test_assumes_sigma_boundaries_no_warning() {
+        let data = vec![
+            rel("analyst", "ASSUMES", "a", 0.30, "n", None),
+            rel("analyst", "ASSUMES", "b", 0.75, "n", None),
+        ];
+        let v = SemanticValidator::new(&data);
+        assert!(!v.validate().iter().any(|e| e.code == "W613"));
     }
 
     // test_r8_coref_with_valid_reference_no_warning /
