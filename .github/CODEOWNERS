@@ -1,0 +1,20 @@
+# CODEOWNERS -- INERTE tant que la protection de branche n'est pas activee
+# (GitHub Settings > Branches > Protection rules > "Require review from
+# Code Owners" sur `main`). Ce fichier seul ne bloque rien : il ne fait que
+# nommer qui GitHub propose comme reviewer quand cette regle existe.
+#
+# Ajoute le 2026-10-28, cote reponse au garde-fou de classification
+# d'operateur (src/semantic.rs::OPERATORS_WITH_FORMAL_SEMANTICS /
+# GRANDFATHERED_UNDEFINED_OPERATORS) : ce garde-fou empeche un nouvel
+# operateur d'entrer SANS classification explicite dans le diff (sinon
+# `cargo test` echoue, et la CI .github/workflows/test.yml le lance deja a
+# chaque push/PR sur main) -- mais rien n'empeche encore qu'UNE SEULE
+# personne decide seule, dans le meme commit, et de l'operateur et de sa
+# classification. Fermer ca pour de vrai demande une deuxieme paire d'yeux
+# AVANT que ca atterrisse sur main, ce que seule une regle de branche GitHub
+# peut imposer -- hors de la portee de ce depot de code.
+#
+# Remplace `@oliviergoyette30-commits` par le(s) vrai(s) reviewer(s) voulu(s)
+# si ce n'est pas la seule personne qui doit valider un changement
+# touchant le catalogue d'operateurs.
+src/semantic.rs @oliviergoyette30-commits
