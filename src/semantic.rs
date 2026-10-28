@@ -53,6 +53,85 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
     "SATISFIES",
 ];
 
+/// GARDE-FOU 2026-10-28 (session en cours, "On fix tout") -- reponse directe
+/// a la trouvaille de ce soir : `REACTS`, `INVOLVES`, `SATISFIES` sont entres
+/// dans `OFFICIAL_OPERATORS` au fil de sessions de diagnostic kappa, sans
+/// qu'aucune revue independante ne tranche "cette relation merite-t-elle un
+/// NOUVEL operateur, ou devrait-elle rentrer dans une case existante ?" --
+/// la meme session qui rencontrait le trou decidait aussi de le combler.
+/// Resultat mesure ce soir : 25 des 40 operateurs officiels actuels n'ont
+/// AUCUNE regle de validation semantique dediee nulle part dans ce fichier
+/// (compte exact, voir `test_every_official_operator_is_classified`
+/// ci-dessous) -- pire que le ratio 22/36 de l'audit du 26 septembre, et
+/// exactement dans le sens attendu : le catalogue grossit plus vite que sa
+/// couverture formelle.
+///
+/// Ce module ne peut pas, a lui seul, forcer une revue HUMAINE independante
+/// avant chaque ajout (ca, c'est une regle de branche GitHub -- hors de la
+/// portee d'un commit de code, a activer par le proprietaire du depot dans
+/// Settings > Branches > Protection rules, idealement avec un fichier
+/// CODEOWNERS sur ce fichier). Ce qu'il PEUT forcer, mecaniquement, via
+/// `cargo test` (donc CI) : qu'un nouvel operateur ajoute a
+/// `OFFICIAL_OPERATORS` ne puisse plus jamais entrer SANS CHOIX EXPLICITE et
+/// VISIBLE DANS LE DIFF -- soit il gagne une vraie regle de validation
+/// (`check_xxx` dedie, et son nom rejoint `OPERATORS_WITH_FORMAL_SEMANTICS`
+/// ci-dessous), soit il est ajoute, a decouvert, a
+/// `GRANDFATHERED_UNDEFINED_OPERATORS` avec une justification en
+/// commentaire. Un operateur absent des DEUX listes fait echouer
+/// `cargo test` -- c'est le garde-fou : pas plus de dette semantique
+/// SILENCIEUSE, meme si la dette elle-meme (les 25 operateurs ci-dessous)
+/// n'est pas resorbee ce soir.
+///
+/// Operateurs ayant une regle de validation semantique dediee (au-dela du
+/// controle structurel generique Axiome D/K qui s'applique a N'IMPORTE quel
+/// operateur portant une modalite MUST/MUST_NOT, donc ne compte pas comme
+/// "semantique a CET operateur") :
+///   - ENTAILS            -> check_axiom_k_entailment, check_entails_transitivity
+///   - CONTRADICTS         -> check_contradicts_symmetry
+///   - KNOWS               -> check_knows_calibration
+///   - DOUBTS              -> check_doubts_calibration
+///   - BELIEVES/DISBELIEVES -> check_epistemic_antonym_consistency
+///   - BEFORE/AFTER        -> check_temporal_pair_consistency
+///   - MAINTAIN            -> check_maintain_tau
+///   - AMP/INH             -> check_amp_inh_conflict
+///   - PERFORM/ARR/ARR.CREATE/ARR.PRODUCE -> check_temporal_contradiction
+///     (via `PERFORMED_OPERATORS`)
+// `allow(dead_code)` : consommee uniquement par le garde-fou
+// `test_every_official_operator_is_classified` (#[cfg(test)]), donc invisible
+// a l'analyse dead_code d'un `cargo build` normal -- ce n'est pas du code
+// mort par accident, retirer ce const casserait le garde-fou en silence.
+#[allow(dead_code)]
+pub(crate) const OPERATORS_WITH_FORMAL_SEMANTICS: &[&str] = &[
+    "ARR", "ARR.CREATE", "ARR.PRODUCE", "PERFORM",
+    "MAINTAIN", "AMP", "INH",
+    "ENTAILS", "CONTRADICTS",
+    "KNOWS", "BELIEVES", "DISBELIEVES", "DOUBTS",
+    "BEFORE", "AFTER",
+];
+
+/// Dette semantique EXISTANTE, reconnue a decouvert plutot que silencieuse.
+/// Chaque entree ici est un operateur officiel SANS regle de validation
+/// dediee -- cette liste ne doit JAMAIS grossir en silence (voir le test de
+/// garde-fou) : un nouvel operateur ajoute a `OFFICIAL_OPERATORS` qui
+/// atterrit ici doit porter sa propre justification en commentaire au
+/// moment de l'ajout, visible dans la revue du diff/PR. Elle PEUT retrecir
+/// -- c'est le but -- a mesure qu'un `check_xxx` dedie est ecrit pour l'un
+/// de ces operateurs et que son nom migre vers
+/// `OPERATORS_WITH_FORMAL_SEMANTICS` ci-dessus.
+// `allow(dead_code)` : meme raison que OPERATORS_WITH_FORMAL_SEMANTICS
+// ci-dessus -- consommee uniquement par le garde-fou de test.
+#[allow(dead_code)]
+pub(crate) const GRANDFATHERED_UNDEFINED_OPERATORS: &[&str] = &[
+    "ARR.JOIN", "ARR.ACCESS",
+    "INTENT", "TRANSFORM", "RESIST",
+    "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    "COMMAND", "ASK", "STATE", "RECOMMEND",
+    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES", "COMPARES",
+    "ASSUMES",
+    "DURING",
+    "EITHER_OR", "REACTS", "INVOLVES", "SATISFIES",
+];
+
 /// `EITHER_OR` (2026-10-05) -- trouvaille du run restreint du pipeline kappa
 /// v2 (`kappa_generate_v2_deterministic_literals.py`, item complex_002,
 /// "Hypertension >160 mmHg requires ACE inhibitors OR calcium channel
@@ -1297,4 +1376,95 @@ mod tests {
     // place d'origine, plus haut dans ce fichier) -- ils construisaient des
     // `ast::Block` a la main, un type que ni le tokenizer ni le parser reel
     // ne produisent jamais.
+
+    // ── GARDE-FOU 2026-10-28 : gouvernance d'ajout d'operateur ──
+    //
+    // Reponse directe a la trouvaille de ce soir (REACTS/INVOLVES/SATISFIES
+    // entres au catalogue sans revue independante, decides dans la meme
+    // session de diagnostic qui rencontrait le trou). Voir le commentaire
+    // au-dessus de `OPERATORS_WITH_FORMAL_SEMANTICS` /
+    // `GRANDFATHERED_UNDEFINED_OPERATORS` pour le raisonnement complet.
+
+    #[test]
+    fn test_every_official_operator_is_classified() {
+        // Tout operateur de OFFICIAL_OPERATORS doit apparaitre dans
+        // EXACTEMENT une des deux listes de classification -- jamais les
+        // deux (ambigu : a-t-il une semantique ou pas ?), jamais aucune
+        // (c'est precisement le trou que ce garde-fou ferme : un operateur
+        // ajoute a OFFICIAL_OPERATORS sans que personne ne tranche
+        // explicitement son statut semantique).
+        //
+        // Un futur ajout a OFFICIAL_OPERATORS qui ne touche ni
+        // OPERATORS_WITH_FORMAL_SEMANTICS ni GRANDFATHERED_UNDEFINED_OPERATORS
+        // fait echouer CE test, donc `cargo test`, donc CI -- la seule
+        // facon de faire passer un nouvel operateur est un choix EXPLICITE
+        // et VISIBLE dans le diff : soit une vraie regle `check_xxx` dediee
+        // (et son nom rejoint la premiere liste), soit un aveu explicite de
+        // dette dans la seconde, avec justification en commentaire.
+        let mut unclassified = Vec::new();
+        let mut double_classified = Vec::new();
+        for op in OFFICIAL_OPERATORS {
+            let has_semantics = OPERATORS_WITH_FORMAL_SEMANTICS.contains(op);
+            let is_grandfathered = GRANDFATHERED_UNDEFINED_OPERATORS.contains(op);
+            match (has_semantics, is_grandfathered) {
+                (false, false) => unclassified.push(*op),
+                (true, true) => double_classified.push(*op),
+                _ => {}
+            }
+        }
+        assert!(
+            unclassified.is_empty(),
+            "Operateur(s) ajoute(s) a OFFICIAL_OPERATORS sans classification \
+             semantique explicite -- ajoutez-les a OPERATORS_WITH_FORMAL_SEMANTICS \
+             (avec un vrai check_xxx dedie) ou, a defaut, a \
+             GRANDFATHERED_UNDEFINED_OPERATORS (avec justification) : {:?}",
+            unclassified
+        );
+        assert!(
+            double_classified.is_empty(),
+            "Operateur(s) present(s) dans LES DEUX listes de classification \
+             a la fois (ambigu — a-t-il une semantique definie ou pas ?) : {:?}",
+            double_classified
+        );
+    }
+
+    #[test]
+    fn test_grandfathered_list_has_no_duplicates_and_no_unofficial_operators() {
+        // La liste de dette ne doit reference que de VRAIS operateurs
+        // officiels (sinon elle masquerait silencieusement une faute de
+        // frappe plutot que de documenter une dette reelle), et chaque
+        // operateur n'y apparait qu'une fois.
+        let mut seen = std::collections::HashSet::new();
+        for op in GRANDFATHERED_UNDEFINED_OPERATORS {
+            assert!(
+                OFFICIAL_OPERATORS.contains(op),
+                "'{}' est dans GRANDFATHERED_UNDEFINED_OPERATORS mais absent \
+                 d'OFFICIAL_OPERATORS -- faute de frappe probable",
+                op
+            );
+            assert!(
+                seen.insert(*op),
+                "'{}' apparait plus d'une fois dans GRANDFATHERED_UNDEFINED_OPERATORS",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_formal_semantics_list_has_no_duplicates_and_no_unofficial_operators() {
+        let mut seen = std::collections::HashSet::new();
+        for op in OPERATORS_WITH_FORMAL_SEMANTICS {
+            assert!(
+                OFFICIAL_OPERATORS.contains(op),
+                "'{}' est dans OPERATORS_WITH_FORMAL_SEMANTICS mais absent \
+                 d'OFFICIAL_OPERATORS -- faute de frappe probable",
+                op
+            );
+            assert!(
+                seen.insert(*op),
+                "'{}' apparait plus d'une fois dans OPERATORS_WITH_FORMAL_SEMANTICS",
+                op
+            );
+        }
+    }
 }
