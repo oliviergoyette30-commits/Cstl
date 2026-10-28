@@ -221,13 +221,44 @@ impl HashChain {
     /// de desynchronisation entre `entries.len()` et le plus haut `seq`
     /// utilise.
     pub fn append(&mut self, payload: &CstlPayload) -> AuditEntry {
+        let hash = canonical_hash(payload);
+
+        // FIX 2026-10-28 (session Olivier, audit live multi-angle, db SQLite
+        // fraiche et isolee) : `adn_store.rs::save_audit_entry` documente deja
+        // l'intention "un payload de contenu identique soumis deux fois doit
+        // rester idempotent" (INSERT OR IGNORE sur `hash UNIQUE`) -- mais
+        // cette fonction, elle, ne dedupliquait JAMAIS en memoire : chaque
+        // replay (meme contenu canonique, donc meme hash) recevait un
+        // NOUVEAU seq et un parent_hash pointant sur le dernier entry en
+        // date -- qui, lors d'un replay immediat (aucun autre payload entre
+        // les deux envois), est CE MEME hash : une entree devenait alors son
+        // propre parent. Le client recevait un AUDIT[seq=N, ...] qui
+        // annonçait un enregistrement reussi, mais le disque le rejetait
+        // silencieusement (contrainte hash UNIQUE) -- confirme en direct:
+        // redemarrage immediat du serveur apres un replay -> "Loaded 1 audit
+        // entries" au lieu de 2, seq=N jamais revu, aucun signal d'erreur
+        // n'avait ete renvoye au client au moment du replay. C'est le MEME
+        // bug que celui documente juste au-dessus (seq recalcule sur un
+        // trou de l'historique persiste) sous un declencheur different
+        // (replay immediat, sans trou) -- le fix de seq ne couvrait que le
+        // premier declencheur. Fix ici: appliquer la MEME idempotence en
+        // memoire qu'au disque -- un hash deja present renvoie l'entree
+        // EXISTANTE (meme seq/parent_hash), jamais une entree fantome que
+        // le disque refusera de toute facon.
+        if let Some(existing) = self.entries.iter().find(|e| e.hash == hash) {
+            eprintln!(
+                "[Audit] replay detecte (hash={}) -- entree existante renvoyee (seq={}), aucune nouvelle entree creee",
+                &existing.hash[..23.min(existing.hash.len())],
+                existing.seq
+            );
+            return existing.clone();
+        }
+
         let parent_hash = self
             .entries
             .last()
             .map(|e| e.hash.clone())
             .unwrap_or_else(|| "root".to_string());
-
-        let hash = canonical_hash(payload);
 
         let next_seq = self.entries.last().map(|e| e.seq + 1).unwrap_or(0);
 
@@ -364,6 +395,42 @@ mod tests {
         assert_eq!(e2.parent_hash, e1.hash);
         assert_eq!(chain.len(), 2);
         assert!(chain.verify_integrity().is_ok());
+    }
+
+    /// Regression pour la trouvaille du 2026-10-28 (confirmee en direct,
+    /// db SQLite fraiche et isolee, binaire release) : avant le fix,
+    /// rejouer EXACTEMENT le meme payload (meme canonical_hash) juste apres
+    /// son premier envoi produisait une DEUXIEME `AuditEntry` avec un
+    /// nouveau seq et un `parent_hash` pointant sur... son propre hash (une
+    /// entree devenant son propre parent) -- que `adn_store.rs::
+    /// save_audit_entry` rejetait ensuite silencieusement au disque
+    /// (`INSERT OR IGNORE` sur `hash UNIQUE`), sans jamais le signaler au
+    /// client qui avait pourtant recu un AUDIT[seq=1, ...] annoncant un
+    /// enregistrement reussi. Le fix applique la meme idempotence EN
+    /// MEMOIRE que celle deja documentee pour le disque : un replay doit
+    /// renvoyer l'entree EXISTANTE, jamais une entree fantome.
+    #[test]
+    fn test_append_is_idempotent_on_immediate_replay() {
+        let mut chain = HashChain::new();
+        let first = chain.append(&mk("alice", "query"));
+        let replay = chain.append(&mk("alice", "query")); // contenu identique
+
+        assert_eq!(replay.seq, first.seq, "un replay ne doit jamais consommer un nouveau seq");
+        assert_eq!(replay.parent_hash, first.parent_hash, "un replay doit renvoyer l'entree existante telle quelle");
+        assert_ne!(replay.parent_hash, replay.hash, "une entree ne peut pas etre son propre parent");
+        assert_eq!(chain.len(), 1, "aucune entree fantome ajoutee en memoire");
+    }
+
+    #[test]
+    fn test_append_idempotent_replay_does_not_disturb_later_distinct_entries() {
+        let mut chain = HashChain::new();
+        let first = chain.append(&mk("alice", "query"));
+        let _replay = chain.append(&mk("alice", "query"));
+        let distinct = chain.append(&mk("bob", "reply"));
+
+        assert_eq!(distinct.seq, first.seq + 1, "un payload reellement nouveau doit suivre le dernier seq REEL, pas etre decale par le replay ignore");
+        assert_eq!(distinct.parent_hash, first.hash);
+        assert_eq!(chain.len(), 2);
     }
 
     #[test]

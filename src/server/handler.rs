@@ -319,6 +319,33 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // FIX 2026-10-28 (session Olivier, audit live multi-angle) :
+                    // E108 ("Contradiction tau-locale", MUST_NOT(S,O,tau) +
+                    // PERFORM(S,O,tau) au MEME instant, DANS LE MEME payload)
+                    // restait jusqu'ici un SEMANTIC_WARNING pur, sans effet sur
+                    // consistency_check/deontic_audit/EXECUTION_TRACE.verdict --
+                    // alors meme que le commentaire juste au-dessus de
+                    // deontic_audit (plus bas dans ce fichier, "jamais de rejet,
+                    // une contradiction a travers l'historique peut etre un vrai
+                    // desaccord entre agents/moments -- CONTRAIREMENT a se
+                    // contredire dans le meme souffle") qualifie explicitement le
+                    // cas INTRA-payload de PLUS grave que le cas cross-historique.
+                    // Le cross-historique (deontic_audit) faisait deja basculer le
+                    // verdict a FLAGGED ; le cas que ce commentaire designe
+                    // lui-meme comme pire recevait, dans les faits, le traitement
+                    // le plus faible de tout le pipeline (confirme en direct sur
+                    // le binaire release + serveur TCP reel, payload
+                    // CONSTRAINTS[MUST_NOT ARR.ACCESS ...] + RELATION[ARR.ACCESS
+                    // meme sujet/objet/tau] -> EXECUTION_TRACE[verdict=PASS]).
+                    // Reste un SEMANTIC_WARNING (pas un rejet : meme politique
+                    // "jamais de rejet" que deontic_audit cross-historique
+                    // ci-dessous, un payload malforme n'est pas forcement une
+                    // attaque), mais pese maintenant sur le verdict exactement
+                    // comme deontic_audit -- parite retablie entre les deux
+                    // mecanismes de detection Axiome D.
+                    let intra_payload_deontic_contradiction =
+                        semantic_warnings.iter().any(|w| w.starts_with("E108:"));
+
                     let mut semantic_warning_lines = String::new();
                     if !semantic_warnings.is_empty() {
                         warn!("[Handler] Semantic operator warnings: {:?}", semantic_warnings);
@@ -1284,7 +1311,10 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // possible de ce bloc, aucune boucle vers un LLM tiers n'existe
                     // dans ce chemin serveur.
                     let kb_ran = !verification_lines.is_empty();
-                    let execution_trace_verdict = if !consistency.consistent || !deontic_audit.consistent {
+                    let execution_trace_verdict = if !consistency.consistent
+                        || !deontic_audit.consistent
+                        || intra_payload_deontic_contradiction
+                    {
                         "FLAGGED"
                     } else {
                         "PASS"
@@ -1295,7 +1325,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         if kb_ran { "RUN" } else { "SKIPPED" },
                         verification_lines.lines().count(),
                         if consistency.consistent { "PASS" } else { "FLAGGED" },
-                        if deontic_audit.consistent { "PASS" } else { "FLAGGED" },
+                        if deontic_audit.consistent && !intra_payload_deontic_contradiction { "PASS" } else { "FLAGGED" },
                     );
 
                     // STEP 3c-quater: ERROR_SIGNAL (2026-09-08, meme origine que
@@ -1726,12 +1756,20 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // Absent quand aucune RELATION de ce payload ne porte de `modality`
                     // ET que l'audit contre l'historique est propre -- pas de bruit sur
                     // le trafic factuel normal (l'immense majorite des payloads).
-                    let deontic_audit_line = if deontic_audit.violations.is_empty() {
+                    // 2026-10-28: inclut desormais aussi le cas intra-payload (E108,
+                    // voir intra_payload_deontic_contradiction plus haut) -- avant ce
+                    // fix, un MUST_NOT viole dans le MEME payload que son interdiction
+                    // ne produisait JAMAIS cette ligne (seul un SEMANTIC_WARNING,
+                    // non correle a DEONTIC_AUDIT), alors que c'est le meme Axiome D
+                    // que le cas cross-historique ci-dessous, juste observe a une
+                    // portee temporelle differente (meme instant vs historique).
+                    let deontic_audit_line = if deontic_audit.violations.is_empty() && !intra_payload_deontic_contradiction {
                         String::new()
                     } else {
                         format!(
-                            "DEONTIC_AUDIT [consistent=false, violations={}]\n",
-                            deontic_audit.violations.len()
+                            "DEONTIC_AUDIT [consistent=false, violations={}, intra_payload={}]\n",
+                            deontic_audit.violations.len(),
+                            intra_payload_deontic_contradiction
                         )
                     };
 
