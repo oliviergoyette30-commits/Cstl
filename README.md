@@ -10,6 +10,10 @@
 ![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
 ![v5.1 Features](https://img.shields.io/badge/v5.1-B1%2BA%2BB2%2BC-green.svg)
 
+> **Are you an AI agent reading this repo?** See [`AGENTS.md`](AGENTS.md) for the
+> fastest path to actually running CSTL — one command, zero setup, real
+> server, real output.
+
 ---
 
 ## What's New in v5.1?
