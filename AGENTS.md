@@ -9,6 +9,40 @@ actual run against the real code in this repo (2026-10-29) -- not invented.
 If you want the full feature writeup first, read `README.md`. If you just
 want to see it work, keep reading here.
 
+## Option 0 — you have NO code execution at all (a chat-window AI)
+
+This is for you if you are reading this because a human pasted it into your
+chat and you cannot run a single command yourself — only compose text and
+wait for the human to paste a result back. This was added on 2026-10-29
+after exactly that situation: an AI in a chat window said so itself ("I
+don't click Enter in your terminal") rather than quietly pretending it had
+run code it hadn't. If that's you, don't guess at CSTL's behavior from this
+file's prose — have the human get you a real answer in one copy-paste step:
+
+1. Ask the human running your chat to do this once (it stays running):
+   ```bash
+   cargo run --bin cstl_parser &
+   cargo run --example http_bridge_for_ai &
+   ```
+2. Compose your own CSTL payload as plain text (see the format in Option 2
+   below, or `CSTL_SPEC_v5_0.md`). Give the human exactly this to run,
+   substituting your payload text:
+   ```bash
+   cat > /tmp/payload.cstl << 'EOF'
+   <your CSTL payload text here>
+   EOF
+   curl -s --data-binary @/tmp/payload.cstl http://127.0.0.1:8089/try
+   ```
+3. Have them paste the raw output back to you. That text is the real
+   server's real response — not simulated, not predicted by any LLM.
+4. Repeat with a different payload for anything else you want to try.
+
+`examples/http_bridge_for_ai.rs` is a plain HTTP-to-TCP relay: it does zero
+CSTL interpretation itself, it just forwards your payload's bytes to the
+real server and returns the real response's bytes. `curl` was chosen
+because it's already installed on effectively everything, unlike the raw
+`/dev/tcp` bash trick in Option 2, which needs a shell that understands it.
+
 ## Option 1 — the whole architecture, one command, zero setup
 
 ```bash
