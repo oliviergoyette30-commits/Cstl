@@ -1006,6 +1006,30 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                             trust_score,
                                             public_key: public_key.clone(),
                                         };
+                                        // Persiste AVANT le register() en memoire (meme ordre
+                                        // que le reste du pipeline: ecrire au disque avant de
+                                        // refleter en memoire) -- fix 2026-10-29 de la faille
+                                        // de continuite d'identite trouvee par l'audit du 15
+                                        // octobre (voir adn_store.rs::save_agent): sans ca, le
+                                        // registre redemarrait toujours vide et le premier
+                                        // client a se reenregistrer sous un nom apres un
+                                        // restart en devenait le proprietaire, cle publique y
+                                        // comprise, sans preuve de rotation puisque plus rien
+                                        // n'existait contre quoi verifier. Avertissement seul
+                                        // en cas d'echec (meme politique que les autres writes
+                                        // "best effort" vers adn_store dans ce handler) --
+                                        // l'enregistrement en memoire reste la source de
+                                        // verite pour la session en cours.
+                                        if let Err(e) = ctx.adn_store.lock().await.save_agent(
+                                            &card.name,
+                                            &card.version,
+                                            &card.capabilities,
+                                            card.trust_score,
+                                            card.public_key.as_deref(),
+                                            chrono::Utc::now().timestamp(),
+                                        ) {
+                                            error!("[Handler] agent_register: echec persistance de '{}': {}", name, e);
+                                        }
                                         ctx.agent_registry.write().await.register(card);  // agent_register: écriture
                                         if is_rotation {
                                             info!("[Handler] agent_register: '{}' -- key rotation proven, key updated (trust_score={})", name, trust_score);

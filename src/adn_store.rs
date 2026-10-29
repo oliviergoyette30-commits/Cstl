@@ -329,6 +329,14 @@ impl AdnStore {
                 created_at INTEGER NOT NULL,
                 UNIQUE(proposal_id, voter_id)
             );
+            CREATE TABLE IF NOT EXISTS agents (
+                name TEXT PRIMARY KEY,
+                version TEXT NOT NULL,
+                capabilities TEXT NOT NULL,
+                trust_score REAL NOT NULL,
+                public_key TEXT,
+                updated_at INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_quorum_votes_proposal ON quorum_votes(proposal_id);
             CREATE INDEX IF NOT EXISTS idx_arbitrage_cases_status ON arbitrage_cases(status);
             CREATE INDEX IF NOT EXISTS idx_arbitration_rulings_case ON arbitration_rulings(case_id);
@@ -700,6 +708,14 @@ impl AdnStore {
                 content_hash TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 UNIQUE(proposal_id, voter_id)
+            );
+            CREATE TABLE IF NOT EXISTS agents (
+                name TEXT PRIMARY KEY,
+                version TEXT NOT NULL,
+                capabilities TEXT NOT NULL,
+                trust_score REAL NOT NULL,
+                public_key TEXT,
+                updated_at INTEGER NOT NULL
             );",
         )?;
         Ok(Self { conn })
@@ -1697,6 +1713,74 @@ impl AdnStore {
         Ok(out)
     }
 
+    /// Persiste un agent (upsert par `name`) -- fix 2026-10-29 de la faille
+    /// de continuite d'identite trouvee par l'audit du 15 octobre:
+    /// `AgentRegistry` ne vivait qu'en memoire, vide a chaque redemarrage
+    /// du serveur, donc le premier client qui se reenregistrait sous un nom
+    /// apres un restart devenait ce nom (sa cle publique devenait la
+    /// reference, aucune preuve de rotation exigee puisque rien n'existait
+    /// a faire tourner). Appele depuis `handler.rs` juste apres
+    /// `agent_registry.write().await.register(card)`, meme discipline que
+    /// `chain`/`governance_events` deja seedes au demarrage. `capabilities`
+    /// stocke en CSV (pas de table de jointure separee -- coherent avec le
+    /// reste du fichier, ex. `assigned_arbiters` en JSON texte dans
+    /// `arbitrage_cases`).
+    pub fn save_agent(
+        &self,
+        name: &str,
+        version: &str,
+        capabilities: &[String],
+        trust_score: f64,
+        public_key: Option<&str>,
+        updated_at: i64,
+    ) -> Result<(), rusqlite::Error> {
+        let capabilities_csv = capabilities.join(",");
+        self.conn.execute(
+            "INSERT INTO agents (name, version, capabilities, trust_score, public_key, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(name) DO UPDATE SET
+                version = excluded.version,
+                capabilities = excluded.capabilities,
+                trust_score = excluded.trust_score,
+                public_key = excluded.public_key,
+                updated_at = excluded.updated_at",
+            params![name, version, capabilities_csv, trust_score, public_key, updated_at],
+        )?;
+        Ok(())
+    }
+
+    /// Charge tous les agents persistes -- utilise au demarrage
+    /// (`try_with_data_path`) pour seeder `AgentRegistry` avant d'ouvrir le
+    /// port d'ecoute, meme logique que `load_chain`/`load_governance_events`
+    /// juste au-dessus dans ce fichier. Tuple brut (pas `AgentCard`): ce
+    /// module n'a pas besoin de dependre de `agent_discovery`, l'appelant
+    /// construit la struct.
+    pub fn load_agents(&self) -> Result<Vec<(String, String, Vec<String>, f64, Option<String>)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT name, version, capabilities, trust_score, public_key FROM agents ORDER BY name ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let capabilities_csv: String = row.get(2)?;
+            let capabilities = if capabilities_csv.is_empty() {
+                Vec::new()
+            } else {
+                capabilities_csv.split(',').map(|s| s.to_string()).collect()
+            };
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                capabilities,
+                row.get::<_, f64>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
     /// Tous les emergence_proofs enregistres, du plus ancien au plus recent.
     pub fn get_emergence_proofs(&self) -> Result<Vec<EmergenceProof>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
@@ -2413,6 +2497,64 @@ impl AdnStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Fix 2026-10-29 (faille de continuite d'identite, audit du 15
+    /// octobre): round-trip simple save_agent/load_agents, upsert inclus.
+    #[test]
+    fn test_save_agent_load_agents_roundtrip_and_upsert() {
+        let store = AdnStore::open(":memory:").unwrap();
+
+        store.save_agent("alice", "5.0.0", &["communication".to_string()], 0.95, Some("pubkey_abc"), 1000).unwrap();
+        store.save_agent("bob", "5.0.0", &["fact_checking".to_string(), "arbitration".to_string()], 0.85, None, 1001).unwrap();
+
+        let loaded = store.load_agents().unwrap();
+        assert_eq!(loaded.len(), 2);
+        let alice = loaded.iter().find(|(name, ..)| name == "alice").expect("alice doit etre chargee");
+        assert_eq!(alice.1, "5.0.0");
+        assert_eq!(alice.2, vec!["communication".to_string()]);
+        assert_eq!(alice.3, 0.95);
+        assert_eq!(alice.4, Some("pubkey_abc".to_string()));
+        let bob = loaded.iter().find(|(name, ..)| name == "bob").expect("bob doit etre charge");
+        assert_eq!(bob.2, vec!["fact_checking".to_string(), "arbitration".to_string()]);
+        assert_eq!(bob.4, None, "agent legacy sans cle doit rester None, pas une chaine vide");
+
+        // Rotation de cle: meme nom, nouvelle cle -- doit remplacer, pas dupliquer.
+        store.save_agent("alice", "5.0.0", &["communication".to_string()], 0.97, Some("pubkey_rotated"), 2000).unwrap();
+        let loaded2 = store.load_agents().unwrap();
+        assert_eq!(loaded2.len(), 2, "l'upsert ne doit pas creer de doublon");
+        let alice2 = loaded2.iter().find(|(name, ..)| name == "alice").unwrap();
+        assert_eq!(alice2.4, Some("pubkey_rotated".to_string()));
+        assert_eq!(alice2.3, 0.97);
+    }
+
+    /// Fix 2026-10-29: la vraie garantie que ce fix doit tenir -- un agent
+    /// persiste AVANT un "redemarrage" (ouverture d'une nouvelle connexion
+    /// sur le meme fichier, pas `:memory:` qui ne survivrait de toute facon
+    /// pas a une fermeture) doit etre rechargeable par la connexion
+    /// suivante. Sans ce fix, `load_agents()` n'existait pas et
+    /// `AgentRegistry::new()` demarrait toujours vide a chaque
+    /// `try_with_data_path`.
+    #[test]
+    fn test_agent_persists_across_reopen_same_file() {
+        let tmp_path = std::env::temp_dir().join(format!("cstl_test_agent_persist_{}.db", std::process::id()));
+        let tmp_path_str = tmp_path.to_str().unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+
+        {
+            let store = AdnStore::open(tmp_path_str).unwrap();
+            store.save_agent("alice", "5.0.0", &["communication".to_string()], 0.95, Some("pubkey_abc"), 1000).unwrap();
+        } // connexion fermee -- simule l'arret du serveur
+
+        {
+            let store2 = AdnStore::open(tmp_path_str).unwrap(); // "redemarrage"
+            let loaded = store2.load_agents().unwrap();
+            assert_eq!(loaded.len(), 1, "alice doit survivre a la fermeture/reouverture de la connexion");
+            assert_eq!(loaded[0].0, "alice");
+            assert_eq!(loaded[0].4, Some("pubkey_abc".to_string()), "la cle publique doit survivre -- c'est elle qui empeche le vol d'identite post-restart");
+        }
+
+        let _ = std::fs::remove_file(&tmp_path);
+    }
 
     #[test]
     fn test_put_master_compressed_roundtrip_and_fk_enforcement() {

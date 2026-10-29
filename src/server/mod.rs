@@ -32,7 +32,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use serde_json;
 
-use crate::agent_discovery::AgentRegistry;
+use crate::agent_discovery::{AgentCard, AgentRegistry};
 use crate::kb_verify::KbVerifier;
 use crate::adn_store::AdnStore;
 use crate::restricted_council::RestrictedCouncil;
@@ -234,6 +234,23 @@ impl CstlNativeServer {
             .save_wai_dictionary(&dict_hash, dict_timestamp, &dict_symbols_json, dict_size)
             .map_err(|e| format!("impossible de sauvegarder le dictionnaire WAI v5.0.0: {e}"))?;
 
+        // Seed AgentRegistry depuis ce qui est deja persiste -- fix
+        // 2026-10-29 de la faille de continuite d'identite trouvee par
+        // l'audit du 15 octobre (voir le commentaire de `save_agent` dans
+        // adn_store.rs): avant ce chargement, le registre demarrait
+        // TOUJOURS vide, meme quand cette meme base SQLite contenait deja
+        // des agents enregistres avec leur cle publique -- un redemarrage
+        // laissait donc n'importe qui reprendre un nom deja pris sans
+        // prouver la possession de l'ancienne cle. Meme logique que
+        // `chain`/`governance_events` juste au-dessus dans cette fonction.
+        let loaded_agents = adn_store
+            .load_agents()
+            .map_err(|e| format!("impossible de charger les agents persistes depuis '{data_path}': {e}"))?;
+        let mut agent_registry = AgentRegistry::new();
+        for (name, version, capabilities, trust_score, public_key) in loaded_agents {
+            agent_registry.register(AgentCard { name, version, capabilities, trust_score, public_key });
+        }
+
         let adn_store_arc = Arc::new(Mutex::new(adn_store));
         // Portee reduite v1, decision explicite de l'utilisateur: un seul membre
         // autorise pour bootstrap le systeme, pas le quorum 2/3 multi-personnes
@@ -260,7 +277,7 @@ impl CstlNativeServer {
         ));
         Ok(CstlNativeServer {
             port,
-            agent_registry: Arc::new(RwLock::new(AgentRegistry::new())),
+            agent_registry: Arc::new(RwLock::new(agent_registry)),
             chain: Arc::new(Mutex::new(chain)),
             kb_verifier: Arc::new(KbVerifier::new()),
             adn_store: adn_store_arc,
@@ -313,7 +330,18 @@ impl CstlNativeServer {
             eprintln!("[CSTL-Native Server] Telegram desactive (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents)");
         }
 
-        let addr = format!("0.0.0.0:{}", self.port);
+        // Hote d'ecoute configurable (2026-10-29, durcissement reseau
+        // trouve par l'audit du 15 octobre: bind 0.0.0.0 en dur, aucun moyen
+        // de restreindre a localhost sans recompiler). `CSTL_BIND_HOST`
+        // absent/vide -> "0.0.0.0", comportement identique a avant ce fix
+        // (aucune regression sur le defaut); meme discipline de variable
+        // d'environnement chargee une seule fois ici que CSTL_TLS_*/
+        // CSTL_COLLECT_RESPONSE_CORPUS juste plus bas.
+        let bind_host = std::env::var("CSTL_BIND_HOST")
+            .ok()
+            .filter(|h| !h.is_empty())
+            .unwrap_or_else(|| "0.0.0.0".to_string());
+        let addr = format!("{}:{}", bind_host, self.port);
         let listener = listener::create_listener(&addr).await?;
 
         eprintln!("[CSTL-Native Server] Listening on {}", addr);

@@ -120,6 +120,16 @@ features = ["v4", "serde"]
 # Structured logging for error handling, replacing eprintln! throughout
 version = "0.4"
 
+[dependencies.env_logger]
+# Backend reel pour les macros log::* -- deplace depuis [dev-dependencies]
+# le 2026-10-29: sans backend initialise en production (seulement dans les
+# tests via env_logger::init()/try_init() locaux), les appels log::info!/
+# log::error!/log::warn! dans arbitrage.rs/quorum_wire.rs/handler.rs ne
+# vont strictement nulle part sur le binaire reel -- trouvaille de l'audit
+# du 15 octobre 2026, confirmee a nouveau le 29 octobre (handler.rs en plus
+# depuis). Initialise dans main.rs.
+version = "0.11"
+
 # v5.1 Dependencies (Cryptography, Compression, TLS, Metrics)
 [dependencies.rustls]
 # TLS 1.3 mutual authentication layer
@@ -200,10 +210,6 @@ version = "0.4"
 [dependencies.tower-http]
 # Tower HTTP utilities (CORS, tracing)
 version = "0.5"
-
-[dev-dependencies.env_logger]
-# Logger implementation for tests and development
-version = "0.11"
 
 [dependencies.flate2]
 # GZIP compression for optional Couche 5 payload storage

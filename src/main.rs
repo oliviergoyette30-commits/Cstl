@@ -8,6 +8,13 @@ use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Backend reel pour log::info!/warn!/error! (arbitrage.rs, quorum_wire.rs,
+    // handler.rs) -- sans ca ces appels ne vont nulle part (trouvaille de
+    // l'audit du 15 octobre 2026, Cargo.toml 2026-10-29). RUST_LOG=info par
+    // defaut si la variable d'environnement n'est pas definie, pour que les
+    // logs apparaissent sans configuration prealable.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     eprintln!("🚀 CSTL-Native Server v1.0");
     eprintln!("===========================");
 
