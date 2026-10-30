@@ -1,0 +1,70 @@
+name: CI
+
+# Ajoute le 2026-10-30 en reponse a "es ce que c possible dans github de
+# declencher le test" -- jusqu'ici, "les tests passent" n'etait verifie que
+# localement, par moi ou par Olivier, ce qui ne prouve rien a un tiers (ou a
+# une IA externe) qui n'a aucune raison de nous croire sur parole. Ce
+# workflow fait tourner cargo build + cargo test --lib + une poignee de
+# scenarios live (examples/*_smoke_test.rs, examples/full_architecture_ai_
+# to_ai_test.rs) sur l'infrastructure de GitHub elle-meme, a chaque push et
+# chaque pull request -- un signal verifiable par n'importe qui via l'onglet
+# Actions, independant de ce que dit ce depot ou son auteur.
+#
+# LIMITE HONNETE: ceci ne rend PAS le serveur CSTL public ni interrogeable
+# en continu par un tiers -- chaque run demarre un serveur ephemere, le
+# teste, et le detruit. C'est une preuve que le code marche a cet instant,
+# pas un endpoint permanent. La question de l'hebergement public reste
+# ouverte, separement.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Build + tests (unitaires et live)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installe la toolchain Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache des dependances cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo build --lib
+        run: cargo build --lib --verbose
+
+      - name: cargo build --bin cstl_parser
+        run: cargo build --bin cstl_parser --verbose
+
+      - name: cargo test --lib (tests unitaires)
+        run: cargo test --lib --verbose
+
+      # Scenarios live: demarrent un vrai CstlNativeServer sur un port
+      # ephemere et verifient son comportement reel de bout en bout, pas
+      # juste des assertions en memoire isolees. Memes exemples que ceux
+      # documentes dans AGENTS.md -- si l'un de ceux-ci echoue ici, les
+      # instructions donnees aux IA dans AGENTS.md mentent.
+      - name: Smoke test -- architecture complete AI-to-AI
+        run: cargo run --example full_architecture_ai_to_ai_test
+
+      - name: Smoke test -- audit deontique (intra-payload + cross-history informatif)
+        run: cargo run --example deontic_audit_smoke_test
+
+      - name: Smoke test -- rejet dur opt-in cross-history (strict_deontic_history)
+        run: cargo run --example strict_deontic_history_smoke_test
+
+      - name: Smoke test -- protection Sybil du quorum
+        run: cargo run --example quorum_sybil_test
+
+      - name: Smoke test -- persistance de l'identite d'agent a travers un restart
+        run: cargo run --example agent_registry_persistence_test
