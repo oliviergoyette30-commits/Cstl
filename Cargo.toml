@@ -171,11 +171,19 @@ version = "0.12"
 # Concurrent hashmap for sharded registry
 version = "6"
 
-[dependencies.prometheus]
-# Prometheus metrics client
-# Upgraded from 0.13 to 0.14 to resolve CVE-2025-53605 (protobuf v2.28.0 transitive dep)
-# v0.14+ uses protobuf v3.7.2 which has the uncontrolled recursion fix
-version = "0.14"
+# [dependencies.prometheus] et [dependencies.protobuf] retires le 2026-10-30
+# (Dependabot: alerte medium "Crash due to uncontrolled recursion in protobuf
+# crate"). `cargo tree -i protobuf` confirmait que les deux seuls
+# consommateurs de protobuf etaient prometheus elle-meme et cstl_parser (via
+# cet override direct) -- et `grep -rln prometheus src/` ne trouvait ZERO
+# usage reel: prometheus n'a jamais ete importee nulle part dans ce depot.
+# Un bump de version etait impossible de toute facon: prometheus 0.14.0
+# (derniere version publiee) exige `protobuf = "^3.7.2"`, qui est deja la
+# derniere branche 3.x (la crate protobuf est passee directement de 3.7.2 a
+# 4.x, incompatible avec cette contrainte). Plutot que de mitiger une
+# dependance jamais utilisee, elle est retiree: `cargo build --lib` et
+# `cargo test --lib` (548/548) verifies apres coup, et `cargo tree` confirme
+# protobuf/prometheus absentes de l'arbre entier.
 
 [dependencies.governor]
 # Rate limiting par IP sur le listener TCP (src/server/connection_limits.rs,
@@ -193,11 +201,6 @@ version = "6"
 # Random number generation for key generation (both tests and production)
 # Needed by ed25519-dalek for SigningKey::generate
 version = "0.8"
-
-[dependencies.protobuf]
-# Direct dependency to override transitive prometheus -> protobuf v2.28.0
-# Fixes CVE-2025-53605 (stack overflow via uncontrolled recursion)
-version = "3.7.2"
 
 [dependencies.axum]
 # Web framework for REST API (Layer 5c: FastAPI integration)

@@ -2,4 +2,14 @@
 fastapi==0.115.0
 uvicorn==0.32.0
 pydantic==2.6.0
-python-multipart==0.0.32
+# python-multipart retire le 2026-10-30 (Dependabot: 5 alertes, dont 3 high --
+# DoS via headers/boundary multipart non bornes, ReDoS sur Content-Type, et
+# ecriture arbitraire de fichier via config non-defaut). 0.0.32 est DEJA la
+# derniere version publiee sur PyPI (sortie 2026-06-04) -- aucun correctif
+# en amont n'existe, donc un bump de version est impossible. Verifie par
+# grep sur tout sdk/python/*.py: aucun endpoint n'utilise File()/Form()/
+# UploadFile ni n'importe multipart -- seul /audit/query (POST) existe et
+# prend un corps JSON. FastAPI n'exige python-multipart qu'a l'usage reel
+# du parsing multipart, jamais sollicite ici. Dependance morte qui ne
+# faisait que porter la surface de vulnerabilite sans raison -- retiree
+# plutot que mitigee.
