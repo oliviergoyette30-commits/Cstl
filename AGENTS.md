@@ -127,6 +127,11 @@ worth knowing about if you're checking something specific:
   server restart.
 - `examples/trust_score_poisoning_test.rs` -- trust-weighted routing and
   its [0,1] clamp.
+- `examples/strict_deontic_history_smoke_test.rs` -- the opt-in hard
+  rejection of cross-history deontic contradictions
+  (`INTENT_PAYLOAD[strict_deontic_history=true]`, 2026-10-30): default
+  behavior stays informative-only (unchanged, tested since 2026-09-04),
+  but a client can now ask for a real rejection instead.
 
 Run any of them the same way: `cargo run --example <name>`. Each file's
 header comment explains what it's actually testing and why, in the same

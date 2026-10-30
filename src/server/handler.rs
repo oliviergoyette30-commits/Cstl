@@ -1334,6 +1334,51 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         }
                     }
 
+                    // STEP 3c-quinquies: rejet dur OPT-IN de l'audit deontique
+                    // cross-history (2026-10-30, question ouverte depuis
+                    // l'audit du 28/29 octobre -- cf. commentaire STEP 3c
+                    // ci-dessus). Par design assume, une contradiction qui
+                    // s'etale sur plusieurs payloads reste INFORMATIVE par
+                    // defaut (DEONTIC_AUDIT seul, jamais de rejet): un desaccord
+                    // historique entre agents n'est pas forcement une erreur de
+                    // protocole. Mais certains domaines (finance, securite) ont
+                    // besoin de l'inverse -- qu'une contradiction avec
+                    // l'historique devienne bloquante. Plutot que de changer le
+                    // comportement par defaut (ce qui casserait la semantique
+                    // documentee et les tests existants bases dessus), l'appelant
+                    // opte in explicitement via
+                    // INTENT_PAYLOAD[strict_deontic_history=true]. Champ absent
+                    // ou != "true"/"1" => comportement inchange (informatif
+                    // seulement, teste depuis le 2026-09-04).
+                    let strict_deontic_history = matches!(
+                        payload.intent.get("strict_deontic_history").map(String::as_str),
+                        Some("true") | Some("1")
+                    );
+                    if strict_deontic_history && !deontic_audit.consistent {
+                        let errors: String = deontic_audit
+                            .violations
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, v)| {
+                                format!(
+                                    "E107H[{idx}]: {} {} contredit l'historique (requis par {}, interdit par {})",
+                                    v.subject, v.object, v.required_by, v.forbidden_by
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        warn!(
+                            "[Handler] strict_deontic_history=true: rejet dur de {} violation(s) cross-history",
+                            deontic_audit.violations.len()
+                        );
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=validation_error, errors={}]\n---END---\n",
+                            errors
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     // STEP 3c-ter: EXECUTION_TRACE (2026-09-08, session tripartite
                     // du 22 mai 2026 -- CSTL_SPEC_v5_0.md §16.6). Genere PAR LE
                     // SERVEUR uniquement (contrairement a GUARDRAIL_REPORT/SCOPE_LOCK,
