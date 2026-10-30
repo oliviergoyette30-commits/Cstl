@@ -172,6 +172,49 @@ async fn main() {
         println!("     absent, comme attendu");
     }
 
+    // ---- 1d. Dedup par target_relation (2026-10-30, trouve en testant en
+    // direct avec Gemini): empiler 5 entrees MEASURED sur la meme relation
+    // ne doit PLUS tirer la moyenne vers le haut au-dela de ce qu'une seule
+    // entree MEASURED donnerait -- le poids retenu par cible est le MIN du
+    // groupe, pas une moyenne qui recompte les doublons. ----
+    println!("[1d] 5x MEASURED empiles sur la meme relation + 1 UNKNOWN + 1 dangling...");
+    let stacked_payload = "#!CSTL v5.0.0 MODE=A\n\
+         META [encoder=UncertaintySmokeTest, produced_by=UncertaintySmokeTest]\n\
+         INTENT_PAYLOAD [purpose=uncertainty_smoke_stack, sender=agent_s, receiver=server]\n\
+         RELATION [id=r004, type=ARR.ACCESS, subject=target_node, object=target_node]\n\
+         UNCERTAINTY [\n\
+         \u{20}u1 UNKNOWN [target_relation=r004]\n\
+         \u{20}u2 INFERRED [target_relation=r999]\n\
+         \u{20}u3 MEASURED [target_relation=r004]\n\
+         \u{20}u4 MEASURED [target_relation=r004]\n\
+         \u{20}u5 MEASURED [target_relation=r004]\n\
+         \u{20}u6 MEASURED [target_relation=r004]\n\
+         \u{20}u7 MEASURED [target_relation=r004]\n\
+         ]\n\
+         ---END---\n";
+    let resp_stacked = send(tcp_port, stacked_payload).await;
+    let annotated_stacked = extract_field(&resp_stacked, "UNCERTAINTY_AUDIT", "annotated");
+    let unique_stacked = extract_field(&resp_stacked, "UNCERTAINTY_AUDIT", "unique_targets");
+    let wc_stacked = extract_field(&resp_stacked, "UNCERTAINTY_AUDIT", "weighted_confidence");
+    println!(
+        "     annotated={:?}, unique_targets={:?}, weighted_confidence={:?}",
+        annotated_stacked, unique_stacked, wc_stacked
+    );
+    if annotated_stacked.as_deref() != Some("7") {
+        failures.push(format!("annotated devrait rester 7 (compte brut), obtenu {:?}", annotated_stacked));
+    }
+    if unique_stacked.as_deref() != Some("2") {
+        failures.push(format!("unique_targets devrait etre 2 (r004, r999), obtenu {:?}", unique_stacked));
+    }
+    // Groupe r004: min(UNKNOWN=0.1, MEASURED=1.0 x5) = 0.1. Groupe r999 (dangling): INFERRED=0.4.
+    // (0.1 + 0.4) / 2 = 0.25 -- PAS 0.79, qui serait le resultat (faux) d'une moyenne sans dedup.
+    if wc_stacked.as_deref() != Some("0.25") {
+        failures.push(format!(
+            "weighted_confidence devrait etre 0.25 (dedup par min, pas 0.79 sans dedup), obtenu {:?}",
+            wc_stacked
+        ));
+    }
+
     // ---- 2. /audit/query?hash=<hash> retrouve le bon message ----
     println!("[2] /audit/query?hash=<hash> sur le message MEASURED ci-dessus...");
     let hash_field = extract_field(&resp_measured, "AUDIT", "hash").unwrap_or_default();

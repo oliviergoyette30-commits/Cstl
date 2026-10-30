@@ -1877,6 +1877,32 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // le payload ne contient aucun bloc UNCERTAINTY -- meme principe
                     // d'absence conditionnelle que les blocs ci-dessus, pas de bruit sur
                     // le trafic qui n'utilise pas cette annotation.
+                    //
+                    // Dedup par `target_relation` (2026-10-30, meme session, trouve en
+                    // testant ce bloc en direct avec Gemini): la toute premiere version
+                    // calculait `weighted_confidence` comme une simple moyenne sur
+                    // TOUTES les entrees, sans regarder si plusieurs visaient la meme
+                    // relation -- ce qui permettait d'empiler N entrees `MEASURED`
+                    // (poids 1.0) sur une seule relation pour tirer la moyenne vers le
+                    // haut et noyer une incertitude reelle ailleurs dans le meme
+                    // payload (verifie en direct: 5 doublons `MEASURED` sur r004 +
+                    // 1 `UNKNOWN` legitime + 1 dangling faisait passer la confiance de
+                    // 0.25 a 0.79). Rien ne CONSOMME encore `weighted_confidence` pour
+                    // une decision reelle (ni GOVERNANCE, ni DEONTIC_AUDIT, ni
+                    // CONSISTENCY -- verifie par grep), donc ce n'etait pas exploitable
+                    // aujourd'hui, mais la moyenne elle-meme etait fausse dans son
+                    // principe et le serait devenu le jour ou un consommateur reel
+                    // l'aurait lue. Fix: `weighted_confidence` est calcule sur un
+                    // groupe PAR `target_relation` (le poids MIN du groupe -- pas la
+                    // moyenne, pas le max -- pour qu'empiler des entrees fortes ne
+                    // puisse jamais masquer une seule entree faible sur la meme cible;
+                    // la pire annotation gagne toujours). Une entree sans
+                    // `target_relation` du tout ne peut se dedupliquer avec rien
+                    // (aucune cle commune) et compte seule. `annotated`/`dangling`
+                    // restent des comptes BRUTS (toutes les entrees, dangling inclus) --
+                    // inchange par rapport a avant, c'est `weighted_confidence` seul qui
+                    // etait le calcul a corriger. Nouveau champ `unique_targets` ajoute
+                    // pour que ce denominateur reel soit lisible plutot qu'implicite.
                     let uncertainty_audit_line = if payload.uncertainty.is_empty() {
                         String::new()
                     } else {
@@ -1896,25 +1922,41 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             .collect();
                         let mut annotated = 0usize;
                         let mut dangling = 0usize;
-                        let mut weight_sum = 0.0f64;
+                        let mut min_weight_by_target: std::collections::HashMap<&str, f64> =
+                            std::collections::HashMap::new();
+                        let mut unkeyed_weights: Vec<f64> = Vec::new();
                         for u in &payload.uncertainty {
                             let status = u.get("status").map(String::as_str).unwrap_or("");
-                            weight_sum += confidence_weight(status);
+                            let weight = confidence_weight(status);
                             annotated += 1;
-                            if let Some(target) = u.get("target_relation") {
-                                if !relation_ids.contains(target.as_str()) {
-                                    dangling += 1;
+                            match u.get("target_relation") {
+                                Some(target) => {
+                                    if !relation_ids.contains(target.as_str()) {
+                                        dangling += 1;
+                                    }
+                                    min_weight_by_target
+                                        .entry(target.as_str())
+                                        .and_modify(|w| {
+                                            if weight < *w {
+                                                *w = weight;
+                                            }
+                                        })
+                                        .or_insert(weight);
                                 }
+                                None => unkeyed_weights.push(weight),
                             }
                         }
-                        let weighted_confidence = if annotated > 0 {
-                            weight_sum / annotated as f64
+                        let unique_targets = min_weight_by_target.len() + unkeyed_weights.len();
+                        let weighted_confidence = if unique_targets > 0 {
+                            let sum: f64 = min_weight_by_target.values().sum::<f64>()
+                                + unkeyed_weights.iter().sum::<f64>();
+                            sum / unique_targets as f64
                         } else {
                             0.0
                         };
                         format!(
-                            "UNCERTAINTY_AUDIT [annotated={}, dangling={}, weighted_confidence={:.2}]\n",
-                            annotated, dangling, weighted_confidence
+                            "UNCERTAINTY_AUDIT [annotated={}, dangling={}, unique_targets={}, weighted_confidence={:.2}]\n",
+                            annotated, dangling, unique_targets, weighted_confidence
                         )
                     };
 
