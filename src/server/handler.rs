@@ -1843,6 +1843,81 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             details
                         )
                     };
+                    // Bloc UNCERTAINTY_AUDIT (2026-10-30) -- avant ce commit,
+                    // `payload.uncertainty` etait persiste (`put_master_compressed`,
+                    // seul usage de ce champ dans tout handler.rs) mais jamais relu
+                    // pour produire un effet observable dans la reponse: un payload
+                    // avec `ESTIMATED` et le meme payload avec `INFERRED` produisaient
+                    // une reponse strictement identique, et `target_relation` n'etait
+                    // verifie contre rien nulle part dans le codebase (confirme par
+                    // grep) -- deux trouvailles distinctes faites en verifiant un test
+                    // propose par GPT (relaye par Olivier) sur si ESTIMATED/INFERRED
+                    // sont distingues.
+                    //
+                    // Regle explicite adoptee ici plutot que de perturber CONSISTENCY/
+                    // SIGMA_CALIBRATION sans definir d'abord ce qu'ils sont censes
+                    // faire (mise en garde justifiee de GPT dans cette meme discussion):
+                    // chaque entree UNCERTAINTY porte un poids de confiance fixe selon
+                    // son statut (spec §8), par confiance croissante --
+                    // UNKNOWN (0.1) < INFERRED (0.4) < ESTIMATED (0.6) < MEASURED (1.0).
+                    // Justification du classement: MEASURED est une observation directe
+                    // (confiance maximale); ESTIMATED est un jugement humain/heuristique
+                    // sur une quantite reelle (confiance moderee-haute); INFERRED est
+                    // deduit d'autres faits et herite leur incertitude (confiance
+                    // moderee-basse); UNKNOWN est une absence de connaissance
+                    // EXPLICITEMENT declaree -- confiance minimale mais non nulle,
+                    // puisque l'annoter reste une information, contrairement a
+                    // l'absence totale d'annotation sur une relation.
+                    //
+                    // `target_relation` est maintenant verifie contre les RELATION
+                    // reellement presentes dans CE payload -- ferme le gap "jamais
+                    // valide nulle part" trouve plus tot dans cette session: une
+                    // reference qui ne correspond a aucun `id` de RELATION est comptee
+                    // comme "dangling" plutot que silencieusement ignoree. Absent quand
+                    // le payload ne contient aucun bloc UNCERTAINTY -- meme principe
+                    // d'absence conditionnelle que les blocs ci-dessus, pas de bruit sur
+                    // le trafic qui n'utilise pas cette annotation.
+                    let uncertainty_audit_line = if payload.uncertainty.is_empty() {
+                        String::new()
+                    } else {
+                        fn confidence_weight(status: &str) -> f64 {
+                            match status {
+                                "MEASURED" => 1.0,
+                                "ESTIMATED" => 0.6,
+                                "INFERRED" => 0.4,
+                                "UNKNOWN" => 0.1,
+                                _ => 0.0,
+                            }
+                        }
+                        let relation_ids: std::collections::HashSet<&str> = payload
+                            .relations
+                            .iter()
+                            .filter_map(|r| r.get("id").map(|s| s.as_str()))
+                            .collect();
+                        let mut annotated = 0usize;
+                        let mut dangling = 0usize;
+                        let mut weight_sum = 0.0f64;
+                        for u in &payload.uncertainty {
+                            let status = u.get("status").map(String::as_str).unwrap_or("");
+                            weight_sum += confidence_weight(status);
+                            annotated += 1;
+                            if let Some(target) = u.get("target_relation") {
+                                if !relation_ids.contains(target.as_str()) {
+                                    dangling += 1;
+                                }
+                            }
+                        }
+                        let weighted_confidence = if annotated > 0 {
+                            weight_sum / annotated as f64
+                        } else {
+                            0.0
+                        };
+                        format!(
+                            "UNCERTAINTY_AUDIT [annotated={}, dangling={}, weighted_confidence={:.2}]\n",
+                            annotated, dangling, weighted_confidence
+                        )
+                    };
+
                     // Absent quand aucune RELATION de ce payload ne porte de `modality`
                     // ET que l'audit contre l'historique est propre -- pas de bruit sur
                     // le trafic factuel normal (l'immense majorite des payloads).
@@ -2081,6 +2156,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             routed_agent_name_for_response,
@@ -2090,6 +2166,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             temporal_cycle_line,
                             implausibility_line,
                             epistemic_contradiction_line,
+                            uncertainty_audit_line,
                             deontic_audit_line,
                             performative_line,
                             negotiation_line,

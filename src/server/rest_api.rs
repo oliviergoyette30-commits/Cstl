@@ -74,8 +74,18 @@ pub struct AuditTrailResponse {
 }
 
 /// Query filter parameters
+///
+/// `hash` ajoute le 2026-10-30 avec l'implementation reelle de cette route
+/// (voir `AdnStore::query_audit_trail`) -- c'est le champ qui manquait pour
+/// retrouver un message ordinaire par le hash qu'il recoit dans son propre
+/// bloc `AUDIT [hash=...]`, le besoin precis qui a expose que cette route
+/// etait un stub. `action` reste accepte dans la requete (retro-
+/// compatibilite du contrat d'URL) mais n'a pas de colonne correspondante
+/// dans `audit_trail` -- aucune donnee reelle ne le remplit, voir le
+/// commentaire au-dessus de `query_audit_trail`.
 #[derive(Debug, Deserialize)]
 pub struct AuditQueryParams {
+    pub hash: Option<String>,
     pub start_date: Option<i64>,
     pub end_date: Option<i64>,
     pub entity: Option<String>,
@@ -238,26 +248,62 @@ async fn get_audit_trail(
 }
 
 /// Query audit trail with filters
+///
+/// Avant le 2026-10-30 cette route retournait `results: [], total_count: 0`
+/// codes en dur peu importe les parametres -- trouve en cherchant comment
+/// retrouver un message ordinaire par son hash AUDIT (voir
+/// `AdnStore::query_audit_trail` pour le detail de l'implementation et
+/// pourquoi `/audit/{case_id}` ne pouvait pas repondre a ce besoin).
 async fn query_audit_trail(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Query(params): Query<AuditQueryParams>,
 ) -> impl IntoResponse {
     let limit = params.limit.unwrap_or(100).min(1000);
+    let adn_store = state.adn_store.lock().await;
 
-    let response = json!({
-        "results": [],
-        "total_count": 0,
-        "query_params": {
-            "start_date": params.start_date,
-            "end_date": params.end_date,
-            "entity": params.entity,
-            "action": params.action,
-            "purpose": params.purpose,
-            "limit": limit
+    match adn_store.query_audit_trail(
+        params.hash.as_deref(),
+        params.start_date,
+        params.end_date,
+        params.entity.as_deref(),
+        params.purpose.as_deref(),
+        limit as i64,
+    ) {
+        Ok(entries) => {
+            let results: Vec<ApiAuditEntry> = entries
+                .into_iter()
+                .map(|e| ApiAuditEntry {
+                    seq: e.seq,
+                    hash: e.hash,
+                    parent_hash: e.parent_hash,
+                    sender: e.sender,
+                    receiver: e.receiver,
+                    purpose: e.purpose,
+                })
+                .collect();
+            let total_count = results.len();
+            let response = json!({
+                "results": results,
+                "total_count": total_count,
+                "query_params": {
+                    "hash": params.hash,
+                    "start_date": params.start_date,
+                    "end_date": params.end_date,
+                    "entity": params.entity,
+                    "action": params.action,
+                    "purpose": params.purpose,
+                    "limit": limit
+                }
+            });
+            (StatusCode::OK, Json(response))
         }
-    });
-
-    (StatusCode::OK, Json(response))
+        Err(e) => {
+            let response = json!({
+                "error": format!("Database error: {}", e)
+            });
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
+    }
 }
 
 /// Get audit statistics

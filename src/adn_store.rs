@@ -1228,6 +1228,84 @@ impl AdnStore {
             .optional()
     }
 
+    /// Recherche dans `audit_trail` avec filtres — ajoutee le 2026-10-30.
+    ///
+    /// Avant ce commit, `/audit/query` (rest_api.rs) retournait
+    /// systematiquement `results: [], total_count: 0` codes en dur, quels
+    /// que soient les parametres recus — trouvaille d'un audit mene avec
+    /// Olivier en reponse a une question de GPT (relaye par Olivier) sur
+    /// comment retrouver un message ordinaire par son hash AUDIT. La route
+    /// `/audit/{case_id}` existante ne pouvait pas repondre a ce besoin:
+    /// elle interroge `arbitrage_cases`, une table totalement separee des
+    /// messages CSTL ordinaires (voir commentaire sur `get_audit_trail`
+    /// dans rest_api.rs).
+    ///
+    /// `hash` donne une recherche exacte (court-circuite les autres
+    /// filtres: un hash identifie un message unique, les combiner avec
+    /// `entity`/`purpose`/dates n'aurait aucun sens). Sans `hash`, filtre
+    /// sur `audit_trail` (sender/receiver/purpose) jointe a `adn_store`
+    /// pour `created_at` (`audit_trail` n'a pas sa propre colonne de temps
+    /// — seul `adn_store`, indexe par le meme hash, en a une). `entity`
+    /// matche sender OU receiver. Resultats tries du plus recent au plus
+    /// ancien (`seq DESC`), bornes par `limit`.
+    pub fn query_audit_trail(
+        &self,
+        hash: Option<&str>,
+        start_date: Option<i64>,
+        end_date: Option<i64>,
+        entity: Option<&str>,
+        purpose: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<AuditEntry>, rusqlite::Error> {
+        // Recherche exacte par hash: identifie un message unique, pas la
+        // peine (et pas de sens) de combiner avec les autres filtres.
+        if let Some(h) = hash {
+            return Ok(self.get_audit_entry(h)?.into_iter().collect());
+        }
+
+        let mut sql = String::from(
+            "SELECT a.seq, a.hash, a.parent_hash, a.sender, a.receiver, a.purpose
+             FROM audit_trail a LEFT JOIN adn_store s ON a.hash = s.hash
+             WHERE 1=1",
+        );
+        let mut binds: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        if let Some(sd) = start_date {
+            sql.push_str(" AND s.created_at >= ?");
+            binds.push(Box::new(sd));
+        }
+        if let Some(ed) = end_date {
+            sql.push_str(" AND s.created_at <= ?");
+            binds.push(Box::new(ed));
+        }
+        if let Some(e) = entity {
+            sql.push_str(" AND (a.sender = ? OR a.receiver = ?)");
+            binds.push(Box::new(e.to_string()));
+            binds.push(Box::new(e.to_string()));
+        }
+        if let Some(p) = purpose {
+            sql.push_str(" AND a.purpose = ?");
+            binds.push(Box::new(p.to_string()));
+        }
+        sql.push_str(" ORDER BY a.seq DESC LIMIT ?");
+        binds.push(Box::new(limit));
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            binds.iter().map(|b| b.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), |row| {
+            Ok(AuditEntry {
+                seq: row.get(0)?,
+                hash: row.get(1)?,
+                parent_hash: row.get(2)?,
+                sender: row.get(3)?,
+                receiver: row.get(4)?,
+                purpose: row.get(5)?,
+            })
+        })?;
+        rows.collect()
+    }
+
     /// Ancrage humain (RestrictedCouncil). Rien n'est ancré sans ce commit explicite —
     /// aucune logique de quorum n'appelle encore cette fonction automatiquement:
     /// le quorum 2/3 humain (RestrictedCouncil) n'est pas construit dans cette passe.

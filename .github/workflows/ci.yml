@@ -63,6 +63,9 @@ jobs:
       - name: Smoke test -- rejet dur opt-in cross-history (strict_deontic_history)
         run: cargo run --example strict_deontic_history_smoke_test
 
+      - name: Smoke test -- UNCERTAINTY_AUDIT + /audit/query reel
+        run: cargo run --example uncertainty_and_audit_query_smoke_test
+
       - name: Smoke test -- protection Sybil du quorum
         run: cargo run --example quorum_sybil_test
 
