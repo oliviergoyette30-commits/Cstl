@@ -598,8 +598,13 @@ impl<'a> SemanticValidator<'a> {
             .map(|r| SemanticError {
                 code: "E101".to_string(),
                 message: format!(
-                    "Opérateur invalide '{}' — absent des 36 opérateurs officiels (ligne {})",
-                    r.operator, r.line
+                    // 2026-10-30: etait un "36" code en dur, perime des que
+                    // OFFICIAL_OPERATORS a grossi au-dela de ce compte sans
+                    // que ce message ne soit mis a jour (trouve en direct en
+                    // repondant a une question de GPT sur ce meme message).
+                    // OFFICIAL_OPERATORS.len() ne peut plus se perimer.
+                    "Opérateur invalide '{}' — absent des {} opérateurs officiels (ligne {})",
+                    r.operator, OFFICIAL_OPERATORS.len(), r.line
                 ),
                 line: r.line,
             })
