@@ -2207,6 +2207,72 @@ impl AdnStore {
     // COUCHE 5: get_primer() & load_context()
     // ═══════════════════════════════════════════════════════════════════
 
+    /// Compte les tours deja enregistres pour une `conversation_id` --
+    /// ajoute le 2026-10-31 pour brancher `conversation_id`/`turn` dans le
+    /// chemin de traitement LIVE (`handler.rs`), qui ne les renseignait
+    /// jamais avant ce commit (`put()` y etait toujours appele avec
+    /// `None, None` pour ces deux colonnes -- confirme par grep: zero
+    /// occurrence de `conversation_id` dans tout `handler.rs`). Le serveur
+    /// utilise ce compte comme le prochain `turn` a assigner (0-indexe),
+    /// pour que le client n'ait qu'a fournir `conversation_id` -- jamais a
+    /// gerer un compteur de tour lui-meme, qui dupliquerait un etat que le
+    /// serveur a deja.
+    pub fn count_conversation_turns(&self, conversation_id: &str) -> Result<i64, rusqlite::Error> {
+        self.conn.query_row(
+            "SELECT COUNT(*) FROM adn_store WHERE conversation_id = ?1",
+            params![conversation_id],
+            |row| row.get(0),
+        )
+    }
+
+    /// Recupere les entrees recentes d'une conversation -- meme requete que
+    /// `get_primer()` juste en dessous, MOINS le filtre `committed = 1`.
+    ///
+    /// Pourquoi une fonction separee plutot que de retirer ce filtre de
+    /// `get_primer()`: `get_primer()` sert un besoin different et deja
+    /// cable ailleurs (ancrage humain RestrictedCouncil, Couche 5) --
+    /// changer sa semantique casserait ce contrat. Le besoin ici est
+    /// different: une conversation AI-to-AI LIVE (handler.rs) n'est jamais
+    /// `committed` par un humain -- `put()` insere toujours `committed=0`
+    /// (voir son propre commentaire) et aucune logique de quorum n'appelle
+    /// `commit()` automatiquement. Un `get_primer()` branche tel quel dans
+    /// `handler.rs` n'aurait donc JAMAIS rien trouve, peu importe combien
+    /// de messages precedents existaient -- gap distinct de celui que
+    /// `count_conversation_turns` ci-dessus corrige (conversation_id/turn
+    /// jamais renseignes), trouve en meme temps en essayant de brancher ce
+    /// mecanisme pour de vrai plutot que de le decrire en theorie.
+    pub fn get_conversation_context(
+        &self,
+        conversation_id: &str,
+        before_turn: i64,
+        limit: usize,
+    ) -> Result<Vec<(String, String, Option<String>, Option<String>, i64)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT hash, payload, payload_compressed, encoder, produced_by, turn
+             FROM adn_store
+             WHERE conversation_id = ?1 AND turn < ?2
+             ORDER BY turn DESC
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![conversation_id, before_turn, limit as i64], |row| {
+            let payload_bytes: Vec<u8> = row.get(1)?;
+            let is_compressed: i32 = row.get(2)?;
+            let payload = if is_compressed != 0 {
+                decompress_payload(&payload_bytes).unwrap_or_default()
+            } else {
+                String::from_utf8(payload_bytes).unwrap_or_default()
+            };
+            Ok((
+                row.get::<_, String>(0)?,          // hash
+                payload,
+                row.get::<_, Option<String>>(3)?,  // encoder
+                row.get::<_, Option<String>>(4)?,  // produced_by
+                row.get::<_, Option<i64>>(5)?.unwrap_or(-1), // turn
+            ))
+        })?;
+        rows.collect()
+    }
+
     /// get_primer() — charger les 3-5 entrées ADN les plus pertinentes
     /// avant un tour donné dans une conversation.
     ///

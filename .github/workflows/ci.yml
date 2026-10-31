@@ -66,6 +66,9 @@ jobs:
       - name: Smoke test -- UNCERTAINTY_AUDIT + /audit/query reel
         run: cargo run --example uncertainty_and_audit_query_smoke_test
 
+      - name: Smoke test -- contexte de conversation (CONVERSATION_CONTEXT)
+        run: cargo run --example conversation_context_smoke_test
+
       - name: Smoke test -- protection Sybil du quorum
         run: cargo run --example quorum_sybil_test
 

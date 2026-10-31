@@ -1681,6 +1681,28 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // que la meme tache detenait deja implicitement -> deadlock permanent,
                     // confirme par un test live: la deuxieme requete d'un test en 2 payloads
                     // separes ne progressait plus jamais au-dela de ce point.
+                    // conversation_id/turn (2026-10-31): avant ce commit, systematiquement
+                    // None/None ici -- `get_primer()`/`load_context()` (Couche 5) existaient
+                    // dans adn_store.rs depuis longtemps mais n'avaient jamais ete branches a
+                    // ce chemin, donc aucun payload n'avait jamais de conversation_id/turn a
+                    // lire, quel que soit ce que le client envoyait. Trouve en testant pour
+                    // de vrai l'idee d'un contexte partage entre deux agents a travers
+                    // plusieurs messages. Opt-in: un client qui fournit `conversation_id`
+                    // dans INTENT_PAYLOAD obtient un `turn` assigne par le SERVEUR (compte
+                    // des tours deja stockes pour cet id, 0-indexe) -- le client n'a jamais a
+                    // gerer de compteur lui-meme, qui dupliquerait un etat deja tenu ici.
+                    let conversation_id = payload.intent.get("conversation_id").cloned();
+                    let turn: Option<i64> = match &conversation_id {
+                        Some(cid) => match ctx.adn_store.lock().await.count_conversation_turns(cid) {
+                            Ok(count) => Some(count),
+                            Err(e) => {
+                                error!("[Handler] count_conversation_turns failed: {}", e);
+                                None
+                            }
+                        },
+                        None => None,
+                    };
+
                     let put_result = ctx.adn_store.lock().await.put(
                         &entry.hash,
                         &raw_payload,
@@ -1688,18 +1710,59 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         payload.meta.get("produced_by").map(String::as_str),
                         sigma,
                         Some(&entry.parent_hash),
-                        None,
-                        None,
+                        conversation_id.as_deref(),
+                        turn,
                     );
                     // Rempli dans la branche succes du put() juste en dessous -- voir
                     // STEP 3e-delta plus loin, declare ici (pas seulement dans le bloc
                     // else) pour rester visible lors de l'assemblage de la reponse plus
                     // bas, meme style que temporal_cycle_line/implausibility_line.
                     let mut adn_delta_line = String::new();
+                    // Meme principe, pour le bloc CONVERSATION_CONTEXT (2026-10-31) --
+                    // voir le commentaire complet sur `conversation_id`/`turn` plus haut.
+                    let mut conversation_context_line = String::new();
                     if let Err(e) = put_result {
                         error!("[Handler] adn_store.put failed: {}", e);
                     } else {
                         info!("[Handler] Stored in adn_store (hash={}, sigma={}, committed=false)", entry.hash, sigma);
+
+                        // CONVERSATION_CONTEXT: n'existe que si CE payload portait
+                        // `conversation_id` -- opt-in, meme discipline d'absence
+                        // conditionnelle que les autres blocs ci-dessous (pas de bruit
+                        // sur le trafic qui n'utilise pas cette fonctionnalite). Les
+                        // tours precedents (jusqu'a 5, meme fenetre que get_primer())
+                        // sont lus via get_conversation_context -- PAS get_primer(),
+                        // qui exige committed=1 et ne trouverait jamais rien ici (voir
+                        // sa propre doc). Echec non-fatal: une lecture de contexte
+                        // manquee ne doit jamais faire echouer le stockage du payload
+                        // Layer 1 lui-meme, meme discipline que put_evaluation/
+                        // put_master_compressed ci-dessous.
+                        if let (Some(cid), Some(t)) = (&conversation_id, turn) {
+                            match ctx.adn_store.lock().await.get_conversation_context(cid, t, 5) {
+                                Ok(prior) if !prior.is_empty() => {
+                                    let hashes = prior.iter().map(|(h, _, _, _, _)| h.as_str())
+                                        .collect::<Vec<_>>().join(";");
+                                    let turns = prior.iter().map(|(_, _, _, _, pt)| pt.to_string())
+                                        .collect::<Vec<_>>().join(";");
+                                    conversation_context_line = format!(
+                                        "CONVERSATION_CONTEXT [conversation_id={}, turn={}, prior_turns_included={}, prior_turns={}, prior_hashes={}]\n",
+                                        cid, t, prior.len(), turns, hashes
+                                    );
+                                }
+                                Ok(_) => {
+                                    // Premier tour de cette conversation (t=0): aucun
+                                    // contexte a reconstituer, pas une erreur -- meme
+                                    // discipline que load_context sur le genesis.
+                                    conversation_context_line = format!(
+                                        "CONVERSATION_CONTEXT [conversation_id={}, turn={}, prior_turns_included=0, prior_turns=, prior_hashes=]\n",
+                                        cid, t
+                                    );
+                                }
+                                Err(e) => {
+                                    error!("[Handler] get_conversation_context failed: {}", e);
+                                }
+                            }
+                        }
 
                         // STEP 3d-sigma (suite): persiste le wrapper Layer 2 EvaluatedPayload
                         // construit plus haut -- FK sur adn_store(hash), donc APRES que le
@@ -2199,6 +2262,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             {}\
                             {}\
                             {}\
+                            {}\
                             AUDIT [hash={}, parent_hash={}, seq={}]\n\
                             ---END---\n",
                             routed_agent_name_for_response,
@@ -2221,6 +2285,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             error_signal_lines,
                             execution_trace_line,
                             adn_delta_line,
+                            conversation_context_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq
