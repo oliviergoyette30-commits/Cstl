@@ -403,6 +403,32 @@ pub fn encode_structural(
             }
             None => stable.push(0),
         }
+
+        // extras (2026-10-31, trouve en construisant un bloc COMPRESSED_PAYLOAD
+        // de demonstration pour Gemini): contrairement a DEFINES et RELATIONS
+        // ci-dessus, UNCERTAINTY n'avait AUCUN mecanisme d'extras -- seuls
+        // `identifier`/`status`/`sigma` survivaient a un aller-retour par ce
+        // compresseur. `target_relation` (le champ dont depend
+        // UNCERTAINTY_AUDIT, handler.rs, ajoute la veille) et toute autre cle
+        // (`justification`, etc.) disparaissaient SILENCIEUSEMENT des qu'un
+        // payload passait par le Master Compresseur -- que ce soit via un
+        // client envoyant un bloc COMPRESSED_PAYLOAD, ou via la persistance
+        // normale (`AdnStore::put_master_compressed`, appelee sur CHAQUE
+        // payload traite, compresse ou non a l'origine). Meme mecanisme que
+        // RELATIONS juste au-dessus: toute cle hors du schema connu est
+        // preservee telle quelle plutot que perdue.
+        let mut extras: Vec<(&String, &String)> = u
+            .iter()
+            .filter(|(k, _)| !matches!(k.as_str(), "identifier" | "status" | "sigma"))
+            .collect();
+        extras.sort_by(|a, b| a.0.cmp(b.0));
+        variable.extend_from_slice(&encode_varint(extras.len() as u32));
+        for (k, v) in extras {
+            let k_idx = table.intern(k);
+            let v_idx = table.intern(v);
+            variable.extend_from_slice(&encode_varint(k_idx));
+            variable.extend_from_slice(&encode_varint(v_idx));
+        }
     }
 
     // Les longueurs de la table de chaines sont ECRITES EN PREMIER dans
@@ -547,6 +573,13 @@ pub fn decode_structural(streams: &StructuralStreams) -> Result<DecodedTriple, S
             let sigma_idx = read_varint(variable, &mut vpos, "uncertainty: sigma")?;
             map.insert("sigma".to_string(), read_string(&table, sigma_idx)?.to_string());
         }
+
+        let extra_count = read_varint(variable, &mut vpos, "uncertainty: extras compte")?;
+        for _ in 0..extra_count {
+            let k_idx = read_varint(variable, &mut vpos, "uncertainty: extra key")?;
+            let v_idx = read_varint(variable, &mut vpos, "uncertainty: extra val")?;
+            map.insert(read_string(&table, k_idx)?.to_string(), read_string(&table, v_idx)?.to_string());
+        }
         uncertainty.push(map);
     }
 
@@ -645,6 +678,34 @@ mod tests {
         let uncertainty = vec![
             m(&[("identifier", "e001"), ("status", "ESTIMATED"), ("sigma", "0.7")]),
             m(&[("identifier", "r999"), ("status", "UNKNOWN")]),
+        ];
+        let streams = encode_structural(&[], &[], &uncertainty);
+        let (_, _, u) = decode_structural(&streams).unwrap();
+        assert_eq!(u, uncertainty);
+    }
+
+    /// Regression du 2026-10-31: `target_relation` (et toute cle hors
+    /// `identifier`/`status`/`sigma`) disparaissait silencieusement a la
+    /// compression -- UNCERTAINTY n'avait aucun mecanisme d'extras,
+    /// contrairement a DEFINES et RELATIONS (voir `test_relations_extras_
+    /// roundtrip` plus bas). Trouve en construisant un bloc
+    /// COMPRESSED_PAYLOAD de demonstration pour un tiers (Gemini, relaye
+    /// par Olivier) -- le round-trip paniquait avec `target_relation`
+    /// absent du cote decompresse.
+    #[test]
+    fn test_uncertainty_extras_roundtrip() {
+        let uncertainty = vec![
+            m(&[
+                ("identifier", "u001"),
+                ("status", "MEASURED"),
+                ("sigma", "0.0"),
+                ("target_relation", "r001"),
+                ("justification", "Validation par coordonnees et frontieres physiques."),
+            ]),
+            // Sans sigma, mais avec target_relation quand meme -- les deux
+            // mecanismes optionnels (has_sigma, extras) doivent cohabiter
+            // independamment l'un de l'autre.
+            m(&[("identifier", "u002"), ("status", "UNKNOWN"), ("target_relation", "r999")]),
         ];
         let streams = encode_structural(&[], &[], &uncertainty);
         let (_, _, u) = decode_structural(&streams).unwrap();
