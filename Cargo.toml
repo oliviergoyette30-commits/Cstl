@@ -28,10 +28,15 @@ path = "src/lib.rs"
 # taille vs gzip/zstd pour un gain de vitesse inutile a cette echelle de
 # message (differences de microsecondes). Jamais adopte dans master.rs.
 lz4_flex = "0.14.0"
-# Requis pour les tests de src/signing.rs et src/crypto/post_quantum.rs
-# (SigningKey::generate(&mut csprng)) -- ed25519-dalek 2.x exige un
-# CryptoRngCore, rand 0.8's OsRng l'implemente.
-# Aussi utilisé en production dans post_quantum.rs pour la génération de clés.
+# Requis pour les tests de src/signing.rs (SigningKey::generate(&mut
+# csprng)) -- ed25519-dalek 2.x exige un CryptoRngCore, rand 0.8's OsRng
+# l'implemente.
+# Note 2026-11-02: la mention "aussi utilise en production dans
+# post_quantum.rs pour la generation de cles" qui etait ici etait fausse --
+# post_quantum.rs genere des octets fixes a la main ((0..32).map(|i| i as
+# u8)...), pas d'appel a rand/OsRng. Voir le commentaire pres de l'ancien
+# emplacement de pqcrypto-kyber plus bas dans ce fichier pour le detail
+# complet de ce module (stub honnetement documente, jamais termine).
 criterion = "0.5"
 proptest = "1.4"
 prost = "0.14.4"
@@ -155,13 +160,25 @@ version = "0.10"
 # Secure memory wiping for crypto keys
 version = "1.7"
 
-[dependencies.pqcrypto-kyber]
-# Post-quantum NIST-standardized Kyber
-version = "0.7"
-
-[dependencies.pqcrypto-traits]
-# Traits for post-quantum crypto
-version = "0.3"
+# [dependencies.pqcrypto-kyber] et [dependencies.pqcrypto-traits] retires
+# le 2026-11-02 (cargo audit: toutes deux + pqcrypto-internals transitive
+# signalees "unmaintained", PQClean upstream archive -- RUSTSEC-2024-0381,
+# -2026-0162, -2026-0163). Avant de migrer vers le remplacement recommande
+# (pqcrypto-mlkem), verification du vrai usage: `grep -rn pqcrypto_kyber
+# src/` ne trouve STRICTEMENT RIEN -- src/crypto/post_quantum.rs (le seul
+# module cense s'en servir) n'importe jamais la crate. Ses "cles Kyber" et
+# "signatures Kyber" sont des chaines inventees a la main
+# (`"kyber_pub_stub_1184_bytes"`, `format!("kyber_sig_{}", ...)`), et
+# `verify()` retourne `true` des que la chaine n'est pas vide -- aucune
+# verification cryptographique reelle. C'est honnetement documente dans
+# V5_1_WEEK1_COMPLETION_2026-09-13.md comme un stub de la semaine 1, vraie
+# crypto "deferred to Week 2" -- jamais arrivee. Le commentaire plus bas
+# dans ce fichier qui disait ces deux crates "utilisees en production dans
+# post_quantum.rs" etait donc faux: dependance 100% morte, aucun appel
+# reel nulle part dans ce depot. Retiree plutot que migree -- si la
+# signature post-quantique reelle est voulue un jour, ce sera une
+# implementation neuve avec pqcrypto-mlkem, pas un bump de cette
+# dependance-ci qui n'a jamais rien fait.
 
 [dependencies.parking_lot]
 # Faster parking_lot::Mutex for sharded registry
