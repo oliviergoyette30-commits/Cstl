@@ -266,7 +266,70 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
             continue;
         }
 
+        // Correctif (decouvert 2026-11-05, repare 2026-11-07). La premiere
+        // version de ce correctif executait le flush ci-dessous EN DEHORS du
+        // `if` d'entree en conteneur -- donc a CHAQUE ligne du payload, pas
+        // seulement avant une entree reelle en RELATIONS[/CONSTRAINTS[/
+        // UNCERTAINTY[. Regression detectee par cargo test
+        // (test_relation_never_closed_bracket_dropped_with_warning) : la
+        // ligne ---END--- elle-meme declenchait ce flush avant d'atteindre
+        // le bloc de fin de boucle ("R7 (suite)"), produisant le mauvais
+        // message ("conteneur suivant demarre avant fermeture" au lieu de
+        // "jamais fermee avant ---END---"). Le flush doit etre CONDITIONNE a
+        // l'entree reelle en conteneur -- deplace a l'interieur du `if`.
         if trimmed_line == "RELATIONS [" || trimmed_line == "CONSTRAINTS [" || trimmed_line == "UNCERTAINTY [" {
+            // L'entree en mode conteneur ignorait un bloc simple-ligne encore
+            // en attente dans `current_block` (le plus souvent DEFINE), sans
+            // jamais appeler son parseur -- perte silencieuse, zero
+            // avertissement, pire que R7. Meme flush que les autres points de
+            // transition de ce fichier ("Save previous block if exists").
+            if !current_block.is_empty() && !block_name.is_empty() {
+                match block_name.as_str() {
+                    "META" => payload.meta = parse_block(&current_block)?,
+                    "INTENT_PAYLOAD" => payload.intent = parse_block(&current_block)?,
+                    "RELATION" => match parse_block(&current_block) {
+                        Ok(relation) => payload.relations.push(relation),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "RELATION mal formee ignoree (conteneur suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "DEFINE" => match parse_define_block(&current_block) {
+                        Ok(def) => payload.defines.push(def),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "R7: bloc DEFINE mal forme ignore (conteneur suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "GUARDRAIL_REPORT" => match parse_block(&current_block) {
+                        Ok(report) => payload.guardrail_reports.push(report),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "GUARDRAIL_REPORT mal forme ignore (conteneur suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "SCOPE_LOCK" => match parse_block(&current_block) {
+                        Ok(lock) => record_scope_lock(&mut payload, lock),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "SCOPE_LOCK mal forme ignore (conteneur suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "ERROR_SIGNAL" => match parse_block(&current_block) {
+                        Ok(req) => record_error_signal_request(&mut payload, req),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "ERROR_SIGNAL mal forme ignore (conteneur suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    "COMPRESSED_PAYLOAD" => match parse_block(&current_block) {
+                        Ok(map) => record_compressed_payload(&mut payload, map),
+                        Err(e) => payload.parse_warnings.push(format!(
+                            "COMPRESSED_PAYLOAD mal forme ignore (conteneur suivant demarre avant fermeture) -- {}", e
+                        )),
+                    },
+                    _ => {}
+                }
+            }
+            in_block = false;
+            current_block.clear();
+            block_name.clear();
+
             in_container = Some(if trimmed_line.starts_with("RELATIONS") {
                 "RELATIONS"
             } else if trimmed_line.starts_with("CONSTRAINTS") {
@@ -278,30 +341,30 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         }
 
         // Check if line starts a new block
-        let is_meta = line.starts_with("META [");
-        let is_intent = line.starts_with("INTENT_PAYLOAD [");
-        let is_relation = line.starts_with("RELATION [");
+        let is_meta = trimmed_line.starts_with("META [");
+        let is_intent = trimmed_line.starts_with("INTENT_PAYLOAD [");
+        let is_relation = trimmed_line.starts_with("RELATION [");
         // GUARDRAIL_REPORT et SCOPE_LOCK (ajoutes 2026-09-08) suivent EXACTEMENT
         // la meme forme bracket generique que META/INTENT_PAYLOAD/RELATION --
         // "NOM [" -- donc aucun nouveau mecanisme de decoupage, juste deux mots-cle
         // reconnus de plus. Voir CstlPayload::guardrail_reports/scope_lock pour
         // l'origine (session tripartite du 22 mai 2026) et CSTL_SPEC_v5_0.md pour
         // la grammaire complete.
-        let is_guardrail = line.starts_with("GUARDRAIL_REPORT [");
-        let is_scope_lock = line.starts_with("SCOPE_LOCK [");
+        let is_guardrail = trimmed_line.starts_with("GUARDRAIL_REPORT [");
+        let is_scope_lock = trimmed_line.starts_with("SCOPE_LOCK [");
         // ERROR_SIGNAL (forme CLIENT uniquement, ajoutee 2026-09-08 --
         // CSTL_SPEC_v5_0.md §16.6) suit la meme forme bracket generique.
         // EXECUTION_TRACE n'apparait volontairement PAS ici -- jamais parse
         // en entree, purement genere par le serveur (voir handler.rs).
-        let is_error_signal = line.starts_with("ERROR_SIGNAL [");
+        let is_error_signal = trimmed_line.starts_with("ERROR_SIGNAL [");
         // COMPRESSED_PAYLOAD (wire format compresse, 2026-10-01) -- meme
         // forme bracket generique, voir `record_compressed_payload`.
-        let is_compressed_payload = line.starts_with("COMPRESSED_PAYLOAD [");
+        let is_compressed_payload = trimmed_line.starts_with("COMPRESSED_PAYLOAD [");
         // Contrairement a META/INTENT_PAYLOAD/RELATION, le mot-cle DEFINE
         // n'est pas immediatement suivi de "[" -- la grammaire reelle (spec
         // §9) est `DEFINE <identifier> AS <entity_type> [attrs]`, avec deux
         // tokens (identifiant + type) entre le mot-cle et le crochet.
-        let is_define = line.starts_with("DEFINE ");
+        let is_define = trimmed_line.starts_with("DEFINE ");
 
         if is_meta || is_intent || is_relation || is_define || is_guardrail || is_scope_lock || is_error_signal || is_compressed_payload {
             // Save previous block if exists
@@ -358,7 +421,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
             // Start new block
             in_block = true;
             block_name = if is_meta { "META" } else if is_intent { "INTENT_PAYLOAD" } else if is_relation { "RELATION" } else if is_guardrail { "GUARDRAIL_REPORT" } else if is_scope_lock { "SCOPE_LOCK" } else if is_error_signal { "ERROR_SIGNAL" } else if is_compressed_payload { "COMPRESSED_PAYLOAD" } else { "DEFINE" }.to_string();
-            current_block = line.to_string();
+            current_block = trimmed_line.to_string();
 
             // Check if block ends on same line. Cas particulier DEFINE : le
             // groupe `[attrs]` etant optionnel dans la grammaire (§9), une
@@ -422,7 +485,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
             }
         } else if in_block && line.contains(']') {
             current_block.push('\n');
-            current_block.push_str(line);
+            current_block.push_str(trimmed_line);
 
             match block_name.as_str() {
                 "META" => payload.meta = parse_block(&current_block)?,
@@ -484,7 +547,7 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
             current_block.clear();
         } else if in_block {
             current_block.push('\n');
-            current_block.push_str(line);
+            current_block.push_str(trimmed_line);
         }
     }
 
