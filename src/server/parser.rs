@@ -616,6 +616,8 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         _ => {}
     }
 
+    detect_disjunctive_obligation_ambiguity(&mut payload);
+
     eprintln!("[Parser] Parsed CSTL v{} MODE={}", payload.version, payload.mode);
     eprintln!("[Parser] META: {} fields", payload.meta.len());
     eprintln!("[Parser] INTENT: {} fields", payload.intent.len());
@@ -625,6 +627,104 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     eprintln!("[Parser] UNCERTAINTY: {} entries", payload.uncertainty.len());
 
     Ok(payload)
+}
+
+/// Modalites CONSTRAINTS traitees comme "obligation positive" par
+/// `detect_disjunctive_obligation_ambiguity` ci-dessous -- MUST_NOT/NOT/
+/// FORBID expriment deja une interdiction (pas de piege ET/OU possible du
+/// meme type), MAY/SHOULD/IF/IFF/UNLESS sont trop faibles ou conditionnels
+/// pour que deux occurrences paralleles se lisent sans ambiguite comme "les
+/// deux obligatoires". MUST/REQUIRE sont l'obligation ferme et inconditionnelle
+/// -- SHOULD est inclus par prudence (recommandation forte, meme risque de
+/// lecture par defaut en ET).
+const OBLIGATION_MODALITIES: &[&str] = &["MUST", "REQUIRE", "SHOULD"];
+
+/// Detection heuristique du piege "disjonction lue comme conjonction"
+/// (trouvaille LANG-11, pilote de controle du 2026-11-07, voir
+/// claude/LANG11_PILOT_CONTROL_ARM_2026-11-07.md) : deux CONSTRAINTS
+/// paralleles de modalite obligatoire sur le MEME sujet et le MEME
+/// operateur, vers deux objets differents, alors qu'une relation EITHER_OR
+/// existe entre ces deux memes objets ailleurs dans le payload. Chaque
+/// ligne est individuellement valide -- ce n'est pas une erreur de syntaxe,
+/// c'est un angle mort semantique verifie empiriquement : rien dans
+/// `parse_constraints_line`/`parse_relations_line` n'interdit cette
+/// combinaison, et avant ce fix aucun avertissement n'etait leve.
+///
+/// Ne rejette JAMAIS le payload (meme politique R7/§19 que le reste de ce
+/// fichier : avertissement, jamais un rejet dur, pour une ambiguite
+/// semantique plutot que syntaxique) -- ajoute un avertissement explicite
+/// nommant les deux objets et l'idiome correct verifie : un seul tuple
+/// `(MODALITE) sujet EITHER_OR alternative [attrs]`, lui aussi accepte par
+/// ce meme parseur (`parse_constraints_line` ne restreint l'operateur a
+/// aucune liste -- EITHER_OR y est accepte comme n'importe quel autre
+/// operateur official).
+fn detect_disjunctive_obligation_ambiguity(payload: &mut CstlPayload) {
+    // Toutes les paires d'objets relies par EITHER_OR (relation ouverte,
+    // sans modalite -- RELATION/RELATIONS[], pas CONSTRAINTS/CONSTRAINTS[]).
+    let either_or_pairs: Vec<(String, String)> = payload
+        .relations
+        .iter()
+        .filter(|m| m.get("type").map(|t| t == "EITHER_OR").unwrap_or(false))
+        .filter_map(|m| {
+            let a = m.get("subject")?.clone();
+            let b = m.get("object")?.clone();
+            Some((a, b))
+        })
+        .collect();
+
+    if either_or_pairs.is_empty() {
+        return;
+    }
+
+    // Toutes les contraintes obligatoires : (sujet, operateur, objet).
+    // Copie en valeurs possedees (pas de references) pour ne garder aucun
+    // emprunt sur `payload.relations` une fois cette liste construite --
+    // on va ensuite ecrire dans `payload.parse_warnings`.
+    let obligations: Vec<(String, String, String)> = payload
+        .relations
+        .iter()
+        .filter(|m| {
+            m.get("modality")
+                .map(|mo| OBLIGATION_MODALITIES.contains(&mo.as_str()))
+                .unwrap_or(false)
+        })
+        .filter_map(|m| {
+            let s = m.get("subject")?.clone();
+            let t = m.get("type")?.clone();
+            let o = m.get("object")?.clone();
+            Some((s, t, o))
+        })
+        .collect();
+
+    let mut already_warned: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+
+    for (pair_a, pair_b) in &either_or_pairs {
+        for i in 0..obligations.len() {
+            for j in (i + 1)..obligations.len() {
+                let (s1, t1, o1) = &obligations[i];
+                let (s2, t2, o2) = &obligations[j];
+                if s1 != s2 || t1 != t2 {
+                    continue;
+                }
+                let matches_pair = (o1 == pair_a && o2 == pair_b) || (o1 == pair_b && o2 == pair_a);
+                if !matches_pair {
+                    continue;
+                }
+                let key = if o1 <= o2 {
+                    (o1.clone(), o2.clone())
+                } else {
+                    (o2.clone(), o1.clone())
+                };
+                if !already_warned.insert(key) {
+                    continue;
+                }
+                payload.parse_warnings.push(format!(
+                    "AMBIGUITE DISJONCTIVE (LANG-11): deux contraintes obligatoires paralleles -- {} {} {} et {} {} {} -- alors qu'une relation EITHER_OR existe entre {} et {}. Lu par defaut comme ET (les deux requis), pas OU exclusif. Si l'intention est une obligation disjonctive, preferer un seul tuple : '(MODALITE) {} EITHER_OR {} [alternative={}]'.",
+                    s1, t1, o1, s2, t2, o2, o1, o2, s1, o1, o2
+                ));
+            }
+        }
+    }
 }
 
 /// Parse un bloc `DEFINE <identifier> AS <entity_type> [attr_list]` (spec §9)
@@ -1205,6 +1305,88 @@ RELATION [type=EQUALS, subject=e001, object=e002]
         let payload = parse_payload(payload_str).unwrap();
         assert_eq!(payload.relations.len(), 1);
         assert!(payload.parse_warnings.is_empty());
+    }
+
+    // ── Detection du piege "disjonction lue comme conjonction" (LANG-11,
+    // pilote de controle du 2026-11-07) ──
+
+    #[test]
+    fn test_disjunctive_obligation_ambiguity_detected_with_either_or() {
+        // Deux REQUIRE paralleles sur patient_7 POSSESSES {medication_a,
+        // medication_b} + une relation EITHER_OR entre les deux objets :
+        // exactement le piege historique documente dans
+        // lang11_ground_truth.md -- doit produire un avertissement explicite.
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+RELATIONS [
+(medication_a) EITHER_OR medication_b
+]
+CONSTRAINTS [
+(REQUIRE) patient_7 POSSESSES medication_a
+(REQUIRE) patient_7 POSSESSES medication_b
+]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(
+            payload
+                .parse_warnings
+                .iter()
+                .any(|w| w.contains("AMBIGUITE DISJONCTIVE")),
+            "un avertissement d'ambiguite disjonctive est attendu: {:?}",
+            payload.parse_warnings
+        );
+    }
+
+    #[test]
+    fn test_parallel_required_constraints_without_either_or_no_ambiguity_warning() {
+        // Memes deux REQUIRE paralleles, mais SANS relation EITHER_OR nulle
+        // part dans le payload -- rien n'indique une disjonction, donc pas
+        // d'avertissement (on ne veut pas de faux positif sur deux
+        // obligations qui sont legitimement toutes les deux requises).
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+CONSTRAINTS [
+(REQUIRE) patient_7 POSSESSES medication_a
+(REQUIRE) patient_7 POSSESSES medication_b
+]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(
+            !payload
+                .parse_warnings
+                .iter()
+                .any(|w| w.contains("AMBIGUITE DISJONCTIVE")),
+            "aucun avertissement attendu sans relation EITHER_OR: {:?}",
+            payload.parse_warnings
+        );
+    }
+
+    #[test]
+    fn test_single_either_or_constraint_tuple_no_false_positive() {
+        // L'idiome correct verifie empiriquement le 2026-11-07 : un seul
+        // tuple CONSTRAINTS utilisant EITHER_OR comme operateur -- aucune
+        // paire d'obligations paralleles n'existe, donc rien a signaler.
+        let payload_str = r#"#!CSTL v5.0.0 MODE=A
+META [encoder=Agent_CLAUDE, produced_by=Claude]
+INTENT_PAYLOAD [purpose=test, sender=alice, receiver=bob]
+CONSTRAINTS [
+(MUST) patient_7 EITHER_OR medication_a [alternative=medication_b]
+]
+---END---"#;
+
+        let payload = parse_payload(payload_str).unwrap();
+        assert!(
+            !payload
+                .parse_warnings
+                .iter()
+                .any(|w| w.contains("AMBIGUITE DISJONCTIVE")),
+            "aucun avertissement attendu pour l'idiome correct: {:?}",
+            payload.parse_warnings
+        );
     }
 
     // ── GUARDRAIL_REPORT / SCOPE_LOCK (ajoutes 2026-09-08, session
