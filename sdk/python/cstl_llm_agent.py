@@ -7,6 +7,7 @@ Autonomous agent dialogue with peer-mode self (alice ↔ bob ↔ charlie)
 import sys
 import os
 import json
+import urllib.request
 import socket
 import time
 import argparse
@@ -30,11 +31,6 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
 
-try:
-    import ollama
-    HAS_OLLAMA = True
-except ImportError:
-    HAS_OLLAMA = False
 
 try:
     import google.generativeai as genai
@@ -206,33 +202,93 @@ class LLMProvider:
         raise NotImplementedError
 
 
-class HermesAgentBrain(LLMProvider):
-    """Hermes3:8b via Ollama (localhost:11434)"""
+def _extract_json_object(text: str) -> Optional[dict]:
+    """Extrait le premier objet JSON d'un texte de modele (tolere du texte
+    autour : premiere '{' jusqu'a la derniere '}'). None si absent/invalide."""
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        obj = json.loads(text[start:end + 1])
+    except ValueError:
+        return None
+    return obj if isinstance(obj, dict) else None
 
-    def __init__(self):
-        self.client = ollama.Client(host="http://localhost:11434")
+
+class HermesAgentBrain(LLMProvider):
+    """Hermes via l'API REST d'Ollama (POST /api/generate), stdlib uniquement.
+
+    Reecrit le 2026-11-17 : l'ancienne version exigeait le paquet `ollama`,
+    figeait localhost:11434 et le modele, et `from_env()` retournait un objet
+    meme sans serveur Ollama (creer `ollama.Client` n'ouvre aucune connexion) --
+    la "degradation propre" annoncee n'existait pas. Configuration :
+    CSTL_OLLAMA_HOST (defaut 127.0.0.1), CSTL_OLLAMA_PORT (11434),
+    CSTL_OLLAMA_MODEL (hermes3:8b).
+    """
+
+    DEFAULT_MODEL = "hermes3:8b"
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 11434,
+                 model: str = DEFAULT_MODEL, timeout: float = 60.0):
+        self.host = host
+        self.port = int(port)
+        self.model = model
+        self.timeout = timeout
+
+    @property
+    def base_url(self) -> str:
+        return f"http://{self.host}:{self.port}"
 
     @classmethod
     def from_env(cls) -> Optional['HermesAgentBrain']:
-        """Return HermesAgentBrain if ollama package available, else None."""
-        if not HAS_OLLAMA:
-            return None
+        """Retourne une instance seulement si un serveur Ollama REPOND
+        (GET /api/tags, timeout court), sinon None."""
+        brain = cls(
+            host=os.environ.get("CSTL_OLLAMA_HOST", "127.0.0.1"),
+            port=int(os.environ.get("CSTL_OLLAMA_PORT", "11434")),
+            model=os.environ.get("CSTL_OLLAMA_MODEL", cls.DEFAULT_MODEL),
+        )
         try:
-            return cls()
+            with urllib.request.urlopen(f"{brain.base_url}/api/tags", timeout=1.0):
+                pass
         except Exception:
             return None
+        return brain
+
+    def _post_generate(self, prompt: str, max_tokens: int) -> str:
+        body = json.dumps({
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"num_predict": max_tokens},
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}/api/generate", data=body,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        return str(payload.get("response", "")).strip()
 
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         try:
-            response = self.client.generate(
-                model="hermes3:8b",
-                prompt=prompt,
-                stream=False,
-                options={"num_predict": max_tokens}
-            )
-            return response.get("response", "").strip()
+            return self._post_generate(prompt, max_tokens)
         except Exception as e:
             return f"[Hermes error: {e}]"
+
+    def generate_relation(self, subject: str, peer_message: Optional[str]) -> Optional[dict]:
+        """Demande une relation CSTL au format JSON {type, subject, object}.
+        Retourne le dict parse, ou None si la reponse n'en contient pas."""
+        prompt = (
+            "Reponds UNIQUEMENT par un objet JSON {\"type\": ..., \"subject\": ..., "
+            f"\"object\": ...}} decrivant une relation sur: {subject}"
+        )
+        if peer_message:
+            prompt += f"\nMessage du pair: {peer_message}"
+        try:
+            return _extract_json_object(self._post_generate(prompt, 200))
+        except Exception:
+            return None
 
 
 class AnthropicAgentBrain(LLMProvider):
@@ -389,7 +445,7 @@ class CstlAgent:
         if provider_name == "hermes":
             self.llm = HermesAgentBrain.from_env()
             if not self.llm:
-                raise ImportError("Hermes unavailable: pip3 install ollama")
+                raise ImportError("Hermes unavailable: no Ollama server answering (set CSTL_OLLAMA_HOST/CSTL_OLLAMA_PORT)")
         elif provider_name == "anthropic":
             self.llm = AnthropicAgentBrain.from_env()
             if not self.llm:

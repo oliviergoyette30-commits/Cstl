@@ -106,3 +106,31 @@ jobs:
       - name: Couverture parser N=100 (catalogue officiel)
         run: cargo run --example parser_coverage_n100
 
+  # Ajoute le 2026-11-17 : le SDK Python n'etait teste par aucune CI. Resultat
+  # constate a ce moment-la : requirements.txt ne s'installait plus (pydantic
+  # 2.6.0 sans wheel Python 3.13), 2 dependances importees n'etaient pas
+  # declarees, 4 tests echouaient (chemin absolu d'une autre machine, API
+  # Hermes desynchronisee) et GET /audit/stats repondait 404 depuis toujours.
+  python-sdk:
+    name: SDK Python (pytest + pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installe Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Installe les dependances (runtime + test)
+        run: pip install -r requirements-dev.txt pip-audit
+
+      - name: pytest (les DeprecationWarning du SDK sont des erreurs)
+        run: python -m pytest -q -W error::DeprecationWarning:cstl_adn_server -W error::DeprecationWarning:cstl_obsidian_bridge -W error::DeprecationWarning:cstl_graphify_bridge
+
+      - name: pip-audit (vulnerabilites connues des dependances)
+        run: pip-audit -r requirements.txt

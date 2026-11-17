@@ -1,7 +1,11 @@
 # Couche 5c: REST API Server for ADN Store Audit Trail
-fastapi==0.115.0
-uvicorn==0.32.0
-pydantic==2.6.0
+# Mise a jour 2026-11-17 : fastapi 0.115.0 bloquait starlette en 0.38.6
+# (8 avis de securite PYSEC, corriges en 0.40.0 .. 1.3.1), et pydantic 2.6.0
+# ne s'installait plus sur Python 3.13 (pas de wheel pydantic-core). Versions
+# verifiees ensemble : pip-audit "No known vulnerabilities found", 79 tests OK.
+fastapi==0.163.2
+uvicorn==0.54.0
+pydantic==2.14.3
 # python-multipart retire le 2026-10-30 (Dependabot: 5 alertes, dont 3 high --
 # DoS via headers/boundary multipart non bornes, ReDoS sur Content-Type, et
 # ecriture arbitraire de fichier via config non-defaut). 0.0.32 est DEJA la
@@ -13,3 +17,8 @@ pydantic==2.6.0
 # du parsing multipart, jamais sollicite ici. Dependance morte qui ne
 # faisait que porter la surface de vulnerabilite sans raison -- retiree
 # plutot que mitigee.
+# Importes par le SDK mais jamais declares avant le 2026-11-17 :
+# cryptography (signature Ed25519 : cstl_signing*.py, cstl_llm_agent.py),
+# requests (cstl_obsidian_bridge.py).
+cryptography==50.0.2
+requests==2.34.2

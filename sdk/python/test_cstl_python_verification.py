@@ -11,20 +11,21 @@ import os
 from pathlib import Path
 
 # Add SDK to path
-sys.path.insert(0, '/home/claude/cstl_work/sdk/python')
+SDK_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SDK_DIR))
 
-def test_syntax():
+def check_syntax():
     """Vérifier que le fichier Python est syntaxiquement correct."""
     import py_compile
     try:
-        py_compile.compile('/home/claude/cstl_work/sdk/python/cstl_llm_agent.py', doraise=True)
+        py_compile.compile(str(SDK_DIR / 'cstl_llm_agent.py'), doraise=True)
         print("✓ Python syntax OK")
         return True
     except py_compile.PyCompileError as e:
         print(f"✗ Syntax error: {e}")
         return False
 
-def test_anthropic_from_env():
+def check_anthropic_from_env():
     """Vérifier que AnthropicAgentBrain.from_env() retourne None sans anthropic."""
     try:
         from cstl_llm_agent import AnthropicAgentBrain
@@ -43,7 +44,7 @@ def test_anthropic_from_env():
         print(f"✗ Error testing AnthropicAgentBrain.from_env(): {e}")
         return False
 
-def test_signing_bytes():
+def check_signing_bytes():
     """Vérifier que cstl_signing_bytes existe et produit du canonique."""
     try:
         from cstl_llm_agent import cstl_signing_bytes
@@ -91,7 +92,7 @@ def test_signing_bytes():
         print(f"✗ Error testing cstl_signing_bytes: {e}")
         return False
 
-def test_load_or_create_keypair():
+def check_load_or_create_keypair():
     """Vérifier que load_or_create_keypair existe et gère l'absence de cryptography."""
     try:
         from cstl_llm_agent import load_or_create_keypair
@@ -134,10 +135,10 @@ def main():
     print("=" * 70)
 
     tests = [
-        ("Python Syntax", test_syntax),
-        ("AnthropicAgentBrain.from_env()", test_anthropic_from_env),
-        ("cstl_signing_bytes()", test_signing_bytes),
-        ("load_or_create_keypair()", test_load_or_create_keypair),
+        ("Python Syntax", check_syntax),
+        ("AnthropicAgentBrain.from_env()", check_anthropic_from_env),
+        ("cstl_signing_bytes()", check_signing_bytes),
+        ("load_or_create_keypair()", check_load_or_create_keypair),
     ]
 
     results = []
@@ -160,6 +161,25 @@ def main():
     else:
         print(f"✗ {total - passed} test(s) failed")
         return 1
+
+
+# --- Point d'entree pytest (2026-11-17) ---------------------------------------
+# Les check_* retournent True/False (mode script, voir main()). Appelees
+# directement par pytest, un `return False` etait compte comme un SUCCES :
+# aucune de ces verifications ne pouvait echouer sous pytest. Les wrappers
+# ci-dessous transforment le booleen en vraie assertion.
+
+def test_syntax():
+    assert check_syntax()
+
+def test_anthropic_from_env():
+    assert check_anthropic_from_env()
+
+def test_signing_bytes():
+    assert check_signing_bytes()
+
+def test_load_or_create_keypair():
+    assert check_load_or_create_keypair()
 
 if __name__ == "__main__":
     sys.exit(main())

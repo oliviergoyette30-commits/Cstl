@@ -9,11 +9,9 @@ import os
 import tempfile
 from pathlib import Path
 
-# Test database creation
-def test_database():
-    """Create and verify test database"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = os.path.join(tmpdir, "test_adn.db")
+def _create_test_db(db_path):
+    """Base minimale (meme schema que les tables lues par cstl_adn_server)."""
+    if True:
         conn = sqlite3.connect(db_path)
 
         # Create minimal schema
@@ -87,6 +85,17 @@ def test_database():
         conn.commit()
         conn.close()
 
+
+# Test database creation
+def test_database():
+    """Create and verify test database"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_adn.db")
+        _create_test_db(db_path)
+        conn = sqlite3.connect(db_path)
+        assert conn.execute("SELECT COUNT(*) FROM audit_trail").fetchone()[0] == 1
+        conn.close()
+
         print("✓ Test database created successfully")
         print(f"  Database path: {db_path}")
         print("  Tables created: audit_trail, arbitrage_cases, adn_council_log, arbitration_rulings")
@@ -102,6 +111,7 @@ def test_fastapi_imports():
     except ImportError as e:
         print(f"✗ FastAPI not available: {e}")
         print("  Install: pip install fastapi uvicorn")
+        raise
 
 
 def test_server_startup():
@@ -126,7 +136,58 @@ def test_server_startup():
 
     except ImportError as e:
         print(f"✗ Cannot import cstl_adn_server: {e}")
+        raise
 
+
+
+def _client_on_test_db(tmpdir):
+    """TestClient sur une base de test ; le `with` declenche le lifespan."""
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cstl_adn_server
+    from fastapi.testclient import TestClient
+    db_path = os.path.join(tmpdir, "test_adn.db")
+    _create_test_db(db_path)
+    cstl_adn_server.conn = None
+    cstl_adn_server.DB_PATH = db_path
+    return cstl_adn_server, TestClient(cstl_adn_server.app)
+
+
+def test_endpoints_against_real_db():
+    """Endpoints reels via le lifespan FastAPI (ajoute le 2026-11-17 : aucun
+    test n'appelait jamais un endpoint, ce qui a laisse /audit/stats
+    inaccessible -- capture par /audit/{case_id})."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        server, client = _client_on_test_db(tmpdir)
+        with client as c:
+            assert server.conn is not None, "lifespan: connexion ouverte au demarrage"
+            health = c.get("/health")
+            assert health.status_code == 200
+            assert health.json()["database"]["audit_trail_entries"] == 1
+
+            stats = c.get("/audit/stats")
+            assert stats.status_code == 200, stats.text
+            assert stats.json()["total_entries"] == 1
+            assert stats.json()["total_cases"] == 1
+
+            case = c.get("/audit/case_001")
+            assert case.status_code == 200, case.text
+
+            missing = c.get("/audit/no_such_case")
+            assert missing.status_code == 404
+        assert server.conn is None, "lifespan: connexion fermee a l'arret"
+
+
+def test_static_routes_declared_before_parametric_ones():
+    """Regression : une route fixe /audit/xxx doit preceder /audit/{case_id}."""
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cstl_adn_server
+    paths = [r.path for r in cstl_adn_server.app.routes if hasattr(r, "path")]
+    param = paths.index("/audit/{case_id}")
+    for p in paths:
+        if p.startswith("/audit/") and "{" not in p and p != "/audit/query":
+            assert paths.index(p) < param, f"{p} est masquee par /audit/{{case_id}}"
 
 def main():
     print("🔍 CSTL ADN Server Testing Suite")
@@ -144,7 +205,7 @@ def main():
     print("\n" + "=" * 50)
     print("✅ All basic tests completed")
     print("\nTo run the full server:")
-    print("  export PYTHONPATH=/home/claude/cstl_work/sdk/python:$PYTHONPATH")
+    print("  export PYTHONPATH=sdk/python:$PYTHONPATH")
     print("  pip install -r requirements.txt")
     print("  python -m uvicorn cstl_adn_server:app --host 127.0.0.1 --port 8000")
 

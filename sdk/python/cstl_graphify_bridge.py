@@ -3,7 +3,7 @@
 import json
 import sqlite3
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 import threading
@@ -15,7 +15,7 @@ class GraphifyNode:
         self.type = node_type
         self.label = label
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow().isoformat()
+        self.created_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     def to_graphify_format(self) -> Dict:
         color_map = {
@@ -250,7 +250,7 @@ class GraphifyExporter:
                     )
                     self.edges.append(edge)
 
-            self.last_sync = datetime.utcnow().isoformat()
+            self.last_sync = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             return self.nodes.copy(), self.edges.copy()
 
     def export_to_json(self, output_file: Optional[str] = None) -> Dict:
@@ -259,7 +259,7 @@ class GraphifyExporter:
         graph_data = {
             "metadata": {
                 "version": "1.0.0",
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 "node_count": len(nodes_dict),
                 "edge_count": len(edges_list),
                 "format": "graphify-standard"
@@ -306,7 +306,7 @@ class GraphifyExporter:
         audit_nodes = [n for n in nodes.values() if n.type == "audit_entry"]
 
         md = "# CSTL Graph Index\n\n"
-        md += f"**Generated**: {datetime.utcnow().isoformat()}\n\n"
+        md += f"**Generated**: {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}\n\n"
         md += f"**Nodes**: {len(nodes)} | **Edges**: {len(edges)}\n\n"
 
         if agent_nodes:

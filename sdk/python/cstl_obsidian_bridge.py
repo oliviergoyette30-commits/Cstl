@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple, Any
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -49,7 +49,7 @@ class GraphNode:
 
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow().isoformat()
+            self.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     def to_dict(self) -> Dict:
         return {
@@ -203,7 +203,7 @@ class AgentGraph:
                 "node_count": len(self.nodes),
                 "edge_count": len(self.edges),
                 "agent_count": len(self.agents),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 "version": "5.1.0"
             }
         }
@@ -384,7 +384,7 @@ class ObsidianBridge:
 {relay_list}
 
 ## Metadata
-- Created: {datetime.utcnow().isoformat()}
+- Created: {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}
 - Layer: 7 (Agent Discovery & Routing)
 - Part of: [[CSTL_Graphs/INDEX|CSTL Graph]]
 
@@ -404,7 +404,7 @@ class ObsidianBridge:
 
         index = f"""# CSTL Agent Graph Index
 
-**Generated**: {datetime.utcnow().isoformat()}
+**Generated**: {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}
 **Version**: CSTL v5.1.0
 
 ## Graph Statistics
@@ -434,7 +434,7 @@ This graph represents Layer 6 (Graphify UI) and Layer 7 (Agent Discovery & Routi
 - [[Layer_5c_ADN|Layer 5c: Audit Trail Server]]
 
 ---
-*Last updated: {datetime.utcnow().isoformat()}*
+*Last updated: {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}*
 """
         return index
 

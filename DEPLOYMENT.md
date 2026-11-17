@@ -184,7 +184,8 @@ pip install cryptography
 # Optional: Install LLM providers
 pip install anthropic        # For Anthropic Claude
 pip install google-generativeai  # For Google Gemini
-pip install ollama           # For Ollama client
+# Hermes/Ollama : aucun paquet requis (API REST via la stdlib) -- configurer
+# CSTL_OLLAMA_HOST / CSTL_OLLAMA_PORT / CSTL_OLLAMA_MODEL si besoin.
 ```
 
 ### Step 6: Verify Python SDK
