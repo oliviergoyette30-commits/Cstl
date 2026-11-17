@@ -1088,7 +1088,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
 
                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
-                    let entry = { ctx.chain.lock().await.append(&payload) };
+                    let (entry, is_replay) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
 
                     // Persistance de la chaine (Couche 5/8, cable live le
                     // 2026-09-04). Sans cet appel, `chain.append()` ci-dessus
@@ -1811,7 +1811,11 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         // CONSISTENCY/deontic_audit_line plus bas: jamais de rejet, une
                         // ligne ADN_DELTA n'est ajoutee a la reponse que si un
                         // changement reel (severity != NoChange) est detecte.
-                        {
+                        // Replay (hash deja dans la chaine) : `entry` est l'entree
+                        // EXISTANTE, son delta contre son parent d'origine a deja ete
+                        // rapporte lors du premier envoi -- le re-rapporter
+                        // presenterait un renvoi identique comme un changement.
+                        if !is_replay {
                             let store = ctx.adn_store.lock().await;
                             match crate::adn_delta_detector::compute_delta_report(&store, &entry.parent_hash, &entry.hash) {
                                 Ok(report) if report.conflict_severity != crate::adn_delta_detector::ConflictSeverity::NoChange => {

@@ -231,8 +231,14 @@ impl GovernanceTracker {
 
         let window = self.senders.entry(sender.to_string()).or_insert_with(SenderWindow::new);
 
+        // FIX 2026-11-17 (decision Olivier) : chaque incoherence compte 1.0 dans
+        // le breaker, QUEL QUE SOIT le sigma. La ponderation par sigma faisait
+        // l'inverse de l'intention de securite : moins le serveur faisait
+        // confiance a un agent, plus il lui laissait de marge (sigma neutre 0.5
+        // -> 6 incoherences pour ouvrir au lieu de 3 ; sigma 0.14 -> ~22). La
+        // ponderation reste appliquee au drift ci-dessous.
         if reasons.contains(&EventReason::Inconsistency) {
-            window.inconsistency_events.push((now, sigma_weight));
+            window.inconsistency_events.push((now, 1.0));
         }
         window.inconsistency_events.retain(|(t, _)| now.duration_since(*t) <= breaker_window);
 
@@ -315,6 +321,21 @@ mod tests {
         // "should_alert" est un signal d'escalade, pas un rejet — le
         // module n'a ni le pouvoir ni la fonction de bloquer un payload.
         assert!(state.should_alert);
+    }
+
+    #[test]
+    fn test_breaker_opens_at_threshold_regardless_of_sigma() {
+        // Regression : avec un sigma neutre (0.5, cas par defaut du pipeline
+        // live), 3 incoherences ne donnaient que 1.5 trip -> breaker ferme.
+        for sigma in [0.5, 0.14, 1.0] {
+            let mut g = GovernanceTracker::new(ms(10_000), 3, ms(10_000), 1000, 2.0, ms(0));
+            let mut state = g.record("x", &[EventReason::Inconsistency], Some(sigma));
+            for _ in 0..2 {
+                state = g.record("x", &[EventReason::Inconsistency], Some(sigma));
+            }
+            assert_eq!(state.breaker_trips, 3, "sigma={}", sigma);
+            assert!(state.circuit_open, "sigma={}", sigma);
+        }
     }
 
     #[test]
