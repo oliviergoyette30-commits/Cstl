@@ -25,7 +25,7 @@
 /// 9. quorum_circuit_breaker par le membre legitime du RestrictedCouncil ->
 ///    quorum_circuit_breaker_activated, puis un vote ulterieur est refuse
 ///    (circuit_breaker_active).
-use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
+use cstl_parser::agent_discovery::AgentRegistry;
 use cstl_parser::restricted_council::RestrictedCouncil;
 use cstl_parser::server::audit::signing_bytes;
 use cstl_parser::server::parser::parse_payload;

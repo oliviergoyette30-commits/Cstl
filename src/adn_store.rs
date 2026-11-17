@@ -3965,7 +3965,7 @@ mod tests {
         let _ = std::fs::remove_file(&tmp_path_str);
 
         // Open a fresh DB
-        let store = AdnStore::open(&tmp_path_str).unwrap();
+        let _store = AdnStore::open(&tmp_path_str).unwrap();
 
         // Query sqlite_master to verify indices exist
         let conn = Connection::open(&tmp_path_str).unwrap();

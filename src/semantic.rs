@@ -53,6 +53,15 @@ pub(crate) const OFFICIAL_OPERATORS: &[&str] = &[
     "SATISFIES",
 ];
 
+/// Acces public en LECTURE SEULE au catalogue officiel d'operateurs.
+/// La constante reste `pub(crate)` (son ordre est un contrat d'encodage
+/// positionnel pour compression/structural.rs) ; ce slice `'static` permet
+/// aux exemples/outils externes (ex. examples/parser_coverage_n100.rs) de
+/// s'aligner sur le catalogue reel sans pouvoir le dupliquer ni le modifier.
+pub fn official_operators() -> &'static [&'static str] {
+    OFFICIAL_OPERATORS
+}
+
 /// GARDE-FOU 2026-10-28 (session en cours, "On fix tout") -- reponse directe
 /// a la trouvaille de ce soir : `REACTS`, `INVOLVES`, `SATISFIES` sont entres
 /// dans `OFFICIAL_OPERATORS` au fil de sessions de diagnostic kappa, sans

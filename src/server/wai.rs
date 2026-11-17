@@ -497,55 +497,54 @@ pub fn decode_wai_payload(
 
 /// Helper: decode data using a dictionary version
 fn decode_with_dict(data: &[u8], dict: &DictionaryVersion) -> Result<String, String> {
-    let mut output = String::new();
-    let mut i = 0;
-
-    while i < data.len() {
-        let byte = data[i];
-
-        // Simple marker detection: high byte = symbol ID, low byte = literal
-        if byte >= 128 {
-            // Multi-byte symbol ID
-            if i + 1 < data.len() {
-                let id = ((byte as u16) << 8) | (data[i + 1] as u16);
-                if let Some(s) = dict.decode(id) {
-                    output.push_str(s);
-                }
-                i += 2;
-            } else {
-                i += 1;
-            }
-        } else if byte < 32 && byte != b' ' {
-            // Structural byte (preserved)
-            output.push(byte as char);
-            i += 1;
-        } else {
-            // Literal ASCII
-            output.push(byte as char);
-            i += 1;
-        }
-    }
-
-    Ok(output)
+    decode_symbols_strict(data, |id| dict.decode(id))
 }
 
 /// Helper: decode data using inline symbol map
 fn decode_with_symbols(data: &[u8], lookup: &HashMap<u16, String>) -> Result<String, String> {
-    let mut output = String::new();
+    decode_symbols_strict(data, |id| lookup.get(&id).map(String::as_str))
+}
+
+/// Decodeur commun aux deux chemins (dictionnaire reseau / symboles inline).
+///
+/// Format : un octet >= 128 ouvre un ID de symbole sur 2 octets (big-endian) ;
+/// tout octet < 128 est un litteral ASCII recopie tel quel (y compris les
+/// octets structurels < 32).
+///
+/// FIX 2026-11-17 : les deux decodeurs precedents perdaient des donnees EN
+/// SILENCE tout en retournant `Ok` -- un ID absent du dictionnaire etait
+/// simplement ignore, et un octet de symbole tronque en fin de flux etait
+/// soit jete (`decode_with_dict`), soit recopie comme caractere Latin-1
+/// parasite (`decode_with_symbols`). Un payload corrompu ou encode avec un
+/// autre dictionnaire produisait donc un texte faux sans aucun signal.
+/// Ces cas renvoient maintenant une erreur explicite.
+fn decode_symbols_strict<'a, F>(data: &[u8], lookup: F) -> Result<String, String>
+where
+    F: Fn(u16) -> Option<&'a str>,
+{
+    let mut output = String::with_capacity(data.len());
     let mut i = 0;
 
     while i < data.len() {
         let byte = data[i];
-
-        if byte >= 128 && i + 1 < data.len() {
-            let id = ((byte as u16) << 8) | (data[i + 1] as u16);
-            if let Some(s) = lookup.get(&id) {
-                output.push_str(s);
+        if byte >= 128 {
+            let Some(&low) = data.get(i + 1) else {
+                return Err(format!(
+                    "Truncated WAI symbol ID at byte offset {} (high byte 0x{:02X} without low byte)",
+                    i, byte
+                ));
+            };
+            let id = ((byte as u16) << 8) | (low as u16);
+            match lookup(id) {
+                Some(s) => output.push_str(s),
+                None => {
+                    return Err(format!(
+                        "Unknown WAI symbol ID 0x{:04X} at byte offset {}",
+                        id, i
+                    ))
+                }
             }
             i += 2;
-        } else if byte < 32 && byte != b' ' {
-            output.push(byte as char);
-            i += 1;
         } else {
             output.push(byte as char);
             i += 1;
@@ -596,5 +595,48 @@ mod tests {
         .with_fallback(vec![(0, "test".to_string())]);
 
         assert!(payload.fallback_symbols.is_some());
+    }
+    #[test]
+    fn test_decode_roundtrip_known_symbol_and_literals() {
+        let dict = DictionaryVersion::new(vec![(0x8001, "STATE".to_string())]);
+        let data = [b'[', 0x80, 0x01, b']', b'\n'];
+        assert_eq!(decode_with_dict(&data, &dict).unwrap(), "[STATE]\n");
+    }
+
+    #[test]
+    fn test_decode_unknown_symbol_is_error_not_silent_drop() {
+        let dict = DictionaryVersion::new(vec![(0x8001, "STATE".to_string())]);
+        let data = [b'a', 0x80, 0x02, b'b'];
+        let err = decode_with_dict(&data, &dict).unwrap_err();
+        assert!(err.contains("0x8002"), "{}", err);
+
+        let lookup: HashMap<u16, String> = HashMap::new();
+        assert!(decode_with_symbols(&data, &lookup).is_err());
+    }
+
+    #[test]
+    fn test_decode_truncated_symbol_is_error_on_both_paths() {
+        let dict = DictionaryVersion::new(vec![(0x8001, "STATE".to_string())]);
+        let data = [b'a', 0x80];
+        assert!(decode_with_dict(&data, &dict).unwrap_err().contains("Truncated"));
+
+        let mut lookup = HashMap::new();
+        lookup.insert(0x8001u16, "STATE".to_string());
+        // Avant le fix : renvoyait Ok("a\u{80}") -- caractere parasite.
+        assert!(decode_with_symbols(&data, &lookup).unwrap_err().contains("Truncated"));
+    }
+
+    #[test]
+    fn test_decode_wai_payload_uses_fallback_symbols() {
+        let registry = DictionaryRegistry::new("node1".to_string());
+        let payload = WaiEncodedPayload::new(
+            "missing".to_string(),
+            "node1".to_string(),
+            vec![0x80, 0x00, b'!'],
+        )
+        .with_fallback(vec![(0x8000, "hi".to_string())]);
+        let decoded = decode_wai_payload(&payload, &registry).unwrap();
+        assert_eq!(decoded.data, "hi!");
+        assert!(decoded.fallback_used);
     }
 }

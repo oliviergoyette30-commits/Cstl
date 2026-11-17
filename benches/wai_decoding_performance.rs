@@ -132,7 +132,7 @@ mod wai_decoder {
 
         let mut meta = BTreeMap::new();
         let mut intent = BTreeMap::new();
-        let mut relations = Vec::new();
+        let relations = Vec::new();
 
         // Read chunks
         while pos < bytes.len() && bytes[pos] != FRAME_END {
