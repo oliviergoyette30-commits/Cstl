@@ -46,8 +46,14 @@ jobs:
       - name: cargo build --bin cstl_parser
         run: cargo build --bin cstl_parser --verbose
 
-      - name: cargo test --lib (tests unitaires)
-        run: cargo test --lib --verbose
+      # --all-targets (2026-11-17) : sans ca, un exemple/bench/test d'integration
+      # qui ne compile plus passait inapercu (examples/parser_coverage_n100.rs
+      # est reste casse plusieurs jours, cassant `cargo build --all-targets`).
+      - name: cargo build --all-targets
+        run: cargo build --all-targets
+
+      - name: cargo test (unitaires + integration tests/)
+        run: cargo test --verbose
 
       # Scenarios live: demarrent un vrai CstlNativeServer sur un port
       # ephemere et verifient son comportement reel de bout en bout, pas
@@ -74,3 +80,29 @@ jobs:
 
       - name: Smoke test -- persistance de l'identite d'agent a travers un restart
         run: cargo run --example agent_registry_persistence_test
+
+      # Ajoutes le 2026-11-17 : ces 6 scenarios live echouaient tous sans
+      # qu'aucune CI ne le signale (ils n'etaient lances par personne). Deux
+      # d'entre eux revelaient de vrais bugs du pipeline (breaker pondere par
+      # sigma, ADN_DELTA annonce sur un replay).
+      - name: Smoke test -- quorum BFT multi-connexions
+        run: cargo run --example quorum_smoke_test
+
+      - name: Smoke test -- gouvernance (circuit breaker + council signe)
+        run: cargo run --example governance_smoke_test
+
+      - name: Smoke test -- persistance de la gouvernance a travers un restart
+        run: cargo run --example governance_persistence_smoke_test
+
+      - name: Smoke test -- ADN_DELTA (pas de delta sur un replay)
+        run: cargo run --example adn_delta_smoke_test
+
+      - name: Smoke test -- Double Livre / calibration sigma
+        run: cargo run --example double_livre_smoke_test
+
+      - name: Smoke test -- entites orphelines (W608)
+        run: cargo run --example orphaned_entity_smoke_test
+
+      - name: Couverture parser N=100 (catalogue officiel)
+        run: cargo run --example parser_coverage_n100
+

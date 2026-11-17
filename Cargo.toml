@@ -70,8 +70,12 @@ features = ["full"]
 version = "0.10"
 
 [dependencies.rusqlite]
-version = "0.31"
-features = ["bundled"]
+# 0.31 -> 0.43 (2026-11-17) : libsqlite3-sys 0.28 embarquait un SQLite touche
+# par RUSTSEC-2026-0459 / CVE-2026-119375. `fallible_uint` : depuis 0.38,
+# u64/usize ne sont plus convertis par defaut ; cette feature les reactive
+# avec une ERREUR explicite si la valeur depasse i64::MAX (pas de troncature).
+version = "0.43"
+features = ["bundled", "fallible_uint"]
 
 [dependencies.reqwest]
 version = "0.12"

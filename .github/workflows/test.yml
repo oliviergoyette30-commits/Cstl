@@ -20,11 +20,18 @@ jobs:
       - name: Check Cargo.lock
         run: cargo update --dry-run
 
+      # `set -o pipefail` (2026-11-17) : sans lui, le code de sortie du pipe
+      # etait celui de `tee` -- des tests en ECHEC laissaient ce job VERT.
       - name: Run tests
-        run: cargo test --lib --verbose 2>&1 | tee test-output.log
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --verbose 2>&1 | tee test-output.log
 
+      # Bloquant depuis le 2026-11-17 (le repo est a zero avertissement sur
+      # --all-targets) ; `|| true` rendait ce controle purement decoratif.
       - name: Clippy check
-        run: cargo clippy -- -D warnings || true
+        run: cargo clippy --all-targets -- -D warnings
 
   security:
     name: Security Audit
@@ -37,5 +44,9 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
+      # Bloquant depuis le 2026-11-17 : avec `|| true`, RUSTSEC-2026-0459
+      # (SQLite embarque par libsqlite3-sys 0.28) ne faisait echouer aucun job.
+      # Echoue sur une vulnerabilite ; les avertissements "unmaintained" sans
+      # correctif disponible (chrono, rustls-pemfile) restent informatifs.
       - name: Run security audit
-        run: cargo audit || true
+        run: cargo audit
