@@ -10,13 +10,13 @@
 ///    reponse strictement identique, et `target_relation` n'etait verifie
 ///    contre rien nulle part (confirme par grep). Ce test verifie trois
 ///    choses en live:
-///      a. ESTIMATED et INFERRED produisent des `weighted_confidence`
-///         DIFFERENTS dans le nouveau bloc UNCERTAINTY_AUDIT (0.60 vs 0.40
-///         -- voir le bareme documente dans handler.rs juste avant ce bloc).
-///      b. Un `target_relation` qui ne correspond a aucun `id` de RELATION
-///         presente dans le meme payload est compte dans `dangling`.
-///      c. Un payload SANS bloc UNCERTAINTY ne produit PAS de ligne
-///         UNCERTAINTY_AUDIT (pas de bruit sur le trafic normal).
+///    - a. ESTIMATED et INFERRED produisent des `weighted_confidence`
+///      DIFFERENTS dans le nouveau bloc UNCERTAINTY_AUDIT (0.60 vs 0.40
+///      -- voir le bareme documente dans handler.rs juste avant ce bloc).
+///    - b. Un `target_relation` qui ne correspond a aucun `id` de RELATION
+///      presente dans le meme payload est compte dans `dangling`.
+///    - c. Un payload SANS bloc UNCERTAINTY ne produit PAS de ligne
+///      UNCERTAINTY_AUDIT (pas de bruit sur le trafic normal).
 ///
 /// 2. `/audit/query` (REST API, port separe du TCP) -- avant ce fix,
 ///    retournait toujours `results: [], total_count: 0` codes en dur, quels

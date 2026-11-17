@@ -256,7 +256,7 @@ async fn test_multi_agent_registration_workflow() {
 
     orchestrator.register_rule(rule_register).await;
 
-    let agents = vec!["alice", "bob", "charlie", "diana", "eve"];
+    let agents = ["alice", "bob", "charlie", "diana", "eve"];
 
     for agent_name in agents.iter() {
         let event = cstl_parser::server::deontic_orchestration::DeonticEvent::AgentRegister {
@@ -541,7 +541,7 @@ async fn test_error_handling_malformed_event() {
 async fn test_rule_priority_execution_order() {
     let orchestrator = common::create_test_orchestrator();
 
-    for priority in vec![100, 150, 200, 50] {
+    for priority in [100, 150, 200, 50] {
         let rule = cstl_parser::server::deontic_orchestration::DeonticRule::new_may(
             "governance_breach",
             "all_breaches",

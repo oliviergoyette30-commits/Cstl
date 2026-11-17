@@ -348,12 +348,6 @@ pub fn compress_with_wai(payload: &str) -> Result<Vec<u8>, WaiDictionaryError> {
     Ok(result.into_bytes())
 }
 
-/// Check if a byte is a "word character" (alphanumeric or underscore)
-#[inline]
-fn is_word_char(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
 /// Decompress WAI-compressed bytes back to string
 ///
 /// Reverses compress_with_wai() by detecting 0x7F markers and hex-encoded symbol IDs.

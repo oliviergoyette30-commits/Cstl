@@ -240,6 +240,12 @@ pub struct DecisionStore {
     decisions: HashMap<String, DecisionLifecycle>,
 }
 
+impl Default for DecisionStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DecisionStore {
     pub fn new() -> Self {
         Self {

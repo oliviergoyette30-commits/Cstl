@@ -1,8 +1,8 @@
-/// examples/double_livre_smoke_test.rs -- verification live du Double Livre v5.2
-///
-/// Valide l'architecture de séparation Layer 1 (payload immuable signée) vs
-/// Layer 2 (métadonnées d'évaluation serveur) pour la standardisation sigma
-/// inter-LLM sans modifier les payloads en vol.
+//! examples/double_livre_smoke_test.rs -- verification live du Double Livre v5.2
+//!
+//! Valide l'architecture de séparation Layer 1 (payload immuable signée) vs
+//! Layer 2 (métadonnées d'évaluation serveur) pour la standardisation sigma
+//! inter-LLM sans modifier les payloads en vol.
 
 use cstl_parser::calibration::{EwmaCalibration, SigmaCalibrator};
 use cstl_parser::server::evaluated_payload::{EvaluatedPayload, GovernanceSnapshot};
@@ -218,7 +218,7 @@ fn main() {
         let sigma_high = calibrator.compute_effective_sigma("test", 1.0);
         let sigma_low = calibrator.compute_effective_sigma("test", 0.0);
 
-        if sigma_high >= 0.0 && sigma_high <= 1.0 && sigma_low >= 0.0 && sigma_low <= 1.0 {
+        if (0.0..=1.0).contains(&sigma_high) && (0.0..=1.0).contains(&sigma_low) {
             println!("✅ PASSED: All sigma values bounded in [0.0, 1.0]");
             passed += 1;
         } else {

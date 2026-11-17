@@ -58,6 +58,9 @@ impl GraphifyExporter {
         GraphifyExporter { chain }
     }
 
+    // Pas encore branche sur l'export (aucun noeud deontique emis) ; couvert
+    // par test_deontic_color_mapping.
+    #[allow(dead_code)]
     fn get_deontic_color(deontic_type: &str) -> String {
         match deontic_type {
             "MUST" | "must" => "#DC143C".to_string(),

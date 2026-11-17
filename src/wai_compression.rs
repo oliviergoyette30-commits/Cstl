@@ -41,6 +41,12 @@ pub struct BitPacker {
     bit_pos: u8,
 }
 
+impl Default for BitPacker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitPacker {
     pub fn new() -> Self {
         Self {
@@ -80,6 +86,12 @@ impl BitPacker {
 /// Move-To-Front encoding
 pub struct MoveToFront {
     symbols: Vec<u8>,
+}
+
+impl Default for MoveToFront {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MoveToFront {
@@ -245,7 +257,7 @@ mod tests {
         assert_eq!(encoded.len(), 1);
 
         let encoded = varint_zigzag_encode(1000);
-        assert!(encoded.len() >= 1);
+        assert!(!encoded.is_empty());
     }
 
     #[test]

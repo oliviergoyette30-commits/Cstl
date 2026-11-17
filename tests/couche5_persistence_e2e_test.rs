@@ -35,7 +35,7 @@ fn create_test_entry(
 
     // Create deontic relations for even-indexed entries
     let mut relations = Vec::new();
-    if index % 2 == 0 {
+    if index.is_multiple_of(2) {
         relations.push({
             let mut r = HashMap::new();
             r.insert("subject".to_string(), format!("entity_{}", index));
@@ -156,7 +156,7 @@ fn test_couche5_full_persistence_lifecycle() {
         let entry = store
             .get(&hash)
             .expect("Failed to retrieve entry")
-            .expect(&format!("Entry {} not found after restart", i));
+            .unwrap_or_else(|| panic!("Entry {} not found after restart", i));
 
         // Verify basic properties
         assert_eq!(entry.hash, hash, "Hash mismatch for entry {}", i);
@@ -234,7 +234,7 @@ fn test_couche5_full_persistence_lifecycle() {
         let current_entry = store
             .get(&current_hash)
             .expect("Failed to get current entry for chain check")
-            .expect(&format!("Current entry {} not found for chain check", i));
+            .unwrap_or_else(|| panic!("Current entry {} not found for chain check", i));
 
         assert_eq!(
             current_entry.parent_hash,
@@ -319,6 +319,8 @@ fn test_couche5_full_persistence_lifecycle() {
     // ========== PHASE 5: TEST DELTA DETECTION ACROSS RESTART ==========
 
     // Create a delta detector and test it
+    // Test mono-thread ; l'API publique impose un Arc (voir adn_delta_detector.rs).
+    #[allow(clippy::arc_with_non_send_sync)]
     let detector = ADNDeltaDetector::new(std::sync::Arc::new(store));
 
     // Test delta between entry 0 and entry 1
@@ -745,7 +747,7 @@ fn test_couche5_large_scale_persistence() {
             let entry = store
                 .get(&hash)
                 .expect("Failed to get entry")
-                .expect(&format!("Entry {} not found", test_idx));
+                .unwrap_or_else(|| panic!("Entry {} not found", test_idx));
 
             assert!(entry.payload.contains(&format!("entry_{}", test_idx)));
             assert_eq!(entry.turn, Some(test_idx as i64));

@@ -104,8 +104,8 @@ pub struct StructuralStreams {
     /// Identifiants "prefixe+chiffres" (ex. "r001", "e047") des champs
     /// `relations.id` et `uncertainty.identifier`, quand ils matchent ce
     /// patron -- prefixe explicite (pas suppose ferme, transmis tel quel,
-    /// voir `try_parse_id`) + largeur (pour preserver les zeros de tete)
-    /// + delta zigzag-varint PAR PREFIXE au sein de CE message (2026-09-29,
+    /// voir `try_parse_id`) + largeur (pour preserver les zeros de tete) +
+    /// delta zigzag-varint PAR PREFIXE au sein de CE message (2026-09-29,
     /// reponse a "un exemple d'id" -- mesure : r001/r002/r003 passe de 12
     /// a 3 octets). Aucun etat entre messages -- juste une passe unique,
     /// contrairement a l'idee de table de session ecartee plus tot. Les
@@ -175,7 +175,7 @@ impl StringTable {
     }
 }
 
-fn read_string<'a>(table: &'a [String], idx: u32) -> Result<&'a str, StructuralError> {
+fn read_string(table: &[String], idx: u32) -> Result<&str, StructuralError> {
     table.get(idx as usize).map(String::as_str).ok_or(StructuralError::BadStringIndex(idx))
 }
 

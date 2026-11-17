@@ -144,9 +144,7 @@ async fn main() {
 
     // ---- Scenario 1: quorum_propose d'un expediteur non enregistre ----
     println!("[1/9] quorum_propose d'un expediteur inconnu...");
-    let resp1 = send(port, &format!(
-        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=SmokeTest, produced_by=SmokeTest]\nINTENT_PAYLOAD [purpose=quorum_propose, sender=ghost, receiver=server, proposal_id=smoke_1]\n---END---\n"
-    )).await;
+    let resp1 = send(port, "#!CSTL v5.0.0 MODE=A\nMETA [encoder=SmokeTest, produced_by=SmokeTest]\nINTENT_PAYLOAD [purpose=quorum_propose, sender=ghost, receiver=server, proposal_id=smoke_1]\n---END---\n").await;
     let purpose1 = extract_field(&resp1, "INTENT_PAYLOAD", "purpose");
     println!("      purpose={:?}", purpose1);
     if purpose1.as_deref() != Some("quorum_rejected") {

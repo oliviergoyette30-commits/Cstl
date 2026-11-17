@@ -65,6 +65,8 @@ impl Ord for HuffmanNode {
 /// Huffman coding pour encodage entropique
 pub struct HuffmanCoder {
     codes: HashMap<u8, Vec<bool>>,
+    // Conserve pour l'inspection de l'arbre ; module SUPERSEDED (voir en-tete).
+    #[allow(dead_code)]
     tree: Option<Box<HuffmanNode>>,
 }
 
@@ -99,7 +101,7 @@ impl HuffmanCoder {
         }
 
         // Trier par fréquence décroissante
-        nodes.sort_by(|a, b| b.freq.cmp(&a.freq));
+        nodes.sort_by_key(|n| std::cmp::Reverse(n.freq));
 
         // Construire l'arbre bottom-up
         while nodes.len() > 1 {
@@ -112,7 +114,7 @@ impl HuffmanCoder {
                 right: Some(Box::new(right)),
             };
             nodes.push(parent);
-            nodes.sort_by(|a, b| b.freq.cmp(&a.freq));
+            nodes.sort_by_key(|n| std::cmp::Reverse(n.freq));
         }
 
         let tree = nodes.pop().map(Box::new);
@@ -200,6 +202,12 @@ pub struct PayloadDelta {
     pub changed_fields: HashMap<String, Vec<u8>>,
 }
 
+impl Default for PayloadDelta {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PayloadDelta {
     pub fn new() -> Self {
         Self {
@@ -243,6 +251,9 @@ pub struct CompressionPipeline {
     bitpack_enabled: bool,
     mtf_enabled: bool,
     rle_enabled: bool,
+    // `compress()` ne recoit qu'un payload : le delta (qui exige le payload
+    // precedent) n'est applicable que via `PayloadDelta::compute_delta`.
+    #[allow(dead_code)]
     delta_enabled: bool,
     huffman_enabled: bool,
 }

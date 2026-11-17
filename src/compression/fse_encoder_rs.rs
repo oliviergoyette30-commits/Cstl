@@ -154,7 +154,7 @@ impl NormalizedFreqTable {
         // le deficit/surplus aux symboles dont l'arrondi a le plus perdu
         // (plus grand reste d'abord), en ne descendant jamais sous 1.
         if assigned != PROB_SCALE {
-            remainders.sort_by(|a, b| b.1.cmp(&a.1));
+            remainders.sort_by_key(|r| std::cmp::Reverse(r.1));
             if assigned < PROB_SCALE {
                 let mut deficit = PROB_SCALE - assigned;
                 let mut i = 0;
@@ -297,6 +297,12 @@ pub struct FseEncoder {
 
 const RANS_MAGIC: [u8; 3] = [0x46, 0x53, 0x45]; // "FSE" -- format change, magic conserve pour compat de nommage
 
+impl Default for FseEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FseEncoder {
     pub fn new() -> Self {
         FseEncoder {
@@ -426,6 +432,12 @@ pub struct SharedSessionState {
     slot_count: u16,
 }
 
+impl Default for SharedSessionState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SharedSessionState {
     pub fn new() -> Self {
         SharedSessionState {
@@ -459,6 +471,12 @@ impl SharedSessionState {
 /// donnees reelles au moment de l'encodage.
 pub struct PretrainedTans {
     pub state_range: (u16, u16),
+}
+
+impl Default for PretrainedTans {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PretrainedTans {

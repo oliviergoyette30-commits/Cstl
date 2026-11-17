@@ -10,7 +10,7 @@ fn test_wai_complete_roundtrip() {
     assert!(result.is_ok(), "Encoding failed: {:?}", result);
 
     let encoded = result.unwrap();
-    assert!(encoded.len() > 0, "Encoded payload is empty");
+    assert!(!encoded.is_empty(), "Encoded payload is empty");
     assert_eq!(&encoded[0..3], b"WAI", "Missing WAI magic bytes");
     assert_eq!(encoded[3], 0x01, "Invalid WAI version");
 
@@ -31,7 +31,7 @@ fn test_varint_compression_roundtrip() {
         assert!(encoded.len() <= 5, "Varint encoding too long for {}", value);
 
         let (decoded, consumed) = decode_varint(&encoded)
-            .expect(&format!("Failed to decode varint for {}", value));
+            .unwrap_or_else(|_| panic!("Failed to decode varint for {}", value));
         assert_eq!(decoded, value, "Varint roundtrip failed for {}", value);
         assert_eq!(consumed, encoded.len(), "Varint consumed wrong bytes for {}", value);
     }

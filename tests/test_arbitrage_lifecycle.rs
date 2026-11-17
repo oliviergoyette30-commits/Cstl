@@ -32,12 +32,10 @@ mod arbitrage_comprehensive_tests {
 
     #[test]
     fn test_all_contradiction_types() {
-        let types = vec![
-            ContradictionType::MutuallyExclusive,
+        let types = [ContradictionType::MutuallyExclusive,
             ContradictionType::LogicalBreak,
             ContradictionType::RefusalToComply,
-            ContradictionType::InvalidProof,
-        ];
+            ContradictionType::InvalidProof];
         assert_eq!(types.len(), 4);
     }
 
@@ -251,14 +249,13 @@ mod arbitrage_comprehensive_tests {
             ruled_at: Utc::now(),
         };
 
-        let rulings = vec![ruling_1, ruling_2];
+        let rulings = [ruling_1, ruling_2];
         assert_eq!(rulings.len(), 2);
     }
 
     #[test]
     fn test_arbiter_stake_hierarchy() {
-        let arbiters = vec![
-            Arbiter {
+        let arbiters = [Arbiter {
                 arbiter_id: "arbiter_1".to_string(),
                 public_key: "key1".to_string(),
                 authority_level: AuthorityLevel::Trainee,
@@ -281,8 +278,7 @@ mod arbitrage_comprehensive_tests {
                 stake_amount: 1_000_000,
                 registered_at: Utc::now(),
                 is_active: true,
-            },
-        ];
+            }];
 
         let total_stake: u64 = arbiters.iter().map(|a| a.stake_amount).sum();
         assert_eq!(total_stake, 1_600_000);

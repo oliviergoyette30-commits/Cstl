@@ -112,7 +112,7 @@ CONSTRAINTS [
 ---END---
 "#;
     let parsed_bad = parse_payload(bad_modality_payload).expect("doit parser (rejet au niveau ligne, pas payload)");
-    if parsed_bad.relations.len() != 0 {
+    if !parsed_bad.relations.is_empty() {
         failures.push(format!("CONSTRAINTS modalite invalide: relations attendu=0, obtenu={}", parsed_bad.relations.len()));
     }
     if parsed_bad.parse_warnings.is_empty() {

@@ -42,7 +42,10 @@ fn flat_streams(defines: &[HashMap<String, String>], relations: &[HashMap<String
     flat
 }
 
-fn build(n_relations: usize, entity_pool: usize, seed: usize) -> (Vec<HashMap<String, String>>, Vec<HashMap<String, String>>) {
+type Rows = Vec<HashMap<String, String>>;
+
+
+fn build(n_relations: usize, entity_pool: usize, seed: usize) -> (Rows, Rows) {
     let ops = ["PERFORM", "ARR.ACCESS", "MAINTAIN", "TRANSMIT_FAITHFUL", "COMMAND", "ENTAILS", "BEFORE", "OPPOSES"];
     let modalities = ["MUST", "MUST_NOT", "MAY", "SHOULD"];
     let types = ["Party", "Obligation", "Asset", "Document", "Event"];

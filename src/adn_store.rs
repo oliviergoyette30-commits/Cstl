@@ -148,6 +148,11 @@ pub struct DbPeerReviewSignature {
     pub reviewed_at: i64,
 }
 
+/// Ligne brute de `load_agents` : (name, version, capabilities, trust_score, public_key).
+pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
+/// Ligne brute de `get_conversation_context` : (hash, payload, encoder, produced_by, turn).
+pub type ConversationTurnRow = (String, String, Option<String>, Option<String>, i64);
+
 pub struct AdnStore {
     conn: Connection,
 }
@@ -1833,7 +1838,7 @@ impl AdnStore {
     /// juste au-dessus dans ce fichier. Tuple brut (pas `AgentCard`): ce
     /// module n'a pas besoin de dependre de `agent_discovery`, l'appelant
     /// construit la struct.
-    pub fn load_agents(&self) -> Result<Vec<(String, String, Vec<String>, f64, Option<String>)>, rusqlite::Error> {
+    pub fn load_agents(&self) -> Result<Vec<AgentRow>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT name, version, capabilities, trust_score, public_key FROM agents ORDER BY name ASC",
         )?;
@@ -2246,7 +2251,7 @@ impl AdnStore {
         conversation_id: &str,
         before_turn: i64,
         limit: usize,
-    ) -> Result<Vec<(String, String, Option<String>, Option<String>, i64)>, rusqlite::Error> {
+    ) -> Result<Vec<ConversationTurnRow>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT hash, payload, payload_compressed, encoder, produced_by, turn
              FROM adn_store
@@ -2533,7 +2538,7 @@ impl AdnStore {
 
                 index
                     .entry(term)
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .insert(hash.clone(), score);
             }
         }

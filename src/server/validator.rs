@@ -563,8 +563,8 @@ pub fn check_orphaned_entities(payload: &CstlPayload) -> Vec<String> {
         .filter_map(|d| {
             let name = d.get("name").map(String::as_str);
             let id = d.get("id").map(String::as_str);
-            let is_referenced = name.map_or(false, |n| referenced.contains(n))
-                || id.map_or(false, |i| referenced.contains(i));
+            let is_referenced = name.is_some_and(|n| referenced.contains(n))
+                || id.is_some_and(|i| referenced.contains(i));
             if is_referenced {
                 None
             } else {

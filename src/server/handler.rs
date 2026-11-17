@@ -714,9 +714,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         }
                                         Err(e) => {
                                             error!("[Handler] Failed to open arbitrage case: {}", e);
-                                            format!(
-                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=case_open_failed]\n---END---\n"
-                                            )
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=case_open_failed]\n---END---\n".to_string()
                                         }
                                     }
                                 }
@@ -739,9 +737,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                             }
                                             Err(e) => {
                                                 error!("[Handler] Failed to assign arbiters: {}", e);
-                                                format!(
-                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=assignment_failed]\n---END---\n"
-                                                )
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=assignment_failed]\n---END---\n".to_string()
                                             }
                                         }
                                     }
@@ -776,7 +772,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         // qui doit le signer en premier); le serveur en genere un
                                         // par defaut seulement si absent, pour ne rien casser.
                                         let ruling_id = payload.intent.get("ruling_id").cloned()
-                                            .unwrap_or_else(|| format!("ruling_{}", uuid::Uuid::new_v4().to_string()));
+                                            .unwrap_or_else(|| format!("ruling_{}", uuid::Uuid::new_v4()));
                                         let ruling = arbitrage::ArbitrationRuling {
                                             ruling_id: ruling_id.clone(),
                                             case_id: cid.clone(),
@@ -807,9 +803,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                             }
                                             Err(e) => {
                                                 error!("[Handler] Failed to submit ruling: {}", e);
-                                                format!(
-                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=ruling_submission_failed]\n---END---\n"
-                                                )
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=ruling_submission_failed]\n---END---\n".to_string()
                                             }
                                         }
                                     }
