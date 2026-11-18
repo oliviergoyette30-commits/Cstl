@@ -1,0 +1,189 @@
+[
+  {
+    "id": "V1",
+    "cat": "valide",
+    "desc": "fait simple",
+    "should_detect": false,
+    "cstl_rejected": false,
+    "cstl_flagged": false,
+    "cstl_detail": "accepte sans signal",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "V2",
+    "cat": "valide",
+    "desc": "obligation seule (MUST)",
+    "should_detect": false,
+    "cstl_rejected": false,
+    "cstl_flagged": false,
+    "cstl_detail": "accepte sans signal",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "V3",
+    "cat": "valide",
+    "desc": "interdiction seule (MUST_NOT)",
+    "should_detect": false,
+    "cstl_rejected": false,
+    "cstl_flagged": false,
+    "cstl_detail": "accepte sans signal",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "V4",
+    "cat": "valide",
+    "desc": "ordre temporel A avant B",
+    "should_detect": false,
+    "cstl_rejected": false,
+    "cstl_flagged": false,
+    "cstl_detail": "accepte sans signal",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "V5",
+    "cat": "valide",
+    "desc": "message signe correctement",
+    "should_detect": false,
+    "cstl_rejected": false,
+    "cstl_flagged": false,
+    "cstl_detail": "accepte sans signal",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "E1",
+    "cat": "structure",
+    "desc": "operateur inconnu (TERMINATES_IF)",
+    "should_detect": true,
+    "cstl_rejected": true,
+    "cstl_flagged": false,
+    "cstl_detail": "operator_whitelist_rejected (E101: Opérateur invalide 'TERMINATES_IF' — absent des 40 opérateurs of)",
+    "base_rejected": true,
+    "base_detail": "schema: 'TERMINATES_IF' is not one of ['ARR', 'ARR.CREATE', 'ARR.JOIN', 'ARR.P"
+  },
+  {
+    "id": "E2",
+    "cat": "structure",
+    "desc": "relation sans objet",
+    "should_detect": true,
+    "cstl_rejected": true,
+    "cstl_flagged": false,
+    "cstl_detail": "validation_error",
+    "base_rejected": true,
+    "base_detail": "schema: 'object' is a required property"
+  },
+  {
+    "id": "L1",
+    "cat": "logique",
+    "desc": "MUST et MUST_NOT sur la meme action",
+    "should_detect": true,
+    "cstl_rejected": true,
+    "cstl_flagged": false,
+    "cstl_detail": "validation_error",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "L2",
+    "cat": "logique",
+    "desc": "deux lieux de naissance contradictoires",
+    "should_detect": true,
+    "cstl_rejected": false,
+    "cstl_flagged": true,
+    "cstl_detail": "CONSISTENCY=false",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "L3",
+    "cat": "logique",
+    "desc": "cycle temporel A<B<C<A",
+    "should_detect": true,
+    "cstl_rejected": false,
+    "cstl_flagged": true,
+    "cstl_detail": "CONSISTENCY=false; WARN:E702: temporal cycle detected (EvA -> EvB -> EvC -> EvA)",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "L4",
+    "cat": "logique",
+    "desc": "entite definie jamais referencee",
+    "should_detect": true,
+    "cstl_rejected": false,
+    "cstl_flagged": true,
+    "cstl_detail": "WARN:W608: DEFINE Agreement AS Contract (id=e9) n'est reference p",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "H1",
+    "cat": "historique",
+    "desc": "fait contredisant un message precedent",
+    "should_detect": true,
+    "cstl_rejected": false,
+    "cstl_flagged": true,
+    "cstl_detail": "CONSISTENCY=false",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "H2",
+    "cat": "historique",
+    "desc": "MUST contredisant un MUST_NOT precedent",
+    "should_detect": true,
+    "cstl_rejected": false,
+    "cstl_flagged": true,
+    "cstl_detail": "DEONTIC_AUDIT=false",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "H3",
+    "cat": "historique",
+    "desc": "cycle temporel reparti sur 2 messages",
+    "should_detect": true,
+    "cstl_rejected": false,
+    "cstl_flagged": true,
+    "cstl_detail": "CONSISTENCY=false; WARN:E702: temporal cycle detected (StepB -> StepA -> StepB)",
+    "base_rejected": false,
+    "base_detail": "accepte"
+  },
+  {
+    "id": "S1",
+    "cat": "identite",
+    "desc": "usurpation (signe avec la cle d'un attaquant)",
+    "should_detect": true,
+    "cstl_rejected": true,
+    "cstl_flagged": false,
+    "cstl_detail": "signature_rejected (public_key_mismatch)",
+    "base_rejected": true,
+    "base_detail": "cle != cle enregistree"
+  },
+  {
+    "id": "S2",
+    "cat": "identite",
+    "desc": "message modifie apres signature",
+    "should_detect": true,
+    "cstl_rejected": true,
+    "cstl_flagged": false,
+    "cstl_detail": "signature_rejected (signature_invalid)",
+    "base_rejected": true,
+    "base_detail": "signature invalide"
+  },
+  {
+    "id": "S3",
+    "cat": "identite",
+    "desc": "message non signe d'un agent a cle",
+    "should_detect": true,
+    "cstl_rejected": true,
+    "cstl_flagged": false,
+    "cstl_detail": "signature_rejected (missing_signature_for_registered_agent)",
+    "base_rejected": true,
+    "base_detail": "signature manquante"
+  }
+]

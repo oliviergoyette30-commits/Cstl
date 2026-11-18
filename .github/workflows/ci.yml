@@ -106,6 +106,18 @@ jobs:
       - name: Couverture parser N=100 (catalogue officiel)
         run: cargo run --example parser_coverage_n100
 
+      # Banc d'essai CSTL vs JSON Schema + Ed25519 (2026-11-17) : echoue si CSTL
+      # rate une des 12 erreurs attendues ou rejette un des 5 messages valides.
+      - name: Installe Python (banc d'essai comparatif)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Banc d'essai CSTL vs JSON Schema + Ed25519
+        run: |
+          pip install cryptography jsonschema
+          python3 scripts/benchmark_cstl_vs_jsonschema.py
+
   # Ajoute le 2026-11-17 : le SDK Python n'etait teste par aucune CI. Resultat
   # constate a ce moment-la : requirements.txt ne s'installait plus (pydantic
   # 2.6.0 sans wheel Python 3.13), 2 dependances importees n'etaient pas

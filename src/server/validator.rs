@@ -95,6 +95,21 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
             });
             result.valid = false;
         }
+
+        // E317 (2026-11-17) : `object` n'etait jamais verifie. Une relation sans
+        // objet passait la validation, etait stockee avec un objet vide
+        // (`unwrap_or_default` plus bas), et n'entrait dans AUCUNE verification
+        // (KB, coherence) -- perte silencieuse, alors que JSON Schema + champ
+        // requis la rejette. Trouve par scripts/benchmark_cstl_vs_jsonschema.py
+        // (cas E2). La spec impose RELATION [type, subject, object] ; aucune des
+        // 668 lignes RELATION des fichiers .cstl du depot n'omet l'objet.
+        if relation.get("object").is_none_or(|o| o.trim().is_empty()) {
+            result.errors.push(ValidationError {
+                code: format!("E317[{}]", idx),
+                message: format!("RELATION[{}]: Missing object", idx),
+            });
+            result.valid = false;
+        }
     }
 
     // Signature Ed25519 (Couche 2/securite, src/signing.rs) -- ici, verification
@@ -1262,5 +1277,32 @@ mod tests {
         let payload = payload_with(vec![]);
         let result = validate_payload(&payload);
         assert!(result.valid);
+    }
+
+    #[test]
+    fn test_relation_without_object_is_rejected_e317() {
+        let mut p = valid_minimal_payload_for_e317();
+        let mut rel = std::collections::HashMap::new();
+        rel.insert("type".to_string(), "STATE".to_string());
+        rel.insert("subject".to_string(), "x".to_string());
+        p.relations.push(rel.clone());
+        let r = validate_payload(&p);
+        assert!(!r.valid);
+        assert!(r.errors.iter().any(|e| e.code == "E317[0]"), "{:?}", r.errors);
+
+        rel.insert("object".to_string(), "   ".to_string());
+        p.relations[0] = rel.clone();
+        assert!(validate_payload(&p).errors.iter().any(|e| e.code == "E317[0]"), "objet vide");
+
+        rel.insert("object".to_string(), "alive".to_string());
+        p.relations[0] = rel;
+        assert!(!validate_payload(&p).errors.iter().any(|e| e.code.starts_with("E317")));
+    }
+
+    fn valid_minimal_payload_for_e317() -> CstlPayload {
+        crate::server::parser::parse_payload(
+            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=t, produced_by=t]\nINTENT_PAYLOAD [purpose=inform, sender=a, receiver=b]\n---END---\n",
+        )
+        .expect("payload minimal")
     }
 }

@@ -904,3 +904,23 @@ Demande explicite d'Olivier : comparer contre ce que les développeurs utilisent
 - Le texte naturel n'est PAS comparable sur le decodage — c'est l'argument central de CSTL, pas un angle mort de ce test : il n'y a rien à parser de façon déterministe dans une prose libre. Un système qui s'appuie sur du texte naturel entre agents n'a aucune garantie de récupérer les 20 relations structurées sans repasser par un LLM (coût, latence et taux d'erreur non nuls, non mesurés ici).
 
 Sources : [Benchmark RFC MCP stdio vs SSE latency (open-agent-protocol-hub)](https://github.com/jibranpcccc/open-agent-protocol-hub/issues/4) · [ProtocolBench: Which LLM MultiAgent Protocol to Choose? (arXiv:2510.17149)](https://arxiv.org/pdf/2510.17149) · [ed25519-dalek issue #87 — vérification performance](https://github.com/dalek-cryptography/ed25519-dalek/issues/87)
+
+### CSTL vs JSON Schema + Ed25519 — qui attrape quoi (2026-11-17)
+
+La comparaison de taille ci-dessus montre que l'avantage de CSTL n'est pas sur le fil. Cette comparaison-ci mesure là où il devrait être : **la détection d'erreurs**. Contre une alternative forte, pas un JSON libre : JSON Schema strict (champs requis, aucun champ inconnu, opérateurs et modalités en enum), signature Ed25519 sur le JSON canonique, registre de clés — ce que donnent JSON Schema + JWS + un annuaire. Script reproductible, contre le **vrai serveur compilé** en TCP : `scripts/benchmark_cstl_vs_jsonschema.py` (vérité terrain fixée avant exécution, résultats bruts dans `scripts/benchmark_cstl_vs_jsonschema_results.json`, exécuté en CI).
+
+| Catégorie | Cas | CSTL | JSON Schema + Ed25519 |
+|---|---|---|---|
+| Structure | opérateur inconnu, relation sans objet | 2/2 (rejet) | 2/2 (rejet) |
+| Logique dans un message | MUST + MUST_NOT sur la même action ; deux lieux de naissance ; cycle temporel A<B<C<A ; entité définie jamais référencée | 4/4 (1 rejet, 3 signalements) | 0/4 |
+| Logique entre messages | fait contredisant l'historique ; MUST contredisant un MUST_NOT passé ; cycle temporel réparti sur 2 messages | 3/3 (signalements) | 0/3 |
+| Identité | usurpation ; message modifié après signature ; message non signé d'un agent à clé | 3/3 (rejet) | 3/3 (rejet) |
+| **Total erreurs** | 12 | **12/12** | **5/12** |
+| Faux positifs | 5 messages valides | 0/5 | 0/5 |
+
+Lecture honnête :
+- **Structure et identité : égalité.** JSON Schema + signature fait aussi bien que CSTL. Ce n'est pas là que CSTL apporte quelque chose.
+- **Logique : c'est tout l'écart (7/7 contre 0/7).** JSON Schema valide la *forme*, jamais la *cohérence* : il ne peut pas voir qu'une obligation contredit une interdiction, ni comparer un message à l'historique. Obtenir ça en JSON demande d'écrire et de maintenir un moteur de règles maison.
+- **6 des 12 détections CSTL sont des signalements, pas des rejets** (bloc `CONSISTENCY`/`DEONTIC_AUDIT`/`SEMANTIC_WARNING` dans la réponse, payload accepté). Choix de conception : seules les contradictions déontiques intra-message sont bloquantes par défaut (`strict_deontic_history=true` rend aussi bloquantes celles de l'historique). Un agent qui ignore la réponse ignore le signal.
+- **Ce banc d'essai a trouvé un vrai bug CSTL** : avant le 2026-11-17, une relation sans `object` était acceptée en silence et exclue de toutes les vérifications — JSON Schema la rejetait. Corrigé (E317).
+- Ne mesure pas : la qualité d'encodage par un LLM (payloads écrits à la main), la performance, ni les alternatives « web sémantique » (OWL/SHACL/ODRL), qui couvrent une partie de la logique au prix d'une pile beaucoup plus lourde.
