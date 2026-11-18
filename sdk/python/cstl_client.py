@@ -98,7 +98,28 @@ class CstlResponse:
     audit_parent_hash: str | None = None
     audit_seq: int | None = None
     consistency: dict | None = None
+    deontic_audit: dict | None = None
     raw: str = ""
+
+    @property
+    def issues(self) -> list[str]:
+        """Problemes signales par le serveur sur un message ACCEPTE (2026-11-17).
+
+        CSTL ne rejette que certaines erreurs ; les autres (faits contradictoires,
+        contradiction deontique avec l'historique, cycle temporel, entite
+        orpheline...) arrivent comme signalements dans une reponse
+        `status=processed`. Un agent qui ne lit que `status` les manque toutes --
+        cette liste les rend explicites."""
+        found = []
+        if self.consistency and self.consistency.get("consistent") == "false":
+            found.append(f"CONSISTENCY: {self.consistency.get('contradictions', '?')} contradiction(s), "
+                         f"{self.consistency.get('cycles', '?')} cycle(s)")
+        if self.deontic_audit and self.deontic_audit.get("consistent") == "false":
+            found.append(f"DEONTIC_AUDIT: {self.deontic_audit.get('violations', '?')} violation(s) avec l'historique")
+        for rel in self.relations:
+            if rel.get("block") == "SEMANTIC_WARNING":
+                found.append(f"SEMANTIC_WARNING: {rel.get('detail', '')}")
+        return found
 
     @property
     def is_error(self) -> bool:
@@ -165,6 +186,7 @@ def parse_response(raw: str) -> CstlResponse:
     intent: dict = {}
     relations: list[dict] = []
     consistency: dict | None = None
+    deontic_audit: dict | None = None
     audit: dict | None = None
 
     for line in raw.splitlines():
@@ -182,6 +204,8 @@ def parse_response(raw: str) -> CstlResponse:
             intent.update(kv)
         elif block_name == "CONSISTENCY":
             consistency = kv
+        elif block_name == "DEONTIC_AUDIT":
+            deontic_audit = kv
         elif block_name == "AUDIT":
             audit = kv
         elif block_name in ("RELATION", "VERIFICATION", "EMERGENCE_REPORT", "SEMANTIC_WARNING"):
@@ -203,6 +227,7 @@ def parse_response(raw: str) -> CstlResponse:
         audit_parent_hash=(audit or {}).get("parent_hash"),
         audit_seq=seq_val,
         consistency=consistency,
+        deontic_audit=deontic_audit,
         raw=raw,
     )
 

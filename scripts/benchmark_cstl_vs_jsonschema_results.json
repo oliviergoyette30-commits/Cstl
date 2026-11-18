@@ -105,7 +105,7 @@
     "should_detect": true,
     "cstl_rejected": false,
     "cstl_flagged": true,
-    "cstl_detail": "CONSISTENCY=false; WARN:E702: temporal cycle detected (EvA -> EvB -> EvC -> EvA)",
+    "cstl_detail": "CONSISTENCY=false; WARN:E702: temporal cycle detected (EvC -> EvA -> EvB -> EvC)",
     "base_rejected": false,
     "base_detail": "accepte"
   },
@@ -149,7 +149,7 @@
     "should_detect": true,
     "cstl_rejected": false,
     "cstl_flagged": true,
-    "cstl_detail": "CONSISTENCY=false; WARN:E702: temporal cycle detected (StepB -> StepA -> StepB)",
+    "cstl_detail": "CONSISTENCY=false; WARN:E702: temporal cycle detected (StepA -> StepB -> StepA)",
     "base_rejected": false,
     "base_detail": "accepte"
   },

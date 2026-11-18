@@ -329,6 +329,16 @@ async fn get_stats(State(state): State<ApiState>) -> impl IntoResponse {
     }
 }
 
+/// Relations persistees + date de leur message, pour `build_with_content`
+/// (2026-11-17). Erreur de lecture -> graphe sans contenu plutot qu'une 500 :
+/// la partie "qui parle a qui" reste servie.
+async fn graph_rows(state: &ApiState) -> Vec<crate::adn_store::GraphRelationRow> {
+    state.adn_store.lock().await.graph_relations().unwrap_or_else(|e| {
+        eprintln!("[REST] graph_relations failed: {}", e);
+        Vec::new()
+    })
+}
+
 /// `GET /graphify/export` -- construit et retourne le graphe complet
 /// (noeuds agents + entrees d'audit, arcs sends_to/responds_to) depuis la
 /// chaine d'audit COURANTE. Clone la chaine (`HashChain: Clone`, voir
@@ -338,7 +348,7 @@ async fn get_stats(State(state): State<ApiState>) -> impl IntoResponse {
 async fn graphify_export(State(state): State<ApiState>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_from_audit_trail();
+    let payload = exporter.build_with_content(&graph_rows(&state).await);
     Json(payload)
 }
 
@@ -349,7 +359,7 @@ async fn graphify_export(State(state): State<ApiState>) -> impl IntoResponse {
 async fn graphify_stats(State(state): State<ApiState>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_from_audit_trail();
+    let payload = exporter.build_with_content(&graph_rows(&state).await);
     let stats = exporter.get_graph_stats(&payload);
     Json(stats)
 }
@@ -387,7 +397,7 @@ pub struct GraphifyQueryParams {
 async fn graphify_filter(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_from_audit_trail();
+    let payload = exporter.build_with_content(&graph_rows(&state).await);
 
     let nodes = params.node_type.as_deref().map(|t| exporter.filter_nodes_by_type(&payload, t));
     let edges = params.edge_type.as_deref().map(|t| exporter.filter_edges_by_type(&payload, t));
@@ -404,7 +414,7 @@ async fn graphify_filter(State(state): State<ApiState>, Query(params): Query<Gra
 async fn graphify_search(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_from_audit_trail();
+    let payload = exporter.build_with_content(&graph_rows(&state).await);
 
     match params.q {
         Some(q) => Json(json!({ "nodes": exporter.search_nodes(&payload, &q) })).into_response(),
@@ -418,7 +428,7 @@ async fn graphify_search(State(state): State<ApiState>, Query(params): Query<Gra
 async fn graphify_traverse(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_from_audit_trail();
+    let payload = exporter.build_with_content(&graph_rows(&state).await);
 
     match params.start {
         Some(start) => {

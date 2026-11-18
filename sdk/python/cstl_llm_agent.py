@@ -197,9 +197,48 @@ def verify_signature(payload: dict, public_key_hex: str, signature_hex: str) -> 
 # LLM Provider Interface
 # ============================================================================
 
+# Catalogue officiel (miroir de src/server/semantic.rs::OFFICIAL_OPERATORS) --
+# donne au modele pour qu'il produise des relations que le serveur accepte
+# (un operateur hors catalogue est rejete E101).
+OFFICIAL_OPERATORS = [
+    "ARR", "ARR.CREATE", "ARR.JOIN", "ARR.PRODUCE", "ARR.ACCESS",
+    "INTENT", "MAINTAIN", "TRANSFORM", "RESIST", "AMP", "INH",
+    "PRESSURE", "CATALYZE", "TRANSMIT_FAITHFUL", "TRANSMIT_INFER",
+    "COMMAND", "ASK", "STATE", "PERFORM", "RECOMMEND",
+    "EQUALS", "POSSESSES", "RESEMBLES", "CO_LOCATES", "OPPOSES",
+    "COMPARES", "ENTAILS", "CONTRADICTS",
+    "KNOWS", "BELIEVES", "ASSUMES", "DOUBTS", "DISBELIEVES",
+    "BEFORE", "AFTER", "DURING", "EITHER_OR", "REACTS", "INVOLVES", "SATISFIES",
+]
+RELATION_KEYS = ("type", "subject", "object", "modality")
+
+
 class LLMProvider:
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
         raise NotImplementedError
+
+    def generate_relation(self, subject: str, peer_message: Optional[str]) -> Optional[dict]:
+        """Demande au modele UNE relation CSTL en JSON et la parse.
+
+        Retourne {type, subject, object[, modality]} ou None si la reponse
+        n'en contient pas. Commun a tous les cerveaux (2026-11-17) : c'est ce
+        qui permet au serveur de VERIFIER le contenu -- un message en texte
+        libre n'entre dans aucune verification logique."""
+        prompt = (
+            "Reponds UNIQUEMENT par un objet JSON "
+            '{"type": ..., "subject": ..., "object": ...} (champ optionnel "modality": '
+            '"MUST" ou "MUST_NOT" pour une obligation/interdiction). '
+            f"\"type\" doit etre l'un de : {', '.join(OFFICIAL_OPERATORS)}. "
+            "subject et object : identifiants courts en snake_case. "
+            f"Sujet : {subject}"
+        )
+        if peer_message:
+            prompt += f"\nMessage du pair : {peer_message}"
+        obj = _extract_json_object(self.generate(prompt, max_tokens=200))
+        if not obj:
+            return None
+        rel = {k: str(obj[k]) for k in RELATION_KEYS if obj.get(k)}
+        return rel if all(k in rel for k in ("type", "subject", "object")) else None
 
 
 def _extract_json_object(text: str) -> Optional[dict]:
@@ -276,20 +315,6 @@ class HermesAgentBrain(LLMProvider):
         except Exception as e:
             return f"[Hermes error: {e}]"
 
-    def generate_relation(self, subject: str, peer_message: Optional[str]) -> Optional[dict]:
-        """Demande une relation CSTL au format JSON {type, subject, object}.
-        Retourne le dict parse, ou None si la reponse n'en contient pas."""
-        prompt = (
-            "Reponds UNIQUEMENT par un objet JSON {\"type\": ..., \"subject\": ..., "
-            f"\"object\": ...}} decrivant une relation sur: {subject}"
-        )
-        if peer_message:
-            prompt += f"\nMessage du pair: {peer_message}"
-        try:
-            return _extract_json_object(self._post_generate(prompt, 200))
-        except Exception:
-            return None
-
 
 class AnthropicAgentBrain(LLMProvider):
     """Claude via Anthropic API"""
@@ -318,16 +343,30 @@ class AnthropicAgentBrain(LLMProvider):
         except Exception:
             return None
 
+    MODEL = "claude-opus-5-5"
+
     def generate(self, prompt: str, max_tokens: int = 500) -> str:
+        # 2026-11-17 : "claude-3-5-sonnet-20250515" remplace par le modele
+        # courant. Sur claude-opus-5-5 la reflexion est toujours active et ses
+        # jetons comptent dans max_tokens : le plafond reste donc large (16000)
+        # et `max_tokens` de l'appelant ne sert plus que d'indication. Effort
+        # "low" : sorties courtes (une relation JSON, une phrase). Refus :
+        # repli serveur automatique (`fallbacks: "default"`), puis stop_reason
+        # verifie avant de lire le contenu.
         try:
-            msg = self.client.messages.create(
-                model="claude-3-5-sonnet-20250515",
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}]
+            msg = self.client.beta.messages.create(
+                model=self.MODEL,
+                max_tokens=16000,
+                output_config={"effort": "low"},
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+                messages=[{"role": "user", "content": prompt}],
             )
-            return msg.content[0].text.strip()
         except Exception as e:
             return f"[Anthropic error: {e}]"
+        if msg.stop_reason == "refusal":
+            return "[Anthropic refusal]"
+        return "".join(b.text for b in msg.content if b.type == "text").strip()
 
 
 class GeminiAgentBrain(LLMProvider):
@@ -364,71 +403,22 @@ class GeminiAgentBrain(LLMProvider):
 # CSTL Client
 # ============================================================================
 
-class CstlClient:
-    def __init__(self, host: str = "127.0.0.1", port: int = 5050, timeout: float = 10.0):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
+# Le client interne qui vivait ici (supprime le 2026-11-17) envoyait des
+# payloads invalides : META sans encoder/produced_by (E301/E302), INTENT sans
+# sender/receiver (E304/E305), signature calculee sur un contenu different de
+# celui envoye, texte libre non protege (une virgule = parse_error) -- et
+# rapportait quand meme {"status": "sent"}. Verifie en direct : enregistrement
+# "rejected", message "parse_error". On utilise le client du SDK (cstl_client.py),
+# celui des tests live, qui gere champs requis, guillemets et parsing de reponse.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cstl_client import CstlClient, CstlResponse  # noqa: E402
 
-    def send_message(self, sender: str, receiver: str, purpose: str,
-                    message: str, pub_key: str, signature: str) -> dict:
-        """Send CSTL message with Ed25519 signature"""
+ENCODER = "CstlLlmAgent"
 
-        payload = (
-            f"#!CSTL v5.0.0 MODE=A\n"
-            f"META [sender={sender}, receiver={receiver}, public_key={pub_key}, timestamp={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}]\n"
-            f"INTENT_PAYLOAD [purpose={purpose}, message={message}, signature={signature}]\n"
-            f"---END---\n"
-        )
-
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(self.timeout)
-            sock.connect((self.host, self.port))
-            sock.sendall(payload.encode("utf-8"))
-
-            response = sock.recv(4096)
-            sock.close()
-
-            response_str = response.decode("utf-8", errors="ignore")
-            return {"status": "sent", "response": response_str[:200]}
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
-
-    def register_agent(self, name: str, pub_key: str, signature: str) -> dict:
-        """Register agent with signature"""
-
-        payload = (
-            f"#!CSTL v5.0.0 MODE=A\n"
-            f"META [sender={name}, public_key={pub_key}, timestamp={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}]\n"
-            f"INTENT_PAYLOAD [purpose=agent_register, name={name}, capabilities=auth;verify;sync, signature={signature}]\n"
-            f"---END---\n"
-        )
-
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(self.timeout)
-            sock.connect((self.host, self.port))
-            sock.sendall(payload.encode("utf-8"))
-
-            response = sock.recv(4096)
-            sock.close()
-
-            response_str = response.decode("utf-8", errors="ignore")
-            if "agent_register_ack" in response_str:
-                return {"status": "registered", "response": response_str[:200]}
-            else:
-                return {"status": "rejected", "response": response_str[:200]}
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
-
-
-# ============================================================================
-# Agent Orchestration
-# ============================================================================
 
 class CstlAgent:
-    def __init__(self, name: str, provider_name: str = "hermes"):
+    def __init__(self, name: str, provider_name: str = "hermes",
+                 host: str = "127.0.0.1", port: int = 5050):
         self.name = name
         self.keyfile = Path.home() / ".cstl" / f"agent_{name}.key"
 
@@ -457,76 +447,103 @@ class CstlAgent:
         else:
             raise ValueError(f"Unknown provider: {provider_name}")
 
-        self.client = CstlClient()
+        self.client = CstlClient(host=host, port=port)
         self.registered = False
 
-    def register(self):
-        """Register with server using Ed25519 signature"""
+    # -- envoi signe ---------------------------------------------------------
+    def _send_signed(self, purpose: str, receiver: str, relations: list[dict],
+                     extra_intent: Optional[dict] = None) -> CstlResponse:
+        """Signe EXACTEMENT ce qui est envoye (memes META/INTENT/RELATIONS que
+        le serveur parsera -- les guillemets ajoutes par le client pour les
+        virgules sont retires cote serveur, donc les valeurs signees sont les
+        valeurs brutes)."""
+        meta = {"encoder": ENCODER, "produced_by": ENCODER, "public_key": self.pub_key}
+        intent = {"purpose": purpose, "sender": self.name, "receiver": receiver, **(extra_intent or {})}
+        signature = sign_intent(self.priv_bytes, self.pub_key, version="v5.0.0", mode="A",
+                                meta=meta, intent=intent, relations=relations)
+        payload = self.client.build_payload(
+            encoder=ENCODER, produced_by=ENCODER, purpose=purpose,
+            sender=self.name, receiver=receiver, relations=relations,
+            extra_meta={"public_key": self.pub_key},
+            extra_intent={**(extra_intent or {}), "signature": signature},
+        )
+        return self.client.send_raw(payload)
+
+    def register(self) -> bool:
+        """Enregistre l'agent (agent_register auto-signe). True si accepte."""
         if self.registered:
-            return
-
-        signature = sign_intent(
-            self.priv_bytes,
-            self.pub_key,
-            version="v5.0.0",
-            mode="A",
-            meta={"sender": self.name, "public_key": self.pub_key},
-            intent={"purpose": "agent_register", "name": self.name, "capabilities": "auth;verify;sync"},
-            relations=[]
-        )
-
-        result = self.client.register_agent(self.name, self.pub_key, signature)
-        if result["status"] == "registered":
+            return True
+        resp = self._send_signed("agent_register", "server", [],
+                                 {"name": self.name, "capabilities": "communication"})
+        self.registered = resp.purpose == "agent_register_ack"
+        if self.registered:
             print(f"[{self.name}] ✅ Registered with signature validation")
-            self.registered = True
         else:
-            print(f"[{self.name}] ⚠️  Registration: {result.get('status')}")
+            print(f"[{self.name}] ❌ Registration refused: {resp.purpose} {resp.fields.get('reason', '')}")
+        return self.registered
 
-    def send_message(self, receiver: str, message: str):
-        """Send signed message to peer"""
-        signature = sign_intent(
-            self.priv_bytes,
-            self.pub_key,
-            version="v5.0.0",
-            mode="A",
-            meta={"sender": self.name, "receiver": receiver, "public_key": self.pub_key},
-            intent={"purpose": "communication", "message": message},
-            relations=[]
-        )
+    def send_relations(self, receiver: str, relations: list[dict],
+                       purpose: str = "inform") -> CstlResponse:
+        """Envoie des relations VERIFIABLES (le serveur les controle : operateur,
+        coherence, deontique, historique). Lire `response.is_error` (rejet) et
+        `response.issues` (signalements sur un message accepte)."""
+        return self._send_signed(purpose, receiver, relations)
 
-        result = self.client.send_message(
-            self.name, receiver, "communication", message, self.pub_key, signature
-        )
-        return result
+    def tell(self, receiver: str, subject: str,
+             peer_message: Optional[str] = None) -> Tuple[Optional[dict], Optional[CstlResponse]]:
+        """Le modele formule UNE relation sur `subject`, l'agent l'envoie signee.
+        Retourne (relation, reponse) ; (None, None) si le modele n'a pas produit
+        de relation exploitable -- jamais d'envoi silencieux de texte libre."""
+        relation = self.llm.generate_relation(subject, peer_message)
+        if relation is None:
+            return None, None
+        return relation, self.send_relations(receiver, [relation])
+
+    def send_message(self, receiver: str, message: str) -> CstlResponse:
+        """Texte libre signe (purpose=communication). ATTENTION : aucune
+        verification logique ne s'applique a un texte libre -- preferer
+        send_relations()/tell() pour tout contenu sur lequel un autre agent
+        va agir."""
+        return self._send_signed("communication", receiver, [], {"message": message})
 
     def generate_response(self, prompt: str) -> str:
         """Generate LLM response"""
         return self.llm.generate(prompt)
 
 
-def run_autonomous_dialogue(agent_name: str, provider: str, num_turns: int = 3):
-    """Autonomous agent dialogue"""
+def describe(resp: CstlResponse) -> str:
+    """Resume honnete d'une reponse : rejet, acceptation avec signalements, ou OK."""
+    if resp.is_error or resp.status == "error":
+        reason = resp.fields.get("reason") or resp.fields.get("detail") or ""
+        return f"REJETE ({resp.purpose}{': ' + reason if reason else ''})"
+    if resp.issues:
+        return "ACCEPTE AVEC SIGNALEMENTS: " + " | ".join(resp.issues)
+    return f"ACCEPTE (seq={resp.audit_seq})"
+
+
+def run_autonomous_dialogue(agent_name: str, provider: str, num_turns: int = 3,
+                            host: str = "127.0.0.1", port: int = 5050):
+    """Dialogue autonome : a chaque tour le modele formule une relation sur le
+    sujet du tour (en tenant compte de la relation precedente du pair), l'agent
+    l'envoie signee, et affiche ce que le serveur en dit."""
     print(f"[{agent_name}] Starting autonomous dialogue ({num_turns} turns)...")
 
-    agent = CstlAgent(agent_name, provider)
-    agent.register()
+    agent = CstlAgent(agent_name, provider, host=host, port=port)
+    if not agent.register():
+        print(f"[{agent_name}] arret : enregistrement refuse")
+        return
 
-    # Peer assignment for dialogue
     peers = {"alice": "bob", "bob": "charlie", "charlie": "alice"}
     current_peer = peers.get(agent_name, "alice")
-
+    last = None
     for turn in range(num_turns):
-        # Generate message
-        prompt = f"You are agent {agent_name}. Respond briefly to: Turn {turn + 1}. Stay in character."
-        message = agent.generate_response(prompt)
-
-        print(f"[{agent_name}] Turn {turn + 1}: {message[:50]}...")
-
-        # Send to peer
-        result = agent.send_message(current_peer, message)
-        if result["status"] == "error":
-            print(f"[{agent_name}] ⚠️  Send error: {result.get('error')}")
-
+        subject = f"etat du projet partage avec {current_peer}, tour {turn + 1}"
+        relation, resp = agent.tell(current_peer, subject, json.dumps(last) if last else None)
+        if relation is None:
+            print(f"[{agent_name}] Turn {turn + 1}: le modele n'a produit aucune relation exploitable")
+            continue
+        print(f"[{agent_name}] Turn {turn + 1}: {relation} -> {describe(resp)}")
+        last = relation
         time.sleep(0.5)
 
     print(f"[{agent_name}] ✅ Dialogue complete")
@@ -548,7 +565,7 @@ def main():
     args = parser.parse_args()
 
     if args.peer_mode == "self":
-        run_autonomous_dialogue(args.name, args.provider, args.turns)
+        run_autonomous_dialogue(args.name, args.provider, args.turns, args.host, args.port)
     else:
         print(f"[{args.name}] Peer-mode '{args.peer_mode}' not implemented")
 

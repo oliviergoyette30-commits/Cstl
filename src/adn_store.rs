@@ -150,6 +150,8 @@ pub struct DbPeerReviewSignature {
 
 /// Ligne brute de `load_agents` : (name, version, capabilities, trust_score, public_key).
 pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
+/// Ligne de `graph_relations` : (hash, subject, predicate, object, modality, created_at).
+pub type GraphRelationRow = (String, String, String, String, Option<String>, Option<i64>);
 /// Ligne brute de `get_conversation_context` : (hash, payload, encoder, produced_by, turn).
 pub type ConversationTurnRow = (String, String, Option<String>, Option<String>, i64);
 
@@ -1458,6 +1460,23 @@ impl AdnStore {
             }
         }
         Ok(())
+    }
+
+    /// Relations persistees AVEC le message qui les a affirmees (hash) et la
+    /// date reelle de ce message (`adn_store.created_at`, secondes unix) --
+    /// pour l'export Graphify (2026-11-17), qui jusque-la ne montrait que
+    /// "qui parle a qui" (chaine d'audit), jamais le contenu des messages.
+    /// Tuple : (hash, subject, predicate, object, modality, created_at).
+    pub fn graph_relations(&self) -> Result<Vec<GraphRelationRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT r.hash, r.subject, r.predicate, r.object, r.modality, s.created_at
+             FROM adn_relations r LEFT JOIN adn_store s ON s.hash = r.hash
+             ORDER BY r.id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?))
+        })?;
+        rows.collect()
     }
 
     /// Comme `all_relations()`, mais preserve les 9 attributs (sigma/tau/layer/

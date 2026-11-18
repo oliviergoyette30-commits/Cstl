@@ -213,16 +213,17 @@ class CstlAgent:
 - All 4/4 pass (byte-perfect match)
 
 **Live Verification (Python + Rust Server):**
-1. Start Rust server: `cd /home/claude/Cstl && cargo run`
+1. Start Rust server: `cargo run --bin cstl_parser`
 2. Run Python test: `cd sdk/python && python3 test_python_signing_verification.py` → ✓ Signing bytes match
 3. Generate real keypair and register:
 ```bash
 python3 << 'EOF'
 from cstl_llm_agent import CstlAgent
-agent = CstlAgent("claude_agent", provider="anthropic")
-agent.register()  # → server responds with agent_register_ack
-result = agent.send_message("alice", "Hello from Claude")
-print("Sent:", result)
+from cstl_llm_agent import describe
+agent = CstlAgent("claude_agent", "anthropic")
+agent.register()  # → True on agent_register_ack
+relation, resp = agent.tell("alice", "status of order 42")  # verifiable relation, signed
+print(relation, describe(resp))  # ACCEPTE / ACCEPTE AVEC SIGNALEMENTS / REJETE
 EOF
 ```
 
@@ -577,7 +578,6 @@ Wired in as three new purposes (`quorum_propose`, `quorum_vote`, `quorum_circuit
 ### For Rust Server (Features B-1, A, B-2):
 
 ```bash
-cd /home/claude/Cstl
 cargo build
 cargo test --lib          # All tests pass (including new signing tests)
 cargo run &               # Start server on port 5050
@@ -587,7 +587,7 @@ sleep 2
 ### For Python Agent (Feature C):
 
 ```bash
-cd /home/claude/Cstl/sdk/python
+cd sdk/python
 
 # Verify cross-language signing bytes match
 python3 test_python_signing_verification.py
@@ -598,12 +598,13 @@ python3 << 'EOF'
 from cstl_llm_agent import CstlAgent
 
 # Create agent with Anthropic (requires ANTHROPIC_API_KEY set)
-agent = CstlAgent("my_agent", provider="anthropic")
+agent = CstlAgent("my_agent", "anthropic")
 agent.register()     # → [my_agent] ✅ Registered with signature validation
 
-# Send a signed message
-result = agent.send_message("alice", "Hello, world")
-print("Result:", result)
+# Send a signed, verifiable relation and read what the server says about it
+from cstl_llm_agent import describe
+resp = agent.send_relations("alice", [{"type": "STATE", "subject": "order_42", "object": "shipped"}])
+print(describe(resp), resp.issues)
 EOF
 ```
 
@@ -611,10 +612,9 @@ EOF
 
 ```bash
 # Terminal 1: Start Rust server
-cd /home/claude/Cstl && cargo run
+cargo run --bin cstl_parser
 
 # Terminal 2: Run Python tests
-cd /home/claude/Cstl
 python3 test_python_signing_verification.py  # Verify canonical signing_bytes match
 python3 sdk/python/cstl_llm_agent.py --name alice_agent --provider gemini  # Register and relay
 ```

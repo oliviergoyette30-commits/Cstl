@@ -115,8 +115,20 @@ jobs:
 
       - name: Banc d'essai CSTL vs JSON Schema + Ed25519
         run: |
-          pip install cryptography jsonschema
+          pip install cryptography jsonschema pytest
           python3 scripts/benchmark_cstl_vs_jsonschema.py
+
+      # Agent LLM -> vrai serveur (stub de modele) : enregistrement, relations
+      # verifiables, signalements lus, contradiction visible dans Obsidian et
+      # Graphify. Avant le 2026-11-17 l'agent n'avait jamais ete execute contre
+      # le serveur (enregistrement rejete, messages en parse_error).
+      - name: Agent LLM contre le vrai serveur
+        run: python3 -m pytest -q sdk/python/test_llm_agent_live.py
+
+      # Etaient #[ignore] avec un chemin absolu d'une autre machine : jamais
+      # executes. Prouvent que Python signe ce que Rust verifie, et inversement.
+      - name: Validation croisee des signatures Rust <-> Python
+        run: cargo test --test cross_validation_signing_test -- --include-ignored
 
   # Ajoute le 2026-11-17 : le SDK Python n'etait teste par aucune CI. Resultat
   # constate a ce moment-la : requirements.txt ne s'installait plus (pydantic

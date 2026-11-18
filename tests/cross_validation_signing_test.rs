@@ -56,17 +56,28 @@ fn payload_to_json(payload: &CstlPayload) -> serde_json::Value {
     })
 }
 
+/// Interpreteur Python + chemin du SDK (2026-11-17). Avant : chemin absolu
+/// `/home/claude/cstl_work/sdk/python` d'une autre machine, donc ces tests
+/// (deja `#[ignore]`) ne pouvaient passer nulle part ailleurs. `CSTL_PYTHON`
+/// permet de pointer un venv qui a `cryptography`.
+fn python_cmd() -> Command {
+    let exe = std::env::var("CSTL_PYTHON").unwrap_or_else(|_| "python3".to_string());
+    let mut cmd = Command::new(exe);
+    cmd.env("CSTL_SDK_DIR", concat!(env!("CARGO_MANIFEST_DIR"), "/sdk/python"));
+    cmd
+}
+
 fn call_python_verify(payload_json: &str, pub_key_hex: &str, sig_hex: &str) -> Result<bool, String> {
     //! Appelle Python pour vérifier une signature en utilisant cstl_llm_agent.verify_signature
 
     let python_script = format!(
-        "import sys\nimport json\nsys.path.insert(0, '/home/claude/cstl_work/sdk/python')\n\nfrom cstl_llm_agent import verify_signature\n\npayload_json = json.loads('{}')\npublic_key_hex = '{}'\nsignature_hex = '{}'\n\ntry:\n    result = verify_signature(payload_json, public_key_hex, signature_hex)\n    print('VALID' if result else 'INVALID')\nexcept Exception as e:\n    print('ERROR: ' + str(e))\n",
+        "import sys\nimport json\nsys.path.insert(0, __import__('os').environ['CSTL_SDK_DIR'])\n\nfrom cstl_llm_agent import verify_signature\n\npayload_json = json.loads('{}')\npublic_key_hex = '{}'\nsignature_hex = '{}'\n\ntry:\n    result = verify_signature(payload_json, public_key_hex, signature_hex)\n    print('VALID' if result else 'INVALID')\nexcept Exception as e:\n    print('ERROR: ' + str(e))\n",
         payload_json.replace("'", "\\'"),
         pub_key_hex,
         sig_hex,
     );
 
-    let output = Command::new("python3")
+    let output = python_cmd()
         .arg("-c")
         .arg(&python_script)
         .output()
@@ -94,12 +105,12 @@ fn call_python_sign(payload_json: &str, priv_key_hex: &str) -> Result<(String, S
     //! Représente l'agent Python créant des signatures
 
     let python_script = format!(
-        "import sys\nimport json\nsys.path.insert(0, '/home/claude/cstl_work/sdk/python')\n\nfrom cstl_llm_agent import cstl_signing_bytes\nfrom cryptography.hazmat.primitives.asymmetric import ed25519\n\npayload_json = json.loads('{}')\npriv_key_hex = '{}'\n\ntry:\n    priv_bytes = bytes.fromhex(priv_key_hex)\n    priv_key = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)\n    pub_bytes = priv_key.public_key().public_bytes_raw()\n    pub_hex = pub_bytes.hex()\n    canonical = cstl_signing_bytes(\n        payload_json.get('version', 'v5.0.0'),\n        payload_json.get('mode', 'A'),\n        payload_json.get('meta', dict()),\n        payload_json.get('intent', dict()),\n        payload_json.get('relations', [])\n    )\n    sig_bytes = priv_key.sign(canonical)\n    sig_hex = sig_bytes.hex()\n    print(pub_hex + ',' + sig_hex)\nexcept Exception as e:\n    print('ERROR: ' + str(e))\n",
+        "import sys\nimport json\nsys.path.insert(0, __import__('os').environ['CSTL_SDK_DIR'])\n\nfrom cstl_llm_agent import cstl_signing_bytes\nfrom cryptography.hazmat.primitives.asymmetric import ed25519\n\npayload_json = json.loads('{}')\npriv_key_hex = '{}'\n\ntry:\n    priv_bytes = bytes.fromhex(priv_key_hex)\n    priv_key = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)\n    pub_bytes = priv_key.public_key().public_bytes_raw()\n    pub_hex = pub_bytes.hex()\n    canonical = cstl_signing_bytes(\n        payload_json.get('version', 'v5.0.0'),\n        payload_json.get('mode', 'A'),\n        dict(payload_json.get('meta', dict()), public_key=pub_hex),\n        payload_json.get('intent', dict()),\n        payload_json.get('relations', [])\n    )\n    sig_bytes = priv_key.sign(canonical)\n    sig_hex = sig_bytes.hex()\n    print(pub_hex + ',' + sig_hex)\nexcept Exception as e:\n    print('ERROR: ' + str(e))\n",
         payload_json.replace("'", "\\'"),
         priv_key_hex,
     );
 
-    let output = Command::new("python3")
+    let output = python_cmd()
         .arg("-c")
         .arg(&python_script)
         .output()
@@ -186,7 +197,7 @@ fn test_python_signs_rust_verifies() {
     // Python génère paire de clés
     let python_keygen = r#"
 import sys
-sys.path.insert(0, '/home/claude/cstl_work/sdk/python')
+sys.path.insert(0, __import__('os').environ['CSTL_SDK_DIR'])
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 priv_key = ed25519.Ed25519PrivateKey.generate()
@@ -198,7 +209,7 @@ pub_hex = pub_bytes.hex()
 print(f"{priv_hex},{pub_hex}")
 "#;
 
-    let output = Command::new("python3")
+    let output = python_cmd()
         .arg("-c")
         .arg(python_keygen)
         .output()

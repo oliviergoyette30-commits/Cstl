@@ -1464,6 +1464,19 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // Resume lisible du dilemme pour la notification Telegram — sans
                     // ca, "committer" est un clic aveugle, pas une decision informee.
                     let mut telegram_details = verification_lines.clone();
+                    // 2026-11-17 : les contradictions DEONTIQUES avec l'historique
+                    // (ex. MUST apres un MUST_NOT sur la meme action) etaient
+                    // detectees (DEONTIC_AUDIT) mais absentes de ce resume -- et
+                    // donc jamais escaladees vers Obsidian, alors que c'est le cas
+                    // le plus grave ("le bot doit effacer la base" apres "ne doit pas").
+                    if !deontic_audit.violations.is_empty() {
+                        telegram_details.push_str("\nDeontic violations (vs history):\n");
+                        for v in &deontic_audit.violations {
+                            telegram_details.push_str(&format!(
+                                "- {} {}: {} vs {}\n", v.subject, v.object, v.required_by, v.forbidden_by
+                            ));
+                        }
+                    }
                     if !consistency.contradictions.is_empty() {
                         telegram_details.push_str("\nContradictions:\n");
                         for ct in &consistency.contradictions {
@@ -1497,7 +1510,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // ExecutionLab a detecte une contradiction/cycle, on ecrit une
                     // entree visible directement dans le vault Obsidian de
                     // l'utilisateur, en plus de la notification Telegram.
-                    if !consistency.consistent {
+                    if !consistency.consistent || !deontic_audit.consistent {
                         if let Some(obsidian) = &ctx.obsidian {
                             if let Err(e) = obsidian.escalate(&entry.hash, sigma, &telegram_details) {
                                 error!("[Obsidian] Escalation failed: {}", e);
