@@ -252,3 +252,63 @@ async fn test_detect_entanglement_degrades_cleanly_on_malformed_json() {
         .await;
     assert!(hypotheses.is_empty());
 }
+
+// --- Limites de debit Wikidata (2026-11-17) -------------------------------
+// Constate en direct contre wikidata.org : HTTP 429 en texte brut, que
+// kb_verify rapportait comme "network_error: error decoding response body",
+// sans nouvel essai. Ces deux tests figent le comportement corrige.
+
+/// Repond 429 les `fail_first` premieres fois, puis un resultat de recherche valide.
+struct FlakySearch {
+    calls: std::sync::atomic::AtomicUsize,
+    fail_first: usize,
+}
+
+impl Respond for FlakySearch {
+    fn respond(&self, _request: &Request) -> ResponseTemplate {
+        let n = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if n < self.fail_first {
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "1")
+                .set_body_string("You are making too many requests to the API.")
+        } else {
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "search": [{"id": "Q1", "label": "Thing"}]
+            }))
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_rate_limited_search_is_retried_then_succeeds() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/w/api.php"))
+        .respond_with(FlakySearch { calls: Default::default(), fail_first: 1 })
+        .mount(&server).await;
+    Mock::given(method("GET")).and(path("/sparql"))
+        // false : "n'est pas une page d'homonymie" -> l'entite est retenue.
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"boolean": false})))
+        .mount(&server).await;
+    let verifier = KbVerifier::with_endpoints(
+        format!("{}/w/api.php", server.uri()),
+        format!("{}/sparql", server.uri()),
+    );
+    let r = verifier.verify_relation("thing_a", "spouse", "thing_b", "en", 1, 1).await;
+    assert!(r.subject_qid.is_some(), "apres un 429 puis 200, l'entite doit etre resolue: {r:?}");
+}
+
+#[tokio::test]
+async fn test_persistent_rate_limit_reports_rate_limited_not_decode_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/w/api.php"))
+        .respond_with(FlakySearch { calls: Default::default(), fail_first: usize::MAX })
+        .mount(&server).await;
+    let verifier = KbVerifier::with_endpoints(
+        format!("{}/w/api.php", server.uri()),
+        format!("{}/sparql", server.uri()),
+    );
+    let r = verifier.verify_relation("thing_a", "spouse", "thing_b", "en", 1, 1).await;
+    assert_eq!(r.verified, "unchallenged_unproven");
+    assert!(r.reason.contains("rate_limited (HTTP 429)"), "raison explicite attendue: {}", r.reason);
+    assert!(!r.reason.contains("decoding"), "{}", r.reason);
+}
