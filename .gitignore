@@ -20,3 +20,4 @@ dashboard/logs/
 .claude/worktrees/
 Claude outputs/
 sdk/python/castle_mode_b/
+scripts/llm_agent_eval_stub.json
