@@ -1785,6 +1785,7 @@ impl AdnStore {
     ///    (`audit::canonical_hash`) est celui enregistre ;
     /// 3. relations derivees : `adn_relations` (lue par le graphe et les
     ///    controles de coherence) correspond aux relations du message.
+    ///
     /// Un maillon dont le message n'est pas stocke (ex. agent_register) ne
     /// peut etre verifie que par ses liens : compte a part, pas une erreur.
     pub fn verify_integrity(&self, chain: &crate::server::audit::HashChain) -> Result<IntegrityReport, rusqlite::Error> {
