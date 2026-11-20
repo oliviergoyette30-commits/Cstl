@@ -123,7 +123,7 @@ jobs:
       # Graphify. Avant le 2026-11-17 l'agent n'avait jamais ete execute contre
       # le serveur (enregistrement rejete, messages en parse_error).
       - name: Agent LLM contre le vrai serveur
-        run: python3 -m pytest -q sdk/python/test_llm_agent_live.py sdk/python/test_strict_mode_live.py sdk/python/test_action_authorization_live.py sdk/python/test_mandatory_authorization_live.py
+        run: python3 -m pytest -q sdk/python/test_llm_agent_live.py sdk/python/test_strict_mode_live.py sdk/python/test_action_authorization_live.py sdk/python/test_mandatory_authorization_live.py sdk/python/test_witness_rollback_live.py
 
       # Etaient #[ignore] avec un chemin absolu d'une autre machine : jamais
       # executes. Prouvent que Python signe ce que Rust verifie, et inversement.
