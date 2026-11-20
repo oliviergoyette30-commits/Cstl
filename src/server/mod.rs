@@ -15,6 +15,7 @@ pub mod quorum;
 pub mod quorum_wire;
 pub mod action_authorization;
 pub mod server_key;
+pub mod witness;
 pub mod arbitrage;
 pub mod castle;
 pub mod castle_wire;
@@ -163,6 +164,45 @@ pub struct CstlNativeServer {
 }
 
 impl CstlNativeServer {
+    /// Temoin externe (`CSTL_WITNESS_URL`, voir `witness.rs`) : refuse de
+    /// demarrer sur un historique plus ancien que celui que le temoin a vu,
+    /// puis lui envoie chaque nouveau maillon. Sans temoin configure : rien.
+    /// `CSTL_ACCEPT_BROKEN_CHAIN=1` laisse demarrer malgre une alerte, comme
+    /// pour la verification d'integrite locale.
+    pub async fn check_with_witness(&self) -> Result<(), String> {
+        let Some(client) = witness::WitnessClient::from_env() else { return Ok(()) };
+        let accept_broken = std::env::var("CSTL_ACCEPT_BROKEN_CHAIN").map(|v| v == "1").unwrap_or(false);
+        let entries = self.chain.lock().await.entries.clone();
+        // Temoin configure mais injoignable : refus aussi. Demarrer sans lui
+        // reviendrait a ne plus rien verifier, en silence.
+        let witnessed = match client.fetch(&self.server_key.public_hex()).await {
+            Ok(w) => w,
+            Err(e) if accept_broken => {
+                eprintln!("[Temoin] ⚠️  {e} -- demarrage FORCE (CSTL_ACCEPT_BROKEN_CHAIN=1)");
+                None
+            }
+            Err(e) => return Err(format!("{e} -- demarrage refuse (temoin configure par CSTL_WITNESS_URL)")),
+        };
+        match witnessed {
+            Some(cp) => match witness::check_against_witness(&self.server_key, &entries, &cp) {
+                Ok(()) => eprintln!("[Temoin] {} : dernier maillon vu seq={}, chaine locale a jour", client.base(), cp.seq),
+                Err(e) if accept_broken => eprintln!("[Temoin] ⚠️  {e} -- demarrage FORCE (CSTL_ACCEPT_BROKEN_CHAIN=1)"),
+                Err(e) => return Err(format!("{e} -- demarrage refuse")),
+            },
+            None => eprintln!("[Temoin] {} : aucun maillon connu pour cette cle (premier contact)", client.base()),
+        }
+        let (tx, rx) = tokio::sync::watch::channel(None);
+        {
+            let mut store = self.adn_store.lock().await;
+            if let Ok(Some(cp)) = store.last_signed_checkpoint() {
+                tx.send_replace(Some(cp));
+            }
+            store.set_checkpoint_sink(tx);
+        }
+        client.spawn_pusher(rx);
+        Ok(())
+    }
+
     pub fn new(port: u16) -> Self {
         Self::with_data_path(port, "cstl_adn.db")
     }
@@ -368,6 +408,7 @@ impl CstlNativeServer {
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[CSTL-Native Server] Starting on port {}", self.port);
+        self.check_with_witness().await?;
 
         // Couche 9 -- regles par defaut, enregistrees une seule fois au
         // demarrage (register_rule est async, donc pas possible depuis le

@@ -197,6 +197,9 @@ struct AuditSigner {
     key: std::sync::Arc<crate::server::server_key::ServerKey>,
     since: u64,
     expected_head: Option<(u64, String)>,
+    /// Temoin externe (2026-11-20, `server/witness.rs`) : chaque maillon
+    /// ecrit y est publie, une tache l'envoie au temoin.
+    checkpoints: Option<tokio::sync::watch::Sender<Option<crate::server::witness::Checkpoint>>>,
 }
 
 fn now_unix() -> i64 {
@@ -1794,7 +1797,35 @@ impl AdnStore {
     /// marqueur signe (`ServerKey::init_audit_marker`) : `since` = premier
     /// `seq` qui doit etre signe, `head` = dernier maillon attendu.
     pub fn set_audit_signer(&mut self, key: std::sync::Arc<crate::server::server_key::ServerKey>, marker: crate::server::server_key::AuditMarker) {
-        self.audit_signer = Some(AuditSigner { key, since: marker.since, expected_head: marker.head });
+        self.audit_signer = Some(AuditSigner { key, since: marker.since, expected_head: marker.head, checkpoints: None });
+    }
+
+    /// Publie chaque maillon ecrit dans `tx` (pour le temoin externe).
+    /// Sans effet si la signature n'est pas activee.
+    pub fn set_checkpoint_sink(&mut self, tx: tokio::sync::watch::Sender<Option<crate::server::witness::Checkpoint>>) {
+        if let Some(signer) = &mut self.audit_signer {
+            signer.checkpoints = Some(tx);
+        }
+    }
+
+    /// Dernier maillon persiste, avec sa signature du serveur (pour le
+    /// temoin). `None` si la chaine est vide, non signee, ou sans cle.
+    pub fn last_signed_checkpoint(&self) -> Result<Option<crate::server::witness::Checkpoint>, rusqlite::Error> {
+        let Some(AuditSigner { key, .. }) = &self.audit_signer else { return Ok(None) };
+        let row = self.conn.query_row(
+            "SELECT seq, hash, parent_hash, sender, receiver, purpose, server_signature
+             FROM audit_trail ORDER BY seq DESC LIMIT 1",
+            [],
+            |r| Ok((AuditEntry {
+                seq: r.get(0)?, hash: r.get(1)?, parent_hash: r.get(2)?,
+                sender: r.get(3)?, receiver: r.get(4)?, purpose: r.get(5)?,
+            }, r.get::<_, Option<String>>(6)?)),
+        );
+        match row {
+            Ok((entry, Some(sig))) => Ok(Some(crate::server::witness::Checkpoint::new(key, &entry, sig))),
+            Ok((_, None)) | Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// La base contient-elle au moins un maillon signe par le serveur ?
@@ -1825,10 +1856,13 @@ impl AdnStore {
             // Dernier maillon ecrit -> marqueur signe, APRES la base : un arret
             // entre les deux laisse une chaine plus LONGUE que le marqueur
             // (accepte), jamais plus courte (qui serait signalee a tort).
-            if let Some(AuditSigner { key, since, .. }) = &self.audit_signer {
+            if let Some(AuditSigner { key, since, checkpoints, .. }) = &self.audit_signer {
                 let marker = crate::server::server_key::AuditMarker { since: *since, head: Some((entry.seq, entry.hash.clone())) };
                 if let Err(e) = key.write_audit_marker(&marker) {
                     eprintln!("[AdnStore] ⚠️  marqueur de chaine non mis a jour: {}", e);
+                }
+                if let (Some(tx), Some(sig)) = (checkpoints, &signature) {
+                    tx.send_replace(Some(crate::server::witness::Checkpoint::new(key, entry, sig.clone())));
                 }
             }
             eprintln!("[AdnStore] Audit persisted seq={}", entry.seq);
