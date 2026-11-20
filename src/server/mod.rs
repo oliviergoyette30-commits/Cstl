@@ -14,6 +14,7 @@ pub mod handler;
 pub mod quorum;
 pub mod quorum_wire;
 pub mod action_authorization;
+pub mod server_key;
 pub mod arbitrage;
 pub mod castle;
 pub mod castle_wire;
@@ -91,6 +92,9 @@ pub struct ServerContext {
     /// messages non signes sous un nom libre. A activer des que le serveur
     /// est expose sur un reseau.
     pub require_signatures: bool,
+    /// Cle Ed25519 du serveur (2026-11-20) : signe les jetons d'autorisation
+    /// de la couche 9 (voir `server_key.rs`).
+    pub server_key: Arc<server_key::ServerKey>,
 }
 
 pub struct CstlNativeServer {
@@ -154,6 +158,8 @@ pub struct CstlNativeServer {
     /// existants) pour utiliser des certificats generes en memoire sans
     /// passer par le disque.
     pub tls: Option<Arc<tls::TlsServer>>,
+    /// Cle Ed25519 propre au serveur (`server_key.rs`).
+    pub server_key: Arc<server_key::ServerKey>,
 }
 
 impl CstlNativeServer {
@@ -310,6 +316,14 @@ impl CstlNativeServer {
             governance_arc.clone(),
             restricted_council_arc.clone(),
         ));
+        let server_key = server_key::ServerKey::for_data_path(data_path)?;
+        match &server_key.path {
+            Some(p) => eprintln!(
+                "[CSTL-Native Server] Cle serveur : {} (publique : {}, a distribuer aux systemes qui verifient les autorisations)",
+                server_key.public_hex(), server_key::public_key_path(p).display()
+            ),
+            None => eprintln!("[CSTL-Native Server] Cle serveur EPHEMERE (base en memoire) : {}", server_key.public_hex()),
+        }
         Ok(CstlNativeServer {
             port,
             agent_registry: Arc::new(RwLock::new(agent_registry)),
@@ -328,6 +342,7 @@ impl CstlNativeServer {
             deontic: deontic_arc,
             wai_registry: Arc::new(wai_registry),
             tls: None,
+            server_key: Arc::new(server_key),
         })
     }
 
@@ -457,6 +472,7 @@ impl CstlNativeServer {
             require_signatures: std::env::var("CSTL_REQUIRE_SIGNATURES")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
+            server_key: self.server_key.clone(),
         };
         if ctx.require_signatures {
             eprintln!("[CSTL-Native Server] Mode strict ACTIF (CSTL_REQUIRE_SIGNATURES) -- tout message doit etre signe par un agent enregistre");

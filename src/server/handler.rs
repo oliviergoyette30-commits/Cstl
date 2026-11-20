@@ -505,11 +505,37 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             "[Handler] action_request sender={} action={:?} -> {} ({})",
                             sender, action, if decision.allowed { "allowed" } else { "denied" }, decision.reason
                         );
-                        let shown_action = action.filter(|a| super::action_authorization::is_valid_action(a)).unwrap_or_else(|| "invalid".to_string());
+                        let shown_action = action.clone().filter(|a| super::action_authorization::is_valid_action(a)).unwrap_or_else(|| "invalid".to_string());
                         let shown_sender = if super::action_authorization::is_valid_action(&sender) { sender.clone() } else { "invalid".to_string() };
+                        // Jeton signe par la cle du serveur, SEULEMENT si autorise
+                        // (2026-11-20, server_key.rs) : c'est ce jeton que le systeme
+                        // vise verifie avant d'agir. request_id absent ou hors
+                        // [A-Za-z0-9_.-] -> le hash du message sert de nonce unique.
+                        let token = if decision.allowed {
+                            let request_id = payload.intent.get("request_id").cloned()
+                                .filter(|r| super::action_authorization::is_valid_action(r))
+                                .unwrap_or_else(|| entry.hash.replace(':', "_"));
+                            let issued_at = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                            let auth = super::server_key::Authorization {
+                                agent: shown_sender.clone(),
+                                action: shown_action.clone(),
+                                request_id,
+                                issued_at,
+                                expires_at: issued_at + super::server_key::ttl_from_env(),
+                                audit_hash: entry.hash.clone(),
+                            };
+                            let sig = ctx.server_key.sign_hex(auth.message().as_bytes());
+                            format!(
+                                ", request_id={}, issued_at={}, expires_at={}, audit_hash={}, server_key={}, authorization={}",
+                                auth.request_id, auth.issued_at, auth.expires_at, auth.audit_hash, ctx.server_key.public_hex(), sig
+                            )
+                        } else {
+                            String::new()
+                        };
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}]\n\
+                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}]\n\
                              AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
                             shown_sender,
                             shown_action,
@@ -519,6 +545,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             if decision.conflict { ", conflict=true" } else { "" },
                             if decision.superseded { ", superseded=true" } else { "" },
                             if decision.ignored > 0 { format!(", ignored_rules={}", decision.ignored) } else { String::new() },
+                            token,
                             entry.hash, entry.parent_hash, entry.seq,
                         );
                         send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;

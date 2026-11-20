@@ -170,6 +170,36 @@ With the Python SDK: `agent.act("wipe_db", do_it)` runs `do_it`
 only if allowed, else raises `ActionDenied`. Live test:
 `sdk/python/test_action_authorization_live.py`.
 
+**Making it mandatory.** On its own, the check above is voluntary: an agent
+that skips the request is not stopped. To close that gap, make the system
+that performs the action (a database, an API, a tool) demand proof:
+
+- Every `allowed` answer carries a token signed with the server's own
+  Ed25519 key: `request_id`, `issued_at`, `expires_at`, `audit_hash` and
+  `authorization=<signature>`. Tokens expire after `CSTL_AUTHZ_TTL_SECS`
+  seconds (default 60).
+- The server key lives next to the database, in `<db>.server_key` (mode
+  0600, git-ignored), or at `CSTL_SERVER_KEY_PATH`. The public key is
+  written to `<db>.server_key.pub`.
+- Give that public key to the target system out of band. Never trust the
+  `server_key=` echoed in a response: a fake server would put its own key
+  there.
+
+Then the agent and the target work like this:
+
+```python
+token = agent.authorize("wipe_db")                    # ActionDenied if refused
+guard = CstlGuard(open("cstl_adn.db.server_key.pub").read())   # in the target system
+guard.run(token, "wipe_db", do_it)                    # Unauthorized otherwise
+```
+
+The guard refuses a missing token, a forged token, a token from another
+key, a token for another action or agent, an expired token and a reused
+token. It can keep its record of used tokens in SQLite (`replay_db=`), so
+that record survives a restart. The Rust equivalent is
+`server_key::verify_authorization`. Live test:
+`sdk/python/test_mandatory_authorization_live.py`.
+
 ## Navigating this repo without reading whole files — graphify
 
 The repo is large (~70k lines across Rust, Python, docs). Before opening a

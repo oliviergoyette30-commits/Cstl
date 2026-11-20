@@ -3,6 +3,9 @@
 Cargo.lock
 __pycache__/
 *.db
+# Cle PRIVEE du serveur CSTL (src/server/server_key.rs) et sa cle publique
+*.server_key
+*.server_key.pub
 
 # Python venvs (graphify)
 .graphify-venv/
