@@ -173,6 +173,10 @@ pub struct IntegrityReport {
     pub entries: usize,
     pub content_verified: usize,
     pub content_unverifiable: usize,
+    /// Maillons dont la signature du serveur a ete verifiee (2026-11-20).
+    pub signature_verified: usize,
+    /// Maillons non signes car anterieurs a la signature (`seq < since`).
+    pub signature_legacy: usize,
     pub problems: Vec<String>,
 }
 
@@ -182,6 +186,9 @@ fn short(hash: &str) -> String {
 
 pub struct AdnStore {
     conn: Connection,
+    /// Cle du serveur et premier `seq` qui doit etre signe (2026-11-20) :
+    /// `save_audit_entry` signe chaque maillon, `verify_integrity` verifie.
+    audit_signer: Option<(std::sync::Arc<crate::server::server_key::ServerKey>, u64)>,
 }
 
 fn now_unix() -> i64 {
@@ -614,6 +621,13 @@ impl AdnStore {
         // anciennes. L'ajouter au CREATE TABLE ci-dessus ne suffit pas pour les
         // bases existantes -- ADD COLUMN est idempotent (echoue silencieusement si
         // la colonne existe deja).
+        // Signature du serveur sur chaque maillon (2026-11-20), meme patron.
+        if let Err(e) = conn.execute("ALTER TABLE audit_trail ADD COLUMN server_signature TEXT", []) {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column name") {
+                eprintln!("[AdnStore] ⚠️  migration server_signature echouee (inattendu): {}", msg);
+            }
+        }
         if let Err(e) = conn.execute(
             "ALTER TABLE adn_store ADD COLUMN payload_compressed INTEGER NOT NULL DEFAULT 0",
             [],
@@ -623,7 +637,7 @@ impl AdnStore {
                 eprintln!("[AdnStore] ⚠️  migration payload_compressed echouee (inattendu): {}", msg);
             }
         }
-        Ok(Self { conn })
+        Ok(Self { conn, audit_signer: None })
     }
 
     /// Helper pour tests: créer un AdnStore depuis une connexion existante
@@ -750,7 +764,7 @@ impl AdnStore {
                 updated_at INTEGER NOT NULL
             );",
         )?;
-        Ok(Self { conn })
+        Ok(Self { conn, audit_signer: None })
     }
 
     /// Stocke un payload (ASSUMES / non-commité par défaut). Idempotent sur `hash`:
@@ -1768,10 +1782,21 @@ impl AdnStore {
     /// `canonical_hash`) soumis deux fois doit rester idempotent, comme
     /// `put()` ci-dessus -- `HashChain::append` en memoire ne deduplique pas
     /// lui-meme (voir server/audit.rs).
+    /// Active la signature des maillons par la cle du serveur. `since` :
+    /// premier `seq` qui doit etre signe (`ServerKey::audit_signed_since`).
+    pub fn set_audit_signer(&mut self, key: std::sync::Arc<crate::server::server_key::ServerKey>, since: u64) {
+        self.audit_signer = Some((key, since));
+    }
+
     pub fn save_audit_entry(&self, entry: &AuditEntry) -> Result<(), rusqlite::Error> {
+        let signature = self.audit_signer.as_ref().map(|(key, _)| {
+            key.sign_hex(crate::server::server_key::audit_message(
+                entry.seq, &entry.hash, &entry.parent_hash, &entry.sender, &entry.receiver, &entry.purpose,
+            ).as_bytes())
+        });
         let rows_affected = self.conn.execute(
-            "INSERT OR IGNORE INTO audit_trail (seq, hash, parent_hash, sender, receiver, purpose)
-             VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO audit_trail (seq, hash, parent_hash, sender, receiver, purpose, server_signature)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
             params![
                 entry.seq,
                 &entry.hash,
@@ -1779,6 +1804,7 @@ impl AdnStore {
                 &entry.sender,
                 &entry.receiver,
                 &entry.purpose,
+                signature,
             ],
         )?;
         if rows_affected > 0 {
@@ -1835,10 +1861,38 @@ impl AdnStore {
     ///
     /// Un maillon dont le message n'est pas stocke (ex. agent_register) ne
     /// peut etre verifie que par ses liens : compte a part, pas une erreur.
+    ///
+    /// 4. signature du serveur (2026-11-20, si `set_audit_signer`) : les
+    ///    trois controles ci-dessus ne resistent pas a un attaquant qui
+    ///    REECRIT toute la base en recalculant les hash. La signature, si :
+    ///    il lui faudrait la cle privee du serveur. Tout maillon a partir de
+    ///    `since` doit porter une signature valide.
     pub fn verify_integrity(&self, chain: &crate::server::audit::HashChain) -> Result<IntegrityReport, rusqlite::Error> {
         let mut report = IntegrityReport { entries: chain.entries.len(), ..Default::default() };
         let mut expected_parent = "root".to_string();
+        let signatures: HashMap<u64, Option<String>> = {
+            let mut stmt = self.conn.prepare("SELECT seq, server_signature FROM audit_trail")?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, u64>(0)?, r.get::<_, Option<String>>(1)?)))?;
+            rows.collect::<Result<_, _>>()?
+        };
         for entry in &chain.entries {
+            if let Some((key, since)) = &self.audit_signer {
+                let message = crate::server::server_key::audit_message(
+                    entry.seq, &entry.hash, &entry.parent_hash, &entry.sender, &entry.receiver, &entry.purpose,
+                );
+                match signatures.get(&entry.seq).cloned().flatten() {
+                    Some(sig) if key.verify_hex(message.as_bytes(), &sig) => report.signature_verified += 1,
+                    Some(_) => report.problems.push(format!(
+                        "seq={} : signature du serveur invalide -- maillon reecrit (ou cle du serveur remplacee)",
+                        entry.seq
+                    )),
+                    None if entry.seq >= *since => report.problems.push(format!(
+                        "seq={} : maillon NON signe alors que la chaine est signee depuis seq={} -- signature retiree ou maillon insere",
+                        entry.seq, since
+                    )),
+                    None => report.signature_legacy += 1,
+                }
+            }
             if entry.parent_hash != expected_parent {
                 report.problems.push(format!(
                     "seq={} : lien rompu (parent_hash={}, attendu={}) -- maillon supprime, insere ou modifie",

@@ -196,7 +196,7 @@ impl CstlNativeServer {
     /// de sortir proprement (`std::process::exit`) plutot que de crasher avec
     /// un panic Rust brut sur une base SQLite corrompue/verrouillee.
     pub fn try_with_data_path(port: u16, data_path: &str) -> Result<Self, String> {
-        let adn_store = AdnStore::open(data_path)
+        let mut adn_store = AdnStore::open(data_path)
             .map_err(|e| format!("impossible d'ouvrir la base ADN '{data_path}': {e}"))?;
         // Seed la chaine en memoire depuis ce qui est deja persiste --
         // AVANT le 2026-09-04, ce chargement n'existait pas du tout:
@@ -208,6 +208,22 @@ impl CstlNativeServer {
             .load_chain()
             .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
 
+        // Cle du serveur (server_key.rs) : signe les jetons d'autorisation ET,
+        // depuis le 2026-11-20, chaque maillon de la chaine d'audit. Chargee
+        // AVANT la verification d'integrite, qui en a besoin.
+        let server_key = server_key::ServerKey::for_data_path(data_path)?;
+        if let Ok(pinned) = std::env::var("CSTL_SERVER_PUBLIC_KEY") {
+            if !pinned.trim().is_empty() && !pinned.trim().eq_ignore_ascii_case(&server_key.public_hex()) {
+                return Err(format!(
+                    "la cle du serveur ({}) n'est pas celle attendue par CSTL_SERVER_PUBLIC_KEY ({}) -- cle remplacee ? demarrage refuse",
+                    server_key.public_hex(), pinned.trim()
+                ));
+            }
+        }
+        let server_key = Arc::new(server_key);
+        let since = server_key.audit_signed_since(chain.entries.len() as u64)?;
+        adn_store.set_audit_signer(server_key.clone(), since);
+
         // Verification d'integrite au demarrage (2026-11-20) -- avant, une base
         // falsifiee etait rechargee sans aucune alerte. Echec SUR par defaut :
         // un historique d'audit qui ne se verifie pas ne doit pas servir de
@@ -217,8 +233,9 @@ impl CstlNativeServer {
             .verify_integrity(&chain)
             .map_err(|e| format!("verification d'integrite impossible sur '{data_path}': {e}"))?;
         eprintln!(
-            "[AdnStore] Integrite : {} maillon(s), {} contenu(s) verifie(s) par recalcul du hash, {} non verifiable(s) (message non stocke), {} probleme(s)",
-            integrity.entries, integrity.content_verified, integrity.content_unverifiable, integrity.problems.len()
+            "[AdnStore] Integrite : {} maillon(s), {} contenu(s) verifie(s) par recalcul du hash, {} non verifiable(s) (message non stocke), {} signature(s) du serveur verifiee(s), {} maillon(s) anterieur(s) a la signature, {} probleme(s)",
+            integrity.entries, integrity.content_verified, integrity.content_unverifiable,
+            integrity.signature_verified, integrity.signature_legacy, integrity.problems.len()
         );
         if !integrity.problems.is_empty() {
             for p in &integrity.problems {
@@ -316,7 +333,6 @@ impl CstlNativeServer {
             governance_arc.clone(),
             restricted_council_arc.clone(),
         ));
-        let server_key = server_key::ServerKey::for_data_path(data_path)?;
         match &server_key.path {
             Some(p) => eprintln!(
                 "[CSTL-Native Server] Cle serveur : {} (publique : {}, a distribuer aux systemes qui verifient les autorisations)",
@@ -342,7 +358,7 @@ impl CstlNativeServer {
             deontic: deontic_arc,
             wai_registry: Arc::new(wai_registry),
             tls: None,
-            server_key: Arc::new(server_key),
+            server_key,
         })
     }
 
