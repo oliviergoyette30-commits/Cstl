@@ -39,7 +39,25 @@ implémentation Python (parser, ADN store, serveur FastAPI) a été abandonnée 
 profit de ce portage Rust — toute mention de FastAPI, de fichiers `.py`, ou d'un
 serveur séparé ci-dessous serait une régression de cette réécriture.
 
-**v5.1 Status: 10/10 couches COMPLÈTES et vérifiées.**
+**État réel (revérifié le 2026-11-20, code + tests live) :** les 10 couches ne sont
+PAS toutes complètes. Résumé honnête :
+
+| Couche | État |
+|---|---|
+| 1 Transport | ✅ câblée, testée (relais serveur 100 % ; relais LLM avec RULE 21/24 hops exacts) |
+| 2 Gouvernance | 🟡 câblée, **observation seule** (circuit breaker, drift : jamais de rejet) |
+| 3a Vérification Wikidata | ✅ câblée, testée en réel (limitée par le débit Wikidata, budget 8 s, jamais bloquante) |
+| 3b ExecutionLab + arbitrage | 🟡 câblée ; quorum = **vote 2/3 signé sur un seul serveur** (pas un consensus byzantin distribué) ; conseil à 1 membre par défaut |
+| 4 Calibration | ✅ câblée (EWMA, atténuation par nombre d'échantillons) |
+| 5 Mémoire / provenance | ✅ câblée, persistée (SQLite), relue après redémarrage |
+| 6 Interface humaine | 🟡 Obsidian réel (faits + déontique) ; Graphify réel (contenu, contradictions, signatures, chaîne de hachage) |
+| 7 Découverte d'agents | ✅ câblée, enregistrement signé, rotation de clé |
+| 8 Audit / garantie crypto | ✅ chaîne SHA-256 persistée, Ed25519 ; audit déontique intra-message bloquant, inter-messages bloquant en option |
+| 9 Orchestration déontique | 🟡 **observation seule** : les règles s'exécutent APRÈS l'action, rien n'est bloqué |
+| 10 Compression WAI | 🟡 compression de stockage et de réponse câblées ; décodage `server/wai.rs` branché sur aucun chemin réseau |
+
+Valeurs par défaut (2026-11-20) : écoute sur `127.0.0.1`, signatures optionnelles sauf mode
+strict `CSTL_REQUIRE_SIGNATURES=true`, TLS désactivé.
 
 ### Couche 1: Transport (FORME/TRANSPORT)
 **État:** ✅ PROUVÉ
@@ -285,22 +303,15 @@ Vérifié en direct (`examples/deontic_audit_smoke_test.rs`, 4 scénarios sur un
 Limite honnête, non traitée ici: l'audit historique ne couvre que les relations dont la `modality` est explicitement portée par le wire format — aucune inférence de modalité depuis un texte libre ou un autre vocabulaire. **Mise à jour honnête (2026-09-04, audit du repo):** le format bloc `(MUST)`/`(RULE)` mentionné ici comme alternative non branchée s'appuyait sur `ast::Block` et `validator_semantic.rs` — les deux ont été supprimés le même jour, 100% code mort, aucun producteur réel n'a jamais construit de `Block` en dehors de tests. Il n'existe donc plus aucune trace de ce second système de parsing dans le dépôt ; le format wire réel reste exclusivement le format à plat `RELATION[key=value,...]` (`HashMap`, `src/server/parser.rs`).
 
 ### Couche 9: Deontic Orchestration — Event-Driven Governance
-**État:** ✅ COMPLÈTE (2026-09-13/14)
+**État:** 🟡 PARTIELLE — observation seule (corrigé le 2026-11-20 ; cette section affirmait « COMPLÈTE »)
 
-`src/server/deontic_orchestration.rs` (~700 lines): Event-driven rule registry, broadcast channels for multi-agent coordination, event matching (sender=, severity>=, wildcard routing), action execution.
+`src/server/deontic_orchestration.rs` : registre de règles, diffusion d'événements, correspondance (sender=, severity>=). Câblé sur 3 événements réels (`agent_register`, `arbitration_ruling`, `governance_breach`) et exposé en REST (`GET /deontic/executions`). **Le résultat d'`emit_event` est ignoré par le serveur** : les règles s'exécutent après l'action et ne bloquent rien. Plus fondamentalement, CSTL ne se trouve pas sur le chemin des actions des agents (ils agissent dans leurs propres processus) : un blocage préventif exigera que l'agent demande une autorisation AVANT d'agir.
 
-`src/server/deontic_state_machine.rs` (~520 lines): 6-state decision lifecycle:
-- Open → Arbitration → Ruling → Closed (normal path)
-- Appeal (decision appealed, back to Arbitration)
-- Stale (decision aged out, archived)
+Ce qui bloque réellement aujourd'hui, ailleurs : la contradiction MUST/MUST_NOT dans un même message (E107, `validator.rs`), et celle avec l'historique si le client envoie `strict_deontic_history=true`.
 
-Immutable audit trail per state change, hash-chained, replay-safe idempotency via version-keyed conflict resolution.
+Supprimé le 2026-11-20 : `src/server/deontic_state_machine.rs` (jamais appelé, doublon d'`arbitrage.rs`). L'« audit trail hash-chained » et l'« idempotence replay-safe » décrits ici auparavant n'ont jamais existé dans cette couche.
 
-`sdk/python/cstl_deontic_engine.py` (~450 lines): Multi-threaded orchestrator, graceful degradation when `anthropic` SDK absent, MUST/MUST_NOT/MAY deontic enforcement, metrics (event latency P50/P95, rejection counts, decision latency).
-
-**Tests:** 25+ unit tests + 15 E2E tests, all passing. Python: 43 tests (event routing, state transitions, conflict resolution, rule execution).
-
-**Verified:** Full end-to-end orchestration flow, multi-agent event broadcast, state machine transitions, deontic rule enforcement.
+`sdk/python/cstl_deontic_engine.py` : orchestrateur Python, 43 tests qui passent ; non relié au serveur Rust.
 
 ### Couche 10: WAI v5.1 Compression Layer — Network Optimization
 **État:** ✅ COMPLÈTE (2026-09-14)

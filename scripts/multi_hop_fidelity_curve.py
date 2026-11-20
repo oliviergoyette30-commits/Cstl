@@ -39,7 +39,7 @@ du projet (project_search) prealable a l'ecriture de ce script.
 - CETTE MESURE ("fidelite de transport multi-hop") est DISTINCTE de la
   "judge-based semantic evaluation" (evaluation de sens par un LLM juge,
   ex. le protocole kappa dans run_kappa_protocol_rigorous.py /
-  kappa_results_official.json, kappa=-0.053, REJECTED) -- celle-la reste
+  kappa_simulation_results.json -- SIMULATION, jugements tires au hasard, kappa corrige 0.191, REJECTED) -- celle-la reste
   bloquee ici faute de cle API et n'est PAS ce que ce script tente de
   reproduire. Ce script mesure la survie STRUCTURELLE du contenu
   (les triplets RELATION type/subject/object), pas un jugement de sens.

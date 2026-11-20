@@ -297,7 +297,7 @@ ce chemin de câblage (seuls les event types `agent_register`/
 idempotent event handlers, version-keyed conflict resolution" étaient
 fausses — rien de tel n'existe dans le code, ni avant ni après ce commit.
 
-**`src/server/deontic_state_machine.rs` — réel mais SUPERSEDED, volontairement non câblé**:
+**`src/server/deontic_state_machine.rs` — réel mais SUPERSEDED, jamais câblé, supprimé le 2026-11-20**:
 543 lignes, 15 tests unitaires réels qui passent — mais ce module
 **duplique** `arbitrage.rs`, déjà en production (persisté SQLite, rulings
 Ed25519-signés et vérifiés, déjà câblé dans `handler.rs` via
@@ -477,7 +477,7 @@ A fourth bug surfaced only once a real CSTL-shaped string was round-tripped thro
 
 **Honest conclusion**: wired correctly, safe by construction (same roundtrip + size-guard discipline as `COMPRESSED_RESPONSE`), and currently a no-op on real traffic for a *different*, more precisely diagnosed reason than the Master Compresseur path — this time it's the tokenizer's literal-detection heuristic (inherited from a JSON-oriented design, never a good match for prose-like CSTL field values) fragmenting ordinary vocabulary into unamortizable pieces, not a training-data mismatch. Fixing *that* is bounded, identified future work (stop treating arbitrary identifier text as a JSON-number/boolean candidate), tracked here rather than in `text_dictionary`'s to-do — the two features are unrelated codecs with unrelated root causes for the same symptom.
 
-### Quorum Layer 2 — BFT multi-agent consensus wired into the live pipeline (2026-10-01, `src/server/quorum.rs` + `src/server/quorum_wire.rs` + `src/adn_store.rs`)
+### Quorum Layer 2 — signed 2/3 multi-agent vote wired into the live pipeline (single server, not distributed BFT consensus) (2026-10-01, `src/server/quorum.rs` + `src/server/quorum_wire.rs` + `src/adn_store.rs`)
 
 `quorum.rs` existed since a previous session with 6 passing unit tests (`QuorumMember`, `VoteMessage`, `QuorumState`, Ed25519 vote-signature verification, BFT threshold, circuit breaker) — found by the same `pub mod X` / zero-external-reference grep that found CASTLE and the other dead modules this session. `pub mod quorum;` only, no caller, no network path, no persistence.
 
@@ -759,7 +759,7 @@ Apache 2.0 — Olivier Goyette
 - `src/signing.rs` (127 lines) — Ed25519 verification (Features A/B-2)
 - `src/server/graphify_server.rs` (~300 lines) — REST API + graph export (Couche 6)
 - `src/server/deontic_orchestration.rs` (~700 lines) — Event-driven orchestrator (Couche 9); wired live 2026-10-01, see Couche 9 section
-- `src/server/deontic_state_machine.rs` (~543 lines) — decision lifecycle, superseded/not wired, see Couche 9 section
+- ~~`src/server/deontic_state_machine.rs`~~ — superseded, never wired; **deleted 2026-11-20**
 
 **Modified Rust Files:**
 - `src/agent_discovery.rs` — `AgentCard::public_key` field added (Features B-1)
@@ -814,7 +814,7 @@ Apache 2.0 — Olivier Goyette
 - ✅ Event-driven orchestrator wired live (`src/server/deontic_orchestration.rs`, ~700 lines) — was dead code before this date, see Couche 9 section above for the honest writeup
 - ✅ `GET /deontic/executions` (REST), emits on 3 real events: `agent_register`, `arbitration_ruling` (`arbitrage.rs`), `governance_breach` (Couche 2) — verified live via `examples/deontic_smoke_test.rs`
 - ⚠️ Observational only: `emit_event` runs *after* the underlying action; MUST/MUST_NOT handlers only `eprintln!`, nothing is actually blocked or enforced
-- ❌ `src/server/deontic_state_machine.rs` (~543 lines): real, unit-tested, but deliberately NOT wired — duplicates `arbitrage.rs` already in production (in-memory only, no signatures, no hash chain). No 6-state/"appeals"/"Stale" lifecycle live anywhere; its actual 7 states don't match what was previously claimed here
+- ❌ `src/server/deontic_state_machine.rs` (~543 lines, **deleted 2026-11-20**): real, unit-tested, but deliberately NOT wired — duplicates `arbitrage.rs` already in production (in-memory only, no signatures, no hash chain). No 6-state/"appeals"/"Stale" lifecycle live anywhere; its actual 7 states don't match what was previously claimed here
 - ❌ No immutable hash-chained audit trail and no replay-safe idempotency exist in this layer — both previously claimed, both fabricated, neither was ever in the code
 - ⚠️ Python orchestrator (`sdk/python/cstl_deontic_engine.py`, `sdk/python/test_deontic_engine.py`): exist, not re-verified this pass
 - `tests/deontic_orchestration_integration_test.rs`: 15 real e2e tests, passing
