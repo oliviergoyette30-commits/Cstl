@@ -21,3 +21,4 @@ dashboard/logs/
 Claude outputs/
 sdk/python/castle_mode_b/
 scripts/llm_agent_eval_stub.json
+scripts/llm_relay_fidelity_stub.json

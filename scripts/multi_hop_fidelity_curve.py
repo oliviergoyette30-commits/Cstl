@@ -303,7 +303,7 @@ def start_server(port: int) -> tuple[subprocess.Popen, Path]:
 # ---------------------------------------------------------------------------
 
 def run_curve(host: str, port: int, n_runs: int) -> dict:
-    client = CstlClient(host=host, port=port, timeout=5.0)
+    client = CstlClient(host=host, port=port, timeout=20.0)  # > budget KB du serveur (8s, handler.rs) : a 5s, chaque message expirait des que Wikidata ralentissait
     results: dict = {"hops": {d: {} for d in HOP_DEPTHS}, "runs": n_runs}
 
     for condition in ("regle_stricte", "sans_regle"):
