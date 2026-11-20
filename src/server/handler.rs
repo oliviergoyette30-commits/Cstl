@@ -454,20 +454,37 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let identity_proven = sender_registered
                             && sig_check == SignatureCheck::Valid
                             && embedded_pubkey == registered_pubkey_for_sender;
-                        let history = {
+                        let authors = super::action_authorization::PolicyAuthors::from_env();
+                        let rows = {
                             let store = ctx.adn_store.lock().await;
-                            store.deontic_relations_history().unwrap_or_else(|e| {
-                                error!("[Handler] action_request: deontic_relations_history failed: {}", e);
+                            store.deontic_rules_with_authors().unwrap_or_else(|e| {
+                                error!("[Handler] action_request: deontic_rules_with_authors failed: {}", e);
                                 Vec::new()
                             })
+                        };
+                        // Une regle n'est "autorisee" que si son auteur est un auteur
+                        // de politique ET que le message est signe avec la cle
+                        // ENREGISTREE de cet auteur (sinon n'importe qui pourrait
+                        // ecrire sender=policy_owner).
+                        let rules: Vec<super::action_authorization::Rule> = {
+                            let reg = ctx.agent_registry.read().await;
+                            rows.into_iter().map(|r| {
+                                let authorized = match (&r.author, &r.signer_key) {
+                                    (Some(author), Some(key)) => authors.includes(author)
+                                        && reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
+                                    _ => false,
+                                };
+                                super::action_authorization::Rule { subject: r.subject, object: r.object, modality: r.modality, authorized }
+                            }).collect()
                         };
                         let decision = super::action_authorization::decide(
                             &sender,
                             action.as_deref(),
                             identity_proven,
                             sender_registered,
-                            &history,
+                            &rules,
                             super::action_authorization::DefaultPolicy::from_env(),
+                            &authors,
                         );
                         let (entry, _) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
                         {
@@ -492,7 +509,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let shown_sender = if super::action_authorization::is_valid_action(&sender) { sender.clone() } else { "invalid".to_string() };
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}]\n\
+                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}]\n\
                              AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
                             shown_sender,
                             shown_action,
@@ -500,6 +517,8 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             decision.reason,
                             decision.rule.as_ref().map(|r| format!(", rule={r}")).unwrap_or_default(),
                             if decision.conflict { ", conflict=true" } else { "" },
+                            if decision.superseded { ", superseded=true" } else { "" },
+                            if decision.ignored > 0 { format!(", ignored_rules={}", decision.ignored) } else { String::new() },
                             entry.hash, entry.parent_hash, entry.seq,
                         );
                         send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
