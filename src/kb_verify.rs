@@ -3,7 +3,8 @@
 //! Port de orchestrator/cstl_verify_public_kb.py — même logique, même mapping,
 //! mêmes bornes BFS, mêmes corrections empiriques (2026-08-06 / 08-10 / 08-12).
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Mutex;
 use std::time::Duration;
 use serde::Serialize;
 use serde_json::Value;
@@ -67,7 +68,20 @@ pub struct KbVerifier {
     client: reqwest::Client,
     search_api: String,
     sparql_endpoint: String,
+    /// Cache des resolutions d'entites (2026-11-20). Sans lui, CHAQUE
+    /// relation refaisait 2 recherches + 1 a N verifications d'homonymie,
+    /// meme pour des entites deja vues ("Paris", "Albert Einstein") -- ce qui
+    /// declenchait la limite de debit Wikidata (HTTP 429) en quelques
+    /// messages. Ne contient que des resultats DEFINITIFS (QID trouve, ou
+    /// "aucune entite"), jamais une erreur passagere (429, reseau).
+    entity_cache: Mutex<EntityCache>,
 }
+
+/// (libelle normalise, langue) -> (QID eventuel, libelle trouve ou raison).
+type EntityCache = HashMap<(String, String), (Option<String>, String)>;
+
+/// Au-dela, le cache est vide puis reconstruit (borne memoire simple).
+const ENTITY_CACHE_MAX: usize = 10_000;
 
 impl Default for KbVerifier {
     fn default() -> Self {
@@ -85,6 +99,7 @@ impl KbVerifier {
             client,
             search_api: WIKIDATA_SEARCH_API.to_string(),
             sparql_endpoint: WIKIDATA_SPARQL_ENDPOINT.to_string(),
+            entity_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -103,6 +118,45 @@ impl KbVerifier {
             client,
             search_api: search_api.into(),
             sparql_endpoint: sparql_endpoint.into(),
+            entity_cache: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Envoie la requete et decode le JSON en VERIFIANT le statut HTTP
+    /// (2026-11-17). Avant : `.json()` directement sur la reponse -- une limite
+    /// de debit Wikidata (HTTP 429, corps en texte brut) ou un refus de
+    /// politique user-agent (403) devenaient "network_error: error decoding
+    /// response body", indistinguables d'une vraie panne, et sans nouvel
+    /// essai (constate en direct contre wikidata.org). Desormais : 429/503 ->
+    /// jusqu'a 2 nouveaux essais courts (Retry-After respecte, plafonne a 2s :
+    /// la verification tourne dans le pipeline live, deja borne a 8s par
+    /// handler.rs), et une raison explicite sinon.
+    async fn fetch_json(&self, req: reqwest::RequestBuilder) -> Result<Value, String> {
+        const MAX_RETRIES: u32 = 2;
+        let mut attempt = 0;
+        loop {
+            let this_try = req.try_clone().ok_or_else(|| "request_not_cloneable".to_string())?;
+            let resp = this_try.send().await.map_err(|e| format!("network_error: {e}"))?;
+            let status = resp.status();
+            if status.is_success() {
+                return resp.json::<Value>().await.map_err(|e| format!("invalid_json: {e}"));
+            }
+            let code = status.as_u16();
+            if (code == 429 || code == 503) && attempt < MAX_RETRIES {
+                let wait = resp.headers().get(reqwest::header::RETRY_AFTER)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 2);
+                tokio::time::sleep(Duration::from_secs(wait)).await;
+                attempt += 1;
+                continue;
+            }
+            return Err(match code {
+                429 => "rate_limited (HTTP 429)".to_string(),
+                403 => "forbidden (HTTP 403 -- politique user-agent Wikidata ?)".to_string(),
+                _ => format!("http_error: HTTP {code}"),
+            });
         }
     }
 
@@ -110,13 +164,9 @@ impl KbVerifier {
         let query = format!("ASK {{ wd:{qid} wdt:P31 wd:{DISAMBIGUATION_PAGE_QID} . }}");
         let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
-            .timeout(Duration::from_secs(10))
-            .send().await;
-        match resp {
-            Ok(r) => match r.json::<Value>().await {
-                Ok(j) => j.get("boolean").and_then(Value::as_bool).unwrap_or(false),
-                Err(_) => false,
-            },
+            .timeout(Duration::from_secs(10));
+        match self.fetch_json(resp).await {
+            Ok(j) => j.get("boolean").and_then(Value::as_bool).unwrap_or(false),
             // en cas de doute, ne pas bloquer sur ce filtre seul (comportement Python conservé)
             Err(_) => false,
         }
@@ -126,6 +176,29 @@ impl KbVerifier {
     /// indépendamment de `lang` (correction du 2026-08-10 : la recherche
     /// anglaise résout mieux les entités communes sur l'index Wikidata).
     async fn search_entity(&self, label: &str, lang: &str, max_candidates: usize) -> (Option<String>, String) {
+        let key = (label.trim().to_lowercase(), lang.to_string());
+        if let Some(hit) = self.entity_cache.lock().ok().and_then(|c| c.get(&key).cloned()) {
+            return hit;
+        }
+        let result = self.search_entity_uncached(label, lang, max_candidates).await;
+        let definitive = result.0.is_some() || result.1 == "no_valid_non_disambiguation_entity_found";
+        if definitive {
+            if let Ok(mut cache) = self.entity_cache.lock() {
+                if cache.len() >= ENTITY_CACHE_MAX {
+                    cache.clear();
+                }
+                cache.insert(key, result.clone());
+            }
+        }
+        result
+    }
+
+    /// Nombre d'entites en cache (observabilite / tests).
+    pub fn cached_entities(&self) -> usize {
+        self.entity_cache.lock().map(|c| c.len()).unwrap_or(0)
+    }
+
+    async fn search_entity_uncached(&self, label: &str, lang: &str, max_candidates: usize) -> (Option<String>, String) {
         let mut languages_to_try = vec!["en"];
         if lang != "en" {
             languages_to_try.push(lang);
@@ -140,16 +213,10 @@ impl KbVerifier {
                     ("format", "json"),
                     ("limit", &max_candidates.to_string()),
                 ])
-                .timeout(Duration::from_secs(10))
-                .send().await;
-
-            let resp = match resp {
-                Ok(r) => r,
-                Err(e) => return (None, format!("network_error: {e}")),
-            };
-            let json: Value = match resp.json().await {
+                .timeout(Duration::from_secs(10));
+            let json: Value = match self.fetch_json(resp).await {
                 Ok(j) => j,
-                Err(e) => return (None, format!("network_error: {e}")),
+                Err(e) => return (None, e),
             };
 
             let results = json.get("search").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -179,14 +246,10 @@ impl KbVerifier {
         );
         let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
-            .timeout(Duration::from_secs(15))
-            .send().await;
-        match resp {
-            Ok(r) => match r.json::<Value>().await {
-                Ok(j) => (Some(j.get("boolean").and_then(Value::as_bool).unwrap_or(false)), None),
-                Err(e) => (None, Some(format!("network_error: {e}"))),
-            },
-            Err(e) => (None, Some(format!("network_error: {e}"))),
+            .timeout(Duration::from_secs(15));
+        match self.fetch_json(resp).await {
+            Ok(j) => (Some(j.get("boolean").and_then(Value::as_bool).unwrap_or(false)), None),
+            Err(e) => (None, Some(e)),
         }
     }
 
@@ -197,12 +260,8 @@ impl KbVerifier {
         );
         let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
-            .timeout(Duration::from_secs(15))
-            .send().await;
-        let json: Value = match resp {
-            Ok(r) => match r.json().await { Ok(j) => j, Err(_) => return vec![] },
-            Err(_) => return vec![],
-        };
+            .timeout(Duration::from_secs(15));
+        let json: Value = match self.fetch_json(resp).await { Ok(j) => j, Err(_) => return vec![] };
         json.pointer("/results/bindings").and_then(Value::as_array).cloned().unwrap_or_default()
             .iter()
             .filter_map(|b| b.pointer("/n/value").and_then(Value::as_str))
@@ -263,22 +322,18 @@ impl KbVerifier {
         );
         let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
-            .timeout(Duration::from_secs(15))
-            .send().await;
-        match resp {
-            Ok(r) => match r.json::<Value>().await {
-                Ok(j) => {
-                    let bindings = j.pointer("/results/bindings").and_then(Value::as_array)
-                        .cloned().unwrap_or_default();
-                    match bindings.first() {
-                        Some(first) => (Some(true),
-                            first.pointer("/prop/value").and_then(Value::as_str).map(String::from)),
-                        None => (Some(false), None),
-                    }
+            .timeout(Duration::from_secs(15));
+        match self.fetch_json(resp).await {
+            Ok(j) => {
+                let bindings = j.pointer("/results/bindings").and_then(Value::as_array)
+                    .cloned().unwrap_or_default();
+                match bindings.first() {
+                    Some(first) => (Some(true),
+                        first.pointer("/prop/value").and_then(Value::as_str).map(String::from)),
+                    None => (Some(false), None),
                 }
-                Err(e) => (None, Some(format!("network_error: {e}"))),
-            },
-            Err(e) => (None, Some(format!("network_error: {e}"))),
+            }
+            Err(e) => (None, Some(e)),
         }
     }
 
@@ -321,12 +376,8 @@ impl KbVerifier {
         );
         let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
-            .timeout(Duration::from_secs(15))
-            .send().await;
-        let json: Value = match resp {
-            Ok(r) => match r.json().await { Ok(j) => j, Err(_) => return HashSet::new() },
-            Err(_) => return HashSet::new(),
-        };
+            .timeout(Duration::from_secs(15));
+        let json: Value = match self.fetch_json(resp).await { Ok(j) => j, Err(_) => return HashSet::new() };
         json.pointer("/results/bindings").and_then(Value::as_array).cloned().unwrap_or_default()
             .iter()
             .filter_map(|b| b.pointer("/n/value").and_then(Value::as_str))
@@ -346,9 +397,8 @@ impl KbVerifier {
         );
         let resp = self.client.get(&self.sparql_endpoint)
             .query(&[("query", query.as_str()), ("format", "json")])
-            .timeout(Duration::from_secs(10))
-            .send().await.ok()?;
-        let json: Value = resp.json().await.ok()?;
+            .timeout(Duration::from_secs(10));
+        let json: Value = self.fetch_json(resp).await.ok()?;
         json.pointer("/results/bindings/0/label/value").and_then(Value::as_str).map(String::from)
     }
 

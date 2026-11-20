@@ -316,12 +316,10 @@ async fn main() {
     step_times.push(("arbiter_register (2e)", t0.elapsed()));
 
     let t0 = Instant::now();
-    let resp_open = send(&format!(
-        "#!CSTL v5.0.0 MODE=A\n\
+    let resp_open = send("#!CSTL v5.0.0 MODE=A\n\
          META [encoder=BenchmarkAudit, produced_by=BenchmarkAudit]\n\
          INTENT_PAYLOAD [purpose=arbitrage_channel, sender=bench_opener, receiver=server, action=open_case, escalation_source=benchmark_audit, contradiction_type=logical_break, description=Benchmark+cycle]\n\
-         ---END---\n"
-    )).await.0;
+         ---END---\n").await.0;
     step_times.push(("open_case", t0.elapsed()));
     let case_id = extract_field(&resp_open, "INTENT_PAYLOAD", "case_id").unwrap_or_default();
 
@@ -457,8 +455,8 @@ async fn main() {
     // ============================================================
     println!("--- Point 9/10: Latence requetes Graphify (graphe reel, apres ~{total_messages_sent} messages) ---");
     let graphify_queries = vec![
-        format!("/graphify/filter?node_type=agent"),
-        format!("/graphify/search?q=bench"),
+        "/graphify/filter?node_type=agent".to_string(),
+        "/graphify/search?q=bench".to_string(),
         format!("/graphify/traverse?start={bench_sender}&depth=2"),
     ];
     for q in &graphify_queries {

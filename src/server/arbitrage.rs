@@ -124,7 +124,7 @@ pub struct ArbitrationRulingFinal {
     pub finalized_at: DateTime<Utc>,
 }
 
-/// Helpers pour convertir les types métier vers les types base de données
+// Helpers pour convertir les types métier vers les types base de données
 
 /// Trait d'interface pour le gestionnaire d'arbitrage
 pub trait ArbitrageManager {
@@ -211,7 +211,7 @@ pub async fn open_case_async(
     contradiction_type: ContradictionType,
     description: String,
 ) -> Result<String, ArbitrationError> {
-    let case_id = format!("case_{}", uuid::Uuid::new_v4().to_string());
+    let case_id = format!("case_{}", uuid::Uuid::new_v4());
     let now = Utc::now();
 
     use crate::adn_store::ArbitrageCase;
@@ -265,7 +265,7 @@ pub async fn assign_arbiters_async(
     let assigned = {
         let adn = adn_store.lock().await;
         select_arbiters_round_robin(&adn, count)
-            .map_err(|e| ArbitrationError::ArbitersAssignmentFailed(e))?
+            .map_err(ArbitrationError::ArbitersAssignmentFailed)?
     };
 
     if assigned.is_empty() {
@@ -561,8 +561,7 @@ pub fn select_arbiters_round_robin(adn: &AdnStore, count: usize) -> Result<Vec<S
     let selected: Vec<String> = arbiters
         .iter()
         .cycle()
-        .take(count)
-        .map(|a| a.clone())
+        .take(count).cloned()
         .collect();
 
     Ok(selected)
@@ -796,12 +795,10 @@ mod tests {
 
     #[test]
     fn test_contradiction_type_variants() {
-        let types = vec![
-            ContradictionType::MutuallyExclusive,
+        let types = [ContradictionType::MutuallyExclusive,
             ContradictionType::LogicalBreak,
             ContradictionType::RefusalToComply,
-            ContradictionType::InvalidProof,
-        ];
+            ContradictionType::InvalidProof];
         assert_eq!(types.len(), 4);
         assert_eq!(types[0], ContradictionType::MutuallyExclusive);
     }

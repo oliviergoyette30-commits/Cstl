@@ -23,7 +23,6 @@ pub mod audit;
 pub mod tls;
 pub mod rest_api;
 pub mod deontic_orchestration;
-pub mod deontic_state_machine;
 pub mod graphify_server;
 pub mod evaluated_payload;
 pub mod response_compression;
@@ -83,6 +82,14 @@ pub struct ServerContext {
     /// jusqu'ici bloque par l'absence de ce genre de donnees (voir
     /// README, section Response-side compression).
     pub collect_response_corpus: bool,
+    /// Mode strict (2026-11-20, `CSTL_REQUIRE_SIGNATURES=true`) : TOUT
+    /// expediteur doit etre enregistre avec une cle Ed25519 et signer chaque
+    /// message (hors agent_register/arbiter_register, qui portent leur propre
+    /// auto-signature). Par defaut, seuls les agents DEJA enregistres avec
+    /// une cle sont tenus de signer -- n'importe qui peut sinon envoyer des
+    /// messages non signes sous un nom libre. A activer des que le serveur
+    /// est expose sur un reseau.
+    pub require_signatures: bool,
 }
 
 pub struct CstlNativeServer {
@@ -193,6 +200,33 @@ impl CstlNativeServer {
         let chain = adn_store
             .load_chain()
             .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
+
+        // Verification d'integrite au demarrage (2026-11-20) -- avant, une base
+        // falsifiee etait rechargee sans aucune alerte. Echec SUR par defaut :
+        // un historique d'audit qui ne se verifie pas ne doit pas servir de
+        // base aux decisions suivantes. CSTL_ACCEPT_BROKEN_CHAIN=1 permet de
+        // demarrer quand meme, en connaissance de cause (alerte maintenue).
+        let integrity = adn_store
+            .verify_integrity(&chain)
+            .map_err(|e| format!("verification d'integrite impossible sur '{data_path}': {e}"))?;
+        eprintln!(
+            "[AdnStore] Integrite : {} maillon(s), {} contenu(s) verifie(s) par recalcul du hash, {} non verifiable(s) (message non stocke), {} probleme(s)",
+            integrity.entries, integrity.content_verified, integrity.content_unverifiable, integrity.problems.len()
+        );
+        if !integrity.problems.is_empty() {
+            for p in &integrity.problems {
+                eprintln!("[AdnStore] INTEGRITE COMPROMISE : {p}");
+            }
+            let accepted = std::env::var("CSTL_ACCEPT_BROKEN_CHAIN").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
+            if !accepted {
+                return Err(format!(
+                    "historique d'audit compromis dans '{data_path}' ({} probleme(s), detail ci-dessus) -- demarrage refuse. \
+                     Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+                    integrity.problems.len()
+                ));
+            }
+            eprintln!("[AdnStore] CSTL_ACCEPT_BROKEN_CHAIN=1 : demarrage malgre un historique compromis");
+        }
 
         // Seed la Couche 2 (gouvernance) depuis ce qui est deja persiste --
         // meme logique que `chain` juste au-dessus. `since` ne rapatrie que
@@ -330,17 +364,19 @@ impl CstlNativeServer {
             eprintln!("[CSTL-Native Server] Telegram desactive (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID absents)");
         }
 
-        // Hote d'ecoute configurable (2026-10-29, durcissement reseau
-        // trouve par l'audit du 15 octobre: bind 0.0.0.0 en dur, aucun moyen
-        // de restreindre a localhost sans recompiler). `CSTL_BIND_HOST`
-        // absent/vide -> "0.0.0.0", comportement identique a avant ce fix
-        // (aucune regression sur le defaut); meme discipline de variable
-        // d'environnement chargee une seule fois ici que CSTL_TLS_*/
-        // CSTL_COLLECT_RESPONSE_CORPUS juste plus bas.
+        // Hote d'ecoute configurable (`CSTL_BIND_HOST`). DEFAUT CHANGE le
+        // 2026-11-20 : "127.0.0.1" au lieu de "0.0.0.0". Avec 0.0.0.0, toute
+        // machine du reseau pouvait envoyer des messages -- et, signatures
+        // optionnelles par defaut, sous un nom libre. Exposer le serveur est
+        // maintenant un choix explicite : CSTL_BIND_HOST=0.0.0.0 (a combiner
+        // avec CSTL_REQUIRE_SIGNATURES=true et TLS).
         let bind_host = std::env::var("CSTL_BIND_HOST")
             .ok()
             .filter(|h| !h.is_empty())
-            .unwrap_or_else(|| "0.0.0.0".to_string());
+            .unwrap_or_else(|| "127.0.0.1".to_string());
+        if bind_host == "0.0.0.0" && std::env::var("CSTL_REQUIRE_SIGNATURES").map(|v| v != "1" && !v.eq_ignore_ascii_case("true")).unwrap_or(true) {
+            eprintln!("[CSTL-Native Server] ATTENTION: ecoute sur toutes les interfaces SANS CSTL_REQUIRE_SIGNATURES -- n'importe quelle machine du reseau peut envoyer des messages non signes");
+        }
         let addr = format!("{}:{}", bind_host, self.port);
         let listener = listener::create_listener(&addr).await?;
 
@@ -417,7 +453,13 @@ impl CstlNativeServer {
             collect_response_corpus: std::env::var("CSTL_COLLECT_RESPONSE_CORPUS")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
+            require_signatures: std::env::var("CSTL_REQUIRE_SIGNATURES")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         };
+        if ctx.require_signatures {
+            eprintln!("[CSTL-Native Server] Mode strict ACTIF (CSTL_REQUIRE_SIGNATURES) -- tout message doit etre signe par un agent enregistre");
+        }
 
         if ctx.collect_response_corpus {
             eprintln!("[CSTL-Native Server] Collecte du corpus de reponses ACTIVE (CSTL_COLLECT_RESPONSE_CORPUS) -- chaque reponse plain-text sera persistee dans response_corpus");

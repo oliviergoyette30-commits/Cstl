@@ -121,7 +121,7 @@ async fn main() {
         if !delta_line.contains("payload_changed=true") {
             failures.push(format!("scenario 2: payload_changed=true attendu dans la ligne ADN_DELTA: {delta_line}"));
         }
-        if delta_line.contains("delta_old_ref=") == false || delta_line.contains("delta_new_ref=") == false {
+        if !delta_line.contains("delta_old_ref=") || !delta_line.contains("delta_new_ref=") {
             failures.push(format!("scenario 2: delta_old_ref=/delta_new_ref= attendus (pas old_hash=/new_hash=, collision de sous-chaine avec AUDIT hash=): {delta_line}"));
         }
         // Conformite wire: un seul bloc ADN_DELTA sur sa propre ligne (pas de

@@ -35,6 +35,7 @@ const PROB_SCALE: u32 = 1 << PROB_BITS;
 const RANS_L: u32 = 1 << 23;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // champs conserves pour Debug/inspection de la table
 pub struct FSETable {
     symbol_id: u8,
     frequency: usize,
@@ -49,6 +50,7 @@ pub struct FSEEncoder {
     norm_freq: [u32; 256],
     norm_cum: [u32; 257],
     bitstream: Vec<u8>,
+    #[allow(dead_code)]
     bit_pos: usize,
 }
 
@@ -87,11 +89,7 @@ impl FSEEncoder {
     fn normalize(frequencies: &HashMap<u8, usize>) -> ([u32; 256], [u32; 257]) {
         let mut freq = [0u32; 256];
         if frequencies.is_empty() {
-            let mut cum = [0u32; 257];
-            for i in 0..=256 {
-                cum[i] = 0;
-            }
-            return (freq, cum);
+            return (freq, [0u32; 257]);
         }
         let total: u64 = frequencies.values().map(|&v| v as u64).sum::<u64>().max(1);
 
@@ -106,7 +104,7 @@ impl FSEEncoder {
         }
 
         if assigned != PROB_SCALE {
-            remainders.sort_by(|a, b| b.1.cmp(&a.1));
+            remainders.sort_by_key(|r| std::cmp::Reverse(r.1));
             if assigned < PROB_SCALE {
                 let mut deficit = PROB_SCALE - assigned;
                 let mut i = 0;
@@ -233,11 +231,6 @@ impl FSEEncoder {
         Ok(out)
     }
 
-    fn pack_bits(&self, bits: &[u8]) -> Result<Vec<u8>, String> {
-        // Conserve tel quel -- non utilise par le chemin rANS ci-dessus
-        // (garde-fou de compat si du code externe l'appelait encore).
-        Ok(bits.to_vec())
-    }
 
     pub fn get_max_state(&self) -> usize {
         self.max_state
@@ -303,9 +296,9 @@ mod tests {
         let mut encoder = FSEEncoder::new(&freqs);
         // Genere une sequence conforme a la distribution declaree.
         let mut symbols = Vec::new();
-        symbols.extend(std::iter::repeat(b'A').take(900));
-        symbols.extend(std::iter::repeat(b'B').take(90));
-        symbols.extend(std::iter::repeat(b'C').take(10));
+        symbols.extend(std::iter::repeat_n(b'A', 900));
+        symbols.extend(std::iter::repeat_n(b'B', 90));
+        symbols.extend(std::iter::repeat_n(b'C', 10));
 
         let encoded = encoder.encode(&symbols).unwrap();
         let decoded = encoder.decode(&encoded).unwrap();

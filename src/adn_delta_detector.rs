@@ -146,7 +146,7 @@ fn compare_payloads(old_payload: &str, new_payload: &str) -> (bool, Vec<String>,
     let old_lines: Vec<&str> = old_payload.lines().collect();
     let new_lines: Vec<&str> = new_payload.lines().collect();
 
-    if old_lines.len() > 0 && new_lines.len() > 0 {
+    if !old_lines.is_empty() && !new_lines.is_empty() {
         let line_diffs = diff_lines(&old_lines, &new_lines);
         // Aussi compter byte diff
         let byte_diff = count_byte_diffs(old_payload.as_bytes(), new_payload.as_bytes());
@@ -191,7 +191,7 @@ fn count_byte_diffs(old: &[u8], new: &[u8]) -> usize {
         .zip(new.iter())
         .filter(|&(x, y)| x != y)
         .count()
-        + (old.len() as isize - new.len() as isize).abs() as usize
+        + (old.len() as isize - new.len() as isize).unsigned_abs()
 }
 
 /// Compare les modalités déontiques stockées en adn_relations
@@ -318,6 +318,9 @@ pub fn format_cstl(report: &DeltaReport) -> String {
 }
 
 #[cfg(test)]
+// `ADNDeltaDetector::new` prend un `Arc<AdnStore>` (API publique, voir plus
+// haut) ; ces tests sont mono-thread, le non-Sync d'AdnStore est sans effet.
+#[allow(clippy::arc_with_non_send_sync)]
 mod tests {
     use super::*;
     use rusqlite::Connection;
@@ -325,8 +328,7 @@ mod tests {
 
     fn create_test_store() -> AdnStore {
         let conn = Connection::open_in_memory().expect("in-memory DB");
-        let store = AdnStore::open_connection(conn).expect("store creation");
-        store
+        AdnStore::open_connection(conn).expect("store creation")
     }
 
     #[test]

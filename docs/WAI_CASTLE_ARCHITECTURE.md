@@ -320,7 +320,7 @@ Agents reference dictionary versions by hash in every payload:
 
 ```
 INTENT_PAYLOAD {
-    dict_version_hash: "f906a30189...",  // Reference to standard v5.0.0
+    dict_version_hash: "f906a30189...",  // Reference to standard v5.0.0 (hash of symbols sorted by (id, value))
     content: [compressed bytes...]
 }
 ```

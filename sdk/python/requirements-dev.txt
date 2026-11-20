@@ -1,0 +1,5 @@
+# Dependances de test du SDK (2026-11-17). `httpx` est requis par
+# fastapi.testclient (tests d'endpoints de test_adn_server.py).
+-r requirements.txt
+pytest>=8
+httpx>=0.27

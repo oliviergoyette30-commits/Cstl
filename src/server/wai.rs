@@ -26,7 +26,15 @@ pub struct DictionaryVersion {
 
 impl DictionaryVersion {
     /// Create a new versioned dictionary from symbols
-    pub fn new(symbols: Vec<(u16, String)>) -> Self {
+    pub fn new(mut symbols: Vec<(u16, String)>) -> Self {
+        // FIX 2026-11-17 : le commentaire "hash from sorted symbols" ci-dessous
+        // n'etait pas respecte -- aucun tri n'etait fait, donc le meme jeu de
+        // symboles fourni dans un autre ordre donnait une autre empreinte, ce
+        // qui casse l'adressage par contenu entre agents. Tri canonique par
+        // (id, valeur). Le dictionnaire standard v5.0.0 etant deja trie et sans
+        // doublon, son empreinte (f906a301...) est inchangee (verifie par test).
+        symbols.sort();
+
         // Build reverse lookup
         let mut lookup = HashMap::new();
         for (id, value) in &symbols {
@@ -497,55 +505,76 @@ pub fn decode_wai_payload(
 
 /// Helper: decode data using a dictionary version
 fn decode_with_dict(data: &[u8], dict: &DictionaryVersion) -> Result<String, String> {
-    let mut output = String::new();
-    let mut i = 0;
-
-    while i < data.len() {
-        let byte = data[i];
-
-        // Simple marker detection: high byte = symbol ID, low byte = literal
-        if byte >= 128 {
-            // Multi-byte symbol ID
-            if i + 1 < data.len() {
-                let id = ((byte as u16) << 8) | (data[i + 1] as u16);
-                if let Some(s) = dict.decode(id) {
-                    output.push_str(s);
-                }
-                i += 2;
-            } else {
-                i += 1;
-            }
-        } else if byte < 32 && byte != b' ' {
-            // Structural byte (preserved)
-            output.push(byte as char);
-            i += 1;
-        } else {
-            // Literal ASCII
-            output.push(byte as char);
-            i += 1;
-        }
-    }
-
-    Ok(output)
+    decode_symbols_strict(data, |id| dict.decode(id))
 }
 
 /// Helper: decode data using inline symbol map
 fn decode_with_symbols(data: &[u8], lookup: &HashMap<u16, String>) -> Result<String, String> {
-    let mut output = String::new();
+    decode_symbols_strict(data, |id| lookup.get(&id).map(String::as_str))
+}
+
+/// Plus grand ID de symbole representable sur le fil (15 bits).
+pub const MAX_WAI_SYMBOL_ID: u16 = 0x7FFF;
+
+/// Encode un ID de symbole au format fil : 2 octets, bit de poids fort du
+/// premier octet a 1 (marqueur de symbole), puis les 15 bits de l'ID.
+pub fn encode_symbol_id(id: u16) -> Result<[u8; 2], String> {
+    if id > MAX_WAI_SYMBOL_ID {
+        return Err(format!(
+            "WAI symbol ID {} exceeds maximum {} (15-bit wire format)",
+            id, MAX_WAI_SYMBOL_ID
+        ));
+    }
+    Ok([0x80 | (id >> 8) as u8, (id & 0xFF) as u8])
+}
+
+/// Decodeur commun aux deux chemins (dictionnaire reseau / symboles inline).
+///
+/// Format : un octet >= 128 ouvre un ID de symbole sur 2 octets ; le bit de
+/// poids fort n'est QUE le marqueur, l'ID est sur les 15 bits restants
+/// (`((b0 & 0x7F) << 8) | b1`). Tout octet < 128 est un litteral ASCII
+/// recopie tel quel (y compris les octets structurels < 32).
+///
+/// FIX 2026-11-17 : l'ID etait auparavant lu sur 16 bits, marqueur compris,
+/// donc toujours >= 0x8000 -- alors que le dictionnaire standard v5.0.0
+/// utilise les IDs 0..=220 : aucun de ses 221 symboles n'etait decodable.
+/// Aucun dictionnaire du repo n'utilisait d'ID >= 0x8000, donc masquer le
+/// marqueur ne casse aucun payload existant.
+///
+/// FIX 2026-11-17 : les deux decodeurs precedents perdaient des donnees EN
+/// SILENCE tout en retournant `Ok` -- un ID absent du dictionnaire etait
+/// simplement ignore, et un octet de symbole tronque en fin de flux etait
+/// soit jete (`decode_with_dict`), soit recopie comme caractere Latin-1
+/// parasite (`decode_with_symbols`). Un payload corrompu ou encode avec un
+/// autre dictionnaire produisait donc un texte faux sans aucun signal.
+/// Ces cas renvoient maintenant une erreur explicite.
+fn decode_symbols_strict<'a, F>(data: &[u8], lookup: F) -> Result<String, String>
+where
+    F: Fn(u16) -> Option<&'a str>,
+{
+    let mut output = String::with_capacity(data.len());
     let mut i = 0;
 
     while i < data.len() {
         let byte = data[i];
-
-        if byte >= 128 && i + 1 < data.len() {
-            let id = ((byte as u16) << 8) | (data[i + 1] as u16);
-            if let Some(s) = lookup.get(&id) {
-                output.push_str(s);
+        if byte >= 128 {
+            let Some(&low) = data.get(i + 1) else {
+                return Err(format!(
+                    "Truncated WAI symbol ID at byte offset {} (high byte 0x{:02X} without low byte)",
+                    i, byte
+                ));
+            };
+            let id = (((byte & 0x7F) as u16) << 8) | (low as u16);
+            match lookup(id) {
+                Some(s) => output.push_str(s),
+                None => {
+                    return Err(format!(
+                        "Unknown WAI symbol ID 0x{:04X} at byte offset {}",
+                        id, i
+                    ))
+                }
             }
             i += 2;
-        } else if byte < 32 && byte != b' ' {
-            output.push(byte as char);
-            i += 1;
         } else {
             output.push(byte as char);
             i += 1;
@@ -596,5 +625,85 @@ mod tests {
         .with_fallback(vec![(0, "test".to_string())]);
 
         assert!(payload.fallback_symbols.is_some());
+    }
+    #[test]
+    fn test_decode_roundtrip_known_symbol_and_literals() {
+        let dict = DictionaryVersion::new(vec![(0x0001, "STATE".to_string())]);
+        let data = [b'[', 0x80, 0x01, b']', b'\n'];
+        assert_eq!(decode_with_dict(&data, &dict).unwrap(), "[STATE]\n");
+    }
+
+    #[test]
+    fn test_decode_unknown_symbol_is_error_not_silent_drop() {
+        let dict = DictionaryVersion::new(vec![(0x0001, "STATE".to_string())]);
+        let data = [b'a', 0x80, 0x02, b'b'];
+        let err = decode_with_dict(&data, &dict).unwrap_err();
+        assert!(err.contains("0x0002"), "{}", err);
+
+        let lookup: HashMap<u16, String> = HashMap::new();
+        assert!(decode_with_symbols(&data, &lookup).is_err());
+    }
+
+    #[test]
+    fn test_decode_truncated_symbol_is_error_on_both_paths() {
+        let dict = DictionaryVersion::new(vec![(0x0001, "STATE".to_string())]);
+        let data = [b'a', 0x80];
+        assert!(decode_with_dict(&data, &dict).unwrap_err().contains("Truncated"));
+
+        let mut lookup = HashMap::new();
+        lookup.insert(0x0001u16, "STATE".to_string());
+        // Avant le fix : renvoyait Ok("a\u{80}") -- caractere parasite.
+        assert!(decode_with_symbols(&data, &lookup).unwrap_err().contains("Truncated"));
+    }
+
+    #[test]
+    fn test_decode_wai_payload_uses_fallback_symbols() {
+        let registry = DictionaryRegistry::new("node1".to_string());
+        let payload = WaiEncodedPayload::new(
+            "missing".to_string(),
+            "node1".to_string(),
+            vec![0x80, 0x00, b'!'],
+        )
+        .with_fallback(vec![(0x0000, "hi".to_string())]);
+        let decoded = decode_wai_payload(&payload, &registry).unwrap();
+        assert_eq!(decoded.data, "hi!");
+        assert!(decoded.fallback_used);
+    }
+    #[test]
+    fn test_standard_dictionary_hash_unchanged_by_canonical_sort() {
+        // Empreinte persistee en base et citee dans docs/WAI_CASTLE_ARCHITECTURE.md.
+        let d = DictionaryVersion::new_standard_cstl_v5_0_0();
+        assert_eq!(
+            d.version_hash,
+            "f906a301891329caab7a9850f20a5ad09dbaf028e3b629c77dc1846b031c1ebd"
+        );
+    }
+
+    #[test]
+    fn test_dictionary_hash_independent_of_symbol_order() {
+        let a = DictionaryVersion::new(vec![(0, "x".to_string()), (1, "y".to_string())]);
+        let b = DictionaryVersion::new(vec![(1, "y".to_string()), (0, "x".to_string())]);
+        assert_eq!(a.version_hash, b.version_hash);
+    }
+
+    #[test]
+    fn test_every_standard_symbol_roundtrips_through_wire_format() {
+        // Avant le fix : 0/221 symboles decodables (ID lu avec le marqueur).
+        let d = DictionaryVersion::new_standard_cstl_v5_0_0();
+        let mut data = Vec::new();
+        let mut expected = String::new();
+        for (id, value) in &d.symbols {
+            data.extend_from_slice(&encode_symbol_id(*id).unwrap());
+            data.push(b' ');
+            expected.push_str(value);
+            expected.push(' ');
+        }
+        assert_eq!(decode_with_dict(&data, &d).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_encode_symbol_id_rejects_ids_beyond_15_bits() {
+        assert_eq!(encode_symbol_id(MAX_WAI_SYMBOL_ID).unwrap(), [0xFF, 0xFF]);
+        assert!(encode_symbol_id(MAX_WAI_SYMBOL_ID + 1).is_err());
     }
 }

@@ -7,7 +7,7 @@
 use std::time::Instant;
 
 /// Simulated WAI-Absolute decoder for this benchmark
-/// Real implementation in src/wai_compression.rs
+/// (src/wai_compression.rs, dont ce bench etait une copie, a ete supprime le 2026-11-20 : code mort)
 mod wai_decoder {
     use std::collections::BTreeMap;
 
@@ -132,7 +132,7 @@ mod wai_decoder {
 
         let mut meta = BTreeMap::new();
         let mut intent = BTreeMap::new();
-        let mut relations = Vec::new();
+        let relations = Vec::new();
 
         // Read chunks
         while pos < bytes.len() && bytes[pos] != FRAME_END {
@@ -143,9 +143,9 @@ mod wai_decoder {
                     pos += consumed;
                     let chunk_end = pos + len as usize;
                     while pos < chunk_end {
-                        let (key, consumed) = decode_value(&bytes[pos..], &DICTIONARY)?;
+                        let (key, consumed) = decode_value(&bytes[pos..], DICTIONARY)?;
                         pos += consumed;
-                        let (value, consumed) = decode_value(&bytes[pos..], &DICTIONARY)?;
+                        let (value, consumed) = decode_value(&bytes[pos..], DICTIONARY)?;
                         pos += consumed;
                         if let WaiValue::String(k) = key {
                             meta.insert(k, value);
@@ -158,9 +158,9 @@ mod wai_decoder {
                     pos += consumed;
                     let chunk_end = pos + len as usize;
                     while pos < chunk_end {
-                        let (key, consumed) = decode_value(&bytes[pos..], &DICTIONARY)?;
+                        let (key, consumed) = decode_value(&bytes[pos..], DICTIONARY)?;
                         pos += consumed;
-                        let (value, consumed) = decode_value(&bytes[pos..], &DICTIONARY)?;
+                        let (value, consumed) = decode_value(&bytes[pos..], DICTIONARY)?;
                         pos += consumed;
                         if let WaiValue::String(k) = key {
                             intent.insert(k, value);
@@ -379,10 +379,8 @@ fn generate_large_payload(size: usize) -> Vec<u8> {
     // Add INTENT chunk
     if bytes_used < size - 10 {
         payload.push(0xFB);
-        bytes_used += 1;
         let intent_len_pos = payload.len();
         payload.push(0x00);
-        bytes_used += 1;
 
         let intent_start = payload.len();
         for i in 0..6 {
@@ -391,7 +389,6 @@ fn generate_large_payload(size: usize) -> Vec<u8> {
             payload.push(0x24); // Binary blob
             payload.push(0x20); // 32 bytes
             payload.extend_from_slice(&[0xAB; 32]);
-            bytes_used += 35;
         }
         let intent_len = (payload.len() - intent_start) as u8;
         payload[intent_len_pos] = intent_len;

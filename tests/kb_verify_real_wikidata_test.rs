@@ -19,7 +19,7 @@
 //!   la couche applicative. Aucun resultat reseau reel (succes ou echec) n'a
 //!   donc pu etre observe ICI. Personne n'a fabrique de resultat a la place.
 //! - A executer sur la machine d'Olivier (acces reseau normal) avec:
-//!     cargo test --release --test kb_verify_real_wikidata_test -- --ignored --nocapture
+//!   `cargo test --release --test kb_verify_real_wikidata_test -- --ignored --nocapture`
 //!   pour obtenir la premiere confirmation reelle contre le vrai service.
 //!
 //! Choix du cas d'entree: Marie Curie / Pierre Curie, relation "spouse"

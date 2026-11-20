@@ -33,12 +33,14 @@ fn gzip_bytes(data: &[u8]) -> Vec<u8> {
     encoder.finish().expect("gzip finish")
 }
 
+type Rows = Vec<HashMap<String, String>>;
+
 /// Construit un payload CSTL de N relations, avec un taux de reutilisation
 /// d'entites CONTROLE par `entity_pool` -- plus le pool est petit relatif a
 /// N, plus il y a de redondance (cas favorable a LZ77/gzip) ; plus il est
 /// grand, moins il y a de redondance (cas defavorable, plus proche d'un
 /// message CSTL reel avec des entites variees, peu repetees).
-fn build_payload(n_relations: usize, entity_pool: usize) -> (Vec<HashMap<String, String>>, Vec<HashMap<String, String>>, String) {
+fn build_payload(n_relations: usize, entity_pool: usize) -> (Rows, Rows, String) {
     let ops = ["PERFORM", "ARR.ACCESS", "MAINTAIN", "TRANSMIT_FAITHFUL", "COMMAND", "ENTAILS", "BEFORE", "OPPOSES"];
     let modalities = ["MUST", "MUST_NOT", "MAY", "SHOULD"];
     let types = ["Party", "Obligation", "Asset", "Document", "Event"];

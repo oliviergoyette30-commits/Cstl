@@ -394,7 +394,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let reg = ctx.agent_registry.read().await;  // STEP 2a: lecture seule, 100+ msg/sec
                         reg.agents.iter().find(|a| a.name == sig_sender).and_then(|a| a.public_key.clone())
                     };
-                    let signature_required = registered_pubkey_for_sender.is_some();
+                    let signature_required = registered_pubkey_for_sender.is_some() || ctx.require_signatures;
                     // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
                     // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
                     // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
@@ -413,7 +413,12 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     } else {
                         match &sig_check {
                             SignatureCheck::Invalid(_) => Some("signature_invalid"),
+                            SignatureCheck::NotPresent if signature_required && registered_pubkey_for_sender.is_none() => Some("signature_required_strict_mode"),
                             SignatureCheck::NotPresent if signature_required => Some("missing_signature_for_registered_agent"),
+                            // Mode strict : une signature valide ne suffit pas, la cle doit
+                            // etre celle d'un agent ENREGISTRE -- sinon n'importe qui signe
+                            // avec une cle jetable sous un nom jamais enregistre.
+                            SignatureCheck::Valid if registered_pubkey_for_sender.is_none() && ctx.require_signatures => Some("sender_not_registered_strict_mode"),
                             SignatureCheck::Valid if signature_required && embedded_pubkey != registered_pubkey_for_sender => Some("public_key_mismatch"),
                             _ => None,
                         }
@@ -714,9 +719,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         }
                                         Err(e) => {
                                             error!("[Handler] Failed to open arbitrage case: {}", e);
-                                            format!(
-                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=case_open_failed]\n---END---\n"
-                                            )
+                                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=case_open_failed]\n---END---\n".to_string()
                                         }
                                     }
                                 }
@@ -739,9 +742,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                             }
                                             Err(e) => {
                                                 error!("[Handler] Failed to assign arbiters: {}", e);
-                                                format!(
-                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=assignment_failed]\n---END---\n"
-                                                )
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=assignment_failed]\n---END---\n".to_string()
                                             }
                                         }
                                     }
@@ -776,7 +777,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         // qui doit le signer en premier); le serveur en genere un
                                         // par defaut seulement si absent, pour ne rien casser.
                                         let ruling_id = payload.intent.get("ruling_id").cloned()
-                                            .unwrap_or_else(|| format!("ruling_{}", uuid::Uuid::new_v4().to_string()));
+                                            .unwrap_or_else(|| format!("ruling_{}", uuid::Uuid::new_v4()));
                                         let ruling = arbitrage::ArbitrationRuling {
                                             ruling_id: ruling_id.clone(),
                                             case_id: cid.clone(),
@@ -807,9 +808,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                             }
                                             Err(e) => {
                                                 error!("[Handler] Failed to submit ruling: {}", e);
-                                                format!(
-                                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=ruling_submission_failed]\n---END---\n"
-                                                )
+                                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=arbitrage_rejected, reason=ruling_submission_failed]\n---END---\n".to_string()
                                             }
                                         }
                                     }
@@ -1092,9 +1091,93 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // Deplace AVANT l'inscription dans la chaine d'audit (2026-11-20) :
+                    // avant, un message rejete par strict_deontic_history etait
+                    // quand meme inscrit dans la chaine (et persiste) puis rejete --
+                    // l'historique d'audit contenait des messages refuses. Constate
+                    // via la verification d'integrite au demarrage (maillon sans
+                    // message stocke). deontic_audit reste disponible plus bas.
+                    // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
+                    // — meme principe que STEP 3c ci-dessus (charger seulement ce dont
+                    // on se sert), mais pour les relations portant `modality`. Verifie
+                    // les MUST/MUST_NOT du payload courant contre TOUT ce qui a ete
+                    // persiste par des payloads PRECEDENTS (potentiellement d'autres
+                    // agents) — une contradiction Axiome D qui s'etale sur plusieurs
+                    // requetes, invisible a la verification intra-payload bloquante
+                    // (server/validator.rs::validate_deontic_constraints, STEP 2).
+                    // INFORMATIF SEULEMENT, comme la coherence factuelle ci-dessus:
+                    // jamais de rejet, une contradiction a travers l'historique peut
+                    // etre un vrai desaccord entre agents/moments, pas une erreur de
+                    // protocole (contrairement a se contredire dans le meme souffle).
+                    let deontic_history = {
+                        let store = ctx.adn_store.lock().await;
+                        store.deontic_relations_history().unwrap_or_else(|e| {
+                            error!("[Handler] adn_store.deontic_relations_history failed: {}", e);
+                            Vec::new()
+                        })
+                    };
+                    let deontic_audit = execution_lab::check_deontic_consistency_with_history(&payload.relations, &deontic_history);
+                    if !deontic_audit.consistent {
+                        warn!(
+                            "[Handler] Deontic audit: {} Axiom D violation(s) detected against history",
+                            deontic_audit.violations.len()
+                        );
+                        for v in &deontic_audit.violations {
+                            warn!(
+                                "[Handler] Violation: ({}) {} {} vs ({}) {} {}",
+                                v.required_by, v.subject, v.object, v.forbidden_by, v.subject, v.object
+                            );
+                        }
+                    }
+
+                    // STEP 3c-quinquies: rejet dur OPT-IN de l'audit deontique
+                    // cross-history (2026-10-30, question ouverte depuis
+                    // l'audit du 28/29 octobre -- cf. commentaire STEP 3c
+                    // ci-dessus). Par design assume, une contradiction qui
+                    // s'etale sur plusieurs payloads reste INFORMATIVE par
+                    // defaut (DEONTIC_AUDIT seul, jamais de rejet): un desaccord
+                    // historique entre agents n'est pas forcement une erreur de
+                    // protocole. Mais certains domaines (finance, securite) ont
+                    // besoin de l'inverse -- qu'une contradiction avec
+                    // l'historique devienne bloquante. Plutot que de changer le
+                    // comportement par defaut (ce qui casserait la semantique
+                    // documentee et les tests existants bases dessus), l'appelant
+                    // opte in explicitement via
+                    // INTENT_PAYLOAD[strict_deontic_history=true]. Champ absent
+                    // ou != "true"/"1" => comportement inchange (informatif
+                    // seulement, teste depuis le 2026-09-04).
+                    let strict_deontic_history = matches!(
+                        payload.intent.get("strict_deontic_history").map(String::as_str),
+                        Some("true") | Some("1")
+                    );
+                    if strict_deontic_history && !deontic_audit.consistent {
+                        let errors: String = deontic_audit
+                            .violations
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, v)| {
+                                format!(
+                                    "E107H[{idx}]: {} {} contredit l'historique (requis par {}, interdit par {})",
+                                    v.subject, v.object, v.required_by, v.forbidden_by
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        warn!(
+                            "[Handler] strict_deontic_history=true: rejet dur de {} violation(s) cross-history",
+                            deontic_audit.violations.len()
+                        );
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=validation_error, errors={}]\n---END---\n",
+                            errors
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
-                    let entry = { ctx.chain.lock().await.append(&payload) };
+                    let (entry, is_replay) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
 
                     // Persistance de la chaine (Couche 5/8, cable live le
                     // 2026-09-04). Sans cet appel, `chain.append()` ci-dessus
@@ -1301,83 +1384,6 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         consistency.epistemic_contradictions.len(), sigma
                     );
 
-                    // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
-                    // — meme principe que STEP 3c ci-dessus (charger seulement ce dont
-                    // on se sert), mais pour les relations portant `modality`. Verifie
-                    // les MUST/MUST_NOT du payload courant contre TOUT ce qui a ete
-                    // persiste par des payloads PRECEDENTS (potentiellement d'autres
-                    // agents) — une contradiction Axiome D qui s'etale sur plusieurs
-                    // requetes, invisible a la verification intra-payload bloquante
-                    // (server/validator.rs::validate_deontic_constraints, STEP 2).
-                    // INFORMATIF SEULEMENT, comme la coherence factuelle ci-dessus:
-                    // jamais de rejet, une contradiction a travers l'historique peut
-                    // etre un vrai desaccord entre agents/moments, pas une erreur de
-                    // protocole (contrairement a se contredire dans le meme souffle).
-                    let deontic_history = {
-                        let store = ctx.adn_store.lock().await;
-                        store.deontic_relations_history().unwrap_or_else(|e| {
-                            error!("[Handler] adn_store.deontic_relations_history failed: {}", e);
-                            Vec::new()
-                        })
-                    };
-                    let deontic_audit = execution_lab::check_deontic_consistency_with_history(&payload.relations, &deontic_history);
-                    if !deontic_audit.consistent {
-                        warn!(
-                            "[Handler] Deontic audit: {} Axiom D violation(s) detected against history",
-                            deontic_audit.violations.len()
-                        );
-                        for v in &deontic_audit.violations {
-                            warn!(
-                                "[Handler] Violation: ({}) {} {} vs ({}) {} {}",
-                                v.required_by, v.subject, v.object, v.forbidden_by, v.subject, v.object
-                            );
-                        }
-                    }
-
-                    // STEP 3c-quinquies: rejet dur OPT-IN de l'audit deontique
-                    // cross-history (2026-10-30, question ouverte depuis
-                    // l'audit du 28/29 octobre -- cf. commentaire STEP 3c
-                    // ci-dessus). Par design assume, une contradiction qui
-                    // s'etale sur plusieurs payloads reste INFORMATIVE par
-                    // defaut (DEONTIC_AUDIT seul, jamais de rejet): un desaccord
-                    // historique entre agents n'est pas forcement une erreur de
-                    // protocole. Mais certains domaines (finance, securite) ont
-                    // besoin de l'inverse -- qu'une contradiction avec
-                    // l'historique devienne bloquante. Plutot que de changer le
-                    // comportement par defaut (ce qui casserait la semantique
-                    // documentee et les tests existants bases dessus), l'appelant
-                    // opte in explicitement via
-                    // INTENT_PAYLOAD[strict_deontic_history=true]. Champ absent
-                    // ou != "true"/"1" => comportement inchange (informatif
-                    // seulement, teste depuis le 2026-09-04).
-                    let strict_deontic_history = matches!(
-                        payload.intent.get("strict_deontic_history").map(String::as_str),
-                        Some("true") | Some("1")
-                    );
-                    if strict_deontic_history && !deontic_audit.consistent {
-                        let errors: String = deontic_audit
-                            .violations
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, v)| {
-                                format!(
-                                    "E107H[{idx}]: {} {} contredit l'historique (requis par {}, interdit par {})",
-                                    v.subject, v.object, v.required_by, v.forbidden_by
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join("; ");
-                        warn!(
-                            "[Handler] strict_deontic_history=true: rejet dur de {} violation(s) cross-history",
-                            deontic_audit.violations.len()
-                        );
-                        let response = format!(
-                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=validation_error, errors={}]\n---END---\n",
-                            errors
-                        );
-                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
-                        continue;
-                    }
 
                     // STEP 3c-ter: EXECUTION_TRACE (2026-09-08, session tripartite
                     // du 22 mai 2026 -- CSTL_SPEC_v5_0.md §16.6). Genere PAR LE
@@ -1470,6 +1476,19 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // Resume lisible du dilemme pour la notification Telegram — sans
                     // ca, "committer" est un clic aveugle, pas une decision informee.
                     let mut telegram_details = verification_lines.clone();
+                    // 2026-11-17 : les contradictions DEONTIQUES avec l'historique
+                    // (ex. MUST apres un MUST_NOT sur la meme action) etaient
+                    // detectees (DEONTIC_AUDIT) mais absentes de ce resume -- et
+                    // donc jamais escaladees vers Obsidian, alors que c'est le cas
+                    // le plus grave ("le bot doit effacer la base" apres "ne doit pas").
+                    if !deontic_audit.violations.is_empty() {
+                        telegram_details.push_str("\nDeontic violations (vs history):\n");
+                        for v in &deontic_audit.violations {
+                            telegram_details.push_str(&format!(
+                                "- {} {}: {} vs {}\n", v.subject, v.object, v.required_by, v.forbidden_by
+                            ));
+                        }
+                    }
                     if !consistency.contradictions.is_empty() {
                         telegram_details.push_str("\nContradictions:\n");
                         for ct in &consistency.contradictions {
@@ -1503,7 +1522,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // ExecutionLab a detecte une contradiction/cycle, on ecrit une
                     // entree visible directement dans le vault Obsidian de
                     // l'utilisateur, en plus de la notification Telegram.
-                    if !consistency.consistent {
+                    if !consistency.consistent || !deontic_audit.consistent {
                         if let Some(obsidian) = &ctx.obsidian {
                             if let Err(e) = obsidian.escalate(&entry.hash, sigma, &telegram_details) {
                                 error!("[Obsidian] Escalation failed: {}", e);
@@ -1817,7 +1836,11 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         // CONSISTENCY/deontic_audit_line plus bas: jamais de rejet, une
                         // ligne ADN_DELTA n'est ajoutee a la reponse que si un
                         // changement reel (severity != NoChange) est detecte.
-                        {
+                        // Replay (hash deja dans la chaine) : `entry` est l'entree
+                        // EXISTANTE, son delta contre son parent d'origine a deja ete
+                        // rapporte lors du premier envoi -- le re-rapporter
+                        // presenterait un renvoi identique comme un changement.
+                        if !is_replay {
                             let store = ctx.adn_store.lock().await;
                             match crate::adn_delta_detector::compute_delta_report(&store, &entry.parent_hash, &entry.hash) {
                                 Ok(report) if report.conflict_severity != crate::adn_delta_detector::ConflictSeverity::NoChange => {
@@ -2337,6 +2360,9 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                 // cote serveur ci-dessus pour le debug.
                 let details = match &e {
                     parser::ParseError::MissingHashbang => "missing_hashbang",
+                    // Categorie fixe (jamais le contenu brut) : dit a l'IA cliente
+                    // que c'est sa premiere ligne qui est en cause (2026-11-20).
+                    parser::ParseError::InvalidFormat(m) if m.starts_with("malformed_header") => "malformed_header",
                     parser::ParseError::InvalidFormat(_) => "invalid_format",
                     parser::ParseError::MissingEndMarker => "missing_end_marker",
                     parser::ParseError::MalformedBlock(_) => "malformed_block",

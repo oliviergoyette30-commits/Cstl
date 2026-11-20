@@ -142,7 +142,7 @@ fn find_cycles(relations: &[HashMap<String, String>]) -> Vec<Cycle> {
         // partant de B (meme cycle, deux points de depart). On evite le doublon
         // en retirant du pool de departs tout noeud deja couvert par un cycle trouve.
         let mut already_in_a_cycle: HashSet<&str> = HashSet::new();
-        for (&start, _) in adjacency.iter() {
+        for &start in adjacency.keys() {
             if already_in_a_cycle.contains(start) {
                 continue;
             }
@@ -249,7 +249,7 @@ fn find_temporal_cycles(relations: &[HashMap<String, String>]) -> Vec<Cycle> {
 
     let mut cycles = Vec::new();
     let mut already_in_a_cycle: HashSet<&str> = HashSet::new();
-    for (&start, _) in adjacency.iter() {
+    for &start in adjacency.keys() {
         if already_in_a_cycle.contains(start) {
             continue;
         }

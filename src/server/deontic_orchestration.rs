@@ -211,7 +211,7 @@ impl DeonticOrchestrator {
         let mut rules = self.rules.lock().await;
         rules.push(rule);
         // Sort by priority descending for execution order
-        rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        rules.sort_by_key(|r| std::cmp::Reverse(r.priority));
     }
 
     /// Get a receiver for events

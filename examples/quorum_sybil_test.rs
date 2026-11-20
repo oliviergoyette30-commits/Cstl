@@ -9,7 +9,7 @@
 /// cles, enregistrer N agents, et devenir lui-meme la totalite (ou la
 /// supermajorite) du "quorum" dont member_count/threshold dependent --
 /// defaisant la garantie BFT (2/3 des membres) que ce module revendique.
-use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
+use cstl_parser::agent_discovery::AgentRegistry;
 use cstl_parser::restricted_council::RestrictedCouncil;
 use cstl_parser::server::audit::signing_bytes;
 use cstl_parser::server::parser::parse_payload;
@@ -121,7 +121,7 @@ async fn main() {
     println!("=== UN SEUL ACTEUR enregistre 3 agents sybils (3 cles Ed25519 fraiches, zero cout) ===");
     let sk1 = register_sybil(port, "sybil_1").await;
     let sk2 = register_sybil(port, "sybil_2").await;
-    let sk3 = register_sybil(port, "sybil_3").await;
+    let _sk3 = register_sybil(port, "sybil_3").await;
     println!("sybil_1, sybil_2, sybil_3 enregistres -- aucun humain distinct requis, aucune preuve autre que la possession d'une cle fraichement generee.");
 
     println!("\n=== sybil_1 propose ===");

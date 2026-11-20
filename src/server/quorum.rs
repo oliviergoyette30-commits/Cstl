@@ -57,14 +57,16 @@ impl QuorumMember {
         }
     }
 
-    /// Validates member is eligible to vote (active + health >= 0.6)
+    /// Validates member is eligible to vote (active + health >= 0.3)
     pub fn is_eligible(&self) -> bool {
         self.status != "inactive" && self.health_score >= 0.3
     }
 
-    /// Updates health score (clamped to [0.0, 1.0])
+    /// Updates health score (clamped to [0.0, 1.0]; NaN -> 0.0)
     pub fn update_health(&mut self, score: f64) {
-        self.health_score = score.max(0.0).min(1.0);
+        // `f64::clamp` propagerait un NaN ; l'ancien `max(0.0).min(1.0)`
+        // le ramenait a 0.0 -- comportement conserve explicitement.
+        self.health_score = if score.is_nan() { 0.0 } else { score.clamp(0.0, 1.0) };
         self.last_verified = Utc::now();
 
         // Auto-transition status based on health
@@ -331,7 +333,7 @@ pub fn compute_threshold(member_count: u64) -> u64 {
     if member_count == 0 {
         return 0;
     }
-    ((2 * member_count) + 2) / 3
+    (2 * member_count).div_ceil(3)
 }
 
 /// Checks if circuit breaker should activate based on metrics

@@ -95,6 +95,21 @@ pub fn validate_payload(payload: &CstlPayload) -> ValidationResult {
             });
             result.valid = false;
         }
+
+        // E317 (2026-11-17) : `object` n'etait jamais verifie. Une relation sans
+        // objet passait la validation, etait stockee avec un objet vide
+        // (`unwrap_or_default` plus bas), et n'entrait dans AUCUNE verification
+        // (KB, coherence) -- perte silencieuse, alors que JSON Schema + champ
+        // requis la rejette. Trouve par scripts/benchmark_cstl_vs_jsonschema.py
+        // (cas E2). La spec impose RELATION [type, subject, object] ; aucune des
+        // 668 lignes RELATION des fichiers .cstl du depot n'omet l'objet.
+        if relation.get("object").is_none_or(|o| o.trim().is_empty()) {
+            result.errors.push(ValidationError {
+                code: format!("E317[{}]", idx),
+                message: format!("RELATION[{}]: Missing object", idx),
+            });
+            result.valid = false;
+        }
     }
 
     // Signature Ed25519 (Couche 2/securite, src/signing.rs) -- ici, verification
@@ -329,8 +344,12 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
             && tok.len() >= 2
     }
 
-    let relations: Vec<AstRelation> = payload.relations.iter()
-        .filter_map(|r| {
+    // `line` = position (1-based) de la RELATION dans le message (2026-11-20).
+    // Le parser ne conserve pas le numero de ligne du texte -- l'ajouter dans
+    // la relation changerait les octets signes -- donc les erreurs affichaient
+    // "ligne 0" pour toutes les relations. La position est exacte et utile.
+    let relations: Vec<AstRelation> = payload.relations.iter().enumerate()
+        .filter_map(|(idx, r)| {
             let operator = r.get("type").cloned().unwrap_or_default();
             if !looks_like_sdl_operator(&operator) {
                 return None;
@@ -341,7 +360,7 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
                 object: r.get("object").cloned().unwrap_or_default(),
                 attrs: Vec::new(),
                 modality: None,
-                line: 0,
+                line: idx + 1,
             })
         })
         .collect();
@@ -370,8 +389,8 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
 /// jamais matcher par accident -- pas besoin de l'heuristique majuscules
 /// utilisee pour la whitelist generique.
 fn relations_to_ast_full(payload: &CstlPayload) -> Vec<AstRelation> {
-    payload.relations.iter()
-        .map(|r| {
+    payload.relations.iter().enumerate()
+        .map(|(idx, r)| {
             let attrs: Vec<crate::ast::Field> = r.iter()
                 .filter(|(k, _)| !matches!(k.as_str(), "subject" | "type" | "object" | "modality"))
                 .map(|(k, v)| crate::ast::Field {
@@ -387,7 +406,7 @@ fn relations_to_ast_full(payload: &CstlPayload) -> Vec<AstRelation> {
                 object: r.get("object").cloned().unwrap_or_default(),
                 attrs,
                 modality: r.get("modality").cloned(),
-                line: 0,
+                line: idx + 1,
             }
         })
         .collect()
@@ -563,8 +582,8 @@ pub fn check_orphaned_entities(payload: &CstlPayload) -> Vec<String> {
         .filter_map(|d| {
             let name = d.get("name").map(String::as_str);
             let id = d.get("id").map(String::as_str);
-            let is_referenced = name.map_or(false, |n| referenced.contains(n))
-                || id.map_or(false, |i| referenced.contains(i));
+            let is_referenced = name.is_some_and(|n| referenced.contains(n))
+                || id.is_some_and(|i| referenced.contains(i));
             if is_referenced {
                 None
             } else {
@@ -606,14 +625,14 @@ pub fn check_orphaned_entities(payload: &CstlPayload) -> Vec<String> {
 /// SDL Axiome D deja ecrit et teste (`semantic.rs`) au lieu de reinventer
 /// une verification de substring.
 fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationResult) {
-    let relations: Vec<AstRelation> = payload.relations.iter()
-        .map(|r| AstRelation {
+    let relations: Vec<AstRelation> = payload.relations.iter().enumerate()
+        .map(|(idx, r)| AstRelation {
             subject: r.get("subject").cloned().unwrap_or_default(),
             operator: r.get("type").cloned().unwrap_or_default(),
             object: r.get("object").cloned().unwrap_or_default(),
             attrs: Vec::new(),
             modality: r.get("modality").cloned(),
-            line: 0,
+            line: idx + 1,
         })
         .collect();
 
@@ -1262,5 +1281,32 @@ mod tests {
         let payload = payload_with(vec![]);
         let result = validate_payload(&payload);
         assert!(result.valid);
+    }
+
+    #[test]
+    fn test_relation_without_object_is_rejected_e317() {
+        let mut p = valid_minimal_payload_for_e317();
+        let mut rel = std::collections::HashMap::new();
+        rel.insert("type".to_string(), "STATE".to_string());
+        rel.insert("subject".to_string(), "x".to_string());
+        p.relations.push(rel.clone());
+        let r = validate_payload(&p);
+        assert!(!r.valid);
+        assert!(r.errors.iter().any(|e| e.code == "E317[0]"), "{:?}", r.errors);
+
+        rel.insert("object".to_string(), "   ".to_string());
+        p.relations[0] = rel.clone();
+        assert!(validate_payload(&p).errors.iter().any(|e| e.code == "E317[0]"), "objet vide");
+
+        rel.insert("object".to_string(), "alive".to_string());
+        p.relations[0] = rel;
+        assert!(!validate_payload(&p).errors.iter().any(|e| e.code.starts_with("E317")));
+    }
+
+    fn valid_minimal_payload_for_e317() -> CstlPayload {
+        crate::server::parser::parse_payload(
+            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=t, produced_by=t]\nINTENT_PAYLOAD [purpose=inform, sender=a, receiver=b]\n---END---\n",
+        )
+        .expect("payload minimal")
     }
 }

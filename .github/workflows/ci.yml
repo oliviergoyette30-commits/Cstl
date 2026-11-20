@@ -46,8 +46,14 @@ jobs:
       - name: cargo build --bin cstl_parser
         run: cargo build --bin cstl_parser --verbose
 
-      - name: cargo test --lib (tests unitaires)
-        run: cargo test --lib --verbose
+      # --all-targets (2026-11-17) : sans ca, un exemple/bench/test d'integration
+      # qui ne compile plus passait inapercu (examples/parser_coverage_n100.rs
+      # est reste casse plusieurs jours, cassant `cargo build --all-targets`).
+      - name: cargo build --all-targets
+        run: cargo build --all-targets
+
+      - name: cargo test (unitaires + integration tests/)
+        run: cargo test --verbose
 
       # Scenarios live: demarrent un vrai CstlNativeServer sur un port
       # ephemere et verifient son comportement reel de bout en bout, pas
@@ -74,3 +80,81 @@ jobs:
 
       - name: Smoke test -- persistance de l'identite d'agent a travers un restart
         run: cargo run --example agent_registry_persistence_test
+
+      # Ajoutes le 2026-11-17 : ces 6 scenarios live echouaient tous sans
+      # qu'aucune CI ne le signale (ils n'etaient lances par personne). Deux
+      # d'entre eux revelaient de vrais bugs du pipeline (breaker pondere par
+      # sigma, ADN_DELTA annonce sur un replay).
+      - name: Smoke test -- quorum BFT multi-connexions
+        run: cargo run --example quorum_smoke_test
+
+      - name: Smoke test -- gouvernance (circuit breaker + council signe)
+        run: cargo run --example governance_smoke_test
+
+      - name: Smoke test -- persistance de la gouvernance a travers un restart
+        run: cargo run --example governance_persistence_smoke_test
+
+      - name: Smoke test -- ADN_DELTA (pas de delta sur un replay)
+        run: cargo run --example adn_delta_smoke_test
+
+      - name: Smoke test -- Double Livre / calibration sigma
+        run: cargo run --example double_livre_smoke_test
+
+      - name: Smoke test -- entites orphelines (W608)
+        run: cargo run --example orphaned_entity_smoke_test
+
+      - name: Couverture parser N=100 (catalogue officiel)
+        run: cargo run --example parser_coverage_n100
+
+      # Banc d'essai CSTL vs JSON Schema + Ed25519 (2026-11-17) : echoue si CSTL
+      # rate une des 12 erreurs attendues ou rejette un des 5 messages valides.
+      - name: Installe Python (banc d'essai comparatif)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Banc d'essai CSTL vs JSON Schema + Ed25519
+        run: |
+          pip install cryptography jsonschema pytest
+          python3 scripts/benchmark_cstl_vs_jsonschema.py
+
+      # Agent LLM -> vrai serveur (stub de modele) : enregistrement, relations
+      # verifiables, signalements lus, contradiction visible dans Obsidian et
+      # Graphify. Avant le 2026-11-17 l'agent n'avait jamais ete execute contre
+      # le serveur (enregistrement rejete, messages en parse_error).
+      - name: Agent LLM contre le vrai serveur
+        run: python3 -m pytest -q sdk/python/test_llm_agent_live.py sdk/python/test_strict_mode_live.py
+
+      # Etaient #[ignore] avec un chemin absolu d'une autre machine : jamais
+      # executes. Prouvent que Python signe ce que Rust verifie, et inversement.
+      - name: Validation croisee des signatures Rust <-> Python
+        run: cargo test --test cross_validation_signing_test -- --include-ignored
+
+  # Ajoute le 2026-11-17 : le SDK Python n'etait teste par aucune CI. Resultat
+  # constate a ce moment-la : requirements.txt ne s'installait plus (pydantic
+  # 2.6.0 sans wheel Python 3.13), 2 dependances importees n'etaient pas
+  # declarees, 4 tests echouaient (chemin absolu d'une autre machine, API
+  # Hermes desynchronisee) et GET /audit/stats repondait 404 depuis toujours.
+  python-sdk:
+    name: SDK Python (pytest + pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installe Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Installe les dependances (runtime + test)
+        run: pip install -r requirements-dev.txt pip-audit
+
+      - name: pytest (les DeprecationWarning du SDK sont des erreurs)
+        run: python -m pytest -q -W error::DeprecationWarning:cstl_adn_server -W error::DeprecationWarning:cstl_obsidian_bridge -W error::DeprecationWarning:cstl_graphify_bridge
+
+      - name: pip-audit (vulnerabilites connues des dependances)
+        run: pip-audit -r requirements.txt

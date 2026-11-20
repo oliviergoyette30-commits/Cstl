@@ -102,48 +102,48 @@ python3 sdk/python/cstl_orchestrator.py --script agentA.txt agentB.txt
 comme `agent_a`/`agent_b`, chaines via `parent_hash` (meme logique que
 `send2.sh`/`send3.sh` a la racine du depot).
 
-## `cstl_llm_agent.py` -- agent LLM reel signe (2026-09-04)
+## `cstl_llm_agent.py` -- agent LLM signe (reecrit le 2026-11-17)
 
-Dependances: `pip install cryptography` (obligatoire, signature Ed25519)
-et `pip install anthropic` (optionnel -- sans lui, degradation propre,
-voir plus bas).
+Dependances : `pip install cryptography` (signature Ed25519). Cerveaux :
+Hermes via Ollama (aucun paquet requis : `CSTL_OLLAMA_HOST` / `CSTL_OLLAMA_PORT`
+/ `CSTL_OLLAMA_MODEL`), Claude (`pip install anthropic`, modele
+`claude-opus-5-5`, repli serveur automatique sur refus), Gemini
+(`google-generativeai`, non revalide le 2026-11-17).
 
-Ce qui est **verifie en direct dans le sandbox de developpement** (donc
-deja confirme fonctionnel, pas seulement structurellement):
-- `cstl_signing_bytes()` (le port Python de
-  `src/server/audit.rs::signing_bytes`) produit un hash BYTE-FOR-BYTE
-  identique a l'implementation Rust sur une fixture croisee
-  (`examples/print_signing_bytes_fixture.rs` cote Rust, meme fixture
-  codee en dur dans `_structural_selftest()` cote Python).
-- `register_agent()` et `send_signed_relation()` fonctionnent contre un
-  **vrai serveur Rust demarre** (`cargo run --release`): enregistrement
-  dynamique accepte (`agent_register_ack`), un message non signe du meme
-  expediteur maintenant enregistre est rejete
-  (`missing_signature_for_registered_agent`), le meme message
-  correctement signe est accepte (`status=processed`).
-- `AnthropicAgentBrain.from_env()` degrade proprement (`None`) dans cet
-  environnement precis (ni paquet `anthropic`, ni `ANTHROPIC_API_KEY`).
+**Pourquoi la reecriture** : verifie en direct le 2026-11-17, l'agent ne
+fonctionnait plus contre le serveur -- enregistrement rejete (champs requis
+absents), messages en `parse_error` (virgule dans le texte), signature
+calculee sur un autre contenu que celui envoye -- et rapportait quand meme
+`status: sent`. Surtout, il n'envoyait que du texte libre : aucune des
+verifications logiques de CSTL ne s'appliquait a ses messages.
 
-Ce qui **n'a pas pu etre verifie ici** et reste a confirmer par
-l'utilisateur sur sa propre machine: une vraie reponse generee par un
-modele Claude, dans une conversation reelle avec le serveur CSTL.
-
-```bash
-pip install anthropic
-export ANTHROPIC_API_KEY=sk-...
-cargo run --release &                                    # serveur CSTL, port 5050
-python3 sdk/python/cstl_llm_agent.py --peer-mode stdin --turns 4
+```python
+from cstl_llm_agent import CstlAgent, describe
+agent = CstlAgent("my_agent", "anthropic")      # ou "hermes", "gemini"
+agent.register()                                 # True si agent_register_ack
+relation, resp = agent.tell("bob", "etat de la commande 42")
+print(relation, describe(resp))
+# ex. {'type': 'STATE', 'subject': 'order_42', 'object': 'shipped'} ACCEPTE (seq=3)
+#     ... ACCEPTE AVEC SIGNALEMENTS: DEONTIC_AUDIT: 1 violation(s) avec l'historique
+#     ... REJETE (operator_whitelist_rejected: E101 ...)
 ```
 
-Confirmer que: (1) `[LlmAgent] agent_register -> purpose='agent_register_ack'`
-apparait, (2) chaque tour affiche une `relation` generee par le modele
-(pas une erreur JSON) et `status='processed'`, (3) taper une reponse au
-prompt `[Pair humain]` relance bien un tour suivant.
+- `tell(receiver, subject)` : le modele formule UNE relation (JSON, operateur
+  du catalogue officiel), l'agent l'envoie signee. Rien n'est envoye si le
+  modele ne produit pas de relation exploitable.
+- `send_relations(receiver, relations)` : envoi direct de relations.
+- `resp.is_error` = rejet ; `resp.issues` = signalements sur un message
+  accepte (contradiction de faits, contradiction deontique avec
+  l'historique, avertissements semantiques). Les lire : CSTL n'en rejette
+  qu'une partie.
+- `send_message(receiver, texte)` : texte libre signe -- **aucune
+  verification logique** ne s'y applique.
 
-Auto-test structurel seul (aucun reseau, verifie ce qui EST verifiable
-sans `anthropic`/cle -- c'est celui execute dans le sandbox de
-developpement):
+Dialogue autonome : `python3 sdk/python/cstl_llm_agent.py --name alice --provider hermes --turns 3`.
 
-```bash
-python3 sdk/python/cstl_llm_agent.py --structural-selftest
-```
+Verifie : `sdk/python/test_llm_agent_live.py` (en CI) fait tourner l'agent,
+avec un modele simule, contre le vrai serveur : enregistrement, relation
+acceptee, contradiction signalee, operateur rejete, contradiction visible
+dans Obsidian et Graphify. **Non verifie ici** : une vraie generation par
+Claude, Hermes ou Gemini (ni cle API ni Ollama dans cet environnement).
+

@@ -45,7 +45,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // (qui paniquent avec un backtrace Rust brut) pour que le processus puisse sortir
     // proprement avec un message actionnable si la base ADN est corrompue/verrouillee
     // au demarrage (trouvaille de l'audit du repo, 2026-09-04).
-    let mut server = match CstlNativeServer::try_with_data_path(5050, "cstl_adn.db") {
+    // Ports configurables (2026-11-20) : CSTL_PORT (TCP, defaut 5050) et
+    // CSTL_REST_PORT (API REST, defaut 8000). Codes en dur avant : deux
+    // serveurs ne pouvaient pas tourner sur la meme machine.
+    let port_from_env = |name: &str, default: u16| -> u16 {
+        match std::env::var(name) {
+            Ok(v) if !v.is_empty() => v.parse().unwrap_or_else(|_| {
+                eprintln!("❌ {name}={v} n'est pas un port valide");
+                std::process::exit(1);
+            }),
+            _ => default,
+        }
+    };
+    let tcp_port = port_from_env("CSTL_PORT", 5050);
+    let rest_port = port_from_env("CSTL_REST_PORT", 8000);
+    let mut server = match CstlNativeServer::try_with_data_path(tcp_port, "cstl_adn.db") {
         Ok(server) => server,
         Err(msg) => {
             eprintln!("❌ Demarrage impossible: {msg}");
@@ -54,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     server.agent_registry = Arc::new(RwLock::new(registry));
 
-    eprintln!("📡 Starting server on port 5050...");
+    eprintln!("📡 Starting server on port {tcp_port}...");
     eprintln!("💬 Ready to receive CSTL payloads\n");
 
     // Couche 5c: Start REST API server on port 8000 in parallel with TCP server
@@ -65,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wai_registry_for_rest = server.wai_registry.clone();
     let sigma_calibrator_for_rest = server.sigma_calibrator.clone();
 
-    eprintln!("🌐 Starting REST API server on port 8000...");
+    eprintln!("🌐 Starting REST API server on port {rest_port}...");
     eprintln!("   GET /health → health check");
     eprintln!("   GET /audit/{{case_id}} → audit trail JSON");
     eprintln!("   POST /audit/query → filter audit by date/entity/action");
@@ -90,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             wai_registry_for_rest,
             sigma_calibrator_for_rest,
             "127.0.0.1",
-            8000,
+            rest_port,
         ).await {
             eprintln!("❌ REST API server error: {}", e);
         }

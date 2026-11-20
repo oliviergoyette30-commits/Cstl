@@ -45,6 +45,12 @@ pub struct WaiEncoder {
     zigzag_enabled: bool,
 }
 
+impl Default for WaiEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WaiEncoder {
     pub fn new() -> Self {
         WaiEncoder {

@@ -213,16 +213,17 @@ class CstlAgent:
 - All 4/4 pass (byte-perfect match)
 
 **Live Verification (Python + Rust Server):**
-1. Start Rust server: `cd /home/claude/Cstl && cargo run`
+1. Start Rust server: `cargo run --bin cstl_parser`
 2. Run Python test: `cd sdk/python && python3 test_python_signing_verification.py` → ✓ Signing bytes match
 3. Generate real keypair and register:
 ```bash
 python3 << 'EOF'
 from cstl_llm_agent import CstlAgent
-agent = CstlAgent("claude_agent", provider="anthropic")
-agent.register()  # → server responds with agent_register_ack
-result = agent.send_message("alice", "Hello from Claude")
-print("Sent:", result)
+from cstl_llm_agent import describe
+agent = CstlAgent("claude_agent", "anthropic")
+agent.register()  # → True on agent_register_ack
+relation, resp = agent.tell("alice", "status of order 42")  # verifiable relation, signed
+print(relation, describe(resp))  # ACCEPTE / ACCEPTE AVEC SIGNALEMENTS / REJETE
 EOF
 ```
 
@@ -296,7 +297,7 @@ ce chemin de câblage (seuls les event types `agent_register`/
 idempotent event handlers, version-keyed conflict resolution" étaient
 fausses — rien de tel n'existe dans le code, ni avant ni après ce commit.
 
-**`src/server/deontic_state_machine.rs` — réel mais SUPERSEDED, volontairement non câblé**:
+**`src/server/deontic_state_machine.rs` — réel mais SUPERSEDED, jamais câblé, supprimé le 2026-11-20**:
 543 lignes, 15 tests unitaires réels qui passent — mais ce module
 **duplique** `arbitrage.rs`, déjà en production (persisté SQLite, rulings
 Ed25519-signés et vérifiés, déjà câblé dans `handler.rs` via
@@ -362,7 +363,7 @@ CSTL is not only a wire format. The syntax is layer 1 of a governance architectu
 
 | # | Layer | v5.1 Status |
 |---|---|---|
-| 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Proven (99.3%, 12+ hops) |
+| 1 | **Transport** — wire format, SHA-256 immutable, deterministic validation | ✅ Server relay: 100% at 1/2/3/5 hops (`scripts/multi_hop_fidelity_curve.py`). LLM relay **with RULE lines**: 21/24 hops copied character-exact, 100% of relations intact, 99.95% mean character similarity (claude-opus-5-5, 2 runs × 12 hops, 2026-11-20, `scripts/llm_relay_fidelity.py`); **without RULE lines: 0%** (the model decodes the payload into prose). Original 99.3% / 12+ hops figure: manual cross-vendor measurement, not reproducible from this repo. |
 | 2 | **Governance / Resilience** — Ed25519 identity, signature verification, key rotation, circuit breaker, 2/3 quorum | ✅ **NEW v5.1**: `src/signing.rs` (check_signature, check_rotation_signature), `src/server/handler.rs` STEP 2a signature verification, all registered agents require valid signatures. Backward compatible: bootstrap agents (alice, bob) with `public_key=None` don't require signatures. |
 | 3a | **Public fact verification** — Wikidata + SPARQL, entity resolution | ✅ Implemented, wired live (`src/kb_verify.rs`) |
 | 3b | **Software lab + arbitration** — `RestrictedCouncil`, subprocess-isolated `ExecutionLab`, human channel | ✅ Real, wired live over TCP (`purpose=arbitrage_channel` in `handler.rs`, `src/server/arbitrage.rs`): open case, assign arbiters, submit ruling, **peer review, escalate to council** (both added 2026-10-01, see below), finalize. **Corrected 2026-10-01**: the previously claimed `src/server/arbitration_api.rs` ("REST API, 6 endpoints, WebSocket events") is an empty (0-byte) file, declared nowhere, compiled into nothing — that claim was entirely fabricated. The real path is the TCP channel above; see the Couche 9 section for a live-verified example (open → assign → Ed25519-signed ruling). Case lifecycle: Open → InProgress → RulingSubmitted → Finalized/EscalatedToCouncil (`arbitrage::CaseStatus`, not the names previously claimed here). **Peer review gap found and fixed 2026-10-01**: `peer_review_async`/`escalate_to_council_async` (real DB-backed logic, `save_peer_review`/`save_arbitrage_case`) existed with zero wire action to trigger them — `finalize_case` therefore ALWAYS failed with `QuorumNotReached` as soon as a council required ≥1 peer review (nothing ever called `save_peer_review`), a real functional gap, not a duplicate. Wired as actions `peer_review`/`escalate_to_council` on `purpose=arbitrage_channel` (`handler.rs`), verified live end-to-end: `finalize_case` fails before any peer review, a second registered arbiter signs `"{reviewer_id}||{ruling_id}"` raw Ed25519 and submits `peer_review`, `finalize_case` then succeeds (`examples/pub_fn_wiring_smoke_test.rs`). Known remaining limitation, found while wiring, not fixed (out of scope): `finalize_case_async` reports a hardcoded single `peer_reviews` entry (`"quorum"`) rather than the real per-reviewer list once the quorum is met — the finalized count is always 1, not the true number of reviews recorded. Human channel fully wired via restricted council + Telegram bridge. |
@@ -476,7 +477,7 @@ A fourth bug surfaced only once a real CSTL-shaped string was round-tripped thro
 
 **Honest conclusion**: wired correctly, safe by construction (same roundtrip + size-guard discipline as `COMPRESSED_RESPONSE`), and currently a no-op on real traffic for a *different*, more precisely diagnosed reason than the Master Compresseur path — this time it's the tokenizer's literal-detection heuristic (inherited from a JSON-oriented design, never a good match for prose-like CSTL field values) fragmenting ordinary vocabulary into unamortizable pieces, not a training-data mismatch. Fixing *that* is bounded, identified future work (stop treating arbitrary identifier text as a JSON-number/boolean candidate), tracked here rather than in `text_dictionary`'s to-do — the two features are unrelated codecs with unrelated root causes for the same symptom.
 
-### Quorum Layer 2 — BFT multi-agent consensus wired into the live pipeline (2026-10-01, `src/server/quorum.rs` + `src/server/quorum_wire.rs` + `src/adn_store.rs`)
+### Quorum Layer 2 — signed 2/3 multi-agent vote wired into the live pipeline (single server, not distributed BFT consensus) (2026-10-01, `src/server/quorum.rs` + `src/server/quorum_wire.rs` + `src/adn_store.rs`)
 
 `quorum.rs` existed since a previous session with 6 passing unit tests (`QuorumMember`, `VoteMessage`, `QuorumState`, Ed25519 vote-signature verification, BFT threshold, circuit breaker) — found by the same `pub mod X` / zero-external-reference grep that found CASTLE and the other dead modules this session. `pub mod quorum;` only, no caller, no network path, no persistence.
 
@@ -577,7 +578,6 @@ Wired in as three new purposes (`quorum_propose`, `quorum_vote`, `quorum_circuit
 ### For Rust Server (Features B-1, A, B-2):
 
 ```bash
-cd /home/claude/Cstl
 cargo build
 cargo test --lib          # All tests pass (including new signing tests)
 cargo run &               # Start server on port 5050
@@ -587,7 +587,7 @@ sleep 2
 ### For Python Agent (Feature C):
 
 ```bash
-cd /home/claude/Cstl/sdk/python
+cd sdk/python
 
 # Verify cross-language signing bytes match
 python3 test_python_signing_verification.py
@@ -598,12 +598,13 @@ python3 << 'EOF'
 from cstl_llm_agent import CstlAgent
 
 # Create agent with Anthropic (requires ANTHROPIC_API_KEY set)
-agent = CstlAgent("my_agent", provider="anthropic")
+agent = CstlAgent("my_agent", "anthropic")
 agent.register()     # → [my_agent] ✅ Registered with signature validation
 
-# Send a signed message
-result = agent.send_message("alice", "Hello, world")
-print("Result:", result)
+# Send a signed, verifiable relation and read what the server says about it
+from cstl_llm_agent import describe
+resp = agent.send_relations("alice", [{"type": "STATE", "subject": "order_42", "object": "shipped"}])
+print(describe(resp), resp.issues)
 EOF
 ```
 
@@ -611,10 +612,9 @@ EOF
 
 ```bash
 # Terminal 1: Start Rust server
-cd /home/claude/Cstl && cargo run
+cargo run --bin cstl_parser
 
 # Terminal 2: Run Python tests
-cd /home/claude/Cstl
 python3 test_python_signing_verification.py  # Verify canonical signing_bytes match
 python3 sdk/python/cstl_llm_agent.py --name alice_agent --provider gemini  # Register and relay
 ```
@@ -694,6 +694,10 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 | `GOOGLE_API_KEY` | Gemini model access | `AIza...` |
 | `CSTL_COUNCIL_MEMBERS` | Authorized council voters | `alice,bob,charlie` |
 | `CSTL_COLLECT_RESPONSE_CORPUS` | Opt-in: persist plain-text server responses to `response_corpus` for future dictionary retraining (off by default) | `1` or `true` |
+| `CSTL_BIND_HOST` | TCP listen address. **Default `127.0.0.1` since 2026-11-20** (was `0.0.0.0`): exposing the server is now explicit. Combine `0.0.0.0` with `CSTL_REQUIRE_SIGNATURES` and TLS. | `0.0.0.0` |
+| `CSTL_PORT` / `CSTL_REST_PORT` | TCP server port (default `5050`) / REST API port (default `8000`, always bound to `127.0.0.1`) | `5151` / `8181` |
+| `CSTL_ACCEPT_BROKEN_CHAIN` | At startup the server re-verifies the whole persisted audit history: chain links, each message's hash recomputed from its stored content, and derived relations. **If anything was altered, startup is refused** (since 2026-11-20; before, a tampered database was reloaded silently). Set to `1` to start anyway, knowingly — the alert stays in the log. | `1` |
+| `CSTL_REQUIRE_SIGNATURES` | Strict mode: every sender must be registered with an Ed25519 key and sign every message (`signature_required_strict_mode`, `sender_not_registered_strict_mode`). Off by default so the unsigned quick start in `AGENTS.md` keeps working; **turn it on as soon as the server is reachable from a network.** | `true` |
 
 ### Database
 
@@ -756,7 +760,7 @@ Apache 2.0 — Olivier Goyette
 - `src/signing.rs` (127 lines) — Ed25519 verification (Features A/B-2)
 - `src/server/graphify_server.rs` (~300 lines) — REST API + graph export (Couche 6)
 - `src/server/deontic_orchestration.rs` (~700 lines) — Event-driven orchestrator (Couche 9); wired live 2026-10-01, see Couche 9 section
-- `src/server/deontic_state_machine.rs` (~543 lines) — decision lifecycle, superseded/not wired, see Couche 9 section
+- ~~`src/server/deontic_state_machine.rs`~~ — superseded, never wired; **deleted 2026-11-20**
 
 **Modified Rust Files:**
 - `src/agent_discovery.rs` — `AgentCard::public_key` field added (Features B-1)
@@ -811,7 +815,7 @@ Apache 2.0 — Olivier Goyette
 - ✅ Event-driven orchestrator wired live (`src/server/deontic_orchestration.rs`, ~700 lines) — was dead code before this date, see Couche 9 section above for the honest writeup
 - ✅ `GET /deontic/executions` (REST), emits on 3 real events: `agent_register`, `arbitration_ruling` (`arbitrage.rs`), `governance_breach` (Couche 2) — verified live via `examples/deontic_smoke_test.rs`
 - ⚠️ Observational only: `emit_event` runs *after* the underlying action; MUST/MUST_NOT handlers only `eprintln!`, nothing is actually blocked or enforced
-- ❌ `src/server/deontic_state_machine.rs` (~543 lines): real, unit-tested, but deliberately NOT wired — duplicates `arbitrage.rs` already in production (in-memory only, no signatures, no hash chain). No 6-state/"appeals"/"Stale" lifecycle live anywhere; its actual 7 states don't match what was previously claimed here
+- ❌ `src/server/deontic_state_machine.rs` (~543 lines, **deleted 2026-11-20**): real, unit-tested, but deliberately NOT wired — duplicates `arbitrage.rs` already in production (in-memory only, no signatures, no hash chain). No 6-state/"appeals"/"Stale" lifecycle live anywhere; its actual 7 states don't match what was previously claimed here
 - ❌ No immutable hash-chained audit trail and no replay-safe idempotency exist in this layer — both previously claimed, both fabricated, neither was ever in the code
 - ⚠️ Python orchestrator (`sdk/python/cstl_deontic_engine.py`, `sdk/python/test_deontic_engine.py`): exist, not re-verified this pass
 - `tests/deontic_orchestration_integration_test.rs`: 15 real e2e tests, passing
@@ -904,3 +908,23 @@ Demande explicite d'Olivier : comparer contre ce que les développeurs utilisent
 - Le texte naturel n'est PAS comparable sur le decodage — c'est l'argument central de CSTL, pas un angle mort de ce test : il n'y a rien à parser de façon déterministe dans une prose libre. Un système qui s'appuie sur du texte naturel entre agents n'a aucune garantie de récupérer les 20 relations structurées sans repasser par un LLM (coût, latence et taux d'erreur non nuls, non mesurés ici).
 
 Sources : [Benchmark RFC MCP stdio vs SSE latency (open-agent-protocol-hub)](https://github.com/jibranpcccc/open-agent-protocol-hub/issues/4) · [ProtocolBench: Which LLM MultiAgent Protocol to Choose? (arXiv:2510.17149)](https://arxiv.org/pdf/2510.17149) · [ed25519-dalek issue #87 — vérification performance](https://github.com/dalek-cryptography/ed25519-dalek/issues/87)
+
+### CSTL vs JSON Schema + Ed25519 — qui attrape quoi (2026-11-17)
+
+La comparaison de taille ci-dessus montre que l'avantage de CSTL n'est pas sur le fil. Cette comparaison-ci mesure là où il devrait être : **la détection d'erreurs**. Contre une alternative forte, pas un JSON libre : JSON Schema strict (champs requis, aucun champ inconnu, opérateurs et modalités en enum), signature Ed25519 sur le JSON canonique, registre de clés — ce que donnent JSON Schema + JWS + un annuaire. Script reproductible, contre le **vrai serveur compilé** en TCP : `scripts/benchmark_cstl_vs_jsonschema.py` (vérité terrain fixée avant exécution, résultats bruts dans `scripts/benchmark_cstl_vs_jsonschema_results.json`, exécuté en CI).
+
+| Catégorie | Cas | CSTL | JSON Schema + Ed25519 |
+|---|---|---|---|
+| Structure | opérateur inconnu, relation sans objet | 2/2 (rejet) | 2/2 (rejet) |
+| Logique dans un message | MUST + MUST_NOT sur la même action ; deux lieux de naissance ; cycle temporel A<B<C<A ; entité définie jamais référencée | 4/4 (1 rejet, 3 signalements) | 0/4 |
+| Logique entre messages | fait contredisant l'historique ; MUST contredisant un MUST_NOT passé ; cycle temporel réparti sur 2 messages | 3/3 (signalements) | 0/3 |
+| Identité | usurpation ; message modifié après signature ; message non signé d'un agent à clé | 3/3 (rejet) | 3/3 (rejet) |
+| **Total erreurs** | 12 | **12/12** | **5/12** |
+| Faux positifs | 5 messages valides | 0/5 | 0/5 |
+
+Lecture honnête :
+- **Structure et identité : égalité.** JSON Schema + signature fait aussi bien que CSTL. Ce n'est pas là que CSTL apporte quelque chose.
+- **Logique : c'est tout l'écart (7/7 contre 0/7).** JSON Schema valide la *forme*, jamais la *cohérence* : il ne peut pas voir qu'une obligation contredit une interdiction, ni comparer un message à l'historique. Obtenir ça en JSON demande d'écrire et de maintenir un moteur de règles maison.
+- **6 des 12 détections CSTL sont des signalements, pas des rejets** (bloc `CONSISTENCY`/`DEONTIC_AUDIT`/`SEMANTIC_WARNING` dans la réponse, payload accepté). Choix de conception : seules les contradictions déontiques intra-message sont bloquantes par défaut (`strict_deontic_history=true` rend aussi bloquantes celles de l'historique). Un agent qui ignore la réponse ignore le signal.
+- **Ce banc d'essai a trouvé un vrai bug CSTL** : avant le 2026-11-17, une relation sans `object` était acceptée en silence et exclue de toutes les vérifications — JSON Schema la rejetait. Corrigé (E317).
+- Ne mesure pas : la qualité d'encodage par un LLM (payloads écrits à la main), la performance, ni les alternatives « web sémantique » (OWL/SHACL/ODRL), qui couvrent une partie de la logique au prix d'une pile beaucoup plus lourde.

@@ -221,6 +221,19 @@ impl HashChain {
     /// de desynchronisation entre `entries.len()` et le plus haut `seq`
     /// utilise.
     pub fn append(&mut self, payload: &CstlPayload) -> AuditEntry {
+        self.append_with_replay_flag(payload).0
+    }
+
+    /// Comme `append`, mais indique aussi si le payload etait un REPLAY
+    /// (hash deja present -> entree existante renvoyee, rien d'ajoute).
+    ///
+    /// FIX 2026-11-17 : sans ce signal, handler.rs ne pouvait pas distinguer
+    /// un replay d'un nouveau payload et recalculait l'ADN_DELTA de l'entree
+    /// EXISTANTE contre SON parent d'origine -- un renvoi identique etait
+    /// annonce au client comme un changement (`severity=Moderate`) alors
+    /// qu'aucun contenu nouveau n'avait ete recu (trouve via
+    /// examples/adn_delta_smoke_test.rs, scenario 3).
+    pub fn append_with_replay_flag(&mut self, payload: &CstlPayload) -> (AuditEntry, bool) {
         let hash = canonical_hash(payload);
 
         // FIX 2026-10-28 (session Olivier, audit live multi-angle, db SQLite
@@ -251,7 +264,7 @@ impl HashChain {
                 &existing.hash[..23.min(existing.hash.len())],
                 existing.seq
             );
-            return existing.clone();
+            return (existing.clone(), true);
         }
 
         let parent_hash = self
@@ -279,7 +292,7 @@ impl HashChain {
         );
 
         self.entries.push(entry.clone());
-        entry
+        (entry, false)
     }
 
     pub fn len(&self) -> usize {
@@ -412,8 +425,10 @@ mod tests {
     #[test]
     fn test_append_is_idempotent_on_immediate_replay() {
         let mut chain = HashChain::new();
-        let first = chain.append(&mk("alice", "query"));
-        let replay = chain.append(&mk("alice", "query")); // contenu identique
+        let (first, first_replay) = chain.append_with_replay_flag(&mk("alice", "query"));
+        let (replay, is_replay) = chain.append_with_replay_flag(&mk("alice", "query")); // contenu identique
+        assert!(!first_replay, "premier envoi: pas un replay");
+        assert!(is_replay, "renvoi identique: doit etre signale comme replay");
 
         assert_eq!(replay.seq, first.seq, "un replay ne doit jamais consommer un nouveau seq");
         assert_eq!(replay.parent_hash, first.parent_hash, "un replay doit renvoyer l'entree existante telle quelle");

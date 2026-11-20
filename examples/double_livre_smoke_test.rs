@@ -1,8 +1,8 @@
-/// examples/double_livre_smoke_test.rs -- verification live du Double Livre v5.2
-///
-/// Valide l'architecture de séparation Layer 1 (payload immuable signée) vs
-/// Layer 2 (métadonnées d'évaluation serveur) pour la standardisation sigma
-/// inter-LLM sans modifier les payloads en vol.
+//! examples/double_livre_smoke_test.rs -- verification live du Double Livre v5.2
+//!
+//! Valide l'architecture de séparation Layer 1 (payload immuable signée) vs
+//! Layer 2 (métadonnées d'évaluation serveur) pour la standardisation sigma
+//! inter-LLM sans modifier les payloads en vol.
 
 use cstl_parser::calibration::{EwmaCalibration, SigmaCalibrator};
 use cstl_parser::server::evaluated_payload::{EvaluatedPayload, GovernanceSnapshot};
@@ -68,12 +68,23 @@ fn main() {
     // Test 4: Sigma calibrator trusted agent
     println!("Test 4: Sigma calibrator blending (trusted agent)...");
     {
+        // Depuis le fix 2026-09-15 (ewma.rs::compute_effective_sigma), le sigma
+        // est attenue vers 0.5 de confidence_margin() = 1/sqrt(n) : 10
+        // echantillons ne suffisent volontairement PAS a faire confiance
+        // (~0.75). Il en faut ~100 pour depasser 0.85.
         let mut calibrator = SigmaCalibrator::new(0.2);
         for _ in 0..10 {
             calibrator.observe_verdict("trusted_agent", true);
         }
+        let sigma_10 = calibrator.compute_effective_sigma("trusted_agent", 0.9);
+        for _ in 10..100 {
+            calibrator.observe_verdict("trusted_agent", true);
+        }
         let sigma = calibrator.compute_effective_sigma("trusted_agent", 0.9);
-        if sigma > 0.85 {
+        if !(0.5..0.85).contains(&sigma_10) {
+            println!("❌ FAILED: 10 samples should stay attenuated in [0.5, 0.85), got {}", sigma_10);
+            failed += 1;
+        } else if sigma > 0.85 {
             println!("✅ PASSED: High accuracy agent's high sigma trusted = {}", sigma);
             passed += 1;
         } else {
@@ -86,8 +97,9 @@ fn main() {
     // Test 5: Sigma calibrator distrusted agent
     println!("Test 5: Sigma calibrator blending (distrusted agent)...");
     {
+        // Meme attenuation que le test 4 : ~100 echantillons requis.
         let mut calibrator = SigmaCalibrator::new(0.2);
-        for _ in 0..10 {
+        for _ in 0..100 {
             calibrator.observe_verdict("bad_agent", false);
         }
         let sigma = calibrator.compute_effective_sigma("bad_agent", 0.9);
@@ -218,7 +230,7 @@ fn main() {
         let sigma_high = calibrator.compute_effective_sigma("test", 1.0);
         let sigma_low = calibrator.compute_effective_sigma("test", 0.0);
 
-        if sigma_high >= 0.0 && sigma_high <= 1.0 && sigma_low >= 0.0 && sigma_low <= 1.0 {
+        if (0.0..=1.0).contains(&sigma_high) && (0.0..=1.0).contains(&sigma_low) {
             println!("✅ PASSED: All sigma values bounded in [0.0, 1.0]");
             passed += 1;
         } else {

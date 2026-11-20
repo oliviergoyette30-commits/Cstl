@@ -70,7 +70,12 @@ impl GraphifyExporter {
     fn get_node_type_color(node_type: &str) -> String {
         match node_type {
             "agent" => "#4A90E2".to_string(),
+            "entity" => "#20B2AA".to_string(),
+            "key" => "#DAA520".to_string(),
             "relation" => "#7B68EE".to_string(),
+            "chains_to" => "#708090".to_string(),
+            "holds_key" => "#DAA520".to_string(),
+            "signed_by" => "#B8860B".to_string(),
             "decision" => "#50C878".to_string(),
             "commitment" => "#FF6B6B".to_string(),
             "audit_entry" => "#FFB347".to_string(),
@@ -88,6 +93,8 @@ impl GraphifyExporter {
             "confirms" => "#FFB347".to_string(),
             "violates" => "#DC143C".to_string(),
             "implements" => "#32CD32".to_string(),
+            "asserts" => "#BBBBBB".to_string(),
+            "relation" => "#7B68EE".to_string(),
             _ => "#999999".to_string(),
         }
     }
@@ -117,6 +124,218 @@ impl GraphifyExporter {
         &s[..end]
     }
 
+    /// Graphe complet + PROVENANCE CRYPTOGRAPHIQUE (2026-11-20) : en plus de
+    /// `build_with_content`, rend visibles les garanties Ed25519 et SHA-256
+    /// qui etaient absentes du graphe :
+    /// - par message (`audit_entry`) : `signature` = valid|invalid|absent
+    ///   (REVERIFIEE a l'export, voir `AdnStore::crypto_provenance`),
+    ///   `key_fp` (16 premiers hex de la cle), `chain_ok` (son parent_hash est
+    ///   bien le hash du message precedent, ou "root" pour le premier) ;
+    /// - arc `chains_to` de chaque message vers son predecesseur : la chaine
+    ///   de hachage elle-meme ;
+    /// - noeuds `key:<fp>`, arc `holds_key` agent -> cle enregistree, arc
+    ///   `signed_by` message -> cle qui l'a signe (signature valide). Une
+    ///   usurpation apparait comme `key_matches_sender=false` : message signe
+    ///   par une cle qui n'est pas celle enregistree pour son expediteur.
+    pub fn build_with_crypto(
+        &self,
+        rows: &[crate::adn_store::GraphRelationRow],
+        provenance: &HashMap<String, (String, Option<String>)>,
+        agent_keys: &HashMap<String, String>,
+    ) -> GraphifyPayload {
+        let mut payload = self.build_with_content(rows);
+        let fp = |k: &str| k.chars().take(16).collect::<String>();
+        let mut key_ids = std::collections::HashSet::new();
+        let mut add_key = |payload: &mut GraphifyPayload, key: &str| -> String {
+            let id = format!("key:{}", fp(key));
+            if key_ids.insert(id.clone()) {
+                let mut extra = HashMap::new();
+                extra.insert("algorithm".to_string(), "Ed25519".to_string());
+                extra.insert("public_key".to_string(), key.to_string());
+                payload.nodes.push(GraphifyNode {
+                    id: id.clone(),
+                    label: format!("Ed25519 {}", fp(key)),
+                    node_type: "key".to_string(),
+                    color: Self::get_node_type_color("key"),
+                    size: 1.0,
+                    metadata: GraphifyNodeMetadata {
+                        created_at: "unknown".to_string(),
+                        class: "key".to_string(),
+                        extra,
+                    },
+                });
+            }
+            id
+        };
+
+        for (agent, key) in agent_keys {
+            let key_id = add_key(&mut payload, key);
+            if let Some(node) = payload.nodes.iter_mut().find(|n| &n.id == agent && n.node_type == "agent") {
+                node.metadata.extra.insert("key_fp".to_string(), fp(key));
+            }
+            payload.edges.push(GraphifyEdge {
+                source: agent.clone(),
+                target: key_id,
+                edge_type: "holds_key".to_string(),
+                weight: 1.0,
+                color: Self::get_edge_type_color("holds_key"),
+                metadata: HashMap::new(),
+            });
+        }
+
+        let entries = &self.chain.entries;
+        for (idx, entry) in entries.iter().enumerate() {
+            let audit_id = format!("audit_{}", idx);
+            let expected_parent = if idx == 0 { "root".to_string() } else { entries[idx - 1].hash.clone() };
+            let chain_ok = entry.parent_hash == expected_parent;
+            let (status, key) = provenance.get(&entry.hash).cloned().unwrap_or_else(|| ("unknown".to_string(), None));
+            let mut signed_by = None;
+            if let Some(node) = payload.nodes.iter_mut().find(|n| n.id == audit_id) {
+                node.metadata.extra.insert("signature".to_string(), status.clone());
+                node.metadata.extra.insert("chain_ok".to_string(), chain_ok.to_string());
+                if let Some(k) = &key {
+                    node.metadata.extra.insert("key_fp".to_string(), fp(k));
+                    if let Some(registered) = agent_keys.get(&entry.sender) {
+                        node.metadata.extra.insert("key_matches_sender".to_string(), (registered == k).to_string());
+                    }
+                    if status == "valid" { signed_by = Some(k.clone()); }
+                }
+            }
+            if let Some(k) = signed_by {
+                let key_id = add_key(&mut payload, &k);
+                payload.edges.push(GraphifyEdge {
+                    source: audit_id.clone(),
+                    target: key_id,
+                    edge_type: "signed_by".to_string(),
+                    weight: 1.0,
+                    color: Self::get_edge_type_color("signed_by"),
+                    metadata: HashMap::new(),
+                });
+            }
+            if idx > 0 {
+                let mut meta = HashMap::new();
+                meta.insert("parent_hash".to_string(), entry.parent_hash.clone());
+                meta.insert("chain_ok".to_string(), chain_ok.to_string());
+                payload.edges.push(GraphifyEdge {
+                    source: audit_id,
+                    target: format!("audit_{}", idx - 1),
+                    edge_type: "chains_to".to_string(),
+                    weight: 1.0,
+                    color: if chain_ok { Self::get_edge_type_color("chains_to") } else { Self::get_edge_type_color("violates") },
+                    metadata: meta,
+                });
+            }
+        }
+        payload.metadata.node_count = payload.nodes.len();
+        payload.metadata.edge_count = payload.edges.len();
+        payload
+    }
+
+    /// Graphe COMPLET (2026-11-17) : la chaine d'audit (qui parle a qui) PLUS
+    /// le contenu des messages -- entites (`entity:<nom>`), relations entre
+    /// elles (arc `relation`, predicat/modalite en metadonnees), arc `asserts`
+    /// du message vers le sujet de chaque relation qu'il affirme, et les
+    /// contradictions marquees (`conflict=fact|deontic`, couleur `violates`).
+    /// Les contradictions viennent des MEMES detecteurs que le pipeline live
+    /// (`execution_lab::check_consistency_with_history` /
+    /// `check_deontic_consistency_with_history`, appeles sur l'ensemble des
+    /// relations) -- aucune logique dupliquee ici.
+    pub fn build_with_content(&self, rows: &[crate::adn_store::GraphRelationRow]) -> GraphifyPayload {
+        let mut payload = self.build_from_audit_trail();
+
+        let audit_id_by_hash: HashMap<&str, String> = self.chain.entries.iter().enumerate()
+            .map(|(i, e)| (e.hash.as_str(), format!("audit_{}", i)))
+            .collect();
+        let mut created_by_hash: HashMap<&str, i64> = HashMap::new();
+        for (hash, _, _, _, _, created) in rows {
+            if let Some(t) = created { created_by_hash.insert(hash.as_str(), *t); }
+        }
+        for node in payload.nodes.iter_mut() {
+            if let Some(hash) = node.metadata.extra.get("full_hash") {
+                if let Some(t) = created_by_hash.get(hash.as_str()) {
+                    if let Some(dt) = chrono::DateTime::from_timestamp(*t, 0) {
+                        node.metadata.created_at = dt.to_rfc3339();
+                    }
+                }
+            }
+        }
+
+        // Memes detecteurs que le pipeline live.
+        let rels: Vec<HashMap<String, String>> = rows.iter().map(|(_, s, p, o, m, _)| {
+            let mut r = HashMap::new();
+            r.insert("subject".to_string(), s.clone());
+            r.insert("type".to_string(), p.clone());
+            r.insert("object".to_string(), o.clone());
+            if let Some(m) = m { r.insert("modality".to_string(), m.clone()); }
+            r
+        }).collect();
+        let facts = crate::execution_lab::check_consistency_with_history(&rels, &[]);
+        let fact_conflicts: std::collections::HashSet<(String, String)> = facts.contradictions.iter()
+            .map(|c| (c.subject.clone(), c.predicate.clone())).collect();
+        let deontic = crate::execution_lab::check_deontic_consistency_with_history(&rels, &[]);
+        let deontic_conflicts: std::collections::HashSet<(String, String)> = deontic.violations.iter()
+            .map(|v| (v.subject.clone(), v.object.clone())).collect();
+
+        let mut entity_ids = std::collections::HashSet::new();
+        for (hash, subject, predicate, object, modality, _) in rows {
+            for name in [subject, object] {
+                let id = format!("entity:{}", name);
+                if entity_ids.insert(id.clone()) {
+                    payload.nodes.push(GraphifyNode {
+                        id: id.clone(),
+                        label: name.clone(),
+                        node_type: "entity".to_string(),
+                        color: Self::get_node_type_color("entity"),
+                        size: 1.2,
+                        metadata: GraphifyNodeMetadata {
+                            created_at: "unknown".to_string(),
+                            class: "entity".to_string(),
+                            extra: HashMap::new(),
+                        },
+                    });
+                }
+            }
+            let conflict = if fact_conflicts.contains(&(subject.clone(), predicate.clone())) {
+                Some("fact")
+            } else if modality.is_some() && deontic_conflicts.contains(&(subject.clone(), object.clone())) {
+                Some("deontic")
+            } else {
+                None
+            };
+            let mut meta = HashMap::new();
+            meta.insert("predicate".to_string(), predicate.clone());
+            meta.insert("hash".to_string(), hash.clone());
+            if let Some(m) = modality { meta.insert("modality".to_string(), m.clone()); }
+            if let Some(c) = conflict { meta.insert("conflict".to_string(), c.to_string()); }
+            let color = match (conflict, modality) {
+                (Some(_), _) => Self::get_edge_type_color("violates"),
+                (None, Some(m)) => Self::get_deontic_color(m),
+                (None, None) => Self::get_edge_type_color("relation"),
+            };
+            payload.edges.push(GraphifyEdge {
+                source: format!("entity:{}", subject),
+                target: format!("entity:{}", object),
+                edge_type: "relation".to_string(),
+                weight: 1.0,
+                color,
+                metadata: meta,
+            });
+            if let Some(audit_id) = audit_id_by_hash.get(hash.as_str()) {
+                payload.edges.push(GraphifyEdge {
+                    source: audit_id.clone(),
+                    target: format!("entity:{}", subject),
+                    edge_type: "asserts".to_string(),
+                    weight: 0.5,
+                    color: Self::get_edge_type_color("asserts"),
+                    metadata: HashMap::new(),
+                });
+            }
+        }
+        payload.metadata.node_count = payload.nodes.len();
+        payload.metadata.edge_count = payload.edges.len();
+        payload
+    }
+
     pub fn build_from_audit_trail(&self) -> GraphifyPayload {
         let mut nodes: HashMap<String, GraphifyNode> = HashMap::new();
         let mut edges: Vec<GraphifyEdge> = Vec::new();
@@ -137,7 +356,7 @@ impl GraphifyExporter {
             metadata.insert("receiver".to_string(), entry.receiver.clone());
             metadata.insert("purpose".to_string(), entry.purpose.clone());
             metadata.insert("hash".to_string(), format!("{}...", &entry.hash[..12.min(entry.hash.len())]));
-            metadata.insert("timestamp".to_string(), Utc::now().to_rfc3339());
+            metadata.insert("full_hash".to_string(), entry.hash.clone());
 
             let node = GraphifyNode {
                 id: entry_id.clone(),
@@ -146,7 +365,10 @@ impl GraphifyExporter {
                 color: Self::get_node_type_color("audit_entry"),
                 size: 1.0,
                 metadata: GraphifyNodeMetadata {
-                    created_at: Utc::now().to_rfc3339(),
+                    // Date reelle du message renseignee par `build_with_content`
+                    // (adn_store.created_at) ; avant le 2026-11-17 : l'heure de
+                    // l'EXPORT, presentee comme celle du message.
+                    created_at: "unknown".to_string(),
                     class: "audit_entry".to_string(),
                     extra: metadata.clone(),
                 },
@@ -427,5 +649,77 @@ mod tests {
         let exporter = GraphifyExporter::new(chain);
         let payload = exporter.build_from_audit_trail(); // ne doit PAS paniquer (c'est le but du test)
         assert_eq!(payload.nodes.len(), 3); // 1 audit_entry + sender + receiver
+    }
+    #[test]
+    fn test_build_with_content_shows_entities_relations_conflicts_and_real_dates() {
+        let mut chain = audit::HashChain::new();
+        let p = crate::server::parser::parse_payload(
+            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=t, produced_by=t]\nINTENT_PAYLOAD [purpose=inform, sender=alice, receiver=bob]\n---END---\n",
+        ).unwrap();
+        let entry = chain.append(&p);
+        let exporter = GraphifyExporter::new(chain);
+        let h = entry.hash.clone();
+        let rows = vec![
+            (h.clone(), "agent_z".into(), "born_in".into(), "Paris".into(), None, Some(1_794_976_491)),
+            (h.clone(), "agent_z".into(), "born_in".into(), "Berlin".into(), None, Some(1_794_976_491)),
+            (h.clone(), "bot".into(), "PERFORM".into(), "wipe_db".into(), Some("MUST_NOT".into()), Some(1_794_976_491)),
+            (h.clone(), "bot".into(), "PERFORM".into(), "wipe_db".into(), Some("MUST".into()), Some(1_794_976_491)),
+            (h.clone(), "order_7".into(), "STATE".into(), "shipped".into(), None, Some(1_794_976_491)),
+        ];
+        let g = exporter.build_with_content(&rows);
+
+        let entities = g.nodes.iter().filter(|n| n.node_type == "entity").count();
+        assert_eq!(entities, 7, "agent_z, Paris, Berlin, bot, wipe_db, order_7, shipped");
+        let rel: Vec<_> = g.edges.iter().filter(|e| e.edge_type == "relation").collect();
+        assert_eq!(rel.len(), 5);
+        let conflict = |c: &str| rel.iter().filter(|e| e.metadata.get("conflict").map(String::as_str) == Some(c)).count();
+        assert_eq!(conflict("fact"), 2, "Paris vs Berlin");
+        assert_eq!(conflict("deontic"), 2, "MUST vs MUST_NOT");
+        assert!(rel.iter().any(|e| !e.metadata.contains_key("conflict")), "order_7 STATE shipped sans conflit");
+        assert_eq!(g.edges.iter().filter(|e| e.edge_type == "asserts").count(), 5);
+
+        let audit = g.nodes.iter().find(|n| n.node_type == "audit_entry").unwrap();
+        assert_eq!(audit.metadata.created_at, "2026-11-18T04:34:51+00:00", "date du message, pas de l'export");
+        assert_eq!(g.metadata.node_count, g.nodes.len());
+        assert_eq!(g.metadata.edge_count, g.edges.len());
+    }
+    #[test]
+    fn test_build_with_crypto_exposes_signatures_keys_chain_and_tampering() {
+        let mk = |sender: &str, parent: &str, hash: &str, seq: u64| audit::AuditEntry {
+            hash: hash.to_string(), parent_hash: parent.to_string(), sender: sender.to_string(),
+            receiver: "bob".to_string(), purpose: "inform".to_string(), seq,
+        };
+        let mut chain = audit::HashChain::new();
+        chain.entries.push(mk("signer", "root", "sha256:a", 0));
+        chain.entries.push(mk("alice", "sha256:a", "sha256:b", 1));
+        chain.entries.push(mk("signer", "sha256:TAMPERED", "sha256:c", 2)); // chaine rompue
+        chain.entries.push(mk("signer", "sha256:c", "sha256:d", 3));
+        let key = "ab".repeat(32);
+        let other = "cd".repeat(32);
+        let mut prov = HashMap::new();
+        prov.insert("sha256:a".to_string(), ("valid".to_string(), Some(key.clone())));
+        prov.insert("sha256:b".to_string(), ("absent".to_string(), None));
+        prov.insert("sha256:c".to_string(), ("invalid".to_string(), Some(key.clone())));
+        prov.insert("sha256:d".to_string(), ("valid".to_string(), Some(other.clone()))); // cle d'un autre
+        let mut agents = HashMap::new();
+        agents.insert("signer".to_string(), key.clone());
+
+        let g = GraphifyExporter::new(chain).build_with_crypto(&[], &prov, &agents);
+        let node = |id: &str| g.nodes.iter().find(|n| n.id == id).unwrap().metadata.extra.clone();
+        assert_eq!(node("audit_0")["signature"], "valid");
+        assert_eq!(node("audit_0")["key_matches_sender"], "true");
+        assert_eq!(node("audit_1")["signature"], "absent");
+        assert_eq!(node("audit_2")["signature"], "invalid");
+        assert_eq!(node("audit_2")["chain_ok"], "false", "parent_hash altere");
+        assert_eq!(node("audit_3")["key_matches_sender"], "false", "usurpation visible");
+
+        let count = |t: &str| g.edges.iter().filter(|e| e.edge_type == t).count();
+        assert_eq!(count("chains_to"), 3);
+        assert_eq!(count("holds_key"), 1);
+        assert_eq!(count("signed_by"), 2, "seulement les signatures VALIDES");
+        assert_eq!(g.nodes.iter().filter(|n| n.node_type == "key").count(), 2);
+        let broken = g.edges.iter().find(|e| e.edge_type == "chains_to" && e.source == "audit_2").unwrap();
+        assert_eq!(broken.metadata["chain_ok"], "false");
+        assert_eq!(g.metadata.edge_count, g.edges.len());
     }
 }

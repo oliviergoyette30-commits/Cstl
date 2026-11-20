@@ -7,8 +7,8 @@
 /// et le texte naturel et protobuf vue que c'est le choix des developpeurs
 /// contre cstl".
 ///
-/// Contenu semantique IDENTIQUE encode dans les 4 formats (meme 20 concepts
-/// + 20 relations que le point 3 de examples/benchmark_audit.rs, pour
+/// Contenu semantique IDENTIQUE encode dans les 4 formats (meme 20 concepts +
+/// 20 relations que le point 3 de examples/benchmark_audit.rs, pour
 /// rester coherent avec la grille deja publiee) -- rien n'est truque en
 /// faveur d'un format: le texte naturel decrit exactement les memes faits,
 /// le JSON et le Protobuf portent exactement les memes champs que le

@@ -14,13 +14,13 @@
 ///
 /// Flux complet:
 ///   1. Quelqu'un avec le repo lance UNE FOIS:
-///        cargo run --bin cstl_parser &
-///        cargo run --example http_bridge_for_ai &
+///      `cargo run --bin cstl_parser &`
+///      `cargo run --example http_bridge_for_ai &`
 ///   2. L'IA sans shell compose elle-meme le texte du payload CSTL (a partir
 ///      de CSTL_SPEC_v5_0.md ou des exemples de AGENTS.md) et le donne a
 ///      l'humain, par exemple:
-///        "Colle ca dans un fichier payload.cstl, puis lance:
-///         curl -s --data-binary @payload.cstl http://localhost:8089/try"
+///      "Colle ca dans un fichier payload.cstl, puis lance:
+///      `curl -s --data-binary @payload.cstl http://localhost:8089/try`"
 ///   3. L'humain colle la vraie reponse du serveur dans le chat de l'IA.
 ///   4. L'IA peut iterer -- composer un autre payload, demander un autre
 ///      curl -- sans jamais executer une seule commande elle-meme.

@@ -33,8 +33,7 @@ fn main() {
     // Reconstruit le texte brut equivalent (ce que le payload "lirait" en
     // clair) juste pour l'affichage comparatif -- la vraie source de
     // verite du contenu reste defines/relations/uncertainty ci-dessus.
-    let plain = format!(
-        "#!CSTL v5.0.0 MODE=A\n\
+    let plain = "#!CSTL v5.0.0 MODE=A\n\
          META [encoder=compression_demo, produced_by=compression_demo]\n\
          INTENT_PAYLOAD [purpose=inform, sender=alice, receiver=server]\n\
          DEFINE montreal AS City [population=1780000]\n\
@@ -44,8 +43,7 @@ fn main() {
          UNCERTAINTY [\n\
          \u{20}u001 MEASURED [target_relation=r001, sigma=0.0]\n\
          ]\n\
-         ---END---\n"
-    );
+         ---END---\n".to_string();
 
     let compressed_bytes = master_compress(&defines, &relations, &uncertainty).expect("compression");
     let b64 = base64::engine::general_purpose::STANDARD.encode(&compressed_bytes);
@@ -75,5 +73,5 @@ fn main() {
     assert_eq!(d2, defines);
     assert_eq!(r2, relations);
     assert_eq!(u2, uncertainty);
-    println!("\nRound-trip verifie: decompresser {} redonne EXACTEMENT defines/relations/uncertainty d'origine.", "ce bloc");
+    println!("\nRound-trip verifie: decompresser ce bloc redonne EXACTEMENT defines/relations/uncertainty d'origine.");
 }

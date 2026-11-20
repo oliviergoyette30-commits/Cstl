@@ -148,6 +148,26 @@ pub struct DbPeerReviewSignature {
     pub reviewed_at: i64,
 }
 
+/// Ligne brute de `load_agents` : (name, version, capabilities, trust_score, public_key).
+pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
+/// Ligne de `graph_relations` : (hash, subject, predicate, object, modality, created_at).
+pub type GraphRelationRow = (String, String, String, String, Option<String>, Option<i64>);
+/// Ligne brute de `get_conversation_context` : (hash, payload, encoder, produced_by, turn).
+pub type ConversationTurnRow = (String, String, Option<String>, Option<String>, i64);
+
+/// Resultat de `AdnStore::verify_integrity`.
+#[derive(Debug, Default, Clone)]
+pub struct IntegrityReport {
+    pub entries: usize,
+    pub content_verified: usize,
+    pub content_unverifiable: usize,
+    pub problems: Vec<String>,
+}
+
+fn short(hash: &str) -> String {
+    hash.chars().take(19).collect()
+}
+
 pub struct AdnStore {
     conn: Connection,
 }
@@ -1455,6 +1475,54 @@ impl AdnStore {
         Ok(())
     }
 
+    /// Provenance cryptographique de chaque message persiste (2026-11-20), pour
+    /// l'export Graphify : la signature est REVERIFIEE maintenant
+    /// (`signing::check_signature`, la meme fonction que le serveur a la
+    /// reception), pas seulement constatee presente. Cle : hash du message.
+    /// Valeur : (statut "valid" | "invalid" | "absent" | "unparsable",
+    /// cle publique embarquee si presente).
+    pub fn crypto_provenance(&self) -> Result<HashMap<String, (String, Option<String>)>, rusqlite::Error> {
+        let hashes: Vec<String> = {
+            let mut stmt = self.conn.prepare("SELECT hash FROM adn_store")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        let mut out = HashMap::new();
+        for hash in hashes {
+            let Some(entry) = self.get(&hash)? else { continue };
+            let info = match crate::server::parser::parse_payload(&entry.payload) {
+                Ok(p) => {
+                    let status = match crate::signing::check_signature(&p) {
+                        crate::signing::SignatureCheck::Valid => "valid",
+                        crate::signing::SignatureCheck::Invalid(_) => "invalid",
+                        crate::signing::SignatureCheck::NotPresent => "absent",
+                    };
+                    (status.to_string(), p.meta.get("public_key").cloned())
+                }
+                Err(_) => ("unparsable".to_string(), None),
+            };
+            out.insert(hash, info);
+        }
+        Ok(out)
+    }
+
+    /// Relations persistees AVEC le message qui les a affirmees (hash) et la
+    /// date reelle de ce message (`adn_store.created_at`, secondes unix) --
+    /// pour l'export Graphify (2026-11-17), qui jusque-la ne montrait que
+    /// "qui parle a qui" (chaine d'audit), jamais le contenu des messages.
+    /// Tuple : (hash, subject, predicate, object, modality, created_at).
+    pub fn graph_relations(&self) -> Result<Vec<GraphRelationRow>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT r.hash, r.subject, r.predicate, r.object, r.modality, s.created_at
+             FROM adn_relations r LEFT JOIN adn_store s ON s.hash = r.hash
+             ORDER BY r.id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?))
+        })?;
+        rows.collect()
+    }
+
     /// Comme `all_relations()`, mais preserve les 9 attributs (sigma/tau/layer/
     /// weight/id/coref_with + `extra_attrs` custom) au lieu du seul triplet
     /// sujet/predicat/objet. A utiliser des qu'un appelant a besoin de la
@@ -1705,6 +1773,75 @@ impl AdnStore {
         Ok(chain)
     }
 
+    /// Verification d'integrite COMPLETE de l'historique persiste (2026-11-20).
+    ///
+    /// Avant : `load_chain` rechargeait la chaine sans aucun controle, et
+    /// `HashChain::verify_integrity` ne regardait que les liens. Verifie en
+    /// direct : un message reecrit dans la base (contenu "shipped" ->
+    /// "refunded") ou un maillon supprime passaient sans aucune alerte au
+    /// redemarrage. Trois controles ici :
+    /// 1. liens : chaque `parent_hash` est le hash du maillon precedent ;
+    /// 2. contenu : le hash RECALCULE depuis le message stocke
+    ///    (`audit::canonical_hash`) est celui enregistre ;
+    /// 3. relations derivees : `adn_relations` (lue par le graphe et les
+    ///    controles de coherence) correspond aux relations du message.
+    ///
+    /// Un maillon dont le message n'est pas stocke (ex. agent_register) ne
+    /// peut etre verifie que par ses liens : compte a part, pas une erreur.
+    pub fn verify_integrity(&self, chain: &crate::server::audit::HashChain) -> Result<IntegrityReport, rusqlite::Error> {
+        let mut report = IntegrityReport { entries: chain.entries.len(), ..Default::default() };
+        let mut expected_parent = "root".to_string();
+        for entry in &chain.entries {
+            if entry.parent_hash != expected_parent {
+                report.problems.push(format!(
+                    "seq={} : lien rompu (parent_hash={}, attendu={}) -- maillon supprime, insere ou modifie",
+                    entry.seq, short(&entry.parent_hash), short(&expected_parent)
+                ));
+            }
+            expected_parent = entry.hash.clone();
+
+            let Some(stored) = self.get(&entry.hash)? else {
+                report.content_unverifiable += 1;
+                continue;
+            };
+            let parsed = match crate::server::parser::parse_payload(&stored.payload) {
+                Ok(p) => p,
+                Err(e) => {
+                    report.problems.push(format!("seq={} : message stocke illisible ({e})", entry.seq));
+                    continue;
+                }
+            };
+            let recomputed = crate::server::audit::canonical_hash(&parsed);
+            if recomputed != entry.hash {
+                report.problems.push(format!(
+                    "seq={} : contenu modifie (hash recalcule {} != hash enregistre {})",
+                    entry.seq, short(&recomputed), short(&entry.hash)
+                ));
+                continue;
+            }
+            report.content_verified += 1;
+
+            let mut expected: Vec<(String, String, String, Option<String>)> = parsed.relations.iter()
+                .filter_map(|r| Some((r.get("subject")?.clone(), r.get("type")?.clone(), r.get("object")?.clone(), r.get("modality").cloned())))
+                .collect();
+            let mut stmt = self.conn.prepare_cached(
+                "SELECT subject, predicate, object, modality FROM adn_relations WHERE hash = ?1",
+            )?;
+            let mut actual: Vec<(String, String, String, Option<String>)> = stmt
+                .query_map(params![entry.hash], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
+                .collect::<Result<_, _>>()?;
+            expected.sort();
+            actual.sort();
+            if expected != actual {
+                report.problems.push(format!(
+                    "seq={} : relations derivees (adn_relations) differentes du message signe",
+                    entry.seq
+                ));
+            }
+        }
+        Ok(report)
+    }
+
     pub fn audit_count(&self) -> Result<u64, rusqlite::Error> {
         self.conn.query_row("SELECT COUNT(*) FROM audit_trail", [], |row| row.get(0))
     }
@@ -1833,7 +1970,7 @@ impl AdnStore {
     /// juste au-dessus dans ce fichier. Tuple brut (pas `AgentCard`): ce
     /// module n'a pas besoin de dependre de `agent_discovery`, l'appelant
     /// construit la struct.
-    pub fn load_agents(&self) -> Result<Vec<(String, String, Vec<String>, f64, Option<String>)>, rusqlite::Error> {
+    pub fn load_agents(&self) -> Result<Vec<AgentRow>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT name, version, capabilities, trust_score, public_key FROM agents ORDER BY name ASC",
         )?;
@@ -2246,7 +2383,7 @@ impl AdnStore {
         conversation_id: &str,
         before_turn: i64,
         limit: usize,
-    ) -> Result<Vec<(String, String, Option<String>, Option<String>, i64)>, rusqlite::Error> {
+    ) -> Result<Vec<ConversationTurnRow>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT hash, payload, payload_compressed, encoder, produced_by, turn
              FROM adn_store
@@ -2533,7 +2670,7 @@ impl AdnStore {
 
                 index
                     .entry(term)
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .insert(hash.clone(), score);
             }
         }
@@ -3965,7 +4102,7 @@ mod tests {
         let _ = std::fs::remove_file(&tmp_path_str);
 
         // Open a fresh DB
-        let store = AdnStore::open(&tmp_path_str).unwrap();
+        let _store = AdnStore::open(&tmp_path_str).unwrap();
 
         // Query sqlite_master to verify indices exist
         let conn = Connection::open(&tmp_path_str).unwrap();

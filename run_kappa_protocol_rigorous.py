@@ -1,7 +1,24 @@
 #!/usr/bin/env python3
 """
-run_kappa_protocol_rigorous.py — Test κ triple-aveugle
-Résout la contradiction April/June avec Fleiss' kappa + Wilson IC
+run_kappa_protocol_rigorous.py — SIMULATION du protocole κ (aucun juge réel)
+
+AVERTISSEMENT (2026-11-20) : ce script N'INTERROGE AUCUN MODÈLE. Les
+« jugements » des trois juges nommés gpt4/gemini/mistral sont TIRÉS AU HASARD
+(random.seed(42), voir run_experiment). Son ancien fichier de sortie,
+kappa_results_official.json, était présenté comme le résultat officiel d'un
+protocole « triple-aveugle » : c'était une simulation. Il est renommé
+kappa_simulation_results.json.
+
+Trois erreurs de calcul corrigées le même jour :
+- la formule de Fleiss était fausse (accord observé calculé comme
+  sum p(1-p), c'est-à-dire un DÉSACCORD) : -0.053 rapporté pour 0.191 réel ;
+- l'« intervalle de confiance » était un intervalle de Wilson sur une
+  PROPORTION de oui, transformé en 2p-1 -- pas un IC du kappa (d'où une
+  estimation hors de son propre intervalle) ; remplacé par un bootstrap ;
+- un « kappa par texte » calculé sur un seul texte, statistiquement vide
+  (toujours 0) ; remplacé par le taux d'accord des juges sur chaque texte.
+
+Pour une vraie mesure : remplacer la génération aléatoire par de vrais juges.
 """
 
 import json
@@ -39,31 +56,34 @@ CORPUS = {
 # ===== FLEISS' KAPPA =====
 
 def fleiss_kappa(matrix: List[List[int]]) -> float:
-    """Calcule Fleiss' κ pour 3+ juges, 20 sujets, k=2 catégories."""
+    """Fleiss' κ standard, 2 catégories. `matrix[juge][sujet]` vaut 0 ou 1."""
     m = len(matrix)
-    n = len(matrix[0])
-    
+    n = len(matrix[0]) if matrix else 0
     if m < 2 or n == 0:
-        return 0.0
-    
-    # P_o: accord observé moyen
-    p_i_list = []
-    for i in range(n):
-        count_1 = sum(matrix[judge][i] for judge in range(m))
-        p_i = count_1 / m
-        p_i_list.append(p_i)
-    
-    P_o = sum(p * (1 - p) for p in p_i_list) / n
-    
-    # P_e: accord attendu par hasard
-    p_bar = sum(p_i_list) / n
-    P_e = p_bar * (1 - p_bar)
-    
-    if P_e >= 1.0:
-        return 1.0
-    
-    kappa = (P_o - P_e) / (1 - P_e) if P_e < 1.0 else 0.0
-    return max(-1.0, min(1.0, kappa))
+        return float("nan")
+    ones = [sum(matrix[j][i] for j in range(m)) for i in range(n)]
+    # Accord observé par sujet : proportion de paires de juges d'accord.
+    p_i = [(c * c + (m - c) * (m - c) - m) / (m * (m - 1)) for c in ones]
+    p_bar = sum(p_i) / n
+    p1 = sum(ones) / (n * m)
+    p_e = p1 * p1 + (1 - p1) * (1 - p1)
+    if p_e == 1.0:
+        return float("nan")  # tous les jugements identiques : κ indéfini
+    return (p_bar - p_e) / (1 - p_e)
+
+
+def bootstrap_ci(matrix: List[List[int]], n_boot: int = 5000, seed: int = 0) -> Tuple[float, float]:
+    """IC 95 % du κ par rééchantillonnage des SUJETS (bootstrap percentile)."""
+    rng = random.Random(seed)
+    m, n = len(matrix), len(matrix[0])
+    vals = []
+    for _ in range(n_boot):
+        idx = [rng.randrange(n) for _ in range(n)]
+        k = fleiss_kappa([[matrix[j][i] for i in idx] for j in range(m)])
+        if k == k:  # ignore NaN
+            vals.append(k)
+    vals.sort()
+    return vals[int(0.025 * len(vals))], vals[int(0.975 * len(vals)) - 1]
 
 # ===== WILSON INTERVAL =====
 
@@ -125,26 +145,22 @@ def run_experiment():
     print(f"\n🔢 Calcul Fleiss' κ...")
     kappa_global = fleiss_kappa(judgment_matrix)
     
-    # Intervalle de confiance (approximation)
-    successes = sum(sum(row) for row in judgment_matrix)
-    n_total = len(judgment_matrix) * len(judgment_matrix[0])
-    wilson_lower, wilson_p, wilson_upper = wilson_interval(successes, n_total)
-    kappa_lower = max(-1.0, 2 * wilson_lower - 1)
-    kappa_upper = min(1.0, 2 * wilson_upper - 1)
+    # Intervalle de confiance du KAPPA (bootstrap sur les sujets).
+    kappa_lower, kappa_upper = bootstrap_ci(judgment_matrix)
     
     print(f"   κ (Fleiss) = {kappa_global:.3f}")
     print(f"   95% IC = [{kappa_lower:.3f}, {kappa_upper:.3f}]")
     
-    # Diagnostic par texte
-    print(f"\n📈 Accord par texte:")
-    per_text_kappa = {}
+    # Diagnostic par texte : taux d'accord des juges (un κ sur un seul
+    # sujet n'a pas de sens).
+    print(f"\n📈 Accord des juges par texte:")
+    per_text_agreement = {}
+    m = len(judgment_matrix)
     for i, text_id in enumerate(text_ids):
-        single_matrix = [row[i:i+1] for row in judgment_matrix]
-        kappa_single = fleiss_kappa(single_matrix)
-        per_text_kappa[text_id] = kappa_single
-        entry = CORPUS[text_id]
-        diff = entry["diff"]
-        print(f"   {text_id:15} ({diff:7}) κ={kappa_single:+.2f}")
+        c = sum(judgment_matrix[j][i] for j in range(m))
+        agreement = (c * c + (m - c) * (m - c) - m) / (m * (m - 1))
+        per_text_agreement[text_id] = agreement
+        print(f"   {text_id:15} ({CORPUS[text_id]['diff']:7}) accord={agreement:.2f}")
     
     # Décision ArXiv
     print(f"\n🚪 Décision ArXiv:")
@@ -161,8 +177,10 @@ def run_experiment():
     
     # Résultats JSON (bruts, publiés pour audit)
     results = {
+        "SIMULATION": True,
+        "WARNING": "Jugements TIRES AU HASARD (random.seed(42)) -- aucun juge reel n'a ete interroge. Ne pas citer comme une mesure.",
         "timestamp": "2026-08-30T13:07:00Z",
-        "protocol_version": "1.0_triple_blind",
+        "protocol_version": "1.0_simulated",
         "n_texts": n_texts,
         "n_judges": n_judges,
         "n_judgments": n_texts * n_judges,
@@ -172,13 +190,13 @@ def run_experiment():
         "seuil_acceptation": seuil,
         "decision_pass": decision_pass,
         "arxiv_gate": arxiv_gate,
-        "per_text_kappa": {k: round(v, 3) for k, v in per_text_kappa.items()},
+        "per_text_judge_agreement": {k: round(v, 3) for k, v in per_text_agreement.items()},
         "judgment_matrix": judgment_matrix,
         "text_order": text_ids,
         "judge_order": judge_ids
     }
     
-    output_file = Path("kappa_results_official.json")
+    output_file = Path("kappa_simulation_results.json")
     output_file.write_text(json.dumps(results, indent=2))
     
     print(f"\n✓ Résultats sauvegardés: {output_file}")

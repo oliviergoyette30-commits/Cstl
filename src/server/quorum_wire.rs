@@ -395,6 +395,7 @@ mod tests {
                 Arc::new(RestrictedCouncil::new(council_members)),
             )),
             collect_response_corpus: false,
+            require_signatures: false,
         })
     }
 

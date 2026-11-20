@@ -70,13 +70,21 @@ features = ["full"]
 version = "0.10"
 
 [dependencies.rusqlite]
-version = "0.31"
-features = ["bundled"]
+# 0.31 -> 0.43 (2026-11-17) : libsqlite3-sys 0.28 embarquait un SQLite touche
+# par RUSTSEC-2026-0459 / CVE-2026-119375. `fallible_uint` : depuis 0.38,
+# u64/usize ne sont plus convertis par defaut ; cette feature les reactive
+# avec une ERREUR explicite si la valeur depasse i64::MAX (pas de troncature).
+version = "0.43"
+features = ["bundled", "fallible_uint"]
 
 [dependencies.reqwest]
 version = "0.12"
 features = ["json"]
 
+# 2026-11-20 : aes-gcm, chacha20poly1305, zeroize, parking_lot, notify, tower,
+# tower-http retires -- declares mais jamais utilises par le code (verifie par
+# recherche sur src/tests/examples/benches). Les deux chiffrements laissaient
+# croire que CSTL chiffre des donnees : ce n'est pas le cas.
 [dependencies.serde]
 version = "1"
 features = ["derive"]
@@ -148,18 +156,6 @@ version = "2"
 # Async TLS for tokio runtime
 version = "0.26"
 
-[dependencies.aes-gcm]
-# AES-256-GCM authenticated encryption
-version = "0.10"
-
-[dependencies.chacha20poly1305]
-# ChaCha20-Poly1305 alternative cipher
-version = "0.10"
-
-[dependencies.zeroize]
-# Secure memory wiping for crypto keys
-version = "1.7"
-
 # [dependencies.pqcrypto-kyber] et [dependencies.pqcrypto-traits] retires
 # le 2026-11-02 (cargo audit: toutes deux + pqcrypto-internals transitive
 # signalees "unmaintained", PQClean upstream archive -- RUSTSEC-2024-0381,
@@ -179,10 +175,6 @@ version = "1.7"
 # signature post-quantique reelle est voulue un jour, ce sera une
 # implementation neuve avec pqcrypto-mlkem, pas un bump de cette
 # dependance-ci qui n'a jamais rien fait.
-
-[dependencies.parking_lot]
-# Faster parking_lot::Mutex for sharded registry
-version = "0.12"
 
 [dependencies.dashmap]
 # Concurrent hashmap for sharded registry
@@ -210,10 +202,6 @@ version = "6"
 # garde par IpAddr, dashmap deja une dependance directe de ce depot.
 version = "0.7"
 
-[dependencies.notify]
-# File watch for live config reload
-version = "6"
-
 [dependencies.rand]
 # Random number generation for key generation (both tests and production)
 # Needed by ed25519-dalek for SigningKey::generate
@@ -222,14 +210,6 @@ version = "0.8"
 [dependencies.axum]
 # Web framework for REST API (Layer 5c: FastAPI integration)
 version = "0.7"
-
-[dependencies.tower]
-# Middleware framework for axum
-version = "0.4"
-
-[dependencies.tower-http]
-# Tower HTTP utilities (CORS, tracing)
-version = "0.5"
 
 [dependencies.flate2]
 # GZIP compression for optional Couche 5 payload storage

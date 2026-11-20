@@ -207,17 +207,41 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         return Err(ParseError::MissingEndMarker);
     }
 
-    // Parse hashbang
-    let hashbang_line = raw.lines().next().unwrap_or("");
-    if let Some(version_mode) = hashbang_line.strip_prefix("#!CSTL ") {
-        let parts: Vec<&str> = version_mode.split_whitespace().collect();
-        if !parts.is_empty() {
-            payload.version = parts[0].to_string();
+    // Parse hashbang -- STRICT depuis le 2026-11-20 (spec §2 :
+    // header ::= "#!CSTL" SP version SP "MODE=A"). Avant, tout ce qui suivait
+    // les deux premiers mots etait ignore et le mode n'etait pas controle :
+    // une premiere ligne collee en double ("#!CSTL v5.0.0 MODE=A#!CSTL v5.0.0
+    // MODE=A", trouve en testant avec ChatGPT) passait sans signal, avec un
+    // mode lu "A#!CSTL". Les modes B et C, reserves par la spec, restent
+    // acceptes ; tout le reste est refuse avec une raison explicite.
+    let hashbang_line = raw.lines().next().unwrap_or("").trim_end();
+    let header_ok = |line: &str| -> Option<(String, String)> {
+        let rest = line.strip_prefix("#!CSTL ")?;
+        let parts: Vec<&str> = rest.split_whitespace().collect();
+        if parts.len() != 2 {
+            return None;
         }
-        if parts.len() > 1 {
-            if let Some(mode_str) = parts[1].strip_prefix("MODE=") {
-                payload.mode = mode_str.to_string();
-            }
+        let version = parts[0];
+        let nums: Vec<&str> = version.strip_prefix('v')?.split('.').collect();
+        if !(2..=3).contains(&nums.len()) || nums.iter().any(|n| n.is_empty() || !n.chars().all(|c| c.is_ascii_digit())) {
+            return None;
+        }
+        let mode = parts[1].strip_prefix("MODE=")?;
+        if !matches!(mode, "A" | "B" | "C") {
+            return None;
+        }
+        Some((version.to_string(), mode.to_string()))
+    };
+    match header_ok(hashbang_line) {
+        Some((version, mode)) => {
+            payload.version = version;
+            payload.mode = mode;
+        }
+        None => {
+            return Err(ParseError::InvalidFormat(format!(
+                "malformed_header: attendu \"#!CSTL vX.Y.Z MODE=A\", recu \"{}\"",
+                hashbang_line.chars().take(80).collect::<String>()
+            )));
         }
     }
 
@@ -1525,5 +1549,28 @@ RELATION [type=EQUALS, subject=x, object=x]
         assert_eq!(payload.guardrail_reports.len(), 1);
         assert!(payload.error_signal_request.is_some());
         assert_eq!(payload.relations.len(), 1);
+    }
+    #[test]
+    fn test_header_is_strict() {
+        let body = "\nMETA [encoder=t, produced_by=t]\nINTENT_PAYLOAD [purpose=inform, sender=a, receiver=b]\n---END---\n";
+        for ok in ["#!CSTL v5.0.0 MODE=A", "#!CSTL v5.0 MODE=A", "#!CSTL v5.0.0 MODE=B", "#!CSTL v5.0.0 MODE=A  "] {
+            let p = parse_payload(&format!("{ok}{body}")).unwrap_or_else(|e| panic!("{ok:?} doit passer: {e}"));
+            assert_eq!(p.version.chars().next(), Some('v'));
+        }
+        for bad in [
+            "#!CSTL v5.0.0 MODE=A#!CSTL v5.0.0 MODE=A", // premiere ligne collee en double
+            "#!CSTL v5.0.0 MODE=Z",
+            "#!CSTL v5.0.0",
+            "#!CSTL MODE=A",
+            "#!CSTL 5.0.0 MODE=A",
+            "#!CSTL v5.x MODE=A",
+            "#!CSTL v5.0.0 MODE=A extra",
+            "#!CSTLv5.0.0 MODE=A",
+        ] {
+            match parse_payload(&format!("{bad}{body}")) {
+                Err(ParseError::InvalidFormat(m)) => assert!(m.contains("malformed_header"), "{m}"),
+                other => panic!("{bad:?} doit etre refuse, obtenu {other:?}"),
+            }
+        }
     }
 }

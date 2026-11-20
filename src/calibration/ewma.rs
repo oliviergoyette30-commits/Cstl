@@ -27,7 +27,7 @@ impl EwmaCalibration {
     /// Initialize a new EWMA calibration for an agent
     pub fn new(agent_name: String, initial_score: f64, alpha: f64) -> Self {
         assert!(alpha > 0.0 && alpha <= 1.0, "alpha must be in (0.0, 1.0]");
-        assert!(initial_score >= 0.0 && initial_score <= 1.0, "score must be in [0.0, 1.0]");
+        assert!((0.0..=1.0).contains(&initial_score), "score must be in [0.0, 1.0]");
 
         Self {
             agent_name,
@@ -121,6 +121,7 @@ impl SigmaCalibrator {
     /// Compute effective server-side sigma given:
     /// - agent_sigma: what the agent reported
     /// - agent_name: identity for lookup
+    ///
     /// Returns adjusted sigma accounting for agent's historical accuracy
     ///
     /// Avant ce correctif (2026-09-15), cette fonction ignorait completement

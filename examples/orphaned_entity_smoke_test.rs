@@ -101,8 +101,12 @@ async fn main() {
          DEFINE Competitor AS Entity [id=e002]\n\
          DEFINE Acquisition AS Event [id=e003]\n\
          DEFINE Agreement AS Contract [id=e004]\n",
-        "RELATION [type=TERMINATES_IF, subject=e001, object=e003]\n\
-         RELATION [type=REQUIRES, subject=e003, object=e002]\n",
+        // Operateurs officiels (TERMINATES_IF/REQUIRES de legal_003 d'origine sont
+        // hors catalogue et seraient rejetes E101 par la whitelist avant meme
+        // d'atteindre la detection W608 testee ici). Meme graphe : e004 jamais
+        // reference.
+        "RELATION [type=ENTAILS, subject=e001, object=e003]\n\
+         RELATION [type=INVOLVES, subject=e003, object=e002]\n",
     )).await;
     let has_w608_2 = resp2.contains("W608") && resp2.contains("e004") && resp2.contains("Agreement");
     println!("      W608_present_et_nomme_Agreement={}", has_w608_2);

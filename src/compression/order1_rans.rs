@@ -80,7 +80,7 @@ fn normalize(counts: &HashMap<u8, u32>) -> CtxTable {
         remainders.push((sym as usize, (raw * PROB_SCALE as u64) % total));
     }
     if assigned != PROB_SCALE {
-        remainders.sort_by(|a, b| b.1.cmp(&a.1));
+        remainders.sort_by_key(|r| std::cmp::Reverse(r.1));
         if assigned < PROB_SCALE {
             let mut deficit = PROB_SCALE - assigned;
             let mut i = 0;

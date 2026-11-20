@@ -6,22 +6,17 @@ Exposes ADN store audit trail via HTTP endpoints
 
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 import uvicorn
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-app = FastAPI(
-    title="CSTL Audit Trail Server",
-    version="5.1.0",
-    description="REST API for CSTL ADN Store Audit Trail Access"
-)
 
 # Global database connection
 DB_PATH = "cstl_adn.db"
@@ -37,7 +32,6 @@ def get_db_connection():
     return conn
 
 
-@app.on_event("startup")
 async def startup():
     """Initialize database connection on startup"""
     logger.info(f"Connecting to ADN database: {DB_PATH}")
@@ -52,7 +46,6 @@ async def startup():
         raise
 
 
-@app.on_event("shutdown")
 async def shutdown():
     """Close database connection on shutdown"""
     global conn
@@ -60,6 +53,26 @@ async def shutdown():
         conn.close()
         conn = None
         logger.info("Database connection closed")
+
+
+# `lifespan` (2026-11-17) remplace `@app.on_event("startup"/"shutdown")`,
+# deprecie par FastAPI. Meme comportement : startup() avant la premiere
+# requete, shutdown() a l'arret.
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await startup()
+    try:
+        yield
+    finally:
+        await shutdown()
+
+
+app = FastAPI(
+    title="CSTL Audit Trail Server",
+    version="5.1.0",
+    description="REST API for CSTL ADN Store Audit Trail Access",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health", tags=["Health"])
@@ -81,7 +94,7 @@ async def health_check() -> Dict[str, Any]:
 
         return {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "database": {
                 "connected": True,
                 "audit_trail_entries": audit_count
@@ -90,6 +103,56 @@ async def health_check() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=503, detail=str(e))
+
+
+# Declaree AVANT /audit/{case_id} (2026-11-17) : FastAPI teste les routes dans
+# l'ordre de declaration -- placee apres, GET /audit/stats etait capture par
+# /audit/{case_id} (case_id="stats") et repondait 404 "Case stats not found".
+@app.get("/audit/stats", tags=["Audit"])
+async def get_audit_stats() -> Dict[str, Any]:
+    """
+    Get overall statistics for audit trail
+
+    Returns:
+        total_entries: Total audit trail entries
+        total_cases: Total arbitrage cases
+        total_rulings: Total arbitration rulings
+        council_actions: Count of council actions by type
+        purposes: Count of audit entries by purpose
+    """
+    try:
+        db = get_db_connection()
+
+        # Get total counts
+        total_entries = db.execute("SELECT COUNT(*) as count FROM audit_trail").fetchone()["count"]
+        total_cases = db.execute("SELECT COUNT(*) as count FROM arbitrage_cases").fetchone()["count"]
+        total_rulings = db.execute("SELECT COUNT(*) as count FROM arbitration_rulings").fetchone()["count"]
+
+        # Get council actions breakdown
+        council_actions = {}
+        cursor = db.execute("SELECT action, COUNT(*) as count FROM adn_council_log GROUP BY action")
+        for row in cursor.fetchall():
+            council_actions[row["action"]] = row["count"]
+
+        # Get purposes breakdown
+        purposes = {}
+        cursor = db.execute("SELECT purpose, COUNT(*) as count FROM audit_trail GROUP BY purpose")
+        for row in cursor.fetchall():
+            purposes[row["purpose"]] = row["count"]
+
+        return {
+            "total_entries": total_entries,
+            "total_cases": total_cases,
+            "total_rulings": total_rulings,
+            "council_actions": council_actions,
+            "purposes": purposes,
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        }
+
+    except sqlite3.Error as e:
+        logger.error(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 
 @app.get("/audit/{case_id}", tags=["Audit"])
@@ -312,52 +375,6 @@ async def query_audit_trail(
                 "purpose": purpose,
                 "limit": limit
             }
-        }
-
-    except sqlite3.Error as e:
-        logger.error(f"Database error: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-
-@app.get("/audit/stats", tags=["Audit"])
-async def get_audit_stats() -> Dict[str, Any]:
-    """
-    Get overall statistics for audit trail
-
-    Returns:
-        total_entries: Total audit trail entries
-        total_cases: Total arbitrage cases
-        total_rulings: Total arbitration rulings
-        council_actions: Count of council actions by type
-        purposes: Count of audit entries by purpose
-    """
-    try:
-        db = get_db_connection()
-
-        # Get total counts
-        total_entries = db.execute("SELECT COUNT(*) as count FROM audit_trail").fetchone()["count"]
-        total_cases = db.execute("SELECT COUNT(*) as count FROM arbitrage_cases").fetchone()["count"]
-        total_rulings = db.execute("SELECT COUNT(*) as count FROM arbitration_rulings").fetchone()["count"]
-
-        # Get council actions breakdown
-        council_actions = {}
-        cursor = db.execute("SELECT action, COUNT(*) as count FROM adn_council_log GROUP BY action")
-        for row in cursor.fetchall():
-            council_actions[row["action"]] = row["count"]
-
-        # Get purposes breakdown
-        purposes = {}
-        cursor = db.execute("SELECT purpose, COUNT(*) as count FROM audit_trail GROUP BY purpose")
-        for row in cursor.fetchall():
-            purposes[row["purpose"]] = row["count"]
-
-        return {
-            "total_entries": total_entries,
-            "total_cases": total_cases,
-            "total_rulings": total_rulings,
-            "council_actions": council_actions,
-            "purposes": purposes,
-            "timestamp": datetime.utcnow().isoformat()
         }
 
     except sqlite3.Error as e:

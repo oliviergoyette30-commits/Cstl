@@ -48,7 +48,10 @@ fn gzip_bytes(data: &[u8]) -> Vec<u8> {
     encoder.finish().expect("gzip finish")
 }
 
-fn build(n_relations: usize, entity_pool: usize) -> (Vec<HashMap<String, String>>, Vec<HashMap<String, String>>, String) {
+type Rows = Vec<HashMap<String, String>>;
+
+
+fn build(n_relations: usize, entity_pool: usize) -> (Rows, Rows, String) {
     let ops = ["PERFORM", "ARR.ACCESS", "MAINTAIN", "TRANSMIT_FAITHFUL", "COMMAND", "ENTAILS", "BEFORE", "OPPOSES"];
     let modalities = ["MUST", "MUST_NOT", "MAY", "SHOULD"];
     let types = ["Party", "Obligation", "Asset", "Document", "Event"];

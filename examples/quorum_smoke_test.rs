@@ -20,12 +20,12 @@
 /// 6. Vote tardif (carol) sur une proposition deja decidee -> rejete.
 /// 7. Usurpation: un attaquant signe avec SA PROPRE cle en se faisant passer
 ///    pour alice -> public_key_mismatch.
-/// 8. quorum_circuit_breaker par un agent NON membre du RestrictedCouncil ->
-///    not_authorized.
+/// 8. quorum_circuit_breaker par un agent enregistre mais NON membre du
+///    RestrictedCouncil (mallory) -> not_authorized.
 /// 9. quorum_circuit_breaker par le membre legitime du RestrictedCouncil ->
 ///    quorum_circuit_breaker_activated, puis un vote ulterieur est refuse
 ///    (circuit_breaker_active).
-use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
+use cstl_parser::agent_discovery::AgentRegistry;
 use cstl_parser::restricted_council::RestrictedCouncil;
 use cstl_parser::server::audit::signing_bytes;
 use cstl_parser::server::parser::parse_payload;
@@ -80,7 +80,13 @@ fn make_test_server(port: u16) -> CstlNativeServer {
     let mut server = CstlNativeServer::with_data_path(port, ":memory:");
     let registry = AgentRegistry::new();
     server.agent_registry = Arc::new(RwLock::new(registry));
-    server.restricted_council = Arc::new(RestrictedCouncil::single_member("olivier"));
+    // Depuis le fix anti-Sybil (quorum_sybil_test.rs), voter/proposer exige
+    // l'appartenance au RestrictedCouncil : le conseil contient donc les
+    // votants legitimes. `olivier` n'est enregistre qu'au scenario 9, APRES
+    // la creation de la proposition -> threshold reste compute_threshold(3)=2.
+    server.restricted_council = Arc::new(RestrictedCouncil::new(
+        ["alice", "bob", "carol", "olivier"].iter().map(|s| s.to_string()).collect(),
+    ));
     server
 }
 
@@ -144,9 +150,7 @@ async fn main() {
 
     // ---- Scenario 1: quorum_propose d'un expediteur non enregistre ----
     println!("[1/9] quorum_propose d'un expediteur inconnu...");
-    let resp1 = send(port, &format!(
-        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=SmokeTest, produced_by=SmokeTest]\nINTENT_PAYLOAD [purpose=quorum_propose, sender=ghost, receiver=server, proposal_id=smoke_1]\n---END---\n"
-    )).await;
+    let resp1 = send(port, "#!CSTL v5.0.0 MODE=A\nMETA [encoder=SmokeTest, produced_by=SmokeTest]\nINTENT_PAYLOAD [purpose=quorum_propose, sender=ghost, receiver=server, proposal_id=smoke_1]\n---END---\n").await;
     let purpose1 = extract_field(&resp1, "INTENT_PAYLOAD", "purpose");
     println!("      purpose={:?}", purpose1);
     if purpose1.as_deref() != Some("quorum_rejected") {
@@ -233,8 +237,9 @@ async fn main() {
     }
 
     // ---- Scenario 8: circuit_breaker par un agent non autorise ----
-    println!("[8/9] quorum_circuit_breaker par alice (non membre du RestrictedCouncil)...");
-    let cb_unauthorized = build_signed("alice", &alice_pub, &alice_sk, "quorum_circuit_breaker", ", proposal_id=smoke_impersonation, reason=suspected_stall");
+    println!("[8/9] quorum_circuit_breaker par mallory (enregistree, non membre du RestrictedCouncil)...");
+    let (mallory_sk, mallory_pub) = register_agent(port, "mallory").await;
+    let cb_unauthorized = build_signed("mallory", &mallory_pub, &mallory_sk, "quorum_circuit_breaker", ", proposal_id=smoke_impersonation, reason=suspected_stall");
     let resp8 = send(port, &cb_unauthorized).await;
     let purpose8 = extract_field(&resp8, "INTENT_PAYLOAD", "purpose");
     let reason8 = extract_field(&resp8, "INTENT_PAYLOAD", "reason");
