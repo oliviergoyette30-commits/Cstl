@@ -1091,6 +1091,90 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // Deplace AVANT l'inscription dans la chaine d'audit (2026-11-20) :
+                    // avant, un message rejete par strict_deontic_history etait
+                    // quand meme inscrit dans la chaine (et persiste) puis rejete --
+                    // l'historique d'audit contenait des messages refuses. Constate
+                    // via la verification d'integrite au demarrage (maillon sans
+                    // message stocke). deontic_audit reste disponible plus bas.
+                    // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
+                    // — meme principe que STEP 3c ci-dessus (charger seulement ce dont
+                    // on se sert), mais pour les relations portant `modality`. Verifie
+                    // les MUST/MUST_NOT du payload courant contre TOUT ce qui a ete
+                    // persiste par des payloads PRECEDENTS (potentiellement d'autres
+                    // agents) — une contradiction Axiome D qui s'etale sur plusieurs
+                    // requetes, invisible a la verification intra-payload bloquante
+                    // (server/validator.rs::validate_deontic_constraints, STEP 2).
+                    // INFORMATIF SEULEMENT, comme la coherence factuelle ci-dessus:
+                    // jamais de rejet, une contradiction a travers l'historique peut
+                    // etre un vrai desaccord entre agents/moments, pas une erreur de
+                    // protocole (contrairement a se contredire dans le meme souffle).
+                    let deontic_history = {
+                        let store = ctx.adn_store.lock().await;
+                        store.deontic_relations_history().unwrap_or_else(|e| {
+                            error!("[Handler] adn_store.deontic_relations_history failed: {}", e);
+                            Vec::new()
+                        })
+                    };
+                    let deontic_audit = execution_lab::check_deontic_consistency_with_history(&payload.relations, &deontic_history);
+                    if !deontic_audit.consistent {
+                        warn!(
+                            "[Handler] Deontic audit: {} Axiom D violation(s) detected against history",
+                            deontic_audit.violations.len()
+                        );
+                        for v in &deontic_audit.violations {
+                            warn!(
+                                "[Handler] Violation: ({}) {} {} vs ({}) {} {}",
+                                v.required_by, v.subject, v.object, v.forbidden_by, v.subject, v.object
+                            );
+                        }
+                    }
+
+                    // STEP 3c-quinquies: rejet dur OPT-IN de l'audit deontique
+                    // cross-history (2026-10-30, question ouverte depuis
+                    // l'audit du 28/29 octobre -- cf. commentaire STEP 3c
+                    // ci-dessus). Par design assume, une contradiction qui
+                    // s'etale sur plusieurs payloads reste INFORMATIVE par
+                    // defaut (DEONTIC_AUDIT seul, jamais de rejet): un desaccord
+                    // historique entre agents n'est pas forcement une erreur de
+                    // protocole. Mais certains domaines (finance, securite) ont
+                    // besoin de l'inverse -- qu'une contradiction avec
+                    // l'historique devienne bloquante. Plutot que de changer le
+                    // comportement par defaut (ce qui casserait la semantique
+                    // documentee et les tests existants bases dessus), l'appelant
+                    // opte in explicitement via
+                    // INTENT_PAYLOAD[strict_deontic_history=true]. Champ absent
+                    // ou != "true"/"1" => comportement inchange (informatif
+                    // seulement, teste depuis le 2026-09-04).
+                    let strict_deontic_history = matches!(
+                        payload.intent.get("strict_deontic_history").map(String::as_str),
+                        Some("true") | Some("1")
+                    );
+                    if strict_deontic_history && !deontic_audit.consistent {
+                        let errors: String = deontic_audit
+                            .violations
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, v)| {
+                                format!(
+                                    "E107H[{idx}]: {} {} contredit l'historique (requis par {}, interdit par {})",
+                                    v.subject, v.object, v.required_by, v.forbidden_by
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("; ");
+                        warn!(
+                            "[Handler] strict_deontic_history=true: rejet dur de {} violation(s) cross-history",
+                            deontic_audit.violations.len()
+                        );
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=validation_error, errors={}]\n---END---\n",
+                            errors
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     // AUDIT: le serveur (orchestrateur) calcule le vrai SHA-256.
                     // L'agent envoie PARENT_HASH=root; on le remplace ici.
                     let (entry, is_replay) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
@@ -1300,83 +1384,6 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         consistency.epistemic_contradictions.len(), sigma
                     );
 
-                    // STEP 3c-deontic: Audit deontique HISTORIQUE (Couche 8, 2026-09-04)
-                    // — meme principe que STEP 3c ci-dessus (charger seulement ce dont
-                    // on se sert), mais pour les relations portant `modality`. Verifie
-                    // les MUST/MUST_NOT du payload courant contre TOUT ce qui a ete
-                    // persiste par des payloads PRECEDENTS (potentiellement d'autres
-                    // agents) — une contradiction Axiome D qui s'etale sur plusieurs
-                    // requetes, invisible a la verification intra-payload bloquante
-                    // (server/validator.rs::validate_deontic_constraints, STEP 2).
-                    // INFORMATIF SEULEMENT, comme la coherence factuelle ci-dessus:
-                    // jamais de rejet, une contradiction a travers l'historique peut
-                    // etre un vrai desaccord entre agents/moments, pas une erreur de
-                    // protocole (contrairement a se contredire dans le meme souffle).
-                    let deontic_history = {
-                        let store = ctx.adn_store.lock().await;
-                        store.deontic_relations_history().unwrap_or_else(|e| {
-                            error!("[Handler] adn_store.deontic_relations_history failed: {}", e);
-                            Vec::new()
-                        })
-                    };
-                    let deontic_audit = execution_lab::check_deontic_consistency_with_history(&payload.relations, &deontic_history);
-                    if !deontic_audit.consistent {
-                        warn!(
-                            "[Handler] Deontic audit: {} Axiom D violation(s) detected against history",
-                            deontic_audit.violations.len()
-                        );
-                        for v in &deontic_audit.violations {
-                            warn!(
-                                "[Handler] Violation: ({}) {} {} vs ({}) {} {}",
-                                v.required_by, v.subject, v.object, v.forbidden_by, v.subject, v.object
-                            );
-                        }
-                    }
-
-                    // STEP 3c-quinquies: rejet dur OPT-IN de l'audit deontique
-                    // cross-history (2026-10-30, question ouverte depuis
-                    // l'audit du 28/29 octobre -- cf. commentaire STEP 3c
-                    // ci-dessus). Par design assume, une contradiction qui
-                    // s'etale sur plusieurs payloads reste INFORMATIVE par
-                    // defaut (DEONTIC_AUDIT seul, jamais de rejet): un desaccord
-                    // historique entre agents n'est pas forcement une erreur de
-                    // protocole. Mais certains domaines (finance, securite) ont
-                    // besoin de l'inverse -- qu'une contradiction avec
-                    // l'historique devienne bloquante. Plutot que de changer le
-                    // comportement par defaut (ce qui casserait la semantique
-                    // documentee et les tests existants bases dessus), l'appelant
-                    // opte in explicitement via
-                    // INTENT_PAYLOAD[strict_deontic_history=true]. Champ absent
-                    // ou != "true"/"1" => comportement inchange (informatif
-                    // seulement, teste depuis le 2026-09-04).
-                    let strict_deontic_history = matches!(
-                        payload.intent.get("strict_deontic_history").map(String::as_str),
-                        Some("true") | Some("1")
-                    );
-                    if strict_deontic_history && !deontic_audit.consistent {
-                        let errors: String = deontic_audit
-                            .violations
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, v)| {
-                                format!(
-                                    "E107H[{idx}]: {} {} contredit l'historique (requis par {}, interdit par {})",
-                                    v.subject, v.object, v.required_by, v.forbidden_by
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join("; ");
-                        warn!(
-                            "[Handler] strict_deontic_history=true: rejet dur de {} violation(s) cross-history",
-                            deontic_audit.violations.len()
-                        );
-                        let response = format!(
-                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=validation_error, errors={}]\n---END---\n",
-                            errors
-                        );
-                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
-                        continue;
-                    }
 
                     // STEP 3c-ter: EXECUTION_TRACE (2026-09-08, session tripartite
                     // du 22 mai 2026 -- CSTL_SPEC_v5_0.md §16.6). Genere PAR LE
@@ -2353,6 +2360,9 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                 // cote serveur ci-dessus pour le debug.
                 let details = match &e {
                     parser::ParseError::MissingHashbang => "missing_hashbang",
+                    // Categorie fixe (jamais le contenu brut) : dit a l'IA cliente
+                    // que c'est sa premiere ligne qui est en cause (2026-11-20).
+                    parser::ParseError::InvalidFormat(m) if m.starts_with("malformed_header") => "malformed_header",
                     parser::ParseError::InvalidFormat(_) => "invalid_format",
                     parser::ParseError::MissingEndMarker => "missing_end_marker",
                     parser::ParseError::MalformedBlock(_) => "malformed_block",

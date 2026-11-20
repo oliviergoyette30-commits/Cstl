@@ -155,6 +155,19 @@ pub type GraphRelationRow = (String, String, String, String, Option<String>, Opt
 /// Ligne brute de `get_conversation_context` : (hash, payload, encoder, produced_by, turn).
 pub type ConversationTurnRow = (String, String, Option<String>, Option<String>, i64);
 
+/// Resultat de `AdnStore::verify_integrity`.
+#[derive(Debug, Default, Clone)]
+pub struct IntegrityReport {
+    pub entries: usize,
+    pub content_verified: usize,
+    pub content_unverifiable: usize,
+    pub problems: Vec<String>,
+}
+
+fn short(hash: &str) -> String {
+    hash.chars().take(19).collect()
+}
+
 pub struct AdnStore {
     conn: Connection,
 }
@@ -1758,6 +1771,74 @@ impl AdnStore {
 
         eprintln!("[AdnStore] Loaded {} audit entries from disk", chain.len());
         Ok(chain)
+    }
+
+    /// Verification d'integrite COMPLETE de l'historique persiste (2026-11-20).
+    ///
+    /// Avant : `load_chain` rechargeait la chaine sans aucun controle, et
+    /// `HashChain::verify_integrity` ne regardait que les liens. Verifie en
+    /// direct : un message reecrit dans la base (contenu "shipped" ->
+    /// "refunded") ou un maillon supprime passaient sans aucune alerte au
+    /// redemarrage. Trois controles ici :
+    /// 1. liens : chaque `parent_hash` est le hash du maillon precedent ;
+    /// 2. contenu : le hash RECALCULE depuis le message stocke
+    ///    (`audit::canonical_hash`) est celui enregistre ;
+    /// 3. relations derivees : `adn_relations` (lue par le graphe et les
+    ///    controles de coherence) correspond aux relations du message.
+    /// Un maillon dont le message n'est pas stocke (ex. agent_register) ne
+    /// peut etre verifie que par ses liens : compte a part, pas une erreur.
+    pub fn verify_integrity(&self, chain: &crate::server::audit::HashChain) -> Result<IntegrityReport, rusqlite::Error> {
+        let mut report = IntegrityReport { entries: chain.entries.len(), ..Default::default() };
+        let mut expected_parent = "root".to_string();
+        for entry in &chain.entries {
+            if entry.parent_hash != expected_parent {
+                report.problems.push(format!(
+                    "seq={} : lien rompu (parent_hash={}, attendu={}) -- maillon supprime, insere ou modifie",
+                    entry.seq, short(&entry.parent_hash), short(&expected_parent)
+                ));
+            }
+            expected_parent = entry.hash.clone();
+
+            let Some(stored) = self.get(&entry.hash)? else {
+                report.content_unverifiable += 1;
+                continue;
+            };
+            let parsed = match crate::server::parser::parse_payload(&stored.payload) {
+                Ok(p) => p,
+                Err(e) => {
+                    report.problems.push(format!("seq={} : message stocke illisible ({e})", entry.seq));
+                    continue;
+                }
+            };
+            let recomputed = crate::server::audit::canonical_hash(&parsed);
+            if recomputed != entry.hash {
+                report.problems.push(format!(
+                    "seq={} : contenu modifie (hash recalcule {} != hash enregistre {})",
+                    entry.seq, short(&recomputed), short(&entry.hash)
+                ));
+                continue;
+            }
+            report.content_verified += 1;
+
+            let mut expected: Vec<(String, String, String, Option<String>)> = parsed.relations.iter()
+                .filter_map(|r| Some((r.get("subject")?.clone(), r.get("type")?.clone(), r.get("object")?.clone(), r.get("modality").cloned())))
+                .collect();
+            let mut stmt = self.conn.prepare_cached(
+                "SELECT subject, predicate, object, modality FROM adn_relations WHERE hash = ?1",
+            )?;
+            let mut actual: Vec<(String, String, String, Option<String>)> = stmt
+                .query_map(params![entry.hash], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
+                .collect::<Result<_, _>>()?;
+            expected.sort();
+            actual.sort();
+            if expected != actual {
+                report.problems.push(format!(
+                    "seq={} : relations derivees (adn_relations) differentes du message signe",
+                    entry.seq
+                ));
+            }
+        }
+        Ok(report)
     }
 
     pub fn audit_count(&self) -> Result<u64, rusqlite::Error> {

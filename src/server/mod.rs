@@ -201,6 +201,33 @@ impl CstlNativeServer {
             .load_chain()
             .map_err(|e| format!("impossible de charger la chaine d'audit persistee depuis '{data_path}': {e}"))?;
 
+        // Verification d'integrite au demarrage (2026-11-20) -- avant, une base
+        // falsifiee etait rechargee sans aucune alerte. Echec SUR par defaut :
+        // un historique d'audit qui ne se verifie pas ne doit pas servir de
+        // base aux decisions suivantes. CSTL_ACCEPT_BROKEN_CHAIN=1 permet de
+        // demarrer quand meme, en connaissance de cause (alerte maintenue).
+        let integrity = adn_store
+            .verify_integrity(&chain)
+            .map_err(|e| format!("verification d'integrite impossible sur '{data_path}': {e}"))?;
+        eprintln!(
+            "[AdnStore] Integrite : {} maillon(s), {} contenu(s) verifie(s) par recalcul du hash, {} non verifiable(s) (message non stocke), {} probleme(s)",
+            integrity.entries, integrity.content_verified, integrity.content_unverifiable, integrity.problems.len()
+        );
+        if !integrity.problems.is_empty() {
+            for p in &integrity.problems {
+                eprintln!("[AdnStore] INTEGRITE COMPROMISE : {p}");
+            }
+            let accepted = std::env::var("CSTL_ACCEPT_BROKEN_CHAIN").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
+            if !accepted {
+                return Err(format!(
+                    "historique d'audit compromis dans '{data_path}' ({} probleme(s), detail ci-dessus) -- demarrage refuse. \
+                     Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+                    integrity.problems.len()
+                ));
+            }
+            eprintln!("[AdnStore] CSTL_ACCEPT_BROKEN_CHAIN=1 : demarrage malgre un historique compromis");
+        }
+
         // Seed la Couche 2 (gouvernance) depuis ce qui est deja persiste --
         // meme logique que `chain` juste au-dessus. `since` ne rapatrie que
         // ce qui tombe encore dans la plus grande des deux fenetres

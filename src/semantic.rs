@@ -612,7 +612,7 @@ impl<'a> SemanticValidator<'a> {
                     // que ce message ne soit mis a jour (trouve en direct en
                     // repondant a une question de GPT sur ce meme message).
                     // OFFICIAL_OPERATORS.len() ne peut plus se perimer.
-                    "Opérateur invalide '{}' — absent des {} opérateurs officiels (ligne {})",
+                    "Opérateur invalide '{}' — absent des {} opérateurs officiels (relation n°{})",
                     r.operator, OFFICIAL_OPERATORS.len(), r.line
                 ),
                 line: r.line,
@@ -625,7 +625,7 @@ impl<'a> SemanticValidator<'a> {
                 .map(|r| SemanticError {
                     code: "W601".to_string(),
                     message: format!(
-                        "Opérateur '{}' déprécié depuis v5.0 — migrer vers EQUALS/POSSESSES/RESEMBLES/CO_LOCATES/OPPOSES/COMPARES (ligne {})",
+                        "Opérateur '{}' déprécié depuis v5.0 — migrer vers EQUALS/POSSESSES/RESEMBLES/CO_LOCATES/OPPOSES/COMPARES (relation n°{})",
                         r.operator, r.line
                     ),
                     line: r.line,
@@ -658,7 +658,7 @@ impl<'a> SemanticValidator<'a> {
                     errors.push(SemanticError {
                         code: "E107".to_string(),
                         message: format!(
-                            "SDL Axiome D violé : ({}) {} {} et ({}) {} {} coexistent (lignes {}, {})",
+                            "SDL Axiome D violé : ({}) {} {} et ({}) {} {} coexistent (relations n°{} et n°{})",
                             m1, c1.subject, c1.object, m2, c2.subject, c2.object, c1.line, c2.line
                         ),
                         line: c2.line,
@@ -750,7 +750,7 @@ impl<'a> SemanticValidator<'a> {
                     errors.push(SemanticError {
                         code: "E110".to_string(),
                         message: format!(
-                            "SDL Axiome K violé : ({}) {} {} ENTAILS (transitivement) {}, mais ({}) {} {} l'interdit (lignes {}, {})",
+                            "SDL Axiome K violé : ({}) {} {} ENTAILS (transitivement) {}, mais ({}) {} {} l'interdit (relations n°{} et n°{})",
                             m1, c1.subject, c1.object, c2.object, m2, c2.subject, c2.object, c1.line, c2.line
                         ),
                         line: c2.line,
@@ -944,7 +944,7 @@ impl<'a> SemanticValidator<'a> {
                     errors.push(SemanticError {
                         code: "W611".to_string(),
                         message: format!(
-                            "REACTS valence='{}' hors de l'enumeration documentee {:?} (ligne {})",
+                            "REACTS valence='{}' hors de l'enumeration documentee {:?} (relation n°{})",
                             f.value, Self::REACTS_VALID_VALENCE, f.line
                         ),
                         line: f.line,
@@ -975,7 +975,7 @@ impl<'a> SemanticValidator<'a> {
                     errors.push(SemanticError {
                         code: "W612".to_string(),
                         message: format!(
-                            "INVOLVES role='{}' hors de l'enumeration documentee {:?} (ligne {})",
+                            "INVOLVES role='{}' hors de l'enumeration documentee {:?} (relation n°{})",
                             f.value, Self::INVOLVES_VALID_ROLE, f.line
                         ),
                         line: f.line,
@@ -998,7 +998,7 @@ impl<'a> SemanticValidator<'a> {
                 errors.push(SemanticError {
                     code: "E705".to_string(),
                     message: format!(
-                        "EITHER_OR ({}, {}) — identical subject and object, degenerate disjunction (ligne {})",
+                        "EITHER_OR ({}, {}) — identical subject and object, degenerate disjunction (relation n°{})",
                         r.subject, r.object, r.line
                     ),
                     line: r.line,
@@ -1223,7 +1223,7 @@ impl<'a> SemanticValidator<'a> {
                 let tau = attr_tau(r)?;
                 (tau == "p" || tau == "p_past").then(|| SemanticError {
                     code: "W502".to_string(),
-                    message: format!("MAINTAIN avec τ=p sémantiquement invalide (ligne {})", r.line),
+                    message: format!("MAINTAIN avec τ=p sémantiquement invalide (relation n°{})", r.line),
                     line: r.line,
                 })
             })
@@ -1241,7 +1241,7 @@ impl<'a> SemanticValidator<'a> {
                     errors.push(SemanticError {
                         code: "E109".to_string(),
                         message: format!(
-                            "Contradiction AMP/INH sur paire ({}, {}) — lignes {} et {}",
+                            "Contradiction AMP/INH sur paire ({}, {}) — relations n°{} et n°{}",
                             a.subject, a.object, a.line, i.line
                         ),
                         line: i.line,
@@ -1259,7 +1259,7 @@ impl<'a> SemanticValidator<'a> {
                 let tau = attr_tau(r)?;
                 (!VALID_TAU.contains(&tau.as_str())).then(|| SemanticError {
                     code: "W503".to_string(),
-                    message: format!("Valeur τ invalide '{}' (ligne {})", tau, r.line),
+                    message: format!("Valeur τ invalide '{}' (relation n°{})", tau, r.line),
                     line: r.line,
                 })
             })
@@ -1276,7 +1276,7 @@ impl<'a> SemanticValidator<'a> {
                         errors.push(SemanticError {
                             code: "R9".to_string(),
                             message: format!(
-                                "Attribut '{}={}' hors ontologie (ligne {}). Valeurs canoniques: {:?}",
+                                "Attribut '{}={}' hors ontologie (relation n°{}). Valeurs canoniques: {:?}",
                                 f.name, f.value, f.line, canonical
                             ),
                             line: f.line,
@@ -1298,7 +1298,7 @@ impl<'a> SemanticValidator<'a> {
                 errors.push(SemanticError {
                     code: "R10".to_string(),
                     message: format!(
-                        "Anti-bombing : {} attributs détectés sur '{} {} {}' (ligne {}) — possible attaque, limite {}",
+                        "Anti-bombing : {} attributs détectés sur '{} {} {}' (relation n°{}) — possible attaque, limite {}",
                         n, r.subject, r.operator, r.object, r.line, ATTR_ERROR_THRESHOLD
                     ),
                     line: r.line,
@@ -1307,7 +1307,7 @@ impl<'a> SemanticValidator<'a> {
                 errors.push(SemanticError {
                     code: "W504".to_string(),
                     message: format!(
-                        "k=9 dépassé : {} attributs sur '{} {} {}' (ligne {}) — au-delà du seuil recommandé",
+                        "k=9 dépassé : {} attributs sur '{} {} {}' (relation n°{}) — au-delà du seuil recommandé",
                         n, r.subject, r.operator, r.object, r.line
                     ),
                     line: r.line,

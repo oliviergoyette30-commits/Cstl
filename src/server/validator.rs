@@ -344,8 +344,12 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
             && tok.len() >= 2
     }
 
-    let relations: Vec<AstRelation> = payload.relations.iter()
-        .filter_map(|r| {
+    // `line` = position (1-based) de la RELATION dans le message (2026-11-20).
+    // Le parser ne conserve pas le numero de ligne du texte -- l'ajouter dans
+    // la relation changerait les octets signes -- donc les erreurs affichaient
+    // "ligne 0" pour toutes les relations. La position est exacte et utile.
+    let relations: Vec<AstRelation> = payload.relations.iter().enumerate()
+        .filter_map(|(idx, r)| {
             let operator = r.get("type").cloned().unwrap_or_default();
             if !looks_like_sdl_operator(&operator) {
                 return None;
@@ -356,7 +360,7 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
                 object: r.get("object").cloned().unwrap_or_default(),
                 attrs: Vec::new(),
                 modality: None,
-                line: 0,
+                line: idx + 1,
             })
         })
         .collect();
@@ -385,8 +389,8 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
 /// jamais matcher par accident -- pas besoin de l'heuristique majuscules
 /// utilisee pour la whitelist generique.
 fn relations_to_ast_full(payload: &CstlPayload) -> Vec<AstRelation> {
-    payload.relations.iter()
-        .map(|r| {
+    payload.relations.iter().enumerate()
+        .map(|(idx, r)| {
             let attrs: Vec<crate::ast::Field> = r.iter()
                 .filter(|(k, _)| !matches!(k.as_str(), "subject" | "type" | "object" | "modality"))
                 .map(|(k, v)| crate::ast::Field {
@@ -402,7 +406,7 @@ fn relations_to_ast_full(payload: &CstlPayload) -> Vec<AstRelation> {
                 object: r.get("object").cloned().unwrap_or_default(),
                 attrs,
                 modality: r.get("modality").cloned(),
-                line: 0,
+                line: idx + 1,
             }
         })
         .collect()
@@ -621,14 +625,14 @@ pub fn check_orphaned_entities(payload: &CstlPayload) -> Vec<String> {
 /// SDL Axiome D deja ecrit et teste (`semantic.rs`) au lieu de reinventer
 /// une verification de substring.
 fn validate_deontic_constraints(payload: &CstlPayload, result: &mut ValidationResult) {
-    let relations: Vec<AstRelation> = payload.relations.iter()
-        .map(|r| AstRelation {
+    let relations: Vec<AstRelation> = payload.relations.iter().enumerate()
+        .map(|(idx, r)| AstRelation {
             subject: r.get("subject").cloned().unwrap_or_default(),
             operator: r.get("type").cloned().unwrap_or_default(),
             object: r.get("object").cloned().unwrap_or_default(),
             attrs: Vec::new(),
             modality: r.get("modality").cloned(),
-            line: 0,
+            line: idx + 1,
         })
         .collect();
 

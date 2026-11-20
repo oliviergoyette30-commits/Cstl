@@ -52,7 +52,7 @@ PAS toutes complètes. Résumé honnête :
 | 5 Mémoire / provenance | ✅ câblée, persistée (SQLite), relue après redémarrage |
 | 6 Interface humaine | 🟡 Obsidian réel (faits + déontique) ; Graphify réel (contenu, contradictions, signatures, chaîne de hachage) |
 | 7 Découverte d'agents | ✅ câblée, enregistrement signé, rotation de clé |
-| 8 Audit / garantie crypto | ✅ chaîne SHA-256 persistée, Ed25519 ; audit déontique intra-message bloquant, inter-messages bloquant en option |
+| 8 Audit / garantie crypto | ✅ chaîne SHA-256 persistée **et revérifiée au démarrage** (liens, hash recalculé depuis le contenu, relations dérivées : une base falsifiée bloque le démarrage), Ed25519 ; audit déontique intra-message bloquant, inter-messages bloquant en option |
 | 9 Orchestration déontique | 🟡 **observation seule** : les règles s'exécutent APRÈS l'action, rien n'est bloqué |
 | 10 Compression WAI | 🟡 compression de stockage et de réponse câblées ; décodage `server/wai.rs` branché sur aucun chemin réseau |
 
