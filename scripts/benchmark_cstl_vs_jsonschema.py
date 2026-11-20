@@ -160,6 +160,19 @@ REJECT_PURPOSES = ("validation_error", "signature_rejected", "operator_whitelist
                    "rejected", "error")
 
 
+def canonical_cycles(text):
+    """Le serveur affiche un cycle a partir d'un point de depart qui varie
+    d'une execution a l'autre (ordre de HashMap) : "A -> B -> C -> A" ou
+    "C -> A -> B -> C". On le reecrit a partir de son plus petit element pour
+    que les resultats enregistres ne changent pas sans raison."""
+    def fix(m):
+        nodes = [n.strip() for n in m.group(1).split("->")][:-1]
+        i = nodes.index(min(nodes))
+        rot = nodes[i:] + nodes[:i]
+        return "(" + " -> ".join(rot + [rot[0]]) + ")"
+    return re.sub(r"\(([^()]*->[^()]*)\)", fix, text)
+
+
 def cstl_verdict(resp):
     """Lit la VRAIE reponse : (rejete, signale, detail)."""
     meta_error = bool(re.search(r"^META \[.*status=error", resp, re.M))
@@ -174,6 +187,7 @@ def cstl_verdict(resp):
     for m in re.finditer(r"^SEMANTIC_WARNING \[detail=([^\]]{0,60})", resp, re.M):
         flags.append("WARN:" + m.group(1))
     detail = purpose if rejected else ("; ".join(flags) or "accepte sans signal")
+    detail = canonical_cycles(detail)
     if rejected:
         reason = re.search(r"(?:reason|detail)=([^,\]]{0,70})", resp)
         if reason:
