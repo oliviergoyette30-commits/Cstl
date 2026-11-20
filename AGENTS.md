@@ -155,7 +155,18 @@ INTENT_PAYLOAD [purpose=action_request, sender=<you>, receiver=server, action=wi
 
 Answer: `INTENT_PAYLOAD [purpose=action_authorization, ..., decision=allowed|denied, reason=..., rule=...]`
 plus an `AUDIT` line. A `MUST_NOT` on (you, that action) in the history
-denies it. With the Python SDK: `agent.act("wipe_db", do_it)` runs `do_it`
+denies it.
+
+Who may set those rules: with `CSTL_POLICY_AUTHORS=policy_owner,ops_lead_*`
+on the server, only rules from those agents count. Each rule must come in a
+message signed with the author's registered key. The **most recent** of
+those rules decides, so an authority can lift a prohibition. Rules from
+anyone else are ignored, and the response reports how many were ignored
+(`ignored_rules=N`). Without that variable, any rule counts and a
+prohibition can never be lifted. That was the original behavior, and it
+refused 3 correct actions in `scripts/team_task_benchmark.py`.
+
+With the Python SDK: `agent.act("wipe_db", do_it)` runs `do_it`
 only if allowed, else raises `ActionDenied`. Live test:
 `sdk/python/test_action_authorization_live.py`.
 

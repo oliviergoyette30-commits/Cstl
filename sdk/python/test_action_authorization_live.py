@@ -100,3 +100,56 @@ def test_whitelist_policy_allows_only_explicit_obligations(servers, monkeypatch,
     allowed, resp = bot.request_action("read_logs")
     assert not allowed and resp.fields.get("reason") == "default_deny_no_explicit_permission"
     assert bot.request_action("backup_db")[0]
+
+
+# -- Autorite et revision (CSTL_POLICY_AUTHORS, 2026-11-20) ------------------
+# Constate par scripts/team_task_benchmark.py : sans auteur de politique, la
+# couche 9 refusait des actions correctes (interdiction non levable, regle
+# d'un agent non autorise prise en compte).
+
+@pytest.fixture(scope="module")
+def authority_server():
+    if not BINARY.exists():
+        pytest.skip("cargo build --bin cstl_parser requis")
+    proc = start(5555, 8585, {"CSTL_POLICY_AUTHORS": "owner_*"})
+    yield
+    proc.terminate()
+    proc.wait(timeout=10)
+
+
+def named_agent(m, name, port):
+    a = m.CstlAgent(name, "hermes", port=port)
+    assert a.register()
+    return a
+
+
+def test_policy_owner_can_lift_a_prohibition(authority_server, monkeypatch, tmp_path):
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    rule = {"type": "PERFORM", "subject": bot.name, "object": "rotate_keys"}
+    owner.send_relations("server", [{**rule, "modality": "MUST_NOT"}])
+    allowed, resp = bot.request_action("rotate_keys")
+    assert not allowed and resp.fields.get("reason") == "forbidden", resp.raw
+    owner.send_relations("server", [{**rule, "modality": "MUST"}])
+    allowed, resp = bot.request_action("rotate_keys")
+    assert allowed and resp.fields.get("superseded") == "true", resp.raw
+
+
+def test_rules_from_non_authors_and_forged_senders_are_ignored(authority_server, monkeypatch, tmp_path):
+    from cstl_client import CstlClient
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    ops = named_agent(m, f"ops_{uuid.uuid4().hex[:8]}", 5555)
+    owner.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "check_backups", "modality": "MUST"}])
+    # Agent enregistre et signe, mais pas auteur de politique : ignore.
+    ops.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "check_backups", "modality": "MUST_NOT"}])
+    allowed, resp = bot.request_action("check_backups")
+    assert allowed and resp.fields.get("ignored_rules") == "1", resp.raw
+    # Message NON signe qui pretend venir d'un auteur (nom jamais enregistre) : ignore.
+    c = CstlClient(port=5555)
+    forged = c.send_raw(c.build_payload(
+        encoder="t", produced_by="t", purpose="inform", sender=f"owner_{uuid.uuid4().hex[:8]}", receiver="server",
+        relations=[{"type": "PERFORM", "subject": bot.name, "object": "check_backups", "modality": "MUST_NOT"}]))
+    assert not forged.is_error, forged.raw
+    allowed, resp = bot.request_action("check_backups")
+    assert allowed and resp.fields.get("ignored_rules") == "2", resp.raw

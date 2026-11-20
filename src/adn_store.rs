@@ -149,6 +149,18 @@ pub struct DbPeerReviewSignature {
 }
 
 /// Ligne brute de `load_agents` : (name, version, capabilities, trust_score, public_key).
+/// Une regle deontique persistee et son auteur (`deontic_rules_with_authors`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeonticRuleRow {
+    pub subject: String,
+    pub object: String,
+    pub modality: String,
+    /// `INTENT_PAYLOAD.sender` du message qui a affirme la regle.
+    pub author: Option<String>,
+    /// Cle publique du message, SEULEMENT si sa signature est valide.
+    pub signer_key: Option<String>,
+}
+
 pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
 /// Ligne de `graph_relations` : (hash, subject, predicate, object, modality, created_at).
 pub type GraphRelationRow = (String, String, String, String, Option<String>, Option<i64>);
@@ -1586,6 +1598,41 @@ impl AdnStore {
         let mut out = Vec::new();
         for r in rows {
             out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Regles deontiques persistees, dans l'ordre d'affirmation (la plus
+    /// ancienne d'abord), AVEC leur auteur : pour la couche 9 (2026-11-20),
+    /// qui doit savoir QUI a pose chaque regle. L'auteur et sa cle sont relus
+    /// dans le message stocke, et la signature est REVERIFIEE maintenant
+    /// (`signing::check_signature`) : `signer_key` n'est renseignee que si la
+    /// signature est valide. A l'appelant de comparer cette cle a la cle
+    /// enregistree de l'auteur.
+    pub fn deontic_rules_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        let rows: Vec<(String, String, String, String)> = {
+            let mut stmt = self.conn.prepare(
+                "SELECT hash, subject, object, modality FROM adn_relations
+                 WHERE modality IS NOT NULL ORDER BY id",
+            )?;
+            let it = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+            it.collect::<Result<_, _>>()?
+        };
+        let mut authors: HashMap<String, (Option<String>, Option<String>)> = HashMap::new();
+        let mut out = Vec::with_capacity(rows.len());
+        for (hash, subject, object, modality) in rows {
+            if !authors.contains_key(&hash) {
+                let info = match self.get(&hash)?.map(|e| crate::server::parser::parse_payload(&e.payload)) {
+                    Some(Ok(p)) => {
+                        let valid = crate::signing::check_signature(&p) == crate::signing::SignatureCheck::Valid;
+                        (p.intent.get("sender").cloned(), if valid { p.meta.get("public_key").cloned() } else { None })
+                    }
+                    _ => (None, None),
+                };
+                authors.insert(hash.clone(), info);
+            }
+            let (author, signer_key) = authors[&hash].clone();
+            out.push(DeonticRuleRow { subject, object, modality, author, signer_key });
         }
         Ok(out)
     }
