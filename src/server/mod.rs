@@ -13,6 +13,7 @@ pub mod connection_limits;
 pub mod handler;
 pub mod quorum;
 pub mod quorum_wire;
+pub mod action_authorization;
 pub mod arbitrage;
 pub mod castle;
 pub mod castle_wire;

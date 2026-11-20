@@ -12,6 +12,7 @@ import socket
 import time
 import argparse
 import hashlib
+import uuid
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -416,6 +417,14 @@ from cstl_client import CstlClient, CstlResponse  # noqa: E402
 ENCODER = "CstlLlmAgent"
 
 
+class ActionDenied(Exception):
+    """Action refusee par le serveur CSTL (CstlAgent.act)."""
+
+    def __init__(self, action: str, reason: str, rule: Optional[str] = None):
+        self.action, self.reason, self.rule = action, reason, rule
+        super().__init__(f"action '{action}' refusee : {reason}" + (f" ({rule})" if rule else ""))
+
+
 class CstlAgent:
     def __init__(self, name: str, provider_name: str = "hermes",
                  host: str = "127.0.0.1", port: int = 5050, strict_history: bool = False):
@@ -505,6 +514,26 @@ class CstlAgent:
         if relation is None:
             return None, None
         return relation, self.send_relations(receiver, [relation])
+
+    # -- Couche 9 : autorisation AVANT action (2026-11-20) --------------------
+    def request_action(self, action: str) -> Tuple[bool, CstlResponse]:
+        """Demande au serveur, AVANT d'agir, si `action` est autorisee pour cet
+        agent d'apres l'historique des obligations / interdictions. Retourne
+        (autorise, reponse) ; la decision est inscrite dans la chaine d'audit."""
+        # request_id unique : sans lui, deux demandes identiques ont le meme
+        # hash et la seconde est traitee comme un renvoi -- une seule trace
+        # dans la chaine d'audit pour deux demandes reelles.
+        resp = self._send_signed("action_request", "server", [],
+                                 {"action": action, "request_id": uuid.uuid4().hex})
+        return resp.fields.get("decision") == "allowed", resp
+
+    def act(self, action: str, func, *args, **kwargs):
+        """Execute `func` SEULEMENT si le serveur autorise `action`.
+        Sinon leve ActionDenied (rien n'est execute)."""
+        allowed, resp = self.request_action(action)
+        if not allowed:
+            raise ActionDenied(action, resp.fields.get("reason", resp.purpose), resp.fields.get("rule"))
+        return func(*args, **kwargs)
 
     def send_message(self, receiver: str, message: str) -> CstlResponse:
         """Texte libre signe (purpose=communication). ATTENTION : aucune
