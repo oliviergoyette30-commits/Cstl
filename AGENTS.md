@@ -208,6 +208,8 @@ recomputed hashes. A signed marker next to the key
 chain now stops before that link, its last links were deleted, and
 startup is refused. If the history is empty, the database was deleted or
 reset: the server logs a warning and starts over, signed from `seq=0`.
+Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so that a swapped key
+file is caught too. Tests: `tests/audit_integrity_test.rs`.
 
 **Rollback to an old copy.** Someone who restores an old copy of the
 database *and* its marker together gets an old but valid, signed state.
@@ -227,9 +229,7 @@ It also refuses if the witness is unreachable. The witness cannot make the
 server accept a fake state, because what it returns must carry the
 server's signature. Limit: links are sent asynchronously, so links written
 just before an abrupt stop may not have reached the witness yet. Live test:
-`sdk/python/test_witness_rollback_live.py`. Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so
-that a swapped key file is caught too. Tests:
-`tests/audit_integrity_test.rs`.
+`sdk/python/test_witness_rollback_live.py`.
 
 ## Navigating this repo without reading whole files — graphify
 
