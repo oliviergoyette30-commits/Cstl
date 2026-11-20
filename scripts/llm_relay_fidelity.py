@@ -159,6 +159,8 @@ def run(provider: str, hops: int) -> dict:
                 "chars": round(difflib.SequenceMatcher(None, ref_norm, norm).ratio(), 4),
                 "relations": round(len(ref_rels & rels) / len(ref_rels), 4),
                 "server_accepted": accepted,
+                "server_detail": (agent_mod.describe(resp) if resp is not None else "exception")[:300],
+                "output": current,  # texte relaye, pour auditer chaque mutation
             })
         out[condition] = rows
     return out

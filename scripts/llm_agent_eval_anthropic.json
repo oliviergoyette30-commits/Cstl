@@ -1,0 +1,172 @@
+[
+  {
+    "id": "fact_1",
+    "text": "The capital of France is Paris.",
+    "relation": {
+      "type": "EQUALS",
+      "subject": "capital_of_france",
+      "object": "paris"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=0)"
+  },
+  {
+    "id": "fact_2",
+    "text": "Einstein wrote the theory of relativity.",
+    "relation": {
+      "type": "ARR.CREATE",
+      "subject": "einstein",
+      "object": "theory_of_relativity"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=1)"
+  },
+  {
+    "id": "fact_3",
+    "text": "Water boils at 100 degrees Celsius.",
+    "relation": {
+      "type": "TRANSFORM",
+      "subject": "water",
+      "object": "steam_at_100_celsius"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=2)"
+  },
+  {
+    "id": "know_1",
+    "text": "Alice knows Bob.",
+    "relation": {
+      "type": "KNOWS",
+      "subject": "alice",
+      "object": "bob"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=3)"
+  },
+  {
+    "id": "neg_1",
+    "text": "Alice does not believe that Bob left early.",
+    "relation": {
+      "type": "DISBELIEVES",
+      "subject": "alice",
+      "object": "bob_left_early"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=4)"
+  },
+  {
+    "id": "belief_1",
+    "text": "The manager assumes the budget will be approved.",
+    "relation": {
+      "type": "ASSUMES",
+      "subject": "manager",
+      "object": "budget_approved"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=5)"
+  },
+  {
+    "id": "cond_1",
+    "text": "If Alice and Bob leave, the project fails.",
+    "relation": {
+      "type": "ENTAILS",
+      "subject": "alice_and_bob_leave",
+      "object": "project_fails"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=6)"
+  },
+  {
+    "id": "either_1",
+    "text": "The contract is either renewed or terminated.",
+    "relation": {
+      "type": "EITHER_OR",
+      "subject": "contract_renewed",
+      "object": "contract_terminated"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=7)"
+  },
+  {
+    "id": "forbid_1",
+    "text": "The NDA prohibits disclosure without prior written consent.",
+    "relation": {
+      "type": "COMMAND",
+      "subject": "nda",
+      "object": "disclosure_without_prior_written_consent",
+      "modality": "MUST_NOT"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=8)"
+  },
+  {
+    "id": "oblig_1",
+    "text": "Data controllers must implement security measures.",
+    "relation": {
+      "type": "ARR.PRODUCE",
+      "subject": "data_controllers",
+      "object": "security_measures",
+      "modality": "MUST"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=9)"
+  },
+  {
+    "id": "time_1",
+    "text": "The contract was signed before the delivery.",
+    "relation": {
+      "type": "BEFORE",
+      "subject": "contract_signing",
+      "object": "delivery"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=10)"
+  },
+  {
+    "id": "oppose_1",
+    "text": "The employees oppose the layoffs.",
+    "relation": {
+      "type": "OPPOSES",
+      "subject": "employees",
+      "object": "layoffs"
+    },
+    "produced": true,
+    "accepted": true,
+    "in_catalog": true,
+    "faithful": true,
+    "server": "ACCEPTE (seq=11)"
+  }
+]

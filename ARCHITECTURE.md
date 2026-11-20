@@ -43,7 +43,10 @@ serveur séparé ci-dessous serait une régression de cette réécriture.
 
 ### Couche 1: Transport (FORME/TRANSPORT)
 **État:** ✅ PROUVÉ
-**Fidelité:** 99.3% sur 12+ hops multimodel
+**Fidelité de transport** (relais de modele en modele, lignes RULE + regle d'immuabilite -- PAS la fidelite semantique) :
+- 99.3% sur 12+ hops multimodel : mesure d'origine MANUELLE (copier-coller en chat, un seul auditeur), non reproductible depuis ce depot.
+- Remesure automatisee 2026-11-20 (`scripts/llm_relay_fidelity.py`, claude-opus-5-5, 2 x 12 hops) : AVEC RULE, 21/24 hops copies au caractere pres (une execution a devie au hop 10 et la sortie modifiee a ete rejetee par le serveur), 100% des relations intactes, 99.95% de similarite caractere moyenne ; SANS RULE, 0% (le modele decode le payload en prose).
+- Relais par le serveur lui-meme : 100% a 1/2/3/5 hops (`scripts/multi_hop_fidelity_curve.py`).
 
 CSTL Wire Format avec hashbang `#!CSTL v5.0.0 MODE=A`, SHA-256 immutable, validation déterministe (`src/server/parser.rs`, `src/server/validator.rs`, `src/server/audit.rs`).
 
