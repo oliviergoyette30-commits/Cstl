@@ -396,6 +396,7 @@ mod tests {
             )),
             collect_response_corpus: false,
             require_signatures: false,
+            server_key: Arc::new(crate::server::server_key::ServerKey::ephemeral()),
         })
     }
 

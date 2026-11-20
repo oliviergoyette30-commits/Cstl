@@ -527,6 +527,17 @@ class CstlAgent:
                                  {"action": action, "request_id": uuid.uuid4().hex})
         return resp.fields.get("decision") == "allowed", resp
 
+    def authorize(self, action: str):
+        """Jeton d'autorisation SIGNE par le serveur pour `action`, a presenter
+        au systeme vise (`cstl_guard.CstlGuard.run`). Leve ActionDenied si
+        l'action est refusee (2026-11-20 : couche 9 obligatoire)."""
+        from cstl_guard import AuthorizationToken
+        allowed, resp = self.request_action(action)
+        token = AuthorizationToken.from_response(resp) if allowed else None
+        if token is None:
+            raise ActionDenied(action, resp.fields.get("reason", resp.purpose), resp.fields.get("rule"))
+        return token
+
     def act(self, action: str, func, *args, **kwargs):
         """Execute `func` SEULEMENT si le serveur autorise `action`.
         Sinon leve ActionDenied (rien n'est execute)."""

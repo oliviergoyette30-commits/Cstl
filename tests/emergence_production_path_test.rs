@@ -124,6 +124,7 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
         deontic: server.deontic,
         collect_response_corpus: false,
         require_signatures: false,
+        server_key: std::sync::Arc::new(cstl_parser::server::server_key::ServerKey::ephemeral()),
     });
 
     let connection_limits = std::sync::Arc::new(cstl_parser::server::connection_limits::ConnectionLimits::from_env());
