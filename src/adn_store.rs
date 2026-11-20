@@ -188,7 +188,15 @@ pub struct AdnStore {
     conn: Connection,
     /// Cle du serveur et premier `seq` qui doit etre signe (2026-11-20) :
     /// `save_audit_entry` signe chaque maillon, `verify_integrity` verifie.
-    audit_signer: Option<(std::sync::Arc<crate::server::server_key::ServerKey>, u64)>,
+    audit_signer: Option<AuditSigner>,
+}
+
+/// Cle du serveur, seuil de signature et dernier maillon attendu (marqueur
+/// signe lu au demarrage, voir `ServerKey::init_audit_marker`).
+struct AuditSigner {
+    key: std::sync::Arc<crate::server::server_key::ServerKey>,
+    since: u64,
+    expected_head: Option<(u64, String)>,
 }
 
 fn now_unix() -> i64 {
@@ -1782,14 +1790,20 @@ impl AdnStore {
     /// `canonical_hash`) soumis deux fois doit rester idempotent, comme
     /// `put()` ci-dessus -- `HashChain::append` en memoire ne deduplique pas
     /// lui-meme (voir server/audit.rs).
-    /// Active la signature des maillons par la cle du serveur. `since` :
-    /// premier `seq` qui doit etre signe (`ServerKey::audit_signed_since`).
-    pub fn set_audit_signer(&mut self, key: std::sync::Arc<crate::server::server_key::ServerKey>, since: u64) {
-        self.audit_signer = Some((key, since));
+    /// Active la signature des maillons par la cle du serveur, d'apres le
+    /// marqueur signe (`ServerKey::init_audit_marker`) : `since` = premier
+    /// `seq` qui doit etre signe, `head` = dernier maillon attendu.
+    pub fn set_audit_signer(&mut self, key: std::sync::Arc<crate::server::server_key::ServerKey>, marker: crate::server::server_key::AuditMarker) {
+        self.audit_signer = Some(AuditSigner { key, since: marker.since, expected_head: marker.head });
+    }
+
+    /// La base contient-elle au moins un maillon signe par le serveur ?
+    pub fn has_signed_audit_entries(&self) -> Result<bool, rusqlite::Error> {
+        self.conn.query_row("SELECT EXISTS(SELECT 1 FROM audit_trail WHERE server_signature IS NOT NULL)", [], |r| r.get(0))
     }
 
     pub fn save_audit_entry(&self, entry: &AuditEntry) -> Result<(), rusqlite::Error> {
-        let signature = self.audit_signer.as_ref().map(|(key, _)| {
+        let signature = self.audit_signer.as_ref().map(|AuditSigner { key, .. }| {
             key.sign_hex(crate::server::server_key::audit_message(
                 entry.seq, &entry.hash, &entry.parent_hash, &entry.sender, &entry.receiver, &entry.purpose,
             ).as_bytes())
@@ -1808,6 +1822,15 @@ impl AdnStore {
             ],
         )?;
         if rows_affected > 0 {
+            // Dernier maillon ecrit -> marqueur signe, APRES la base : un arret
+            // entre les deux laisse une chaine plus LONGUE que le marqueur
+            // (accepte), jamais plus courte (qui serait signalee a tort).
+            if let Some(AuditSigner { key, since, .. }) = &self.audit_signer {
+                let marker = crate::server::server_key::AuditMarker { since: *since, head: Some((entry.seq, entry.hash.clone())) };
+                if let Err(e) = key.write_audit_marker(&marker) {
+                    eprintln!("[AdnStore] ⚠️  marqueur de chaine non mis a jour: {}", e);
+                }
+            }
             eprintln!("[AdnStore] Audit persisted seq={}", entry.seq);
         } else {
             eprintln!("[AdnStore] Audit seq={} ignore (hash {} deja present)", entry.seq, entry.hash);
@@ -1875,8 +1898,23 @@ impl AdnStore {
             let rows = stmt.query_map([], |r| Ok((r.get::<_, u64>(0)?, r.get::<_, Option<String>>(1)?)))?;
             rows.collect::<Result<_, _>>()?
         };
+        // 5. derniers maillons supprimes (2026-11-20) : la chaine doit encore
+        //    contenir le dernier maillon enregistre dans le marqueur signe.
+        if let Some(AuditSigner { expected_head: Some((seq, hash)), .. }) = &self.audit_signer {
+            match chain.entries.iter().find(|e| e.seq == *seq) {
+                Some(e) if &e.hash == hash => {}
+                Some(e) => report.problems.push(format!(
+                    "seq={} : dernier maillon enregistre different (hash {} != {} attendu) -- fin de chaine reecrite",
+                    seq, short(&e.hash), short(hash)
+                )),
+                None => report.problems.push(format!(
+                    "derniers maillons supprimes : la chaine s'arrete a seq={} alors que seq={} avait ete ecrit",
+                    chain.entries.last().map(|e| e.seq.to_string()).unwrap_or_else(|| "(vide)".into()), seq
+                )),
+            }
+        }
         for entry in &chain.entries {
-            if let Some((key, since)) = &self.audit_signer {
+            if let Some(AuditSigner { key, since, .. }) = &self.audit_signer {
                 let message = crate::server::server_key::audit_message(
                     entry.seq, &entry.hash, &entry.parent_hash, &entry.sender, &entry.receiver, &entry.purpose,
                 );

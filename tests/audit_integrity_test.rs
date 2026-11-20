@@ -108,9 +108,9 @@ use std::sync::Arc;
 /// meme cle que le serveur chargera pour ce `path`).
 fn seed_signed(path: &str) -> Vec<String> {
     let key = Arc::new(ServerKey::for_data_path(path).unwrap());
-    let since = key.audit_signed_since(0).unwrap();
+    let marker = key.init_audit_marker(0, None, false).unwrap();
     let mut store = AdnStore::open(path).unwrap();
-    store.set_audit_signer(key, since);
+    store.set_audit_signer(key, marker);
     let mut chain = HashChain::new();
     let mut hashes = Vec::new();
     for object in ["approved", "shipped", "closed"] {
@@ -145,17 +145,19 @@ fn rewrite_last_message_consistently(path: &str, last_hash: &str) {
     c.execute("UPDATE audit_trail SET hash=?1 WHERE hash=?2", rusqlite::params![&new_hash, last_hash]).unwrap();
 }
 
+/// Meme sequence qu'au demarrage du serveur (`try_with_data_path`).
 fn signed_problems(path: &str) -> Vec<String> {
     let key = Arc::new(ServerKey::for_data_path(path).unwrap());
-    let since = key.audit_signed_since(0).unwrap();
     let mut store = AdnStore::open(path).unwrap();
-    store.set_audit_signer(key, since);
     let chain = store.load_chain().unwrap();
+    let last = chain.entries.last().map(|e| (e.seq, e.hash.clone()));
+    let marker = key.init_audit_marker(chain.entries.len() as u64, last, store.has_signed_audit_entries().unwrap()).unwrap();
+    store.set_audit_signer(key, marker);
     store.verify_integrity(&chain).unwrap().problems
 }
 
 fn cleanup(path: &str) {
-    for suffix in ["", ".server_key", ".server_key.pub", ".server_key.audit_since"] {
+    for suffix in ["", ".server_key", ".server_key.pub", ".server_key.audit_since", ".server_key.audit_since.tmp"] {
         std::fs::remove_file(format!("{path}{suffix}")).ok();
     }
 }
@@ -220,10 +222,90 @@ fn legacy_unsigned_history_still_starts_and_new_entries_must_be_signed() {
     let server = CstlNativeServer::try_with_data_path(0, &path).expect("historique ancien accepte");
     drop(server);
     let key = Arc::new(ServerKey::for_data_path(&path).unwrap());
-    assert_eq!(key.audit_signed_since(0).unwrap(), 3, "le marqueur garde la valeur ecrite au premier demarrage");
+    let marker = key.read_audit_marker().unwrap().expect("marqueur cree au premier demarrage");
+    assert_eq!(marker.since, 3, "le marqueur garde la valeur ecrite au premier demarrage");
     let mut store = AdnStore::open(&path).unwrap();
-    store.set_audit_signer(key, 3);
+    store.set_audit_signer(key, marker);
     let report = store.verify_integrity(&store.load_chain().unwrap()).unwrap();
     assert_eq!((report.signature_legacy, report.signature_verified, report.problems.len()), (3, 0, 0), "{report:?}");
+    cleanup(&path);
+}
+
+// -- Derniers maillons supprimes (2026-11-20) --------------------------------
+// Supprimer la FIN de la chaine ne casse ni un lien ni une signature : tout
+// ce qui reste est intact. Seul le marqueur signe du dernier maillon ecrit,
+// tenu hors de la base, le montre.
+
+#[test]
+fn deleted_last_links_are_detected_and_startup_refused() {
+    let path = temp_db("truncate");
+    seed_signed(&path);
+    assert!(signed_problems(&path).is_empty());
+    let c = Connection::open(&path).unwrap();
+    c.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    c.execute("DELETE FROM audit_trail WHERE seq >= 1", []).unwrap();
+    drop(c);
+    let p = signed_problems(&path);
+    assert!(p.iter().any(|m| m.contains("derniers maillons supprimes") && m.contains("seq=2")), "{p:?}");
+    let err = CstlNativeServer::try_with_data_path(0, &path).err().expect("demarrage doit etre refuse");
+    assert!(err.contains("historique d'audit compromis"), "{err}");
+    cleanup(&path);
+}
+
+#[test]
+fn deleted_marker_with_signed_history_refuses_startup() {
+    let path = temp_db("nomarker");
+    seed_signed(&path);
+    std::fs::remove_file(format!("{path}.server_key.audit_since")).unwrap();
+    let err = CstlNativeServer::try_with_data_path(0, &path).err().expect("demarrage doit etre refuse");
+    assert!(err.contains("absent"), "{err}");
+    cleanup(&path);
+}
+
+#[test]
+fn marker_behind_the_chain_is_accepted() {
+    // Arret entre l'ecriture en base et celle du marqueur : la chaine est
+    // plus LONGUE que le marqueur. Rien n'est perdu, ce n'est pas une alerte.
+    let path = temp_db("behind");
+    let hashes = seed_signed(&path);
+    let key = ServerKey::for_data_path(&path).unwrap();
+    key.write_audit_marker(&cstl_parser::server::server_key::AuditMarker { since: 0, head: Some((1, hashes[1].clone())) }).unwrap();
+    assert!(signed_problems(&path).is_empty(), "{:?}", signed_problems(&path));
+    cleanup(&path);
+}
+
+#[test]
+fn first_version_marker_is_upgraded_then_protects_the_tail() {
+    let path = temp_db("upgrade");
+    seed_signed(&path);
+    // Marqueur au format d'avant (seuil seul, sans dernier maillon).
+    let key = ServerKey::for_data_path(&path).unwrap();
+    let sig = key.sign_hex(b"cstl-audit-since-v1\nsince=0");
+    std::fs::write(format!("{path}.server_key.audit_since"), format!("since=0\nsignature={sig}\n")).unwrap();
+    drop(CstlNativeServer::try_with_data_path(0, &path).expect("ancien format accepte"));
+    let marker = key.read_audit_marker().unwrap().unwrap();
+    assert_eq!(marker.head.as_ref().map(|h| h.0), Some(2), "{marker:?}");
+    // Desormais, supprimer la fin est detecte.
+    Connection::open(&path).unwrap().execute("DELETE FROM audit_trail WHERE seq = 2", []).unwrap();
+    assert!(signed_problems(&path).iter().any(|m| m.contains("derniers maillons supprimes")));
+    cleanup(&path);
+}
+
+#[test]
+fn marker_for_an_empty_chain_round_trips_and_a_wiped_database_restarts() {
+    // Bug trouve par examples/agent_registry_persistence_test.rs : un
+    // marqueur cree sur une chaine VIDE etait relu comme falsifie.
+    let path = temp_db("empty");
+    drop(CstlNativeServer::try_with_data_path(0, &path).expect("demarrage #1"));
+    drop(CstlNativeServer::try_with_data_path(0, &path).expect("demarrage #2 sur la meme base vide"));
+    cleanup(&path);
+
+    // Base supprimee, cle et marqueur conserves : nouveau depart, pas un refus.
+    let path = temp_db("wiped");
+    seed_signed(&path);
+    std::fs::remove_file(&path).unwrap();
+    drop(CstlNativeServer::try_with_data_path(0, &path).expect("base supprimee : nouveau depart"));
+    let key = ServerKey::for_data_path(&path).unwrap();
+    assert_eq!(key.read_audit_marker().unwrap(), Some(cstl_parser::server::server_key::AuditMarker { since: 0, head: None }));
     cleanup(&path);
 }
