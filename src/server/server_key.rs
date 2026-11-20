@@ -25,6 +25,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 pub const AUTHZ_VERSION: &str = "cstl-authz-v1";
 pub const AUDIT_VERSION: &str = "cstl-audit-v1";
 const SINCE_VERSION: &str = "cstl-audit-since-v1";
+const MARKER_VERSION: &str = "cstl-audit-marker-v2";
 
 pub struct ServerKey {
     signing: SigningKey,
@@ -82,44 +83,127 @@ impl ServerKey {
         self.signing.verifying_key().verify(message, &Signature::from_bytes(&bytes)).is_ok()
     }
 
-    /// Premier `seq` de la chaine d'audit qui DOIT etre signe (2026-11-20).
-    /// Les maillons plus anciens datent d'avant la signature : ils restent
-    /// verifies par leurs liens et leur contenu, pas par une signature.
+    /// Marqueur de la chaine d'audit, stocke a cote de la cle
+    /// (`<cle>.audit_since`) et SIGNE (2026-11-20) :
+    /// - `since` : premier `seq` qui DOIT etre signe. Les maillons plus
+    ///   anciens datent d'avant la signature et restent verifies par leurs
+    ///   liens et leur contenu. Sans ce seuil signe, un attaquant qui
+    ///   reecrit la base pourrait retirer toutes les signatures et faire
+    ///   passer tout l'historique pour "ancien" ;
+    /// - `head` : dernier maillon ecrit (seq, hash), mis a jour a chaque
+    ///   ajout. Une chaine qui s'arrete AVANT ce maillon a perdu ses derniers
+    ///   maillons : ni les liens ni les signatures ne le montrent, puisque
+    ///   tout ce qui reste est intact.
     ///
-    /// Stocke a cote de la cle (`<cle>.audit_since`), SIGNE : sans ca, un
-    /// attaquant qui reecrit la base pourrait retirer toutes les signatures
-    /// et faire passer tout l'historique pour "ancien". Absent -> cree avec
-    /// `chain_len` (tout maillon a venir sera signe). Present mais signature
-    /// invalide -> erreur (marqueur falsifie). Cle ephemere -> `chain_len`.
-    pub fn audit_signed_since(&self, chain_len: u64) -> Result<u64, String> {
-        let Some(key_path) = &self.path else { return Ok(chain_len) };
+    /// Lecture : `Ok(None)` si absent, `Err` si present mais falsifie ou
+    /// illisible. Le format sans `head` (premiere version du marqueur) est
+    /// encore accepte : il est complete au demarrage suivant.
+    pub fn read_audit_marker(&self) -> Result<Option<AuditMarker>, String> {
+        let Some(key_path) = &self.path else { return Ok(None) };
         let path = audit_since_path(key_path);
-        if path.exists() {
-            let text = std::fs::read_to_string(&path)
-                .map_err(|e| format!("marqueur '{}' illisible: {e}", path.display()))?;
-            let mut since = None;
-            let mut sig = None;
-            for line in text.lines() {
-                if let Some(v) = line.strip_prefix("since=") { since = v.trim().parse::<u64>().ok(); }
-                if let Some(v) = line.strip_prefix("signature=") { sig = Some(v.trim().to_string()); }
-            }
-            return match (since, sig) {
-                (Some(n), Some(sig)) if self.verify_hex(since_message(n).as_bytes(), &sig) => Ok(n),
-                _ => Err(format!(
-                    "marqueur '{}' falsifie ou illisible : impossible de savoir depuis quand la chaine d'audit est signee",
-                    path.display()
-                )),
-            };
+        if !path.exists() {
+            return Ok(None);
         }
-        let sig = self.sign_hex(since_message(chain_len).as_bytes());
-        std::fs::write(&path, format!("since={chain_len}\nsignature={sig}\n"))
-            .map_err(|e| format!("ecriture de '{}' impossible: {e}", path.display()))?;
-        Ok(chain_len)
+        let falsified = || format!(
+            "marqueur '{}' falsifie ou illisible : impossible de verifier l'etendue de la chaine d'audit signee",
+            path.display()
+        );
+        let text = std::fs::read_to_string(&path).map_err(|e| format!("marqueur '{}' illisible: {e}", path.display()))?;
+        let field = |name: &str| text.lines().find_map(|l| l.strip_prefix(&format!("{name}=")).map(|v| v.trim().to_string()));
+        let since = field("since").and_then(|v| v.parse::<u64>().ok()).ok_or_else(falsified)?;
+        let sig = field("signature").ok_or_else(falsified)?;
+        let head = match (field("head_seq"), field("head_hash")) {
+            (Some(seq), Some(hash)) => Some((seq.parse::<u64>().map_err(|_| falsified())?, hash)),
+            (None, None) => None,
+            _ => return Err(falsified()),
+        };
+        let marker = AuditMarker { since, head };
+        // Sans dernier maillon : format actuel (chaine vide) OU premiere
+        // version du marqueur, qui ne connaissait que le seuil.
+        let valid = self.verify_hex(marker.message().as_bytes(), &sig)
+            || (marker.head.is_none() && self.verify_hex(format!("{SINCE_VERSION}\nsince={since}").as_bytes(), &sig));
+        if valid { Ok(Some(marker)) } else { Err(falsified()) }
+    }
+
+    /// Ecrit le marqueur (fichier temporaire puis renommage : jamais de
+    /// marqueur a moitie ecrit). Sans effet pour une cle ephemere.
+    pub fn write_audit_marker(&self, marker: &AuditMarker) -> Result<(), String> {
+        let Some(key_path) = &self.path else { return Ok(()) };
+        let path = audit_since_path(key_path);
+        let mut body = format!("since={}\n", marker.since);
+        if let Some((seq, hash)) = &marker.head {
+            body.push_str(&format!("head_seq={seq}\nhead_hash={hash}\n"));
+        }
+        body.push_str(&format!("signature={}\n", self.sign_hex(marker.message().as_bytes())));
+        let mut tmp = path.as_os_str().to_owned();
+        tmp.push(".tmp");
+        let tmp = PathBuf::from(tmp);
+        std::fs::write(&tmp, body).map_err(|e| format!("ecriture de '{}' impossible: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, &path).map_err(|e| format!("ecriture de '{}' impossible: {e}", path.display()))
+    }
+
+    /// Au demarrage : lit le marqueur, ou le cree. `chain_len` et `last` :
+    /// la chaine telle que chargee ; `has_signed_entries` : la base contient
+    /// deja au moins un maillon signe. Renvoie le marqueur a utiliser pour la
+    /// verification d'integrite (son `head` est celui d'AVANT ce demarrage).
+    ///
+    /// Marqueur absent alors que la base contient des maillons signes : il a
+    /// ete supprime (pour effacer le seuil ou le dernier maillon) -> erreur.
+    pub fn init_audit_marker(&self, chain_len: u64, last: Option<(u64, String)>, has_signed_entries: bool) -> Result<AuditMarker, String> {
+        if self.path.is_none() {
+            return Ok(AuditMarker { since: chain_len, head: None });
+        }
+        match self.read_audit_marker()? {
+            // Base VIDE alors que le marqueur connait des maillons : la base a
+            // ete supprimee ou reinitialisee (AGENTS.md la dit supprimable).
+            // On repart d'un marqueur neuf, avec une alerte. Ce n'est pas une
+            // falsification silencieuse : l'historique entier a disparu, ce
+            // qui se voit, et rien ne peut y etre remis sans la cle (tout
+            // maillon a partir de seq=0 doit etre signe).
+            Some(marker) if chain_len == 0 && marker.head.is_some() => {
+                eprintln!(
+                    "[CSTL-Native Server] ⚠️  historique d'audit VIDE alors que seq={} avait ete ecrit : base supprimee ou reinitialisee. Nouveau depart signe depuis seq=0.",
+                    marker.head.as_ref().map(|h| h.0).unwrap_or(0)
+                );
+                let fresh = AuditMarker { since: 0, head: None };
+                self.write_audit_marker(&fresh)?;
+                Ok(fresh)
+            }
+            Some(marker) => {
+                if marker.head.is_none() {
+                    // Premiere version du marqueur (sans dernier maillon) :
+                    // complete avec la chaine actuelle, une seule fois.
+                    self.write_audit_marker(&AuditMarker { since: marker.since, head: last })?;
+                }
+                Ok(marker)
+            }
+            None if has_signed_entries => Err(
+                "marqueur de la chaine d'audit absent alors que la base contient des maillons signes -- supprime ? demarrage refuse".to_string(),
+            ),
+            None => {
+                let marker = AuditMarker { since: chain_len, head: last };
+                self.write_audit_marker(&marker)?;
+                Ok(AuditMarker { since: chain_len, head: None })
+            }
+        }
     }
 }
 
-fn since_message(n: u64) -> String {
-    format!("{SINCE_VERSION}\nsince={n}")
+/// Contenu signe du marqueur de chaine (`ServerKey::read_audit_marker`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditMarker {
+    pub since: u64,
+    /// Dernier maillon ecrit : (seq, hash).
+    pub head: Option<(u64, String)>,
+}
+
+impl AuditMarker {
+    fn message(&self) -> String {
+        match &self.head {
+            Some((seq, hash)) => format!("{MARKER_VERSION}\nsince={}\nhead_seq={seq}\nhead_hash={hash}", self.since),
+            None => format!("{MARKER_VERSION}\nsince={}\nhead=none", self.since),
+        }
+    }
 }
 
 pub fn audit_since_path(key_path: &Path) -> PathBuf {

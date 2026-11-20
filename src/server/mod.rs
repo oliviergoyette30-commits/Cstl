@@ -221,8 +221,12 @@ impl CstlNativeServer {
             }
         }
         let server_key = Arc::new(server_key);
-        let since = server_key.audit_signed_since(chain.entries.len() as u64)?;
-        adn_store.set_audit_signer(server_key.clone(), since);
+        let has_signed = adn_store
+            .has_signed_audit_entries()
+            .map_err(|e| format!("lecture des signatures d'audit impossible sur '{data_path}': {e}"))?;
+        let last = chain.entries.last().map(|e| (e.seq, e.hash.clone()));
+        let marker = server_key.init_audit_marker(chain.entries.len() as u64, last, has_signed)?;
+        adn_store.set_audit_signer(server_key.clone(), marker);
 
         // Verification d'integrite au demarrage (2026-11-20) -- avant, une base
         // falsifiee etait rechargee sans aucune alerte. Echec SUR par defaut :

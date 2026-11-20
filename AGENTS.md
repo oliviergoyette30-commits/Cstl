@@ -203,7 +203,11 @@ that record survives a restart. The Rust equivalent is
 The same server key also **signs every link of the audit chain**. Startup
 re-verifies each signature and refuses to start if one is invalid,
 missing or stripped. That catches a full rewrite of the database with
-recomputed hashes. Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so
+recomputed hashes. A signed marker next to the key
+(`<db>.server_key.audit_since`) records the last link written. If the
+chain now stops before that link, its last links were deleted, and
+startup is refused. If the history is empty, the database was deleted or
+reset: the server logs a warning and starts over, signed from `seq=0`. Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so
 that a swapped key file is caught too. Tests:
 `tests/audit_integrity_test.rs`.
 
