@@ -455,8 +455,8 @@ async fn main() {
     // ============================================================
     println!("--- Point 9/10: Latence requetes Graphify (graphe reel, apres ~{total_messages_sent} messages) ---");
     let graphify_queries = vec![
-        format!("/graphify/filter?node_type=agent"),
-        format!("/graphify/search?q=bench"),
+        "/graphify/filter?node_type=agent".to_string(),
+        "/graphify/search?q=bench".to_string(),
         format!("/graphify/traverse?start={bench_sender}&depth=2"),
     ];
     for q in &graphify_queries {
