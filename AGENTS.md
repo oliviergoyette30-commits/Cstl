@@ -200,6 +200,13 @@ that record survives a restart. The Rust equivalent is
 `server_key::verify_authorization`. Live test:
 `sdk/python/test_mandatory_authorization_live.py`.
 
+The same server key also **signs every link of the audit chain**. Startup
+re-verifies each signature and refuses to start if one is invalid,
+missing or stripped. That catches a full rewrite of the database with
+recomputed hashes. Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so
+that a swapped key file is caught too. Tests:
+`tests/audit_integrity_test.rs`.
+
 ## Navigating this repo without reading whole files — graphify
 
 The repo is large (~70k lines across Rust, Python, docs). Before opening a

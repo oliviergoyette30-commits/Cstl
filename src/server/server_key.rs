@@ -23,6 +23,8 @@ use std::path::{Path, PathBuf};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 
 pub const AUTHZ_VERSION: &str = "cstl-authz-v1";
+pub const AUDIT_VERSION: &str = "cstl-audit-v1";
+const SINCE_VERSION: &str = "cstl-audit-since-v1";
 
 pub struct ServerKey {
     signing: SigningKey,
@@ -72,6 +74,66 @@ impl ServerKey {
     pub fn sign_hex(&self, message: &[u8]) -> String {
         hex::encode(self.signing.sign(message).to_bytes())
     }
+
+    pub fn verify_hex(&self, message: &[u8], signature_hex: &str) -> bool {
+        let Some(bytes) = hex::decode(signature_hex).ok().and_then(|b| <[u8; 64]>::try_from(b).ok()) else {
+            return false;
+        };
+        self.signing.verifying_key().verify(message, &Signature::from_bytes(&bytes)).is_ok()
+    }
+
+    /// Premier `seq` de la chaine d'audit qui DOIT etre signe (2026-11-20).
+    /// Les maillons plus anciens datent d'avant la signature : ils restent
+    /// verifies par leurs liens et leur contenu, pas par une signature.
+    ///
+    /// Stocke a cote de la cle (`<cle>.audit_since`), SIGNE : sans ca, un
+    /// attaquant qui reecrit la base pourrait retirer toutes les signatures
+    /// et faire passer tout l'historique pour "ancien". Absent -> cree avec
+    /// `chain_len` (tout maillon a venir sera signe). Present mais signature
+    /// invalide -> erreur (marqueur falsifie). Cle ephemere -> `chain_len`.
+    pub fn audit_signed_since(&self, chain_len: u64) -> Result<u64, String> {
+        let Some(key_path) = &self.path else { return Ok(chain_len) };
+        let path = audit_since_path(key_path);
+        if path.exists() {
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| format!("marqueur '{}' illisible: {e}", path.display()))?;
+            let mut since = None;
+            let mut sig = None;
+            for line in text.lines() {
+                if let Some(v) = line.strip_prefix("since=") { since = v.trim().parse::<u64>().ok(); }
+                if let Some(v) = line.strip_prefix("signature=") { sig = Some(v.trim().to_string()); }
+            }
+            return match (since, sig) {
+                (Some(n), Some(sig)) if self.verify_hex(since_message(n).as_bytes(), &sig) => Ok(n),
+                _ => Err(format!(
+                    "marqueur '{}' falsifie ou illisible : impossible de savoir depuis quand la chaine d'audit est signee",
+                    path.display()
+                )),
+            };
+        }
+        let sig = self.sign_hex(since_message(chain_len).as_bytes());
+        std::fs::write(&path, format!("since={chain_len}\nsignature={sig}\n"))
+            .map_err(|e| format!("ecriture de '{}' impossible: {e}", path.display()))?;
+        Ok(chain_len)
+    }
+}
+
+fn since_message(n: u64) -> String {
+    format!("{SINCE_VERSION}\nsince={n}")
+}
+
+pub fn audit_since_path(key_path: &Path) -> PathBuf {
+    let mut p = key_path.as_os_str().to_owned();
+    p.push(".audit_since");
+    PathBuf::from(p)
+}
+
+/// Message canonique signe pour un maillon de la chaine d'audit : tous les
+/// champs persistes dans `audit_trail`. Modifier le contenu d'un message
+/// change son hash, donc ce message : la signature ne tient plus, meme si
+/// l'attaquant recalcule tous les hash.
+pub fn audit_message(seq: u64, hash: &str, parent_hash: &str, sender: &str, receiver: &str, purpose: &str) -> String {
+    format!("{AUDIT_VERSION}\nseq={seq}\nhash={hash}\nparent_hash={parent_hash}\nsender={sender}\nreceiver={receiver}\npurpose={purpose}")
 }
 
 pub fn public_key_path(key_path: &Path) -> PathBuf {
