@@ -438,6 +438,74 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // — purpose=council_decision est traite a part: ce n'est pas un
                     // nouveau fait a verifier/stocker, c'est une action sur une entree
                     // DEJA dans l'adn_store. On court-circuite le reste du pipeline.
+                    // STEP 2-action (Couche 9, 2026-11-20) : AUTORISATION AVANT ACTION.
+                    // L'agent demande avant d'agir ; decision d'apres l'historique
+                    // persiste des obligations / interdictions (voir
+                    // action_authorization.rs pour les regles). Arrive ici, la
+                    // signature a deja passe STEP 2a (invalide, ou cle differente de
+                    // celle enregistree -> rejet plus haut). La demande et sa
+                    // decision sont inscrites dans la chaine d'audit, et le message
+                    // est stocke (sans relation : ce n'est pas une affirmation, il ne
+                    // doit pas alimenter l'historique deontique).
+                    if payload.intent.get("purpose").map(String::as_str) == Some("action_request") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let action = payload.intent.get("action").cloned();
+                        let sender_registered = registered_pubkey_for_sender.is_some();
+                        let identity_proven = sender_registered
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let history = {
+                            let store = ctx.adn_store.lock().await;
+                            store.deontic_relations_history().unwrap_or_else(|e| {
+                                error!("[Handler] action_request: deontic_relations_history failed: {}", e);
+                                Vec::new()
+                            })
+                        };
+                        let decision = super::action_authorization::decide(
+                            &sender,
+                            action.as_deref(),
+                            identity_proven,
+                            sender_registered,
+                            &history,
+                            super::action_authorization::DefaultPolicy::from_env(),
+                        );
+                        let (entry, _) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
+                        {
+                            let store = ctx.adn_store.lock().await;
+                            if let Err(e) = store.save_audit_entry(&entry) {
+                                error!("[Handler] action_request: save_audit_entry failed: {}", e);
+                            }
+                            if let Err(e) = store.put(
+                                &entry.hash, &raw_payload,
+                                payload.meta.get("encoder").map(String::as_str),
+                                payload.meta.get("produced_by").map(String::as_str),
+                                0.5, Some(&entry.parent_hash), None, None,
+                            ) {
+                                error!("[Handler] action_request: put failed: {}", e);
+                            }
+                        }
+                        info!(
+                            "[Handler] action_request sender={} action={:?} -> {} ({})",
+                            sender, action, if decision.allowed { "allowed" } else { "denied" }, decision.reason
+                        );
+                        let shown_action = action.filter(|a| super::action_authorization::is_valid_action(a)).unwrap_or_else(|| "invalid".to_string());
+                        let shown_sender = if super::action_authorization::is_valid_action(&sender) { sender.clone() } else { "invalid".to_string() };
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}]\n\
+                             AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
+                            shown_sender,
+                            shown_action,
+                            if decision.allowed { "allowed" } else { "denied" },
+                            decision.reason,
+                            decision.rule.as_ref().map(|r| format!(", rule={r}")).unwrap_or_default(),
+                            if decision.conflict { ", conflict=true" } else { "" },
+                            entry.hash, entry.parent_hash, entry.seq,
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     if payload.intent.get("purpose").map(String::as_str) == Some("council_decision") {
                         let sender = payload.intent.get("sender").cloned().unwrap_or_default();
                         let target_hash = payload.intent.get("target_hash").cloned();

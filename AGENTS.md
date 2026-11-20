@@ -144,6 +144,21 @@ Trust the live output over any written claim, including this file and
 If you find a gap, that's a legitimate finding worth reporting, not a
 sign you did something wrong.
 
+## Ask before you act — authorization (Layer 9)
+
+If your agent is about to *do* something (not just say something), ask the
+server first. Signed request, from a registered agent:
+
+```
+INTENT_PAYLOAD [purpose=action_request, sender=<you>, receiver=server, action=wipe_db, request_id=<unique>]
+```
+
+Answer: `INTENT_PAYLOAD [purpose=action_authorization, ..., decision=allowed|denied, reason=..., rule=...]`
+plus an `AUDIT` line. A `MUST_NOT` on (you, that action) in the history
+denies it. With the Python SDK: `agent.act("wipe_db", do_it)` runs `do_it`
+only if allowed, else raises `ActionDenied`. Live test:
+`sdk/python/test_action_authorization_live.py`.
+
 ## Navigating this repo without reading whole files — graphify
 
 The repo is large (~70k lines across Rust, Python, docs). Before opening a
