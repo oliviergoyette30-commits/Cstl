@@ -143,3 +143,31 @@ Trust the live output over any written claim, including this file and
 `README.md` -- both are maintained by hand and can drift from the code.
 If you find a gap, that's a legitimate finding worth reporting, not a
 sign you did something wrong.
+
+## Navigating this repo without reading whole files — graphify
+
+The repo is large (~70k lines across Rust, Python, docs). Before opening a
+file to find something, query the code graph: it answers in a few hundred
+bytes what reading a file costs thousands of tokens for.
+
+```bash
+pip install graphifyy          # the cloud environment's setup script does this
+graphify update .              # build/refresh graphify-out/ (AST only, no LLM, ~10s)
+graphify explain "fetch_json"                 # where a symbol is (file:line) + its links
+graphify explain "src/kb_verify.rs::verify_relation()"   # disambiguate by path
+graphify affected "parse_payload"             # what depends on it
+graphify god-nodes                            # core abstractions (AdnStore, CstlNativeServer, ...)
+graphify path "A" "B"                         # shortest link between two symbols
+```
+
+`graphify-out/` is git-ignored and goes stale after each commit: rerun
+`graphify update .` after editing code.
+
+**Known limit (checked 2026-11-20):** the Rust extraction misses method calls
+made from *another file* through a value or a lock guard
+(`kb_verifier.verify_relation(...)` in `handler.rs`,
+`state.adn_store.lock().await.graph_relations()` in `rest_api.rs`) — the graph
+then reports "no affected nodes" although callers exist. Calls inside the
+same file, symbol locations and structure are reliable. For cross-file
+callers, complete with a targeted `grep -rn "name(" src` before concluding
+something is unused.
