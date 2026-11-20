@@ -694,6 +694,9 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 | `GOOGLE_API_KEY` | Gemini model access | `AIza...` |
 | `CSTL_COUNCIL_MEMBERS` | Authorized council voters | `alice,bob,charlie` |
 | `CSTL_COLLECT_RESPONSE_CORPUS` | Opt-in: persist plain-text server responses to `response_corpus` for future dictionary retraining (off by default) | `1` or `true` |
+| `CSTL_BIND_HOST` | TCP listen address. **Default `127.0.0.1` since 2026-11-20** (was `0.0.0.0`): exposing the server is now explicit. Combine `0.0.0.0` with `CSTL_REQUIRE_SIGNATURES` and TLS. | `0.0.0.0` |
+| `CSTL_PORT` / `CSTL_REST_PORT` | TCP server port (default `5050`) / REST API port (default `8000`, always bound to `127.0.0.1`) | `5151` / `8181` |
+| `CSTL_REQUIRE_SIGNATURES` | Strict mode: every sender must be registered with an Ed25519 key and sign every message (`signature_required_strict_mode`, `sender_not_registered_strict_mode`). Off by default so the unsigned quick start in `AGENTS.md` keeps working; **turn it on as soon as the server is reachable from a network.** | `true` |
 
 ### Database
 

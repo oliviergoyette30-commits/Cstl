@@ -394,7 +394,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let reg = ctx.agent_registry.read().await;  // STEP 2a: lecture seule, 100+ msg/sec
                         reg.agents.iter().find(|a| a.name == sig_sender).and_then(|a| a.public_key.clone())
                     };
-                    let signature_required = registered_pubkey_for_sender.is_some();
+                    let signature_required = registered_pubkey_for_sender.is_some() || ctx.require_signatures;
                     // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
                     // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
                     // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
@@ -413,7 +413,12 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     } else {
                         match &sig_check {
                             SignatureCheck::Invalid(_) => Some("signature_invalid"),
+                            SignatureCheck::NotPresent if signature_required && registered_pubkey_for_sender.is_none() => Some("signature_required_strict_mode"),
                             SignatureCheck::NotPresent if signature_required => Some("missing_signature_for_registered_agent"),
+                            // Mode strict : une signature valide ne suffit pas, la cle doit
+                            // etre celle d'un agent ENREGISTRE -- sinon n'importe qui signe
+                            // avec une cle jetable sous un nom jamais enregistre.
+                            SignatureCheck::Valid if registered_pubkey_for_sender.is_none() && ctx.require_signatures => Some("sender_not_registered_strict_mode"),
                             SignatureCheck::Valid if signature_required && embedded_pubkey != registered_pubkey_for_sender => Some("public_key_mismatch"),
                             _ => None,
                         }
