@@ -1462,6 +1462,37 @@ impl AdnStore {
         Ok(())
     }
 
+    /// Provenance cryptographique de chaque message persiste (2026-11-20), pour
+    /// l'export Graphify : la signature est REVERIFIEE maintenant
+    /// (`signing::check_signature`, la meme fonction que le serveur a la
+    /// reception), pas seulement constatee presente. Cle : hash du message.
+    /// Valeur : (statut "valid" | "invalid" | "absent" | "unparsable",
+    /// cle publique embarquee si presente).
+    pub fn crypto_provenance(&self) -> Result<HashMap<String, (String, Option<String>)>, rusqlite::Error> {
+        let hashes: Vec<String> = {
+            let mut stmt = self.conn.prepare("SELECT hash FROM adn_store")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        let mut out = HashMap::new();
+        for hash in hashes {
+            let Some(entry) = self.get(&hash)? else { continue };
+            let info = match crate::server::parser::parse_payload(&entry.payload) {
+                Ok(p) => {
+                    let status = match crate::signing::check_signature(&p) {
+                        crate::signing::SignatureCheck::Valid => "valid",
+                        crate::signing::SignatureCheck::Invalid(_) => "invalid",
+                        crate::signing::SignatureCheck::NotPresent => "absent",
+                    };
+                    (status.to_string(), p.meta.get("public_key").cloned())
+                }
+                Err(_) => ("unparsable".to_string(), None),
+            };
+            out.insert(hash, info);
+        }
+        Ok(out)
+    }
+
     /// Relations persistees AVEC le message qui les a affirmees (hash) et la
     /// date reelle de ce message (`adn_store.created_at`, secondes unix) --
     /// pour l'export Graphify (2026-11-17), qui jusque-la ne montrait que

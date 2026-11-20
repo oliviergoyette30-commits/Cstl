@@ -133,3 +133,13 @@ def test_human_sees_agent_contradiction_in_obsidian_and_graphify(server, monkeyp
                  and e["source"] == "entity:robot_g" and e["metadata"].get("conflict") == "deontic"]
     assert len(conflicts) == 2, [e for e in graph["edges"] if e["source"] == "entity:robot_g"]
 
+    # Provenance cryptographique (2026-11-20) : les messages de cet agent sont
+    # revérifies a l'export, relies a SA cle, et chaines a leur predecesseur.
+    mine = [n for n in graph["nodes"] if n["type"] == "audit_entry"
+            and n["metadata"].get("sender") == agent.name]
+    assert mine and all(n["metadata"].get("signature") == "valid" for n in mine), mine
+    assert all(n["metadata"].get("key_matches_sender") == "true" for n in mine), mine
+    assert all(n["metadata"].get("chain_ok") == "true" for n in mine), mine
+    signed = {e["source"] for e in graph["edges"] if e["type"] == "signed_by"}
+    assert {n["id"] for n in mine} <= signed
+

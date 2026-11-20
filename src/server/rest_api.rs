@@ -14,6 +14,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::adn_store::AdnStore;
+use std::collections::HashMap;
 use crate::server::audit;
 use crate::server::graphify_server::GraphifyExporter;
 use crate::server::deontic_orchestration::DeonticOrchestrator;
@@ -339,6 +340,26 @@ async fn graph_rows(state: &ApiState) -> Vec<crate::adn_store::GraphRelationRow>
     })
 }
 
+/// Entrees de `build_with_crypto` (2026-11-20) : relations, provenance
+/// cryptographique revérifiee et cles enregistrees des agents. Erreur de
+/// lecture -> partie vide plutot qu'une 500.
+async fn graph_inputs(state: &ApiState) -> (
+    Vec<crate::adn_store::GraphRelationRow>,
+    HashMap<String, (String, Option<String>)>,
+    HashMap<String, String>,
+) {
+    let rows = graph_rows(state).await;
+    let store = state.adn_store.lock().await;
+    let prov = store.crypto_provenance().unwrap_or_else(|e| {
+        eprintln!("[REST] crypto_provenance failed: {}", e);
+        HashMap::new()
+    });
+    let keys = store.load_agents().map(|agents| {
+        agents.into_iter().filter_map(|(name, _, _, _, key)| key.map(|k| (name, k))).collect()
+    }).unwrap_or_default();
+    (rows, prov, keys)
+}
+
 /// `GET /graphify/export` -- construit et retourne le graphe complet
 /// (noeuds agents + entrees d'audit, arcs sends_to/responds_to) depuis la
 /// chaine d'audit COURANTE. Clone la chaine (`HashChain: Clone`, voir
@@ -348,7 +369,7 @@ async fn graph_rows(state: &ApiState) -> Vec<crate::adn_store::GraphRelationRow>
 async fn graphify_export(State(state): State<ApiState>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_with_content(&graph_rows(&state).await);
+    let payload = { let (rows, prov, keys) = graph_inputs(&state).await; exporter.build_with_crypto(&rows, &prov, &keys) };
     Json(payload)
 }
 
@@ -359,7 +380,7 @@ async fn graphify_export(State(state): State<ApiState>) -> impl IntoResponse {
 async fn graphify_stats(State(state): State<ApiState>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_with_content(&graph_rows(&state).await);
+    let payload = { let (rows, prov, keys) = graph_inputs(&state).await; exporter.build_with_crypto(&rows, &prov, &keys) };
     let stats = exporter.get_graph_stats(&payload);
     Json(stats)
 }
@@ -397,7 +418,7 @@ pub struct GraphifyQueryParams {
 async fn graphify_filter(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_with_content(&graph_rows(&state).await);
+    let payload = { let (rows, prov, keys) = graph_inputs(&state).await; exporter.build_with_crypto(&rows, &prov, &keys) };
 
     let nodes = params.node_type.as_deref().map(|t| exporter.filter_nodes_by_type(&payload, t));
     let edges = params.edge_type.as_deref().map(|t| exporter.filter_edges_by_type(&payload, t));
@@ -414,7 +435,7 @@ async fn graphify_filter(State(state): State<ApiState>, Query(params): Query<Gra
 async fn graphify_search(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_with_content(&graph_rows(&state).await);
+    let payload = { let (rows, prov, keys) = graph_inputs(&state).await; exporter.build_with_crypto(&rows, &prov, &keys) };
 
     match params.q {
         Some(q) => Json(json!({ "nodes": exporter.search_nodes(&payload, &q) })).into_response(),
@@ -428,7 +449,7 @@ async fn graphify_search(State(state): State<ApiState>, Query(params): Query<Gra
 async fn graphify_traverse(State(state): State<ApiState>, Query(params): Query<GraphifyQueryParams>) -> impl IntoResponse {
     let chain_snapshot = { state.chain.lock().await.clone() };
     let exporter = GraphifyExporter::new(chain_snapshot);
-    let payload = exporter.build_with_content(&graph_rows(&state).await);
+    let payload = { let (rows, prov, keys) = graph_inputs(&state).await; exporter.build_with_crypto(&rows, &prov, &keys) };
 
     match params.start {
         Some(start) => {
