@@ -418,8 +418,14 @@ ENCODER = "CstlLlmAgent"
 
 class CstlAgent:
     def __init__(self, name: str, provider_name: str = "hermes",
-                 host: str = "127.0.0.1", port: int = 5050):
+                 host: str = "127.0.0.1", port: int = 5050, strict_history: bool = False):
+        """strict_history=True (2026-11-20) : chaque envoi demande au serveur de
+        REJETER une contradiction deontique avec l'historique
+        (INTENT_PAYLOAD.strict_deontic_history=true) au lieu de seulement la
+        signaler. A utiliser quand l'agent agit sur ce qu'il envoie : un
+        signalement qu'il ne lirait pas ne protegerait rien."""
         self.name = name
+        self.strict_history = strict_history
         self.keyfile = Path.home() / ".cstl" / f"agent_{name}.key"
 
         # Load/create keys
@@ -487,7 +493,8 @@ class CstlAgent:
         """Envoie des relations VERIFIABLES (le serveur les controle : operateur,
         coherence, deontique, historique). Lire `response.is_error` (rejet) et
         `response.issues` (signalements sur un message accepte)."""
-        return self._send_signed(purpose, receiver, relations)
+        extra = {"strict_deontic_history": "true"} if self.strict_history else None
+        return self._send_signed(purpose, receiver, relations, extra)
 
     def tell(self, receiver: str, subject: str,
              peer_message: Optional[str] = None) -> Tuple[Optional[dict], Optional[CstlResponse]]:

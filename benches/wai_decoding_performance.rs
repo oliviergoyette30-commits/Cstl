@@ -7,7 +7,7 @@
 use std::time::Instant;
 
 /// Simulated WAI-Absolute decoder for this benchmark
-/// Real implementation in src/wai_compression.rs
+/// (src/wai_compression.rs, dont ce bench etait une copie, a ete supprime le 2026-11-20 : code mort)
 mod wai_decoder {
     use std::collections::BTreeMap;
 

@@ -3,7 +3,8 @@
 //! Port de orchestrator/cstl_verify_public_kb.py — même logique, même mapping,
 //! mêmes bornes BFS, mêmes corrections empiriques (2026-08-06 / 08-10 / 08-12).
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Mutex;
 use std::time::Duration;
 use serde::Serialize;
 use serde_json::Value;
@@ -67,7 +68,20 @@ pub struct KbVerifier {
     client: reqwest::Client,
     search_api: String,
     sparql_endpoint: String,
+    /// Cache des resolutions d'entites (2026-11-20). Sans lui, CHAQUE
+    /// relation refaisait 2 recherches + 1 a N verifications d'homonymie,
+    /// meme pour des entites deja vues ("Paris", "Albert Einstein") -- ce qui
+    /// declenchait la limite de debit Wikidata (HTTP 429) en quelques
+    /// messages. Ne contient que des resultats DEFINITIFS (QID trouve, ou
+    /// "aucune entite"), jamais une erreur passagere (429, reseau).
+    entity_cache: Mutex<EntityCache>,
 }
+
+/// (libelle normalise, langue) -> (QID eventuel, libelle trouve ou raison).
+type EntityCache = HashMap<(String, String), (Option<String>, String)>;
+
+/// Au-dela, le cache est vide puis reconstruit (borne memoire simple).
+const ENTITY_CACHE_MAX: usize = 10_000;
 
 impl Default for KbVerifier {
     fn default() -> Self {
@@ -85,6 +99,7 @@ impl KbVerifier {
             client,
             search_api: WIKIDATA_SEARCH_API.to_string(),
             sparql_endpoint: WIKIDATA_SPARQL_ENDPOINT.to_string(),
+            entity_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -103,6 +118,7 @@ impl KbVerifier {
             client,
             search_api: search_api.into(),
             sparql_endpoint: sparql_endpoint.into(),
+            entity_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -160,6 +176,29 @@ impl KbVerifier {
     /// indépendamment de `lang` (correction du 2026-08-10 : la recherche
     /// anglaise résout mieux les entités communes sur l'index Wikidata).
     async fn search_entity(&self, label: &str, lang: &str, max_candidates: usize) -> (Option<String>, String) {
+        let key = (label.trim().to_lowercase(), lang.to_string());
+        if let Some(hit) = self.entity_cache.lock().ok().and_then(|c| c.get(&key).cloned()) {
+            return hit;
+        }
+        let result = self.search_entity_uncached(label, lang, max_candidates).await;
+        let definitive = result.0.is_some() || result.1 == "no_valid_non_disambiguation_entity_found";
+        if definitive {
+            if let Ok(mut cache) = self.entity_cache.lock() {
+                if cache.len() >= ENTITY_CACHE_MAX {
+                    cache.clear();
+                }
+                cache.insert(key, result.clone());
+            }
+        }
+        result
+    }
+
+    /// Nombre d'entites en cache (observabilite / tests).
+    pub fn cached_entities(&self) -> usize {
+        self.entity_cache.lock().map(|c| c.len()).unwrap_or(0)
+    }
+
+    async fn search_entity_uncached(&self, label: &str, lang: &str, max_candidates: usize) -> (Option<String>, String) {
         let mut languages_to_try = vec!["en"];
         if lang != "en" {
             languages_to_try.push(lang);

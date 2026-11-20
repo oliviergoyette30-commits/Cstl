@@ -23,7 +23,6 @@ pub mod audit;
 pub mod tls;
 pub mod rest_api;
 pub mod deontic_orchestration;
-pub mod deontic_state_machine;
 pub mod graphify_server;
 pub mod evaluated_payload;
 pub mod response_compression;

@@ -143,3 +143,23 @@ def test_human_sees_agent_contradiction_in_obsidian_and_graphify(server, monkeyp
     signed = {e["source"] for e in graph["edges"] if e["type"] == "signed_by"}
     assert {n["id"] for n in mine} <= signed
 
+
+def test_strict_history_agent_gets_contradiction_rejected(server, monkeypatch, tmp_path):
+    """strict_history=True : la meme contradiction que plus haut (MUST apres
+    MUST_NOT) est REJETEE, pas seulement signalee."""
+    import cstl_llm_agent as m
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    class Stub(m.LLMProvider):
+        def generate(self, prompt, max_tokens=500):
+            return ""
+
+    monkeypatch.setattr(m.HermesAgentBrain, "from_env", classmethod(lambda cls: Stub()))
+    agent = m.CstlAgent(f"agent_{uuid.uuid4().hex[:12]}", "hermes", strict_history=True)
+    assert agent.register()
+    subject = f"bot_{uuid.uuid4().hex[:6]}"
+    first = agent.send_relations("bob", [{"type": "PERFORM", "subject": subject, "object": "wipe", "modality": "MUST_NOT"}])
+    assert not first.is_error, m.describe(first)
+    second = agent.send_relations("bob", [{"type": "PERFORM", "subject": subject, "object": "wipe", "modality": "MUST"}])
+    assert second.is_error or second.status == "error", m.describe(second)
+
