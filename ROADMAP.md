@@ -63,6 +63,17 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - L'avantage vient de l'architecture : une source signée et un serveur
     qui fait foi. Le langage n'y est pour rien.
 
+- **`scripts/policy_history_benchmark.py` :** appliquer l'état final après
+  un long historique de révisions (jusqu'à 60 événements). Texte 24/24,
+  JSON 21/24 et 24/24, CSTL 24/24.
+  - Ce n'est pas un point faible des modèles actuels, donc CSTL n'y
+    apporte pas d'avantage net.
+  - Le test a révélé et fait corriger quatre défauts de CSTL : la
+    permission MAY manquait, la politique ne disait ni la règle par défaut
+    ni l'état des faits, elle montrait des règles remplacées, et le serveur
+    revérifiait toutes les signatures à chaque demande (192 ms à
+    600 règles).
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
