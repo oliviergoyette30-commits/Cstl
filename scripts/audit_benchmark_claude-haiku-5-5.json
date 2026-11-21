@@ -1,0 +1,590 @@
+{
+  "summary": {
+    "texte": {
+      "a0": {
+        "detected": 0,
+        "of": 3
+      },
+      "a1": {
+        "detected": 0,
+        "of": 3
+      },
+      "a2": {
+        "detected": 3,
+        "of": 3
+      },
+      "a3": {
+        "detected": 0,
+        "of": 3
+      },
+      "a4": {
+        "detected": 0,
+        "of": 3
+      },
+      "a5": {
+        "detected": 0,
+        "of": 3
+      },
+      "a6": {
+        "detected": 0,
+        "of": 3
+      }
+    },
+    "json": {
+      "a0": {
+        "detected": 0,
+        "of": 3
+      },
+      "a1": {
+        "detected": 0,
+        "of": 3
+      },
+      "a2": {
+        "detected": 3,
+        "of": 3
+      },
+      "a3": {
+        "detected": 0,
+        "of": 3
+      },
+      "a4": {
+        "detected": 0,
+        "of": 3
+      },
+      "a5": {
+        "detected": 0,
+        "of": 3
+      },
+      "a6": {
+        "detected": 0,
+        "of": 3
+      }
+    },
+    "json_chaine": {
+      "a0": {
+        "detected": 0,
+        "of": 1
+      },
+      "a1": {
+        "detected": 1,
+        "of": 1
+      },
+      "a2": {
+        "detected": 1,
+        "of": 1
+      },
+      "a3": {
+        "detected": 0,
+        "of": 1
+      },
+      "a4": {
+        "detected": 0,
+        "of": 1
+      },
+      "a5": {
+        "detected": 0,
+        "of": 1
+      },
+      "a6": {
+        "detected": 0,
+        "of": 1
+      }
+    },
+    "json_signe": {
+      "a0": {
+        "detected": 0,
+        "of": 1
+      },
+      "a1": {
+        "detected": 1,
+        "of": 1
+      },
+      "a2": {
+        "detected": 1,
+        "of": 1
+      },
+      "a3": {
+        "detected": 1,
+        "of": 1
+      },
+      "a4": {
+        "detected": 1,
+        "of": 1
+      },
+      "a5": {
+        "detected": 0,
+        "of": 1
+      },
+      "a6": {
+        "detected": 0,
+        "of": 1
+      }
+    },
+    "cstl": {
+      "a0": {
+        "detected": 0,
+        "of": 1
+      },
+      "a1": {
+        "detected": 1,
+        "of": 1
+      },
+      "a2": {
+        "detected": 1,
+        "of": 1
+      },
+      "a3": {
+        "detected": 1,
+        "of": 1
+      },
+      "a4": {
+        "detected": 1,
+        "of": 1
+      },
+      "a5": {
+        "detected": 1,
+        "of": 1
+      },
+      "a6": {
+        "detected": 1,
+        "of": 1
+      }
+    }
+  },
+  "rows": [
+    {
+      "attack": "a0",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement, et aucune entrée ne contredit les autres ; il n'y a toutefois ni hachage ni signature qui permettraient de le prouver formellement.\"}"
+    },
+    {
+      "attack": "a0",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages progressent régulièrement de 7 minutes, et chaque règle invoquée correspond à son autorisation, y compris l'exception de 2500 EUR validée par owner, donc rien dans le journal ne révèle une modification, même si une fin tronquée ou une ancienne copie remise ne peuvent pas être exclues sans comparaison ave"
+    },
+    {
+      "attack": "a0",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement, et chaque décision est cohérente avec sa règle, sans preuve interne de modification, bien que l'absence de chaînage cryptographique empêche de le garantir totalement.\"}"
+    },
+    {
+      "attack": "a0",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune incohérence interne n'apparaît : les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement toutes les 7 minutes, et chaque entrée est cohérente avec sa règle, mais l'absence de hachage ou de signature empêche de garantir qu'une réécriture complète n'a pas eu lieu.\"}"
+    },
+    {
+      "attack": "a0",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement, et aucune entrée ne présente de contradiction interne, mais le journal ne contient ni signature ni chaîne de hachage, donc cette absence d'indice ne prouve pas son intégrité.\"}"
+    },
+    {
+      "attack": "a0",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages sont croissants et régulièrement espacés de 7 minutes, et aucune entrée ne présente d'incohérence interne, bien que l'absence de chaînage cryptographique empêche d'exclure formellement un remplacement complet du journal et que le remboursement de 2500 € soit une exception autorisée mais inhabituelle.\"}"
+    },
+    {
+      "attack": "a0",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a0",
+      "log": "json_signe",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a1",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages sont régulièrement espacés de 7 minutes, et chaque décision respecte les règles indiquées, sans incohérence interne visible ; l'absence de hachage ou de signature empêche toutefois d'exclure une réécriture complète du journal.\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages progressent régulièrement de 7 minutes sans rupture, et chaque décision respecte la règle invoquée, mais sans chaîne de hachage ni signature je ne peux pas exclure une modification cohérente de bout en bout.\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages progressent régulièrement toutes les 7 minutes, chaque décision respecte la règle invoquée (remboursements sous 100 euros ou exception validée) et chaque autorisation est cohérente, sans trace visible d'entrée supprimée, ajoutée ou modifiée ni de fin coupée.\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages avancent régulièrement de 7 minutes, les montants respectent les règles citées et aucune entrée ne paraît incohérente, mais sans empreinte cryptographique ou signature je ne peux pas exclure le remplacement complet du journal par une copie antérieure ou réécrite.\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement, chaque remboursement respecte le plafond de 100 euros ou son exception validée, et rien n'indique une entrée modifiée, supprimée ou ajoutée, bien que l'absence de hachage ou de signature empêche de le prouver de façon certaine.\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune incohérence interne n'apparaît : les numéros seq vont de 0 à 11 sans trou, les horodatages croissent régulièrement, et les montants respectent les règles citées, mais sans chaîne de hachage ni signature il est impossible d'exclure une réécriture complète du journal.\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a1",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a2",
+      "log": "texte",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Le numéro de séquence passe de seq=4 à seq=6 : l'entrée seq=5, qui devait se situer vers 09:35 au rythme régulier de 7 minutes, a été supprimée.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "texte",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Le numéro de séquence passe de seq=4 à seq=6 : l'entrée seq=5, qui devrait se situer vers 09:35, a été supprimée, ce qui indique une modification après coup.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "texte",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"La séquence passe de seq=4 à seq=6 sans seq=5, ce qui indique qu'une entrée a été supprimée du journal (l'intervalle de 14 minutes entre ces deux entrées confirme l'absence d'une entrée intermédiaire, attendue vers 09:35).\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"La séquence saute du numéro 4 au numéro 6 (le seq 5 manque, alors que l'horodatage entre 09:28 et 09:42 le situe bien dans la plage), ce qui indique qu'une entrée a été supprimée.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"La séquence saute de seq 4 à seq 6 et l'horodatage passe de 09:28 à 09:42 alors que les entrées sont espacées de 7 minutes, ce qui indique qu'une entrée seq 5 (vers 09:35) a été supprimée.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"La séquence saute du numéro 4 au numéro 6 (aucune entrée seq 5 entre 09:28 et 09:42), ce qui indique qu'une entrée a probablement été supprimée.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a2",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a3",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 12 sont continus, les horodatages progressent régulièrement de 7 minutes, et aucune entrée ne contredit les règles affichées, bien que le remboursement de 2500 EUR mérite une vérification de l'exception et que l'absence de chaînage cryptographique empêche d'exclure une fin coupée.\"}"
+    },
+    {
+      "attack": "a3",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 12 sont continus, les horodatages croissent régulièrement, et aucune entrée ne contredit les règles ou les autorisations affichées ; le remboursement de 2500 EUR est signalé comme exception validée par owner, ce qui reste cohérent, mais l'absence de chaîne de hachage ou de signature empêche d'exclure une fin tronquée ou une ancienne copi"
+    },
+    {
+      "attack": "a3",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 12 sont continus, les horodatages croissent régulièrement, chaque action respecte sa règle et son autorisation déclarée, et aucune incohérence interne n'apparaît, bien qu'un journal sans chaînage cryptographique ne permette pas d'exclure totalement une fin coupée ou une réécriture cohérente.\"}"
+    },
+    {
+      "attack": "a3",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence sont continus de 0 à 12, les horodatages croissent régulièrement, les règles et autorisations sont cohérentes avec les actions, et rien n'indique une suppression, une insertion ou une fin tronquée ; toutefois, sans chaîne de hachage ni signature, une réécriture complète du journal ne peut pas être exclue.\"}"
+    },
+    {
+      "attack": "a3",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 12 sont continus, les horodatages croissent régulièrement sans rupture, aucune entrée ne paraît dupliquée ou incohérente, et le refund de 2500 € est justifié par une exception validée par owner, mais ce contenu seul ne permet pas d'exclure une réécriture complète du journal, faute de chaîne de hachage ou de signature.\"}"
+    },
+    {
+      "attack": "a3",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 12 sont continus, les horodatages croissent régulièrement toutes les 7 minutes sans rupture, et rien dans les entrées n'indique une modification, mais l'absence de chaîne de hachage ou de signature empêche d'exclure un remplacement complet du journal par une copie antérieure ou réécrite.\"}"
+    },
+    {
+      "attack": "a3",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a3",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a4",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence sont continus de 0 à 11, les horodatages croissent régulièrement, chaque remboursement respecte le plafond de 100 euros ou une exception validée, et je ne relève aucune incohérence, bien que l'absence de signature ou de chaînage cryptographique empêche de le garantir formellement.\"}"
+    },
+    {
+      "attack": "a4",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence vont de 0 à 11 sans trou ni doublon, les horodatages suivent un pas régulier de 7 minutes, et chaque remboursement respecte le plafond de 100 euros ou une exception validée par l'owner, sans incohérence interne visible ; cela ne prouve pas l'absence de modification, car une fin tronquée ou une copie complète remplacée resterait invisible san"
+    },
+    {
+      "attack": "a4",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence sont continus de 0 à 11, les horodatages sont régulièrement espacés de 7 minutes, et aucune entrée ne contredit les règles affichées, mais l'absence de chaîne de hachage ou de signature empêche d'exclure une fin tronquée ou une copie entièrement réécrite.\"}"
+    },
+    {
+      "attack": "a4",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les entrées sont numérotées sans trou de 0 à 11, les horodatages sont régulièrement espacés de 7 minutes, les montants respectent les plafonds et les exceptions annoncées, mais l'absence de chaîne de hachage ou de signature empêche de prouver l'intégrité par rapport à une copie de référence.\"}"
+    },
+    {
+      "attack": "a4",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement toutes les 7 minutes, et chaque action respecte sa règle (remboursements sous le plafond de 100 euros ou exception validée par owner), sans incohérence interne visible ; l'absence de signature ou de chaîne de hachage empêche toutefois de le certifier avec certitude.\"}"
+    },
+    {
+      "attack": "a4",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 11 sont continus, les horodatages croissent régulièrement, et chaque entrée respecte sa règle (remboursements sous le plafond de 100 euros ou exception validée par owner), mais le journal n'ayant ni signature ni chaînage de hachage, cette absence d'anomalie ne prouve pas son intégrité.\"}"
+    },
+    {
+      "attack": "a4",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a4",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a5",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"La séquence seq=0 à seq=7 est continue, les horodatages croissent régulièrement, et chaque entrée est cohérente avec ses règles, y compris l'exception de 2500 EUR marquée comme validée par owner ; aucune preuve interne de falsification n'apparaît, bien que l'absence de chaînage cryptographique empêche de le garantir formellement.\"}"
+    },
+    {
+      "attack": "a5",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement, le format est homogène et aucune entrée ne paraît supprimée, ajoutée ou tronquée, même si l'absence de chaînage cryptographique ou de copie de référence empêche une certitude absolue.\"}"
+    },
+    {
+      "attack": "a5",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les entrées sont numérotées sans trou de seq=0 à seq=7, les horodatages croissent régulièrement, chaque remboursement respecte sa règle déclarée (le 2500 EUR porte une exception validée par owner) et rien n'indique une modification, mais sans signature ni chaîne de hachage je ne peux pas le garantir.\"}"
+    },
+    {
+      "attack": "a5",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement, et aucune entrée ne présente de contradiction interne ; le remboursement de 2500 euros est signalé par une exception explicitement validée par owner, ce qui relève d'un point de contrôle et non d'une preuve de falsification, même si l'absence de chaînage cryptographique ou de sign"
+    },
+    {
+      "attack": "a5",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent, et chaque entrée a une règle et une autorisation cohérentes, y compris l'exception de 2500 € validée par owner, mais l'absence de chaîne de hachage ou de signature empêche d'exclure formellement une modification après coup.\"}"
+    },
+    {
+      "attack": "a5",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement et chaque entrée est cohérente avec ses règles, notamment le remboursement de 2500 € couvert par une exception validée par owner, mais sans chaîne de hachage ou signature je ne peux pas exclure une modification que rien dans le contenu ne trahit.\"}"
+    },
+    {
+      "attack": "a5",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a5",
+      "log": "json_signe",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a6",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement et aucune entrée ne contredit les autres, mais le journal ne contient aucune signature ni chaîne de hachage, donc cette absence d'incohérence ne prouve pas son intégrité.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement et chaque entrée est cohérente avec sa règle, sans trace de suppression, d'ajout ou de fin coupée ; le remboursement de 2500 EUR est une exception marquée comme validée par owner, mais rien dans le journal seul ne prouve une falsification.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement, et chaque entrée est cohérente avec sa règle (remboursements de 40 et 90 EUR sous le plafond, exception de 2500 EUR explicitement validée par owner), mais l'absence de chaînage cryptographique ou de copie de référence empêche de le prouver à coup sûr.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages sont croissants, et chaque entrée est cohérente avec sa règle déclarée, y compris le remboursement de 2500 € justifié par une exception validée par owner, bien que le journal ne contienne ni signature ni chaîne de hachage permettant de prouver son intégrité.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent, et aucune entrée ne présente d'incohérence interne, mais le journal ne contient ni signature ni chaîne de hachage, donc cette absence de preuve de falsification ne garantit pas son intégrité.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Les numéros de séquence 0 à 7 sont continus, les horodatages croissent régulièrement, et aucune entrée n'est incohérente avec les règles citées, y compris le remboursement de 2500 € validé par owner, mais sans signature ni chaîne de hachage je ne peux pas exclure une fin coupée ou une copie remplacée.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a6",
+      "log": "json_signe",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a0",
+      "log": "cstl",
+      "run": 0,
+      "detected": false,
+      "reason": "",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a1",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (1 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a2",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (1 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a3",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (2 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a4",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (2 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a5",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (1 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a6",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "Error: \"retour en arriere : la chaine locale s'arrete a seq=7 alors que le temoin a vu seq=11 -- ancienne copie de la base restauree ? -- demarrage refuse\"",
+      "witnessed_seq": 11
+    }
+  ]
+}

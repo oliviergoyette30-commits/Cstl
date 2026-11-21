@@ -105,6 +105,20 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     argument de plus pour le point 1 : faire de CSTL une couche de contrôle
     par-dessus JSON, MCP et A2A.
 
+- **`scripts/audit_benchmark.py` :** un initié falsifie le journal après
+  coup. Six attaques sur le vrai fichier SQLite du serveur : montant
+  modifié, entrée supprimée, fausse entrée, réécriture avec empreintes
+  recalculées, fin coupée et retour à une ancienne copie.
+  - CSTL les détecte toutes, sans fausse alerte. Il refuse de démarrer et
+    dit pourquoi.
+  - Un modèle qui lit un journal texte ou JSON ne voit avec certitude que
+    l'entrée supprimée, à cause du trou de numérotation. Le reste, ce sont
+    des intuitions, avec des fausses alertes : 3 sur 3 pour Opus en JSON.
+  - La chaîne d'empreintes est trompée par un attaquant qui recalcule. Les
+    signatures par entrée ne voient ni la fin coupée ni l'ancienne copie.
+  - Un journal signé avec un ancrage externe ferait aussi bien. CSTL l'a
+    déjà, intégré à l'autorisation.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
