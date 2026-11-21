@@ -194,6 +194,23 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - utiliser le compact pour les modèles forts et le JSON pour les petits
       modèles, tant que l'écart n'est pas comblé.
 
+- **Comparaison avec TOON (`scripts/toon_lite.py`)** : encodeur fidèle à
+  la spécification officielle (v4.4). TOON reçoit sa forme la plus
+  favorable : des tableaux avec `null` pour les conditions absentes.
+  - **Lecture :** le CSTL compact coûte 25 % de tokens de moins que TOON
+    (782 contre 1 046), à compréhension égale. Opus fait 36/36 partout, et
+    Haiku 24, 22 et 20 sur 36.
+  - **Écriture avec Haiku :** TOON fait mieux que le CSTL compact (32/36
+    contre 18/36) et que le JSON (30/36). Il coûte 1 045 tokens, contre 785
+    pour le CSTL compact.
+  - **Écriture avec Opus :** TOON n'a pas été mesuré (crédit épuisé). En
+    CSTL compact, Opus faisait 36/36.
+  - **Conclusion :** le CSTL compact est le plus court. TOON est plus facile
+    à écrire pour un petit modèle, sans doute parce que ses colonnes sont
+    nommées une fois dans l'en-tête.
+  - Piste : un en-tête de colonnes dans le CSTL compact pour les petits
+    modèles.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

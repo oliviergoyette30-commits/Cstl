@@ -13,6 +13,30 @@ Suit la specification officielle (github.com/toon-format/spec, SPEC.md v4.4) :
     commence par « - » ou « # » ;
   - pas de ligne vide, pas d'espace en fin de ligne, pas de saut de ligne
     final.
+RESULTAT (2026-11-21, `format_short_benchmark.py` et `compact_writing_benchmark.py`,
+3 passes x 12 politiques ; fichiers scripts/toon_lecture_*.json, toon_ecriture_*.json) :
+  LECTURE              tokens donnees   tout juste Haiku   tout juste Opus
+    CSTL compact             782            24/36              36/36
+    JSON abrege            1 033            22/36              36/36
+    TOON                   1 046            20/36              36/36
+  ECRITURE (Haiku)     exactes   tokens ecrits
+    CSTL compact        18/36        785
+    JSON                30/36      2 143
+    TOON                32/36      1 045
+  ECRITURE (Opus) : TOON non mesure (credit epuise). Serie precedente : CSTL
+  compact 36/36, JSON 30/36.
+- En lecture, le CSTL compact coute 25 % de tokens de moins que TOON, a
+  comprehension egale (Opus 36/36 partout ; Haiku 24, 22, 20 sur 36).
+- En ecriture, Haiku ecrit mieux le TOON que le CSTL compact (32/36 contre
+  18/36), et presque aussi court (1 045 tokens contre 2 143 en JSON). Le
+  CSTL compact reste le plus court (785), mais Haiku y oublie des regles et
+  confond if: et unless:.
+- Scores TOON d'ecriture recalcules : Haiku ecrivait souvent « role:support »
+  dans la colonne role, que la premiere lecture transformait en
+  role:role:support. C'etait une ambiguite du schema, pas une faute du format.
+- TOON a des tableaux a en-tete : il paie « null » pour chaque condition
+  absente et des guillemets autour de role:<nom> (le « : » l'impose).
+
 Le paquet officiel `toon-format` n'a pas pu etre installe dans cet
 environnement ; cet encodeur n'en couvre qu'une partie (objets, tableaux
 uniformes d'objets a cellules primitives).
@@ -188,7 +212,9 @@ def relations_of(obj):
     """Inverse de `policy_object` : objet decode -> relations."""
     out = []
     for r in obj.get("roles", []) or []:
-        out.append({"type": "POSSESSES", "subject": str(r["agent"]), "object": f"role:{r['role']}"})
+        role = str(r["role"])
+        role = role[5:] if role.startswith("role:") else role   # « role:x » ou « x » : les deux se lisent
+        out.append({"type": "POSSESSES", "subject": str(r["agent"]), "object": f"role:{role}"})
     for f, v in (obj.get("facts") or {}).items():
         out.append({"type": "STATE", "subject": f, "object": "true" if v is True or v == "true" else "false"})
     for r in obj.get("rules", []) or []:
