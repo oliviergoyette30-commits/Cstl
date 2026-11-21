@@ -278,6 +278,15 @@ impl AdnStore {
             CREATE INDEX IF NOT EXISTS idx_adn_parent_hash ON adn_store(parent_hash);
             CREATE INDEX IF NOT EXISTS idx_adn_created_at ON adn_store(created_at);
             CREATE INDEX IF NOT EXISTS idx_adn_conversation ON adn_store(conversation_id, turn);
+            CREATE TABLE IF NOT EXISTS authorizations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount REAL NOT NULL,
+                ts INTEGER NOT NULL,
+                audit_hash TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_authorizations_agent_action ON authorizations(agent, action);
             CREATE TABLE IF NOT EXISTS audit_trail (
                 seq INTEGER PRIMARY KEY,
                 hash TEXT NOT NULL UNIQUE,
@@ -1648,6 +1657,25 @@ impl AdnStore {
     /// (`signing::check_signature`) : `signer_key` n'est renseignee que si la
     /// signature est valide. A l'appelant de comparer cette cle a la cle
     /// enregistree de l'auteur.
+    /// Montant AUTORISE par la couche 9 (2026-11-21), pour les totaux cumules
+    /// (`total_above` / `total_at_most`). `audit_hash` : le maillon d'audit
+    /// de la demande. Limite connue : cette table n'est pas couverte par la
+    /// verification d'integrite au demarrage.
+    pub fn record_authorization(&self, agent: &str, action: &str, amount: f64, ts: u64, audit_hash: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO authorizations (agent, action, amount, ts, audit_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![agent, action, amount, ts as i64, audit_hash],
+        )?;
+        Ok(())
+    }
+
+    /// (secondes unix, montant) deja autorises a `agent` pour `action`.
+    pub fn authorized_amounts(&self, agent: &str, action: &str) -> Result<Vec<(u64, f64)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare_cached("SELECT ts, amount FROM authorizations WHERE agent = ?1 AND action = ?2")?;
+        let rows = stmt.query_map(params![agent, action], |r| Ok((r.get::<_, i64>(0)?.max(0) as u64, r.get::<_, f64>(1)?)))?;
+        rows.collect()
+    }
+
     pub fn deontic_rules_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         self.authored_relations("modality IS NOT NULL", &[])
     }

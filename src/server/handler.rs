@@ -601,6 +601,13 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     // (fact_now), au lieu de laisser l'agent deviner.
                                     let mut conds: String = e.conditions.describe().into_iter()
                                         .map(|(k, v)| format!(", {k}={}", wire_text(&v))).collect();
+                                    if e.conditions.total_above.is_some() || e.conditions.total_at_most.is_some() {
+                                        // Total deja autorise dans la fenetre : l'agent n'a pas a
+                                        // le recompter (c'est la faiblesse que ces regles visent).
+                                        let spent = ctx.adn_store.lock().await.authorized_amounts(&sender, &e.action).unwrap_or_default();
+                                        let view = super::action_authorization::RequestContext { spent, ..req_ctx.clone() };
+                                        conds.push_str(&format!(", spent_now={}", view.spent_within(e.conditions.total_window_secs)));
+                                    }
                                     if e.conditions.if_fact.is_some() { conds.push_str(", if_fact_now=true"); }
                                     if e.conditions.unless_fact.is_some() { conds.push_str(", unless_fact_now=false"); }
                                     out.push_str(&format!(
@@ -638,22 +645,42 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         // `amount_above` / `amount_at_most`. Illisible -> refus.
                         let amount_raw = payload.intent.get("amount").cloned();
                         let amount = amount_raw.as_deref().map(super::action_authorization::parse_amount);
-                        let req_ctx = load_request_context(&ctx, &authors, &sender, amount.flatten()).await;
+                        let mut req_ctx = load_request_context(&ctx, &authors, &sender, amount.flatten()).await;
                         let decision = if matches!(amount, Some(None)) {
                             super::action_authorization::Decision {
                                 allowed: false, reason: "invalid_amount", rule: None, conflict: false,
                                 superseded: false, ignored: 0, not_applicable: 0,
                             }
-                        } else { super::action_authorization::decide(
-                            &sender,
-                            action.as_deref(),
-                            identity_proven,
-                            sender_registered,
-                            &rules,
-                            super::action_authorization::DefaultPolicy::from_env(),
-                            &authors,
-                            &req_ctx,
-                        ) };
+                        } else {
+                            // Totaux cumules (2026-11-21) : lire ce qui a deja ete
+                            // autorise, decider et inscrire le nouveau montant SOUS LE
+                            // MEME verrou. Sinon deux demandes simultanees pourraient
+                            // chacune passer sous le plafond et le depasser ensemble.
+                            let store = ctx.adn_store.lock().await;
+                            if let Some(a) = action.as_deref() {
+                                req_ctx.spent = store.authorized_amounts(&sender, a).unwrap_or_else(|e| {
+                                    error!("[Handler] action_request: authorized_amounts failed: {}", e);
+                                    Vec::new()
+                                });
+                            }
+                            let d = super::action_authorization::decide(
+                                &sender,
+                                action.as_deref(),
+                                identity_proven,
+                                sender_registered,
+                                &rules,
+                                super::action_authorization::DefaultPolicy::from_env(),
+                                &authors,
+                                &req_ctx,
+                            );
+                            if let (true, Some(a), Some(amt)) = (d.allowed, action.as_deref(), amount.flatten()) {
+                                let audit_hash = crate::server::audit::canonical_hash(&payload);
+                                if let Err(e) = store.record_authorization(&sender, a, amt, req_ctx.now, &audit_hash) {
+                                    error!("[Handler] action_request: record_authorization failed: {}", e);
+                                }
+                            }
+                            d
+                        };
                         let (entry, _) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
                         {
                             let store = ctx.adn_store.lock().await;

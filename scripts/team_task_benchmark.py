@@ -324,7 +324,8 @@ def parse_relations(text):
 
 def render_policy(p):
     """Politique effective renvoyee par le serveur (`CstlAgent.policy`)."""
-    cond_keys = ("valid_from", "valid_until", "amount_above", "amount_at_most", "if_fact", "unless_fact", "via_role")
+    cond_keys = ("valid_from", "valid_until", "amount_above", "amount_at_most", "total_above", "total_at_most",
+                 "total_window_secs", "spent_now", "if_fact", "unless_fact", "via_role")
 
     def why(e):
         conds = [f"{k}={e[k]}" for k in cond_keys if e.get(k) and k not in ("if_fact", "unless_fact")]
