@@ -53,10 +53,15 @@ class AuthorizationToken:
     expires_at: int
     audit_hash: str
     signature: str
+    # Montant autorise (2026-11-21), tel qu'ecrit par le serveur, ou None.
+    amount: Optional[str] = None
 
     def message(self) -> bytes:
-        return (f"{AUTHZ_VERSION}\nagent={self.agent}\naction={self.action}\nrequest_id={self.request_id}\n"
-                f"issued_at={self.issued_at}\nexpires_at={self.expires_at}\naudit_hash={self.audit_hash}").encode()
+        text = (f"{AUTHZ_VERSION}\nagent={self.agent}\naction={self.action}\nrequest_id={self.request_id}\n"
+                f"issued_at={self.issued_at}\nexpires_at={self.expires_at}\naudit_hash={self.audit_hash}")
+        if self.amount is not None:
+            text += f"\namount={self.amount}"
+        return text.encode()
 
     @classmethod
     def from_response(cls, resp) -> Optional["AuthorizationToken"]:
@@ -68,7 +73,7 @@ class AuthorizationToken:
         try:
             return cls(agent=f["receiver"], action=f["action"], request_id=f["request_id"],
                        issued_at=int(f["issued_at"]), expires_at=int(f["expires_at"]),
-                       audit_hash=f["audit_hash"], signature=f["authorization"])
+                       audit_hash=f["audit_hash"], signature=f["authorization"], amount=f.get("amount"))
         except (KeyError, ValueError):
             return None
 
@@ -89,9 +94,11 @@ class CstlGuard:
             self._db.execute("CREATE TABLE IF NOT EXISTS used_authorizations (request_id TEXT PRIMARY KEY, action TEXT, used_at INTEGER)")
             self._db.commit()
 
-    def check(self, token: Optional[AuthorizationToken], action: str, agent: Optional[str] = None) -> None:
-        """Leve Unauthorized si le jeton ne permet pas `action` maintenant.
-        Ne consomme PAS le jeton (voir `run`)."""
+    def check(self, token: Optional[AuthorizationToken], action: str, agent: Optional[str] = None,
+              amount=None) -> None:
+        """Leve Unauthorized si le jeton ne permet pas `action` maintenant (et
+        pour `amount`, si le systeme vise execute un montant). Ne consomme PAS
+        le jeton (voir `run`)."""
         if token is None:
             raise Unauthorized("no_token")
         try:
@@ -102,6 +109,16 @@ class CstlGuard:
             raise Unauthorized("wrong_action")
         if agent is not None and token.agent != agent:
             raise Unauthorized("wrong_agent")
+        # Montant (2026-11-21) : le jeton autorise UN montant precis. Executer
+        # un autre montant, ou un montant avec un jeton qui n'en porte pas
+        # (obtenu sans le declarer), est refuse.
+        if amount is not None or token.amount is not None:
+            try:
+                same = amount is not None and token.amount is not None and float(amount) == float(token.amount)
+            except ValueError:
+                same = False
+            if not same:
+                raise Unauthorized("wrong_amount")
         now = self.clock()
         if token.issued_at > now + self.skew:
             raise Unauthorized("not_yet_valid")
@@ -122,10 +139,11 @@ class CstlGuard:
             self._used.add(token.request_id)
 
     def run(self, token: Optional[AuthorizationToken], action: str, func: Callable, *args,
-            agent: Optional[str] = None, **kwargs):
+            agent: Optional[str] = None, amount=None, **kwargs):
         """Execute `func` SEULEMENT avec un jeton valide, jamais utilise, pour
-        `action`. Le jeton est consomme AVANT l'execution : une action qui
+        `action` (et pour `amount` : le montant que `func` va reellement
+        executer). Le jeton est consomme AVANT l'execution : une action qui
         echoue en cours de route demande un nouveau jeton."""
-        self.check(token, action, agent)
+        self.check(token, action, agent, amount)
         self._consume(token)
         return func(*args, **kwargs)

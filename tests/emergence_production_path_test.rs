@@ -83,6 +83,7 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
     ));
     let db_path_str = db_path.to_str().expect("chemin UTF-8").to_string();
     let _ = std::fs::remove_file(&db_path); // au cas ou un run precedent aurait laisse un residu
+    cstl_parser::server::server_key::remove_key_files(&db_path.to_string_lossy());
 
     let server = CstlNativeServer::with_data_path(0, &db_path_str);
 
@@ -233,6 +234,7 @@ async fn detect_emergence_purpose_writes_a_real_row_via_the_tcp_production_path(
     );
 
     let _ = std::fs::remove_file(&db_path);
+    cstl_parser::server::server_key::remove_key_files(&db_path.to_string_lossy());
 }
 
 /// Suffixe de nom de fichier temporaire unique -- `process::id()` seul ne

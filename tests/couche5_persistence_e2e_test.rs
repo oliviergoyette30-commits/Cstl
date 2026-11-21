@@ -66,6 +66,7 @@ fn test_couche5_full_persistence_lifecycle() {
     // Cleanup before test
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to clean up test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 
     // ========== PHASE 1: CREATE & INSERT 10 ENTRIES ==========
@@ -382,6 +383,7 @@ fn test_couche5_full_persistence_lifecycle() {
     // ========== CLEANUP ==========
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to cleanup test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 }
 
@@ -392,6 +394,7 @@ fn test_couche5_parent_hash_chain_integrity() {
 
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to clean up test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 
     // Create a chain of 5 entries
@@ -442,6 +445,7 @@ fn test_couche5_parent_hash_chain_integrity() {
     // Cleanup
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to cleanup test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 }
 
@@ -452,6 +456,7 @@ fn test_couche5_committed_flag_persistence_cycles() {
 
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to clean up test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 
     let hash = make_test_hash(42, "cycles");
@@ -521,6 +526,7 @@ fn test_couche5_committed_flag_persistence_cycles() {
     // Cleanup
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to cleanup test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 }
 
@@ -531,6 +537,7 @@ fn test_couche5_council_log_audit_trail() {
 
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to clean up test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 
     let hash = make_test_hash(99, "audit");
@@ -586,6 +593,7 @@ fn test_couche5_council_log_audit_trail() {
     // Cleanup
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to cleanup test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 }
 
@@ -596,6 +604,7 @@ fn test_couche5_relations_modality_persistence() {
 
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to clean up test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 
     let hash = make_test_hash(777, "relations");
@@ -687,6 +696,7 @@ fn test_couche5_relations_modality_persistence() {
     // Cleanup
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to cleanup test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 }
 
@@ -697,6 +707,7 @@ fn test_couche5_large_scale_persistence() {
 
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to clean up test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 
     const NUM_ENTRIES: usize = 100;
@@ -766,5 +777,6 @@ fn test_couche5_large_scale_persistence() {
     // Cleanup
     if Path::new(db_path).exists() {
         std::fs::remove_file(db_path).expect("Failed to cleanup test database");
+        cstl_parser::server::server_key::remove_key_files(db_path);
     }
 }

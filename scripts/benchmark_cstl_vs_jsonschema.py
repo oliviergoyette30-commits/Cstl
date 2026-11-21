@@ -306,7 +306,12 @@ def main():
         sys.exit("cargo build --bin cstl_parser d'abord")
     workdir = tempfile.mkdtemp(prefix="cstl_bench_")
     log = open(os.path.join(workdir, "server.log"), "w")
-    srv = subprocess.Popen([str(binary)], cwd=workdir, stdout=log, stderr=subprocess.STDOUT)
+    # Les cas de contenu (structure, logique, historique) sont envoyes au nom
+    # des agents de demonstration non signes : mode developpement, puisque
+    # les signatures sont obligatoires par defaut depuis le 2026-11-21. Les
+    # cas d'identite (S1-S3) utilisent des agents a cle et restent stricts.
+    env = {**os.environ, "CSTL_DEV_MODE": "1"}
+    srv = subprocess.Popen([str(binary)], cwd=workdir, env=env, stdout=log, stderr=subprocess.STDOUT)
     try:
         for _ in range(120):
             try:

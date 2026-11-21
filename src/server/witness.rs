@@ -58,9 +58,8 @@ impl Checkpoint {
 
 /// Compare la chaine locale au dernier maillon vu par le temoin.
 pub fn check_against_witness(key: &ServerKey, local: &[AuditEntry], witnessed: &Checkpoint) -> Result<(), String> {
-    if !witnessed.server_key.eq_ignore_ascii_case(&key.public_hex())
-        || !key.verify_hex(witnessed.message().as_bytes(), &witnessed.signature)
-    {
+    // Cle actuelle, ou ancienne cle (rotation) encore en service a ce rang.
+    if !key.verify_audit_by(&witnessed.server_key, witnessed.seq, witnessed.message().as_bytes(), &witnessed.signature) {
         return Err(format!(
             "le temoin renvoie un maillon (seq={}) qui n'est pas signe par la cle de ce serveur -- temoin mal configure ou compromis",
             witnessed.seq

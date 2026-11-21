@@ -98,12 +98,17 @@ fn relation_payload(sender: &str, subject: &str, city: &str) -> String {
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let tmp_path = std::env::temp_dir().join(format!(
         "cstl_audit_persistence_smoke_{}.db",
         std::process::id()
     ));
     let tmp_path_str = tmp_path.to_str().unwrap().to_string();
     let _ = std::fs::remove_file(&tmp_path_str); // run precedent eventuel
+    cstl_parser::server::server_key::remove_key_files(&tmp_path_str);
 
     let mut failures = Vec::new();
 
@@ -178,6 +183,7 @@ async fn main() {
     }
 
     let _ = std::fs::remove_file(&tmp_path_str);
+    cstl_parser::server::server_key::remove_key_files(&tmp_path_str);
 
     println!();
     if failures.is_empty() {

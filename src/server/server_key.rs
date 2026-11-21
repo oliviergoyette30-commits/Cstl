@@ -30,11 +30,85 @@ const MARKER_VERSION: &str = "cstl-audit-marker-v2";
 pub struct ServerKey {
     signing: SigningKey,
     pub path: Option<PathBuf>,
+    /// Anciennes cles du serveur (2026-11-21, `rotate`), la plus recente
+    /// d'abord. Chacune ne vaut que pour les maillons ecrits AVANT sa
+    /// retraite (`until_seq`) : une ancienne cle volee ne permet pas de
+    /// signer un faux maillon recent.
+    past: Vec<PastKey>,
+}
+
+#[derive(Clone)]
+pub struct PastKey {
+    pub public_hex: String,
+    key: VerifyingKey,
+    /// Premier `seq` signe par la cle SUIVANTE.
+    pub until_seq: u64,
+}
+
+const ROTATION_VERSION: &str = "cstl-key-rotation-v1";
+
+fn rotation_message(old: &str, new: &str, at_seq: u64) -> String {
+    format!("{ROTATION_VERSION}\nold={old}\nnew={new}\nat_seq={at_seq}")
+}
+
+pub fn rotations_path(key_path: &Path) -> PathBuf {
+    let mut p = key_path.as_os_str().to_owned();
+    p.push(".rotations");
+    PathBuf::from(p)
+}
+
+fn verifying(hex_key: &str) -> Option<VerifyingKey> {
+    let bytes: [u8; 32] = hex::decode(hex_key).ok()?.try_into().ok()?;
+    VerifyingKey::from_bytes(&bytes).ok()
+}
+
+fn verify_with(key: &VerifyingKey, message: &[u8], signature_hex: &str) -> bool {
+    let Some(bytes) = hex::decode(signature_hex).ok().and_then(|b| <[u8; 64]>::try_from(b).ok()) else {
+        return false;
+    };
+    key.verify(message, &Signature::from_bytes(&bytes)).is_ok()
+}
+
+/// Reconstruit la lignee des anciennes cles a partir de la cle actuelle.
+/// Chaque passage de relais est signe par l'ancienne ET par la nouvelle
+/// cle : un fichier modifie, ou un relais insere sans les deux cles, fait
+/// echouer le chargement (et donc le demarrage).
+fn load_past_keys(key_path: &Path, current_hex: &str) -> Result<Vec<PastKey>, String> {
+    let path = rotations_path(key_path);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("'{}' illisible: {e}", path.display()))?;
+    let records: Vec<serde_json::Value> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).map_err(|e| format!("'{}' : ligne illisible ({e})", path.display())))
+        .collect::<Result<_, _>>()?;
+    let field = |r: &serde_json::Value, k: &str| r.get(k).and_then(|v| v.as_str()).map(str::to_string);
+    let mut past = Vec::new();
+    let mut cur = current_hex.to_string();
+    let mut last_at = u64::MAX;
+    while let Some(r) = records.iter().find(|r| field(r, "new").as_deref() == Some(cur.as_str())) {
+        let bad = || format!("'{}' : passage de cle falsifie (vers {}) -- demarrage refuse", path.display(), &cur[..16.min(cur.len())]);
+        let old = field(r, "old").ok_or_else(bad)?;
+        let at_seq = r.get("at_seq").and_then(|v| v.as_u64()).ok_or_else(bad)?;
+        let (Some(old_key), Some(new_key)) = (verifying(&old), verifying(&cur)) else { return Err(bad()) };
+        let msg = rotation_message(&old, &cur, at_seq);
+        let signed_by_both = verify_with(&old_key, msg.as_bytes(), &field(r, "sig_old").unwrap_or_default())
+            && verify_with(&new_key, msg.as_bytes(), &field(r, "sig_new").unwrap_or_default());
+        if !signed_by_both || at_seq > last_at || past.iter().any(|p: &PastKey| p.public_hex == old) {
+            return Err(bad());
+        }
+        last_at = at_seq;
+        past.push(PastKey { public_hex: old.clone(), key: old_key, until_seq: at_seq });
+        cur = old;
+    }
+    Ok(past)
 }
 
 impl ServerKey {
     pub fn ephemeral() -> Self {
-        ServerKey { signing: SigningKey::generate(&mut rand::rngs::OsRng), path: None }
+        ServerKey { signing: SigningKey::generate(&mut rand::rngs::OsRng), path: None, past: Vec::new() }
     }
 
     /// Cle a cote de la base (`data_path`), ou `CSTL_SERVER_KEY_PATH`.
@@ -65,7 +139,55 @@ impl ServerKey {
         let public = hex::encode(signing.verifying_key().to_bytes());
         std::fs::write(&pub_path, format!("{public}\n"))
             .map_err(|e| format!("ecriture de '{}' impossible: {e}", pub_path.display()))?;
-        Ok(ServerKey { signing, path: Some(path.to_path_buf()) })
+        let past = load_past_keys(path, &public)?;
+        Ok(ServerKey { signing, path: Some(path.to_path_buf()), past })
+    }
+
+    pub fn past_keys(&self) -> &[PastKey] {
+        &self.past
+    }
+
+    /// Verifie la signature d'un maillon de rang `seq` : cle actuelle, ou
+    /// ancienne cle encore en service a ce rang.
+    pub fn verify_audit(&self, seq: u64, message: &[u8], signature_hex: &str) -> bool {
+        self.verify_hex(message, signature_hex)
+            || self.past.iter().any(|p| seq < p.until_seq && verify_with(&p.key, message, signature_hex))
+    }
+
+    /// Comme `verify_audit`, pour un maillon qui annonce la cle qui l'a signe.
+    pub fn verify_audit_by(&self, public_hex: &str, seq: u64, message: &[u8], signature_hex: &str) -> bool {
+        if public_hex.eq_ignore_ascii_case(&self.public_hex()) {
+            return self.verify_hex(message, signature_hex);
+        }
+        self.past.iter().any(|p| p.public_hex.eq_ignore_ascii_case(public_hex) && seq < p.until_seq && verify_with(&p.key, message, signature_hex))
+    }
+
+    /// Remplace la cle du serveur (2026-11-21). `at_seq` : longueur actuelle
+    /// de la chaine -- les maillons a partir de ce rang seront signes par la
+    /// nouvelle cle. Le passage de relais est signe par les DEUX cles et
+    /// ajoute a `<cle>.rotations` ; l'ancienne cle privee est ecrasee, sa cle
+    /// publique reste valable pour les maillons anterieurs. Renvoie la
+    /// nouvelle cle. Le marqueur de chaine doit ensuite etre re-signe.
+    pub fn rotate(&self, at_seq: u64) -> Result<ServerKey, String> {
+        let Some(path) = &self.path else { return Err("cle ephemere : rien a remplacer".into()) };
+        let new = SigningKey::generate(&mut rand::rngs::OsRng);
+        let (old_hex, new_hex) = (self.public_hex(), hex::encode(new.verifying_key().to_bytes()));
+        let msg = rotation_message(&old_hex, &new_hex, at_seq);
+        let record = serde_json::json!({
+            "old": old_hex, "new": new_hex, "at_seq": at_seq,
+            "sig_old": self.sign_hex(msg.as_bytes()),
+            "sig_new": hex::encode(new.sign(msg.as_bytes()).to_bytes()),
+        });
+        let rot = rotations_path(path);
+        let mut text = if rot.exists() {
+            std::fs::read_to_string(&rot).map_err(|e| format!("'{}' illisible: {e}", rot.display()))?
+        } else {
+            String::new()
+        };
+        text.push_str(&format!("{record}\n"));
+        atomic_write(&rot, &text, false)?;
+        atomic_write(path, &hex::encode(new.to_bytes()), true)?;
+        ServerKey::load_or_create(path)
     }
 
     pub fn public_hex(&self) -> String {
@@ -220,10 +342,42 @@ pub fn audit_message(seq: u64, hash: &str, parent_hash: &str, sender: &str, rece
     format!("{AUDIT_VERSION}\nseq={seq}\nhash={hash}\nparent_hash={parent_hash}\nsender={sender}\nreceiver={receiver}\npurpose={purpose}")
 }
 
+/// Supprime les fichiers de cle crees a cote d'une base (`for_data_path`) :
+/// pour les tests et exemples qui jettent leur base temporaire, afin de ne
+/// pas laisser de cles privees derriere eux.
+pub fn remove_key_files(data_path: &str) {
+    for suffix in [".server_key", ".server_key.pub", ".server_key.audit_since", ".server_key.audit_since.tmp",
+                   ".server_key.rotations", ".server_key.rotations.tmp", ".server_key.tmp"] {
+        let _ = std::fs::remove_file(format!("{data_path}{suffix}"));
+    }
+}
+
 pub fn public_key_path(key_path: &Path) -> PathBuf {
     let mut p = key_path.as_os_str().to_owned();
     p.push(".pub");
     PathBuf::from(p)
+}
+
+/// Fichier temporaire puis renommage ; `private` : droits 0600.
+fn atomic_write(path: &Path, content: &str, private: bool) -> Result<(), String> {
+    use std::io::Write;
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    let _ = std::fs::remove_file(&tmp);
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    if private {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = private;
+    let mut f = opts.open(&tmp).map_err(|e| format!("ecriture de '{}' impossible: {e}", tmp.display()))?;
+    f.write_all(content.as_bytes()).map_err(|e| format!("ecriture de '{}' impossible: {e}", tmp.display()))?;
+    drop(f);
+    std::fs::rename(&tmp, path).map_err(|e| format!("ecriture de '{}' impossible: {e}", path.display()))
 }
 
 fn write_private(path: &Path, content: &str) -> Result<(), String> {
@@ -251,6 +405,9 @@ pub struct Authorization {
     pub issued_at: u64,
     pub expires_at: u64,
     pub audit_hash: String,
+    /// Montant autorise (2026-11-21), si la demande en portait un : le
+    /// systeme vise doit executer CE montant, pas un autre.
+    pub amount: Option<String>,
 }
 
 impl Authorization {
@@ -260,7 +417,7 @@ impl Authorization {
         format!(
             "{AUTHZ_VERSION}\nagent={}\naction={}\nrequest_id={}\nissued_at={}\nexpires_at={}\naudit_hash={}",
             self.agent, self.action, self.request_id, self.issued_at, self.expires_at, self.audit_hash
-        )
+        ) + &self.amount.as_deref().map(|a| format!("\namount={a}")).unwrap_or_default()
     }
 }
 
@@ -330,6 +487,7 @@ mod tests {
             issued_at: 1000,
             expires_at: 1060,
             audit_hash: "sha256:abc".into(),
+            amount: None,
         }
     }
 
@@ -365,6 +523,40 @@ mod tests {
         assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", Some("eve"), 1010, 0), Err(AuthzError::WrongAgent));
         assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", None, 1061, 0), Err(AuthzError::Expired));
         assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", None, 990, 5), Err(AuthzError::NotYetValid));
+    }
+
+    #[test]
+    fn rotation_keeps_old_links_valid_only_before_the_switch() {
+        let dir = std::env::temp_dir().join(format!("cstl_rot_{}_{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("k");
+        let k1 = ServerKey::load_or_create(&path).unwrap();
+        let m = b"maillon";
+        let old_sig = k1.sign_hex(m);
+        let k2 = k1.rotate(10).unwrap();
+        assert_ne!(k1.public_hex(), k2.public_hex());
+        // Rechargee depuis le disque : la lignee est reconstruite.
+        let k2 = ServerKey::load_or_create(&path).unwrap();
+        assert_eq!(k2.past_keys().len(), 1);
+        assert!(k2.verify_audit(9, m, &old_sig), "ancien maillon, ancienne cle : valide");
+        assert!(!k2.verify_audit(10, m, &old_sig), "maillon recent signe avec l'ancienne cle : refuse");
+        assert!(k2.verify_audit(10, m, &k2.sign_hex(m)));
+        // Deuxieme rotation : les deux anciennes cles restent bornees.
+        let k3 = k2.rotate(20).unwrap();
+        assert_eq!(k3.past_keys().iter().map(|p| p.until_seq).collect::<Vec<_>>(), [20, 10]);
+        assert!(k3.verify_audit(5, m, &old_sig) && !k3.verify_audit(15, m, &old_sig));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        // Lignee falsifiee : chargement refuse.
+        let rot = rotations_path(&path);
+        let tampered = std::fs::read_to_string(&rot).unwrap().replace("\"at_seq\":10", "\"at_seq\":99");
+        std::fs::write(&rot, tampered).unwrap();
+        assert!(ServerKey::load_or_create(&path).err().unwrap().contains("falsifie"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

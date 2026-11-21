@@ -97,10 +97,31 @@ async fn send_response<S: AsyncWrite + Unpin>(
 /// (TLS active) -- le corps ne lit/ecrit que via `AsyncRead`/`AsyncWrite`,
 /// jamais une methode specifique a `TcpStream`, donc aucune duplication de
 /// code n'etait necessaire pour supporter les deux cas.
-/// Regles deontiques persistees, avec leur auteur et leur raison, pretes pour
-/// la couche 9. Une regle n'est "autorisee" que si son auteur est un auteur de
-/// politique ET que son message est signe avec la cle ENREGISTREE de cet
-/// auteur (sinon n'importe qui pourrait ecrire sender=policy_owner).
+/// Pourquoi une relation persistee ne compte pas pour la couche 9 (`None` :
+/// elle compte). Elle compte si son auteur est un auteur de politique ET que
+/// son message est signe avec la cle ENREGISTREE de cet auteur (sinon
+/// n'importe qui pourrait ecrire sender=policy_owner).
+fn why_not_authorized(
+    row: &crate::adn_store::DeonticRuleRow,
+    authors: &super::action_authorization::PolicyAuthors,
+    reg: &crate::agent_discovery::AgentRegistry,
+) -> Option<&'static str> {
+    let is_author = row.author.as_deref().is_some_and(|a| authors.includes(a));
+    let proven = match (&row.author, &row.signer_key) {
+        (Some(author), Some(key)) => reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
+        _ => false,
+    };
+    if !is_author {
+        Some("not_policy_author")
+    } else if !proven {
+        Some("identity_not_proven")
+    } else {
+        None
+    }
+}
+
+/// Regles deontiques persistees, avec leur auteur, leur raison et leurs
+/// conditions, pretes pour la couche 9.
 async fn load_policy_rules(
     ctx: &ServerContext,
     authors: &super::action_authorization::PolicyAuthors,
@@ -115,19 +136,9 @@ async fn load_policy_rules(
     let reg = ctx.agent_registry.read().await;
     rows.into_iter()
         .map(|r| {
-            let is_author = r.author.as_deref().is_some_and(|a| authors.includes(a));
-            let proven = match (&r.author, &r.signer_key) {
-                (Some(author), Some(key)) => reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
-                _ => false,
-            };
-            let why_ignored = if !is_author {
-                Some("not_policy_author")
-            } else if !proven {
-                Some("identity_not_proven")
-            } else {
-                None
-            };
+            let why_ignored = why_not_authorized(&r, authors, &reg);
             super::action_authorization::Rule {
+                conditions: super::action_authorization::Conditions::from_attrs(&r.attrs),
                 subject: r.subject,
                 object: r.object,
                 modality: r.modality,
@@ -138,6 +149,52 @@ async fn load_policy_rules(
             }
         })
         .collect()
+}
+
+/// Contexte d'evaluation des conditions (2026-11-21) : maintenant, montant
+/// demande, faits enregistres et roles de `sender`. En mode `Only`, seuls
+/// comptent les faits et roles poses par un auteur de politique prouve -- un
+/// agent ne peut ni se donner un role, ni declarer lui-meme l'accord qui
+/// leverait son interdiction. Le plus recent l'emporte (`object=false`
+/// retire un fait ; un role se retire par `role=false` dans la relation).
+async fn load_request_context(
+    ctx: &ServerContext,
+    authors: &super::action_authorization::PolicyAuthors,
+    sender: &str,
+    amount: Option<f64>,
+) -> super::action_authorization::RequestContext {
+    let rows = {
+        let store = ctx.adn_store.lock().await;
+        store.facts_and_roles_with_authors().unwrap_or_else(|e| {
+            error!("[Handler] facts_and_roles_with_authors failed: {}", e);
+            Vec::new()
+        })
+    };
+    let reg = ctx.agent_registry.read().await;
+    let mut out = super::action_authorization::RequestContext::now();
+    out.amount = amount;
+    let enforced = matches!(authors, super::action_authorization::PolicyAuthors::Only(_));
+    for r in rows {
+        if enforced && why_not_authorized(&r, authors, &reg).is_some() {
+            continue;
+        }
+        if r.predicate == "STATE" {
+            if r.object.eq_ignore_ascii_case("false") {
+                out.facts.remove(&r.subject);
+            } else {
+                out.facts.insert(r.subject.clone());
+            }
+        } else if r.subject == sender {
+            if let Some(role) = r.object.strip_prefix("role:") {
+                if r.attrs.get("role").is_some_and(|v| v.eq_ignore_ascii_case("false")) {
+                    out.roles.remove(role);
+                } else {
+                    out.roles.insert(role.to_string());
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Valeur recopiee dans une reponse wire : jamais de `"`, `[`, `]` ni de
@@ -517,18 +574,27 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         } else {
                             let authors = super::action_authorization::PolicyAuthors::from_env();
                             let rules = load_policy_rules(&ctx, &authors).await;
-                            let policy = super::action_authorization::effective_policy(&sender, &rules, &authors);
+                            let req_ctx = load_request_context(&ctx, &authors, &sender, None).await;
+                            let policy = super::action_authorization::effective_policy(&sender, &rules, &authors, &req_ctx);
+                            let mut roles: Vec<&String> = req_ctx.roles.iter().collect();
+                            roles.sort();
+                            let roles = roles.iter().map(|r| r.as_str()).filter(|r| super::action_authorization::is_valid_action(r)).collect::<Vec<_>>().join(" ");
                             let mut out = format!(
                                 "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, forbidden={}, ignored={}, authors_enforced={}]\n",
+                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, forbidden={}, ignored={}, authors_enforced={}{}]\n",
                                 sender, policy.required.len(), policy.forbidden.len(), policy.ignored.len(),
                                 matches!(authors, super::action_authorization::PolicyAuthors::Only(_)),
+                                if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) },
                             );
                             for (decision, list) in [("required", &policy.required), ("forbidden", &policy.forbidden)] {
                                 for e in list {
+                                    let conds: String = e.conditions.describe().into_iter()
+                                        .map(|(k, v)| format!(", {k}={}", wire_text(&v))).collect();
                                     out.push_str(&format!(
-                                        "POLICY_RULE [action={}, decision={}, modality={}, author={}{}]\n",
+                                        "POLICY_RULE [action={}, decision={}, modality={}, author={}{}{}{}]\n",
                                         e.action, decision, e.modality, wire_name(e.author.as_deref()),
+                                        e.via_role.as_deref().map(|r| format!(", via_role={}", wire_name(Some(r)))).unwrap_or_default(),
+                                        conds,
                                         e.reason.as_deref().map(|r| format!(", reason={}", wire_text(r))).unwrap_or_default(),
                                     ));
                                 }
@@ -555,7 +621,17 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             && embedded_pubkey == registered_pubkey_for_sender;
                         let authors = super::action_authorization::PolicyAuthors::from_env();
                         let rules = load_policy_rules(&ctx, &authors).await;
-                        let decision = super::action_authorization::decide(
+                        // Montant de la demande (2026-11-21), pour les regles
+                        // `amount_above` / `amount_at_most`. Illisible -> refus.
+                        let amount_raw = payload.intent.get("amount").cloned();
+                        let amount = amount_raw.as_deref().map(super::action_authorization::parse_amount);
+                        let req_ctx = load_request_context(&ctx, &authors, &sender, amount.flatten()).await;
+                        let decision = if matches!(amount, Some(None)) {
+                            super::action_authorization::Decision {
+                                allowed: false, reason: "invalid_amount", rule: None, conflict: false,
+                                superseded: false, ignored: 0, not_applicable: 0,
+                            }
+                        } else { super::action_authorization::decide(
                             &sender,
                             action.as_deref(),
                             identity_proven,
@@ -563,7 +639,8 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             &rules,
                             super::action_authorization::DefaultPolicy::from_env(),
                             &authors,
-                        );
+                            &req_ctx,
+                        ) };
                         let (entry, _) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
                         {
                             let store = ctx.adn_store.lock().await;
@@ -602,18 +679,21 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                 issued_at,
                                 expires_at: issued_at + super::server_key::ttl_from_env(),
                                 audit_hash: entry.hash.clone(),
+                                amount: amount.flatten().map(|a| a.to_string()),
                             };
                             let sig = ctx.server_key.sign_hex(auth.message().as_bytes());
                             format!(
-                                ", request_id={}, issued_at={}, expires_at={}, audit_hash={}, server_key={}, authorization={}",
-                                auth.request_id, auth.issued_at, auth.expires_at, auth.audit_hash, ctx.server_key.public_hex(), sig
+                                ", request_id={}, issued_at={}, expires_at={}, audit_hash={}{}, server_key={}, authorization={}",
+                                auth.request_id, auth.issued_at, auth.expires_at, auth.audit_hash,
+                                auth.amount.as_deref().map(|a| format!(", amount={a}")).unwrap_or_default(),
+                                ctx.server_key.public_hex(), sig
                             )
                         } else {
                             String::new()
                         };
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}]\n\
+                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}{}]\n\
                              AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
                             shown_sender,
                             shown_action,
@@ -623,6 +703,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             if decision.conflict { ", conflict=true" } else { "" },
                             if decision.superseded { ", superseded=true" } else { "" },
                             if decision.ignored > 0 { format!(", ignored_rules={}", decision.ignored) } else { String::new() },
+                            if decision.not_applicable > 0 { format!(", rules_not_applicable={}", decision.not_applicable) } else { String::new() },
                             token,
                             entry.hash, entry.parent_hash, entry.seq,
                         );
