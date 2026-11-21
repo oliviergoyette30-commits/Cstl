@@ -60,7 +60,7 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import cstl_compact  # noqa: E402
 import toon_lite  # noqa: E402
 
-FORMATS = ("cstl", "json", "compact", "toon")
+FORMATS = ("cstl", "json", "compact", "toon", "compact_tableau")
 SPEC_FIELDS = ("Une regle est PERFORM avec subject (un agent, ou role:<nom>), object (l'action), modality (MUST ou "
                "MUST_NOT) et, s'il y en a, amount_above (la regle ne vaut qu'au-dela de ce montant), if_fact "
                "(seulement si ce fait est vrai), unless_fact (sauf si ce fait est vrai). Un role est une relation "
@@ -81,6 +81,7 @@ SPEC = {
     "json": ("Ecris la politique en JSON : une liste de relations, chacune un objet {cle: valeur}. " + SPEC_FIELDS +
              "\nExemple :\n" + json.dumps(EXAMPLE, ensure_ascii=False)),
     "compact": "Ecris la politique en CSTL compact.\n" + cstl_compact.GUIDE,
+    "compact_tableau": "Ecris la politique en CSTL compact en tableaux.\n" + cstl_compact.GUIDE_TABLE,
     "toon": ("Ecris la politique en TOON (Token-Oriented Object Notation) : un tableau roles[N]{agent,role}, un objet "
              "facts (fait: true|false) et un tableau rules[N]{subject,modality,action,amount_above,if_fact,unless_fact}, "
              "une ligne par element, null quand une condition n'existe pas, N = nombre exact de lignes. Une chaine qui "
@@ -119,6 +120,14 @@ def norm(r):
 
 
 def parse(fmt, text):
+    if fmt == "compact_tableau":
+        body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.startswith("```"))
+        try:
+            rels, problems = cstl_compact.decode_report(body)
+        except cstl_compact.CompactError:
+            return None
+        PARSE_NOTES[text] = problems   # nombre [N] faux : signale (oubli repere), pas fatal pour le score
+        return rels
     if fmt == "toon":
         body = "\n".join(ln for ln in text.strip().splitlines() if not ln.startswith("```"))
         try:
@@ -169,7 +178,7 @@ def run_case(model, size, seed, fmt, run):
     missing, extra = sum((want - have).values()), sum((have - want).values())
     return {"size": size, "seed": seed, "format": fmt, "run": run, "unreadable": got is None,
             "missing": missing, "extra": extra, "exact": got is not None and missing == 0 and extra == 0,
-            "tokens_out": count(model, raw), "raw": raw[:30000], "toon_count_errors": PARSE_NOTES.get(raw, [])}
+            "tokens_out": count(model, raw), "raw": raw[:30000], "count_errors": PARSE_NOTES.get(raw, [])}
 
 
 class StubBrain:

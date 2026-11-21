@@ -15,6 +15,24 @@ GRAMMAIRE (une ligne = une relation ; « # » commence un commentaire) :
                                    REQUIRE, FORBID ou PERMIT
   REL <type> <subject> <object> [cle=valeur ...]   toute autre relation
 
+MODE TABLEAU (`encode(..., table=True)`, 2026-11-21) : une section par type
+d'element, avec un en-tete qui nomme les colonnes et annonce le nombre de
+lignes ; les lignes de la section sont indentees, « - » marque une case vide.
+  ROLES[2] agent role
+    agent_a finance
+    agent_b ops
+  FACTS[1] fait valeur
+    audit_open true
+  RULES[2] qui modalite action au_dela si sauf_si
+    agent_a MUST_NOT wipe_db 100 - audit_open
+    role:finance MUST log_transaction - - - "tracabilite"
+Apres les 6 colonnes d'une regle viennent les autres conditions (prefixes
+ci-dessous) et la raison. Un nombre [N] faux est une erreur : c'est ce qui
+permet de reperer une ligne oubliee au lieu de l'accepter en silence.
+Pourquoi : dans scripts/compact_writing_benchmark.py, Haiku oubliait des
+regles et confondait if: et unless: en mode ligne, alors qu'il ecrivait
+bien TOON, dont les colonnes sont nommees une fois dans l'en-tete.
+
 CONDITIONS d'une regle (dans n'importe quel ordre) :
   >X           amount_above=X        <=X          amount_at_most=X
   total>X      total_above=X         total<=X     total_at_most=X
@@ -44,28 +62,68 @@ def _token(value):
     return v if v and not re.search(r'[\s"#]', v) else _quote(v)
 
 
-def encode(relations):
-    """Relations (dicts, comme pour CstlAgent.send_relations) -> texte compact."""
+def _rule_extras(r, skip):
+    parts = []
+    for k, v in r.items():
+        if k in skip or k == "reason":
+            continue
+        parts.append(SHORT[k] + _token(v) if k in SHORT else f"{k}={_token(v)}")
+    if "reason" in r:
+        parts.append(_quote(r["reason"]))
+    return parts
+
+
+def _is_role(r):
+    return r.get("type") == "POSSESSES" and r.get("object", "").startswith("role:") and set(r) == {"type", "subject", "object"}
+
+
+def _is_fact(r):
+    return r.get("type") == "STATE" and r.get("object") in ("true", "false") and set(r) == {"type", "subject", "object"}
+
+
+def _is_rule(r):
+    return r.get("type") == "PERFORM" and r.get("modality") in MODALITIES and bool(r.get("subject")) and bool(r.get("object"))
+
+
+def _line(r):
+    if _is_role(r):
+        return f"ROLE {_token(r['subject'])} {_token(r['object'][5:])}"
+    if _is_fact(r):
+        return f"FACT {_token(r['subject'])} {r['object']}"
+    if _is_rule(r):
+        return " ".join([_token(r["subject"]), r["modality"], _token(r["object"])]
+                        + _rule_extras(r, ("type", "subject", "object", "modality")))
+    rest = [f"{k}={_token(v)}" for k, v in r.items() if k not in ("type", "subject", "object")]
+    return " ".join(["REL", _token(r.get("type", "")), _token(r.get("subject", "")), _token(r.get("object", ""))] + rest)
+
+
+def _cell(value):
+    return "-" if value in (None, "") else (_quote(value) if str(value) == "-" else _token(value))
+
+
+def encode(relations, table=False):
+    """Relations (dicts, comme pour CstlAgent.send_relations) -> texte compact.
+    `table=True` : mode tableau (en-tetes de colonnes, voir la doc du module)."""
+    rels = [{k: str(v) for k, v in r.items()} for r in relations]
+    if not table:
+        return "\n".join(_line(r) for r in rels)
+    roles, facts, rules = [r for r in rels if _is_role(r)], [r for r in rels if _is_fact(r)], [r for r in rels if _is_rule(r)]
+    others = [r for r in rels if not (_is_role(r) or _is_fact(r) or _is_rule(r))]
     lines = []
-    for r in relations:
-        r = {k: str(v) for k, v in r.items()}
-        t = r.get("type", "")
-        if t == "POSSESSES" and r.get("object", "").startswith("role:") and set(r) == {"type", "subject", "object"}:
-            lines.append(f"ROLE {_token(r['subject'])} {_token(r['object'][5:])}")
-        elif t == "STATE" and r.get("object") in ("true", "false") and set(r) == {"type", "subject", "object"}:
-            lines.append(f"FACT {_token(r['subject'])} {r['object']}")
-        elif t == "PERFORM" and r.get("modality") in MODALITIES and r.get("subject") and r.get("object"):
-            parts = [_token(r["subject"]), r["modality"], _token(r["object"])]
-            for k, v in r.items():
-                if k in ("type", "subject", "object", "modality", "reason"):
-                    continue
-                parts.append(SHORT[k] + _token(v) if k in SHORT else f"{k}={_token(v)}")
-            if "reason" in r:
-                parts.append(_quote(r["reason"]))
-            lines.append(" ".join(parts))
-        else:
-            rest = [f"{k}={_token(v)}" for k, v in r.items() if k not in ("type", "subject", "object")]
-            lines.append(" ".join(["REL", _token(t), _token(r.get("subject", "")), _token(r.get("object", ""))] + rest))
+    if roles:
+        lines.append(f"ROLES[{len(roles)}] agent role")
+        lines += [f"  {_cell(r['subject'])} {_cell(r['object'][5:])}" for r in roles]
+    if facts:
+        lines.append(f"FACTS[{len(facts)}] fait valeur")
+        lines += [f"  {_cell(r['subject'])} {r['object']}" for r in facts]
+    if rules:
+        lines.append(f"RULES[{len(rules)}] qui modalite action au_dela si sauf_si")
+        for r in rules:
+            cells = [_cell(r["subject"]), r["modality"], _cell(r["object"]), _cell(r.get("amount_above")),
+                     _cell(r.get("if_fact")), _cell(r.get("unless_fact"))]
+            extras = _rule_extras(r, ("type", "subject", "object", "modality", "amount_above", "if_fact", "unless_fact"))
+            lines.append("  " + " ".join(cells + extras))
+    lines += [_line(r) for r in others]
     return "\n".join(lines)
 
 
@@ -108,15 +166,78 @@ def _split(line):
     return toks
 
 
-def decode(text):
-    """Texte compact -> relations completes. Leve CompactError sur une ligne
-    illisible (jamais de devinette)."""
-    out = []
+SECTION = re.compile(r"^(ROLES|FACTS|RULES)(?:\[(\d+)\])?(?:\s.*)?$")
+
+
+def _empty(word):
+    text, quoted = word
+    return None if (text == "-" and not quoted) else text
+
+
+def _rule_from(toks, words, n, line, base):
+    r = dict(base)
+    rest, rest_words = toks, words
+    if rest and rest_words[-1][1] and len(rest) > 0:
+        r["reason"] = rest[-1]
+        rest = rest[:-1]
+    for t in rest:
+        for prefix, attr in PREFIXES:
+            if t.startswith(prefix) and len(t) > len(prefix):
+                r[attr] = t[len(prefix):]
+                break
+        else:
+            k, sep, v = t.partition("=")
+            if not sep or not k:
+                raise CompactError(f"ligne {n} : condition inconnue : {t!r}")
+            r[k] = v
+    return r
+
+
+def decode_report(text):
+    """Comme `decode`, mais renvoie (relations, problemes) : un nombre [N]
+    d'en-tete qui ne correspond pas aux lignes est signale au lieu de lever
+    une erreur. Une ligne illisible leve toujours CompactError."""
+    out, problems = [], []
+    section = None   # [nom, nombre annonce ou None, lignes lues]
+
+    def close():
+        if section and section[1] is not None and section[1] != section[2]:
+            problems.append(f"{section[0]}[{section[1]}] annonce, {section[2]} ligne(s) ecrite(s)")
+
     for n, line in enumerate(text.splitlines(), 1):
         words = _split(line)
         if not words:
             continue
         toks = [w for w, _ in words]
+        indented = line[:1].isspace()
+        if section and indented:
+            section[2] += 1
+            kind = section[0]
+            if kind == "ROLES":
+                if len(toks) != 2:
+                    raise CompactError(f"ligne {n} : ROLES attend <agent> <role>")
+                out.append({"type": "POSSESSES", "subject": toks[0], "object": f"role:{toks[1]}"})
+            elif kind == "FACTS":
+                if len(toks) != 2 or toks[1] not in ("true", "false"):
+                    raise CompactError(f"ligne {n} : FACTS attend <fait> true|false")
+                out.append({"type": "STATE", "subject": toks[0], "object": toks[1]})
+            else:
+                if len(toks) < 6 or toks[1] not in MODALITIES:
+                    raise CompactError(f"ligne {n} : RULES attend <qui> <modalite> <action> <au_dela> <si> <sauf_si> : {line!r}")
+                r = {"type": "PERFORM", "subject": toks[0], "object": toks[2], "modality": toks[1]}
+                for attr, w in zip(("amount_above", "if_fact", "unless_fact"), words[3:6]):
+                    v = _empty(w)
+                    if v is not None:
+                        r[attr] = v
+                out.append(_rule_from(toks[6:], words[6:], n, line, r))
+            continue
+        m = SECTION.match(line.strip()) if not indented else None
+        if m:
+            close()
+            section = [m.group(1), int(m.group(2)) if m.group(2) else None, 0]
+            continue
+        close()
+        section = None
         head = toks[0]
         if head == "ROLE":
             if len(toks) != 3:
@@ -139,21 +260,19 @@ def decode(text):
         else:
             if len(toks) < 3 or toks[1] not in MODALITIES:
                 raise CompactError(f"ligne {n} : <subject> <MODALITE> <action> attendu : {line!r}")
-            r = {"type": "PERFORM", "subject": toks[0], "object": toks[2], "modality": toks[1]}
-            rest = toks[3:]
-            if rest and words[-1][1]:
-                r["reason"] = rest.pop()
-            for t in rest:
-                for prefix, attr in PREFIXES:
-                    if t.startswith(prefix) and len(t) > len(prefix):
-                        r[attr] = t[len(prefix):]
-                        break
-                else:
-                    k, sep, v = t.partition("=")
-                    if not sep or not k:
-                        raise CompactError(f"ligne {n} : condition inconnue : {t!r}")
-                    r[k] = v
-            out.append(r)
+            base = {"type": "PERFORM", "subject": toks[0], "object": toks[2], "modality": toks[1]}
+            out.append(_rule_from(toks[3:], words[3:], n, line, base))
+    close()
+    return out, problems
+
+
+def decode(text):
+    """Texte compact (mode ligne ou tableau) -> relations completes. Leve
+    CompactError sur une ligne illisible ou un nombre [N] faux (jamais de
+    devinette : une regle oubliee ne doit pas passer en silence)."""
+    out, problems = decode_report(text)
+    if problems:
+        raise CompactError("nombre de lignes faux : " + " ; ".join(problems))
     return out
 
 
@@ -171,6 +290,26 @@ GUIDE = (
     "FACT audit_open true\n"
     "agent_a MUST_NOT wipe_db >100 unless:audit_open\n"
     "role:finance MUST log_transaction \"tracabilite\""
+)
+
+
+GUIDE_TABLE = (
+    "Format CSTL compact en tableaux : une section par type d'element. L'en-tete donne le nombre exact de lignes "
+    "[N] et les colonnes ; chaque ligne de la section commence par deux espaces ; « - » marque une case vide.\n"
+    "- ROLES[N] agent role : une ligne par role d'un agent.\n"
+    "- FACTS[N] fait valeur : une ligne par fait, valeur true ou false.\n"
+    "- RULES[N] qui modalite action au_dela si sauf_si : une ligne par regle. qui = un agent ou role:<nom> ; "
+    "modalite = MUST, MUST_NOT ou MAY ; au_dela = la regle ne vaut que si le montant depasse ce nombre ; "
+    "si = la regle ne vaut que si ce fait est vrai ; sauf_si = la regle ne vaut pas si ce fait est vrai. "
+    "Une raison facultative peut suivre, entre guillemets.\n"
+    "Exemple :\n"
+    "ROLES[1] agent role\n"
+    "  agent_a finance\n"
+    "FACTS[1] fait valeur\n"
+    "  audit_open true\n"
+    "RULES[2] qui modalite action au_dela si sauf_si\n"
+    "  agent_a MUST_NOT wipe_db 100 - audit_open\n"
+    "  role:finance MUST log_transaction - - - \"tracabilite\""
 )
 
 

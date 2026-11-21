@@ -64,8 +64,9 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 import format_comprehension_benchmark as fc  # noqa: E402
 import toon_lite  # noqa: E402
+import cstl_compact  # noqa: E402
 
-FORMATS = ("cstl", "json_compact", "cstl_court", "json_court", "toon")
+FORMATS = ("cstl", "json_compact", "cstl_court", "json_court", "toon", "cstl_tableau")
 
 NOTES = {
     "cstl_court": (
@@ -80,6 +81,12 @@ NOTES = {
         "- \"facts\" : {fait: true|false} (comme STATE). Un fait absent est faux.\n"
         "- \"rules\" : liste de [subject, modality, action, amount_above, if_fact, unless_fact] ; null quand la "
         "condition n'existe pas."),
+    "cstl_tableau": (
+        "Lecture du format CSTL compact en tableaux :\n"
+        "- \"ROLES[N] agent role\" puis une ligne par role : l'agent a ce role (comme POSSESSES).\n"
+        "- \"FACTS[N] fait valeur\" puis une ligne par fait, true ou false (comme STATE). Un fait absent est faux.\n"
+        "- \"RULES[N] qui modalite action au_dela si sauf_si\" puis une ligne par regle PERFORM : au_dela est "
+        "amount_above, si est if_fact, sauf_si est unless_fact ; « - » quand la condition n'existe pas."),
     "toon": (
         "Lecture du format TOON :\n"
         "- \"roles[N]{agent,role}:\" puis une ligne par role : l'agent a ce role (comme POSSESSES).\n"
@@ -90,6 +97,8 @@ NOTES = {
 
 
 def render(fmt, rels):
+    if fmt == "cstl_tableau":
+        return cstl_compact.encode(rels, table=True)
     if fmt == "toon":
         return toon_lite.encode(toon_lite.policy_object(rels))
     if fmt in ("cstl", "json_compact"):

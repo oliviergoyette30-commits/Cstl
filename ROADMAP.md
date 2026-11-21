@@ -209,7 +209,18 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     à écrire pour un petit modèle, sans doute parce que ses colonnes sont
     nommées une fois dans l'en-tête.
   - Piste : un en-tête de colonnes dans le CSTL compact pour les petits
-    modèles.
+    modèles. **Fait (mode tableau, `encode(..., table=True)`)** :
+    - une section par type d'élément, chacune avec son nombre de lignes et
+      ses colonnes ;
+    - des colonnes nommées en français (`au_dela si sauf_si`), et `-` pour
+      une case vide ;
+    - un nombre de lignes faux est refusé : une règle oubliée ne passe plus
+      en silence ;
+    - taille : 22 091 caractères sur les 12 politiques, contre 19 923 en
+      lignes et 25 229 en TOON ;
+    - lecture et écriture **pas encore mesurées** (crédit API épuisé) :
+      `format_short_benchmark.py --formats cstl_court,toon,cstl_tableau` et
+      `compact_writing_benchmark.py --formats compact,toon,compact_tableau`.
 
 ## Déjà fait (PR #3 à #11)
 
