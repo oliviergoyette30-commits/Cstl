@@ -516,28 +516,36 @@ class CstlAgent:
         return relation, self.send_relations(receiver, [relation])
 
     # -- Couche 9 : autorisation AVANT action (2026-11-20) --------------------
-    def request_action(self, action: str) -> Tuple[bool, CstlResponse]:
+    def request_action(self, action: str, amount=None) -> Tuple[bool, CstlResponse]:
         """Demande au serveur, AVANT d'agir, si `action` est autorisee pour cet
-        agent d'apres l'historique des obligations / interdictions. Retourne
-        (autorise, reponse) ; la decision est inscrite dans la chaine d'audit."""
+        agent d'apres l'historique des obligations / interdictions. `amount` :
+        montant de l'action, pour les regles `amount_above`/`amount_at_most`
+        (2026-11-21). Retourne (autorise, reponse) ; la decision est inscrite
+        dans la chaine d'audit."""
         # request_id unique : sans lui, deux demandes identiques ont le meme
         # hash et la seconde est traitee comme un renvoi -- une seule trace
         # dans la chaine d'audit pour deux demandes reelles.
-        resp = self._send_signed("action_request", "server", [],
-                                 {"action": action, "request_id": uuid.uuid4().hex})
+        intent = {"action": action, "request_id": uuid.uuid4().hex}
+        if amount is not None:
+            intent["amount"] = str(amount)
+        resp = self._send_signed("action_request", "server", [], intent)
         return resp.fields.get("decision") == "allowed", resp
 
     def policy(self) -> dict:
         """Politique EFFECTIVE de cet agent selon le serveur (2026-11-21) :
-        {"required": [...], "forbidden": [...], "ignored": [...]}, chaque
-        entree {action, modality, author[, reason][, why]}. `required` : les
+        {"required": [...], "forbidden": [...], "ignored": [...], "roles": [...]},
+        chaque entree {action, modality, author[, via_role][, reason][, why]
+        [, valid_from, valid_until, amount_above, amount_at_most, if_fact,
+        unless_fact]} : les conditions sont VERIFIEES par le serveur. `required` : les
         obligations a remplir meme si la demande de travail ne les cite pas.
         `ignored` : regles que le serveur ne compte pas (auteur sans
         autorite) -- a ne pas suivre. Leve RuntimeError si refuse."""
         resp = self._send_signed("policy_query", "server", [], {"request_id": uuid.uuid4().hex})
         if resp.purpose != "policy":
             raise RuntimeError(f"politique refusee : {resp.fields.get('reason', resp.purpose)}")
-        out = {"required": [], "forbidden": [], "ignored": []}
+        out = {"required": [], "forbidden": [], "ignored": [], "roles": []}
+        if resp.fields.get("roles"):
+            out["roles"] = resp.fields["roles"].split()
         for block in resp.relations:
             item = {k: v for k, v in block.items() if k not in ("block", "decision")}
             if block.get("block") == "POLICY_RULE":
@@ -546,21 +554,23 @@ class CstlAgent:
                 out["ignored"].append(item)
         return out
 
-    def authorize(self, action: str):
-        """Jeton d'autorisation SIGNE par le serveur pour `action`, a presenter
-        au systeme vise (`cstl_guard.CstlGuard.run`). Leve ActionDenied si
-        l'action est refusee (2026-11-20 : couche 9 obligatoire)."""
+    def authorize(self, action: str, amount=None):
+        """Jeton d'autorisation SIGNE par le serveur pour `action` (et pour CE
+        montant, s'il est donne), a presenter au systeme vise
+        (`cstl_guard.CstlGuard.run`). Leve ActionDenied si l'action est
+        refusee (2026-11-20 : couche 9 obligatoire)."""
         from cstl_guard import AuthorizationToken
-        allowed, resp = self.request_action(action)
+        allowed, resp = self.request_action(action, amount)
         token = AuthorizationToken.from_response(resp) if allowed else None
         if token is None:
             raise ActionDenied(action, resp.fields.get("reason", resp.purpose), resp.fields.get("rule"))
         return token
 
-    def act(self, action: str, func, *args, **kwargs):
-        """Execute `func` SEULEMENT si le serveur autorise `action`.
-        Sinon leve ActionDenied (rien n'est execute)."""
-        allowed, resp = self.request_action(action)
+    def act(self, action: str, func, *args, amount=None, **kwargs):
+        """Execute `func` SEULEMENT si le serveur autorise `action` (pour ce
+        `amount`, s'il est donne). Sinon leve ActionDenied (rien n'est
+        execute)."""
+        allowed, resp = self.request_action(action, amount)
         if not allowed:
             raise ActionDenied(action, resp.fields.get("reason", resp.purpose), resp.fields.get("rule"))
         return func(*args, **kwargs)

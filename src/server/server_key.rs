@@ -342,6 +342,16 @@ pub fn audit_message(seq: u64, hash: &str, parent_hash: &str, sender: &str, rece
     format!("{AUDIT_VERSION}\nseq={seq}\nhash={hash}\nparent_hash={parent_hash}\nsender={sender}\nreceiver={receiver}\npurpose={purpose}")
 }
 
+/// Supprime les fichiers de cle crees a cote d'une base (`for_data_path`) :
+/// pour les tests et exemples qui jettent leur base temporaire, afin de ne
+/// pas laisser de cles privees derriere eux.
+pub fn remove_key_files(data_path: &str) {
+    for suffix in [".server_key", ".server_key.pub", ".server_key.audit_since", ".server_key.audit_since.tmp",
+                   ".server_key.rotations", ".server_key.rotations.tmp", ".server_key.tmp"] {
+        let _ = std::fs::remove_file(format!("{data_path}{suffix}"));
+    }
+}
+
 pub fn public_key_path(key_path: &Path) -> PathBuf {
     let mut p = key_path.as_os_str().to_owned();
     p.push(".pub");
@@ -395,6 +405,9 @@ pub struct Authorization {
     pub issued_at: u64,
     pub expires_at: u64,
     pub audit_hash: String,
+    /// Montant autorise (2026-11-21), si la demande en portait un : le
+    /// systeme vise doit executer CE montant, pas un autre.
+    pub amount: Option<String>,
 }
 
 impl Authorization {
@@ -404,7 +417,7 @@ impl Authorization {
         format!(
             "{AUTHZ_VERSION}\nagent={}\naction={}\nrequest_id={}\nissued_at={}\nexpires_at={}\naudit_hash={}",
             self.agent, self.action, self.request_id, self.issued_at, self.expires_at, self.audit_hash
-        )
+        ) + &self.amount.as_deref().map(|a| format!("\namount={a}")).unwrap_or_default()
     }
 }
 
@@ -474,6 +487,7 @@ mod tests {
             issued_at: 1000,
             expires_at: 1060,
             audit_hash: "sha256:abc".into(),
+            amount: None,
         }
     }
 

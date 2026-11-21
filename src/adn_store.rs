@@ -153,6 +153,7 @@ pub struct DbPeerReviewSignature {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeonticRuleRow {
     pub subject: String,
+    pub predicate: String,
     pub object: String,
     pub modality: String,
     /// `INTENT_PAYLOAD.sender` du message qui a affirme la regle.
@@ -161,6 +162,8 @@ pub struct DeonticRuleRow {
     pub signer_key: Option<String>,
     /// Attribut `reason` de la relation, s'il y en a un (2026-11-21).
     pub reason: Option<String>,
+    /// Tous les attributs hors ontologie (conditions de la couche 9...).
+    pub attrs: HashMap<String, String>,
 }
 
 pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
@@ -1637,21 +1640,35 @@ impl AdnStore {
     /// signature est valide. A l'appelant de comparer cette cle a la cle
     /// enregistree de l'auteur.
     pub fn deontic_rules_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
-        type Row = (String, String, String, String, Option<String>);
+        self.authored_relations("modality IS NOT NULL")
+    }
+
+    /// Faits (`STATE`) et appartenances a un role (`POSSESSES ... role:<nom>`),
+    /// avec leur auteur (2026-11-21) : ce que les conditions de la couche 9
+    /// (`if_fact`, `unless_fact`, regles `role:<nom>`) consultent. Meme
+    /// reverification de signature que `deontic_rules_with_authors`.
+    pub fn facts_and_roles_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        self.authored_relations(
+            "modality IS NULL AND (predicate = 'STATE' OR (predicate = 'POSSESSES' AND object LIKE 'role:%'))",
+        )
+    }
+
+    fn authored_relations(&self, where_sql: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        type Row = (String, String, String, String, Option<String>, Option<String>);
         let rows: Vec<Row> = {
-            let mut stmt = self.conn.prepare(
-                "SELECT hash, subject, object, modality, extra_attrs FROM adn_relations
-                 WHERE modality IS NOT NULL ORDER BY id",
-            )?;
-            let it = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+            let mut stmt = self.conn.prepare(&format!(
+                "SELECT hash, subject, predicate, object, modality, extra_attrs FROM adn_relations
+                 WHERE {where_sql} ORDER BY id"
+            ))?;
+            let it = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?;
             it.collect::<Result<_, _>>()?
         };
         let mut authors: HashMap<String, (Option<String>, Option<String>)> = HashMap::new();
         let mut out = Vec::with_capacity(rows.len());
-        for (hash, subject, object, modality, extra) in rows {
-            let reason = extra
+        for (hash, subject, predicate, object, modality, extra) in rows {
+            let attrs: HashMap<String, String> = extra
                 .and_then(|j| serde_json::from_str::<HashMap<String, String>>(&j).ok())
-                .and_then(|m| m.get("reason").cloned());
+                .unwrap_or_default();
             if !authors.contains_key(&hash) {
                 let info = match self.get(&hash)?.map(|e| crate::server::parser::parse_payload(&e.payload)) {
                     Some(Ok(p)) => {
@@ -1663,7 +1680,13 @@ impl AdnStore {
                 authors.insert(hash.clone(), info);
             }
             let (author, signer_key) = authors[&hash].clone();
-            out.push(DeonticRuleRow { subject, object, modality, author, signer_key, reason });
+            out.push(DeonticRuleRow {
+                subject, predicate, object,
+                modality: modality.unwrap_or_default(),
+                author, signer_key,
+                reason: attrs.get("reason").cloned(),
+                attrs,
+            });
         }
         Ok(out)
     }

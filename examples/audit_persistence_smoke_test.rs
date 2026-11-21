@@ -108,6 +108,7 @@ async fn main() {
     ));
     let tmp_path_str = tmp_path.to_str().unwrap().to_string();
     let _ = std::fs::remove_file(&tmp_path_str); // run precedent eventuel
+    cstl_parser::server::server_key::remove_key_files(&tmp_path_str);
 
     let mut failures = Vec::new();
 
@@ -182,6 +183,7 @@ async fn main() {
     }
 
     let _ = std::fs::remove_file(&tmp_path_str);
+    cstl_parser::server::server_key::remove_key_files(&tmp_path_str);
 
     println!();
     if failures.is_empty() {

@@ -324,7 +324,12 @@ def parse_relations(text):
 
 def render_policy(p):
     """Politique effective renvoyee par le serveur (`CstlAgent.policy`)."""
-    why = lambda e: f" (raison : {e['reason']})" if e.get("reason") else ""  # noqa: E731
+    cond_keys = ("valid_from", "valid_until", "amount_above", "amount_at_most", "if_fact", "unless_fact", "via_role")
+
+    def why(e):
+        conds = [f"{k}={e[k]}" for k in cond_keys if e.get(k)]
+        out = f" [conditions verifiees par le serveur : {', '.join(conds)}]" if conds else ""
+        return out + (f" (raison : {e['reason']})" if e.get("reason") else "")
     lines = ["Politique en vigueur pour toi, calculee par le serveur CSTL "
              "(seules comptent les regles des agents autorises a fixer la politique) :"]
     lines += [f"- OBLIGATOIRE : {e['action']} -- a faire meme si la demande ne le cite pas{why(e)}" for e in p["required"]]

@@ -28,6 +28,7 @@ fn make_db_path() -> String {
 async fn main() {
     let db_path = make_db_path();
     let _ = std::fs::remove_file(&db_path);
+    cstl_parser::server::server_key::remove_key_files(&db_path);
 
     println!("=== Demarrage #1: enregistrement d'alice avec sa cle publique ===");
     {
@@ -79,4 +80,5 @@ async fn main() {
     );
 
     let _ = std::fs::remove_file(&db_path);
+    cstl_parser::server::server_key::remove_key_files(&db_path);
 }

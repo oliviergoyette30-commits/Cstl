@@ -56,7 +56,7 @@ fn clean_history_verifies_and_server_starts() {
     assert_eq!((report.entries, report.content_verified, report.problems.len()), (3, 3, 0), "{report:?}");
     drop(store);
     assert!(CstlNativeServer::try_with_data_path(0, &path).is_ok());
-    std::fs::remove_file(&path).ok();
+    cleanup(&path);
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn rewritten_message_content_is_detected_and_startup_refused() {
     assert!(p.iter().any(|m| m.contains("seq=1") && m.contains("contenu modifie")), "{p:?}");
     let err = CstlNativeServer::try_with_data_path(0, &path).err().expect("demarrage doit etre refuse");
     assert!(err.contains("historique d'audit compromis"), "{err}");
-    std::fs::remove_file(&path).ok();
+    cleanup(&path);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn deleted_link_is_detected() {
     Connection::open(&path).unwrap().execute("DELETE FROM audit_trail WHERE seq=1", []).unwrap();
     let p = problems(&path);
     assert!(p.iter().any(|m| m.contains("lien rompu")), "{p:?}");
-    std::fs::remove_file(&path).ok();
+    cleanup(&path);
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn tampered_derived_relations_are_detected() {
         .execute("UPDATE adn_relations SET object='refunded' WHERE object='shipped'", []).unwrap();
     let p = problems(&path);
     assert!(p.iter().any(|m| m.contains("relations derivees")), "{p:?}");
-    std::fs::remove_file(&path).ok();
+    cleanup(&path);
 }
 
 // -- Signature du serveur sur la chaine (2026-11-20) -------------------------

@@ -185,6 +185,31 @@ layer 9 will decide for you:
 Agents that read this view instead of raw messages scored 48/48 with
 both Haiku 5.5 and Opus 5.5 in `scripts/team_task_benchmark.py`.
 
+**Conditions the server enforces.** A rule can carry extra attributes,
+which layer 9 checks itself (not just their text):
+
+| Attribute | The rule applies only... |
+|---|---|
+| `subject=role:<name>` | to the agents that have this role |
+| `valid_from` / `valid_until` | inside this period (ISO 8601 date or unix seconds) |
+| `amount_above=X` / `amount_at_most=X` | when the requested `amount` is above X / at most X |
+| `if_fact=F` / `unless_fact=F` | when the fact F is / is not recorded |
+
+- A **role** is given by `RELATION [type=POSSESSES, subject=<agent>,
+  object=role:<name>]`, and taken back with `role=false`.
+- A **fact** is recorded by `RELATION [type=STATE, subject=F,
+  object=true]`, and withdrawn with `object=false`.
+- With `CSTL_POLICY_AUTHORS`, only roles and facts from a policy author
+  count. So an agent can neither give itself a role nor declare the
+  consent that would lift its own prohibition.
+- **Prudence:** a condition the server cannot evaluate (no amount in the
+  request, an unreadable value) makes a prohibition apply and an
+  obligation not apply.
+- **Amounts:** send `amount=` with `action_request`
+  (`agent.authorize("refund_order", amount=80)`). The token then carries
+  that amount, and the guard refuses to execute any other
+  (`guard.run(token, "refund_order", do_it, amount=80)`).
+
 With the Python SDK: `agent.act("wipe_db", do_it)` runs `do_it`
 only if allowed, else raises `ActionDenied`. Live test:
 `sdk/python/test_action_authorization_live.py`.

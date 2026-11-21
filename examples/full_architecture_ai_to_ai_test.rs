@@ -110,6 +110,7 @@ fn make_db_path(tag: &str) -> String {
 async fn main() {
     let db_path = make_db_path("main");
     let _ = std::fs::remove_file(&db_path);
+    cstl_parser::server::server_key::remove_key_files(&db_path);
     let port: u16 = 15099;
 
     println!("========== 1. DEMARRAGE + ENREGISTREMENT (identite Ed25519) ==========");
@@ -194,4 +195,5 @@ async fn main() {
     println!("3 aurait laisse mallory voter, 5/6 auraient laisse un attaquant redevenir 'alice'.");
 
     let _ = std::fs::remove_file(&db_path);
+    cstl_parser::server::server_key::remove_key_files(&db_path);
 }
