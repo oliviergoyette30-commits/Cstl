@@ -115,8 +115,10 @@ def same(wire, obj):
     return (v1, m1, o1) == (v2, m2, o2) and sorted(map(repr, b1)) == sorted(map(repr, b2))
 
 
-def capture():
-    """Joue un vrai scenario sur le vrai serveur et garde chaque echange."""
+def capture(tag="size", seed=0):
+    """Joue un vrai scenario sur le vrai serveur et garde chaque echange.
+    `tag` et `seed` font varier les noms et les montants (corpus d'entrainement
+    des dictionnaires de `compression_benchmark.py`)."""
     log = []
     orig = CstlClient.send_raw
 
@@ -128,25 +130,26 @@ def capture():
     CstlClient.send_raw = spy
     proc = tb.start_server("owner_*")
     try:
-        owner = tb.new_agent(None, "owner_size")
-        ex = tb.new_agent(None, "exec_size")
-        base = {"type": "PERFORM", "subject": "exec_size"}
+        owner = tb.new_agent(None, f"owner_{tag}")
+        ex = tb.new_agent(None, f"exec_{tag}")
+        base = {"type": "PERFORM", "subject": f"exec_{tag}"}
+        cap, budget, amount = (100, 200, 50)[seed % 3], (1500, 2000, 800)[seed % 3], 80 - seed
         owner.send_relations("server", [
-            {**base, "object": "refund_order", "modality": "MAY", "amount_at_most": "100", "total_at_most": "1500",
+            {**base, "object": "refund_order", "modality": "MAY", "amount_at_most": str(cap), "total_at_most": str(budget),
              "reason": "remboursements dans le plafond et dans le budget"},
-            {**base, "object": "refund_order", "modality": "MUST_NOT", "amount_above": "100", "reason": "au-dela du plafond"},
+            {**base, "object": "refund_order", "modality": "MUST_NOT", "amount_above": str(cap), "reason": "au-dela du plafond"},
             {**base, "object": "share_medical_record", "modality": "MUST_NOT", "unless_fact": "patient_consent",
              "reason": "sans consentement du patient"},
             {**base, "object": "log_transaction", "modality": "MUST", "reason": "tracabilite"},
         ])
         ex.send_relations("server", [
-            {"type": "STATE", "subject": f"order_{i}", "object": s}
+            {"type": "STATE", "subject": f"order_{i + 10 * seed}", "object": s}
             for i, s in enumerate(["paid", "shipped", "delivered", "returned", "refunded"])])
         ex.policy()
-        ex.request_action("refund_order", 80)
+        ex.request_action("refund_order", amount)
         ex.request_action("share_medical_record", None)
         ex.send_relations("server", [
-            {"type": "CAUSES", "subject": f"step_{i}", "object": f"step_{i + 1}", "confidence": "0.9"} for i in range(20)])
+            {"type": "CAUSES", "subject": f"step_{i + seed}", "object": f"step_{i + seed + 1}", "confidence": "0.9"} for i in range(20)])
     finally:
         proc.terminate()
         proc.wait(timeout=10)

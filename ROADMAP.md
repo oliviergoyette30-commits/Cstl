@@ -140,6 +140,23 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - C'est la taille de la politique qui fait échouer, pas le format, d'où
     l'intérêt que le serveur calcule la politique effective.
 
+- **`scripts/compression_benchmark.py` :** toute la chaîne de compression
+  de CSTL contre un JSON compressé avec les mêmes armes, sur les mêmes 16
+  vrais messages.
+  - Côté CSTL : Master hybride (dictionnaires réseau fixes, gzip
+    structurel, zstd avec dictionnaire embarqué), dictionnaire de texte avec
+    deltas, et réponses compressées du serveur.
+  - Côté JSON : gzip, zstd, brotli, et zstd avec un dictionnaire entraîné.
+  - Avec la meilleure méthode de chaque côté, la taille est la même :
+    2 070 contre 2 076 octets. La méthode gagnante est la même pour les
+    deux : zstd avec un dictionnaire entraîné.
+  - Les compresseurs maison de CSTL font environ 5 fois moins bien
+    (environ 10 000 octets).
+  - Défaut trouvé : `master_decompress` ajoute `object=""` aux relations
+    qui n'en ont pas.
+  - Piste : remplacer les compresseurs maison par zstd avec un
+    dictionnaire entraîné, qui vaudrait aussi pour les agents JSON.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
