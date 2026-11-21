@@ -23,6 +23,24 @@ SCORE : politique exacte (toutes les relations, ni plus ni moins), nombre de
 relations manquantes ou en trop, sorties illisibles, tokens de la sortie
 (API count_tokens).
 
+RESULTAT (2026-11-21, vraie API, 3 passes x 12 politiques, consignes avec exemple complet) :
+             politiques exactes     pass^3          tokens ecrits
+             Haiku     Opus         Haiku   Opus
+  cstl       29/36     31/36        9/12    10/12   1 884
+  json       33/36     30/36        10/12   9/12    2 140
+  compact    21/36     36/36        4/12    12/12     781
+- Opus ecrit le compact SANS AUCUNE erreur (36/36, meme a 60 regles), mieux
+  que le CSTL complet et le JSON, ou il oublie des relations sur les
+  grandes politiques.
+- Haiku ecrit le compact MOINS bien (21/36) : 12 regles oubliees et 5
+  inversions entre if: et unless: (« sauf si » ecrit if:). Il fait mieux en
+  JSON (33/36).
+- Le compact coute 2,4 fois moins de tokens a ecrire (781 contre 1 884 et
+  2 140) : la sortie est la partie la plus chere d'un appel.
+- Une premiere serie (`*_avant_exemples.json`) etait faussee par la
+  consigne : elle ne montrait la syntaxe complete que pour les regles, et
+  le guide compact notait la raison facultative entre crochets. Corrige.
+
 Usage :
   python3 scripts/compact_writing_benchmark.py --model claude-haiku-5-5 --runs 3
   python3 scripts/compact_writing_benchmark.py --stub      # plomberie seule, AUCUNE conclusion
@@ -135,7 +153,7 @@ def run_case(model, size, seed, fmt, run):
     missing, extra = sum((want - have).values()), sum((have - want).values())
     return {"size": size, "seed": seed, "format": fmt, "run": run, "unreadable": got is None,
             "missing": missing, "extra": extra, "exact": got is not None and missing == 0 and extra == 0,
-            "tokens_out": count(model, raw), "raw": raw[:3000]}
+            "tokens_out": count(model, raw), "raw": raw[:30000]}
 
 
 class StubBrain:

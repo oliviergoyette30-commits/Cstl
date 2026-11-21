@@ -175,6 +175,25 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - un programme qui reconstruit le message complet à partir de la forme
       abrégée.
 
+- **CSTL compact, module et tests (`sdk/python/cstl_compact.py`) :**
+  conversion sans perte dans les deux sens (12 tests, dont 300 allers-retours
+  aléatoires), et vue compacte de la politique effective.
+  - **Écriture (`scripts/compact_writing_benchmark.py`) :** Opus écrit le
+    compact sans aucune erreur (36/36), mieux que le CSTL complet (31/36) et
+    le JSON (30/36). Haiku l'écrit moins bien (21/36 contre 33/36 en JSON) :
+    il oublie des règles et confond if: et unless:. Le compact coûte 2,4 fois
+    moins de tokens à écrire.
+  - **Vue du serveur (relais compromis, budget) :** même fiabilité que les
+    autres vues (24/24 et 0 cas compromis, 36/36 au budget). Mais sur une
+    petite politique, elle n'est pas plus courte que les lignes CSTL
+    complètes (291 tokens contre 250) : ses 4 lignes d'explication pèsent
+    plus que les 2 ou 3 règles.
+  - À faire :
+    - raccourcir l'explication de la vue compacte ;
+    - pour Haiku, éviter « sauf si » ou ajouter un exemple avec unless: ;
+    - utiliser le compact pour les modèles forts et le JSON pour les petits
+      modèles, tant que l'écart n'est pas comblé.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
