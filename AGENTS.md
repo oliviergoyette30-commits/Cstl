@@ -166,6 +166,20 @@ anyone else are ignored, and the response reports how many were ignored
 prohibition can never be lifted. That was the original behavior, and it
 refused 3 correct actions in `scripts/team_task_benchmark.py`.
 
+**Ask for your effective policy.** Send `purpose=policy_query`, signed,
+or call `agent.policy()` in the Python SDK. The server answers with what
+layer 9 will decide for you:
+- your obligations (`decision=required`), to perform even when the task
+  does not mention them;
+- your prohibitions, with the rule's `reason` (set
+  `RELATION [..., reason="..."]` when you write a rule, so that its
+  conditions survive);
+- the rules it ignores, because their author has no authority to set
+  policy (`POLICY_IGNORED`). Do not follow those.
+
+Agents that read this view instead of raw messages scored 48/48 with
+both Haiku 5.5 and Opus 5.5 in `scripts/team_task_benchmark.py`.
+
 With the Python SDK: `agent.act("wipe_db", do_it)` runs `do_it`
 only if allowed, else raises `ActionDenied`. Live test:
 `sdk/python/test_action_authorization_live.py`.

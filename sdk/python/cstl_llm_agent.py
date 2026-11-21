@@ -527,6 +527,25 @@ class CstlAgent:
                                  {"action": action, "request_id": uuid.uuid4().hex})
         return resp.fields.get("decision") == "allowed", resp
 
+    def policy(self) -> dict:
+        """Politique EFFECTIVE de cet agent selon le serveur (2026-11-21) :
+        {"required": [...], "forbidden": [...], "ignored": [...]}, chaque
+        entree {action, modality, author[, reason][, why]}. `required` : les
+        obligations a remplir meme si la demande de travail ne les cite pas.
+        `ignored` : regles que le serveur ne compte pas (auteur sans
+        autorite) -- a ne pas suivre. Leve RuntimeError si refuse."""
+        resp = self._send_signed("policy_query", "server", [], {"request_id": uuid.uuid4().hex})
+        if resp.purpose != "policy":
+            raise RuntimeError(f"politique refusee : {resp.fields.get('reason', resp.purpose)}")
+        out = {"required": [], "forbidden": [], "ignored": []}
+        for block in resp.relations:
+            item = {k: v for k, v in block.items() if k not in ("block", "decision")}
+            if block.get("block") == "POLICY_RULE":
+                out["required" if block.get("decision") == "required" else "forbidden"].append(item)
+            elif block.get("block") == "POLICY_IGNORED":
+                out["ignored"].append(item)
+        return out
+
     def authorize(self, action: str):
         """Jeton d'autorisation SIGNE par le serveur pour `action`, a presenter
         au systeme vise (`cstl_guard.CstlGuard.run`). Leve ActionDenied si

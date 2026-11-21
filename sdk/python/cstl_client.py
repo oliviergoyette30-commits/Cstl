@@ -208,7 +208,8 @@ def parse_response(raw: str) -> CstlResponse:
             deontic_audit = kv
         elif block_name == "AUDIT":
             audit = kv
-        elif block_name in ("RELATION", "VERIFICATION", "EMERGENCE_REPORT", "SEMANTIC_WARNING"):
+        elif block_name in ("RELATION", "VERIFICATION", "EMERGENCE_REPORT", "SEMANTIC_WARNING",
+                            "POLICY_RULE", "POLICY_IGNORED"):
             relations.append({"block": block_name, **kv})
 
     purpose = intent.get("purpose", "")

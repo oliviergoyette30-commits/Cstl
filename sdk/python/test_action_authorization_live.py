@@ -153,3 +153,38 @@ def test_rules_from_non_authors_and_forged_senders_are_ignored(authority_server,
     assert not forged.is_error, forged.raw
     allowed, resp = bot.request_action("check_backups")
     assert allowed and resp.fields.get("ignored_rules") == "2", resp.raw
+
+
+# -- Politique effective (2026-11-21) ----------------------------------------
+# Banc d'equipe avec la vraie API : un agent obeissait a l'interdiction d'un
+# agent sans autorite (que le serveur ignorait), oubliait les obligations
+# absentes de sa tache, et perdait la raison des regles (MUST_NOT nu).
+
+def test_policy_query_gives_obligations_reasons_and_ignored_rules(authority_server, monkeypatch, tmp_path):
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    ops = named_agent(m, f"ops_{uuid.uuid4().hex[:8]}", 5555)
+    owner.send_relations("server", [
+        {"type": "PERFORM", "subject": bot.name, "object": "check_backups", "modality": "MUST"},
+        {"type": "PERFORM", "subject": bot.name, "object": "refund_order", "modality": "MUST_NOT",
+         "reason": "pas sans accord du client, et l'accord n'a pas ete donne"},
+    ])
+    ops.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "check_backups", "modality": "MUST_NOT"}])
+    p = bot.policy()
+    assert [r["action"] for r in p["required"]] == ["check_backups"], p
+    assert [r["action"] for r in p["forbidden"]] == ["refund_order"], p
+    assert p["forbidden"][0]["reason"] == "pas sans accord du client, et l'accord n'a pas ete donne", p
+    assert p["forbidden"][0]["author"] == owner.name
+    assert [(r["action"], r["author"], r["why"]) for r in p["ignored"]] == [("check_backups", ops.name, "not_policy_author")], p
+    # Lecture seule : la chaine d'audit n'avance pas.
+    _, before = bot.request_action("read_logs")
+    bot.policy()
+    _, after = bot.request_action("read_logs")
+    assert after.audit_seq == before.audit_seq + 1
+
+
+def test_policy_query_requires_a_proven_identity(authority_server):
+    from cstl_client import CstlClient
+    c = CstlClient(port=5555)
+    r = c.send_raw(c.build_payload(encoder="t", produced_by="t", purpose="policy_query", sender="alice", receiver="server"))
+    assert r.purpose == "policy_denied", r.raw
