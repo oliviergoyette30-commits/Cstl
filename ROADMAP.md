@@ -92,6 +92,19 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     falsifié. Résultat : 15 obligations oubliées et 9/24 parfaits.
   - L'avantage de CSTL vient du serveur qui garde la copie signée.
 
+- **`scripts/format_vs_server_benchmark.py` :** il sépare le format CSTL
+  du serveur CSTL (2 formats × avec ou sans serveur).
+  - Sans serveur, JSON et format CSTL laissent passer les mêmes attaques :
+    6 cas compromis sur 24 pour chacun.
+  - Avec le serveur, les deux formats font 0 cas compromis. JSON 24/24
+    avec les deux modèles, CSTL 23/24 et 24/24.
+  - Le format CSTL est environ 12 % plus court en tokens, mais pas plus
+    fiable.
+  - **Conclusion : l'avantage de CSTL face au JSON vient entièrement du
+    serveur.** Le serveur peut servir des agents qui parlent JSON. C'est un
+    argument de plus pour le point 1 : faire de CSTL une couche de contrôle
+    par-dessus JSON, MCP et A2A.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

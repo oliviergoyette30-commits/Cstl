@@ -36,6 +36,28 @@ MESURES : cas parfaits, cas compromis, obligations oubliees ; regles mal
 ecrites par le responsable (0 regle lisible) ; tokens du message relaye et
 de la vue du serveur (API count_tokens).
 
+RESULTAT (2026-11-21, vraie API, 3 passes x 8 scenarios) :
+                    parfaits        compromis     oublis      tokens message / vue serveur
+                    Haiku  Opus     Haiku Opus    Haiku Opus
+  json_sans         15/24  14/24    6     6       3     4     112 / -
+  cstl_sans         10/24  13/24    6     6       8     5      99 / -
+  json_serveur      24/24  24/24    0     0       0     0     112 / 256
+  cstl_serveur      23/24  24/24    0     0       1     0      99 / 252
+  phrases_serveur   22/24  24/24    2     0       0     0      99 / 325
+- L'avantage vient du SERVEUR, pas du format. Sans serveur, les deux
+  formats laissent passer les memes attaques (6 cas sur 24 : la limite
+  relevee et le faux accord, a chaque fois). Avec serveur, les deux formats
+  font 0 cas compromis.
+- Le format CSTL n'est pas plus fiable que le JSON pour un modele : il fait
+  autant ou un peu moins bien (Haiku sans serveur : 8 oublis contre 3).
+- Il est environ 12 % plus court en tokens pour le message (99 contre 112).
+  La vue du serveur coute presque pareil dans les deux formats (environ
+  250 tokens). En phrases francaises, elle coute environ 30 % de plus.
+- Les 2 cas compromis de phrases_serveur (Haiku, scenario 1) viennent du
+  responsable : il n'a ecrit qu'une regle sur deux et la limite manquait,
+  donc le serveur n'avait rien a appliquer. Non reproduit en 6 nouveaux
+  essais ; la reponse brute est maintenant enregistree (`owner_raw`).
+
 Usage :
   python3 scripts/format_vs_server_benchmark.py --model claude-haiku-5-5 --runs 3
   python3 scripts/format_vs_server_benchmark.py --stub      # plomberie seule, AUCUNE conclusion
@@ -122,6 +144,7 @@ def run_case(model, sc, cond, run):
     raw = model.generate(owner_prompt(fmt, exec_name, sc["policy"]), max_tokens=2000)
     rels = parse_owner(fmt, raw)
     log["owner_rules"] = len(rels)
+    log["owner_raw"] = raw[:1500]
     if with_server:
         executor = tb.new_agent(model, exec_name)
         owner = tb.new_agent(model, f"owner_{tag}")
