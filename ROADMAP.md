@@ -218,9 +218,25 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       en silence ;
     - taille : 22 091 caractères sur les 12 politiques, contre 19 923 en
       lignes et 25 229 en TOON ;
-    - lecture et écriture **pas encore mesurées** (crédit API épuisé) :
-      `format_short_benchmark.py --formats cstl_court,toon,cstl_tableau` et
-      `compact_writing_benchmark.py --formats compact,toon,compact_tableau`.
+    - **Mesuré (3 passes × 12 politiques, `scripts/tableau_*.json`) : le
+      mode tableau n'aide pas.**
+
+      | | Lecture Haiku | Lecture Opus | Écriture Haiku | Écriture Opus | Tokens lus / écrits |
+      |---|---|---|---|---|---|
+      | CSTL compact en lignes | 26/36 | 36/36 | 23/36 | 36/36 | 782 / 784 |
+      | CSTL compact en tableaux | 15/36 | 36/36 | 24/36 (10 illisibles) | 35/36 | 873 / 875 |
+      | TOON | 22/36 | 36/36 | 31/36 | 35/36 | 1 046 / 1 047 |
+
+    - Haiku décale les colonnes : il écrit `- - - patient_consent`, trois
+      tirets comme dans la ligne d'exemple qui finit par une raison, puis le
+      fait dans une 7ᵉ colonne. Le nombre de lignes vérifié a bien repéré
+      un oubli (`RULES[66]` annoncé, 60 lignes écrites).
+    - Conclusion : le mode ligne reste le meilleur CSTL compact. Il est le
+      plus court, et Opus l'écrit sans faute. Pour un petit modèle qui
+      écrit, TOON reste le plus sûr.
+    - Piste suivante, sans colonnes à compter : garder le mode ligne mais
+      nommer les conditions en français (`si:F`, `sauf_si:F`) pour éviter la
+      confusion if/unless de Haiku.
 
 ## Déjà fait (PR #3 à #11)
 
