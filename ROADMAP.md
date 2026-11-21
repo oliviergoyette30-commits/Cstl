@@ -157,6 +157,24 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Piste : remplacer les compresseurs maison par zstd avec un
     dictionnaire entraîné, qui vaudrait aussi pour les agents JSON.
 
+- **`scripts/format_short_benchmark.py` :** un format abrégé qui n'écrit
+  pas ce qui est prévisible (idée d'Olivier). Il n'envoie que l'imprévisible
+  : qui, quoi, quelle règle, quel montant. Un programme reconstruit le
+  message complet pour le serveur.
+  - Le CSTL abrégé divise les tokens des données par 2,5 (782 contre 1 971
+    pour le CSTL complet et 2 039 pour le JSON compact).
+  - Avec la convention de lecture comprise, la consigne complète coûte
+    39 % de moins.
+  - Aucune perte de compréhension : Opus fait tout juste dans les quatre
+    formats, et Haiku fait un peu mieux en abrégé (23/36 contre 17/36).
+  - Le JSON abrégé coûte 32 % de plus que le CSTL abrégé.
+  - C'est le premier avantage mesuré du format CSTL face au JSON.
+  - À faire :
+    - une vue abrégée de la politique effective dans le SDK, à la place de
+      `policy_to_text` ;
+    - un programme qui reconstruit le message complet à partir de la forme
+      abrégée.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

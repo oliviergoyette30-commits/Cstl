@@ -28,6 +28,28 @@ ajoutee a la consigne, et COMPTEE dans les tokens de la consigne complete.
 MESURES : reponses justes (permissions, obligations, pass^3), tokens des
 donnees seules et de la consigne complete (API count_tokens, gratuite).
 
+RESULTAT (2026-11-21, vraie API, 3 passes x 12 politiques, tokens moyens) :
+                 tokens donnees  tokens consigne  tout juste Haiku  tout juste Opus
+  cstl                1 971          2 558           17/36             36/36
+  json_compact        2 039          2 625           18/36             36/36
+  cstl_court            782          1 569           23/36             36/36
+  json_court          1 033          1 764           22/36             36/36
+- Le CSTL abrege divise les tokens des donnees par 2,5 (-60 % contre CSTL
+  complet, -62 % contre JSON compact) et la consigne complete, convention
+  comprise, de 39 %. A 60 regles : 1 285 tokens de donnees contre 3 185.
+- Aucune perte de comprehension : Opus fait tout juste dans les quatre
+  formats. Haiku fait meme un peu mieux en abrege (23/36 contre 17/36 et
+  18/36), sans doute parce que le texte est plus court, mais l'ecart reste
+  petit sur 36 cas.
+- Le JSON abrege fait aussi mieux que le JSON complet, mais il coute 32 %
+  de tokens de plus que le CSTL abrege (1 033 contre 782) : les crochets,
+  les guillemets et les null de chaque position se paient.
+- Attention : les formats abreges regroupent les roles et les faits avant
+  les regles, alors que les formats complets gardent l'ordre melange. Une
+  partie du gain de Haiku peut venir de cet ordre.
+- C'est le premier avantage MESURE du format CSTL face au JSON : sous forme
+  abregee, il est le plus economique en tokens a comprehension egale.
+
 Usage :
   python3 scripts/format_short_benchmark.py --model claude-haiku-5-5 --runs 3
   python3 scripts/format_short_benchmark.py --stub      # plomberie seule, AUCUNE conclusion
