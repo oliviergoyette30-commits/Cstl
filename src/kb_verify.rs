@@ -75,6 +75,16 @@ pub struct KbVerifier {
     /// messages. Ne contient que des resultats DEFINITIFS (QID trouve, ou
     /// "aucune entite"), jamais une erreur passagere (429, reseau).
     entity_cache: Mutex<EntityCache>,
+    /// `CSTL_KB_VERIFY=off` (2026-11-21) : aucune requete vers Wikidata.
+    /// Pour un serveur sans acces reseau, ou un banc d'essai qui envoie des
+    /// milliers de messages (chaque relation coutait 2 recherches et une
+    /// pause de 300 ms, et Wikidata limite le debit). Les relations restent
+    /// `unchallenged_unproven`, avec la raison `kb_verify_disabled`.
+    disabled: bool,
+}
+
+fn kb_verify_disabled_from_env() -> bool {
+    std::env::var("CSTL_KB_VERIFY").map(|v| v.eq_ignore_ascii_case("off") || v == "0" || v.eq_ignore_ascii_case("false")).unwrap_or(false)
 }
 
 /// (libelle normalise, langue) -> (QID eventuel, libelle trouve ou raison).
@@ -100,6 +110,7 @@ impl KbVerifier {
             search_api: WIKIDATA_SEARCH_API.to_string(),
             sparql_endpoint: WIKIDATA_SPARQL_ENDPOINT.to_string(),
             entity_cache: Mutex::new(HashMap::new()),
+            disabled: kb_verify_disabled_from_env(),
         }
     }
 
@@ -119,6 +130,7 @@ impl KbVerifier {
             search_api: search_api.into(),
             sparql_endpoint: sparql_endpoint.into(),
             entity_cache: Mutex::new(HashMap::new()),
+            disabled: false,
         }
     }
 
@@ -478,6 +490,18 @@ impl KbVerifier {
     pub async fn verify_relation(&self, subject: &str, predicate: &str, object: &str,
         lang: &str, max_hops: usize, max_expansions: usize) -> VerificationResult
     {
+        if self.disabled {
+            return VerificationResult {
+                verified: "unchallenged_unproven".into(),
+                source_url: None,
+                reason: "kb_verify_disabled (CSTL_KB_VERIFY=off)".into(),
+                subject_qid: None,
+                object_qid: None,
+                check_method: None,
+                chain: None,
+                property_id: None,
+            };
+        }
         let (subject_qid, subject_info) = self.search_entity(subject, lang, 3).await;
         tokio::time::sleep(Duration::from_millis(300)).await;
         let (object_qid, object_info) = self.search_entity(object, lang, 3).await;
@@ -538,6 +562,16 @@ impl KbVerifier {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn disabled_verifier_makes_no_request() {
+        // Endpoint injoignable : si une requete partait, elle echouerait.
+        let mut v = KbVerifier::with_endpoints("http://127.0.0.1:9/search", "http://127.0.0.1:9/sparql");
+        v.disabled = true;
+        let r = v.verify_relation("Paris", "EQUALS", "France", "fr", 4, 40).await;
+        assert_eq!(r.verified, "unchallenged_unproven");
+        assert!(r.reason.contains("kb_verify_disabled"), "{}", r.reason);
+    }
+
     use super::*;
 
     #[test]

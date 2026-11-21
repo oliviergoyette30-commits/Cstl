@@ -543,13 +543,15 @@ class CstlAgent:
         resp = self._send_signed("policy_query", "server", [], {"request_id": uuid.uuid4().hex})
         if resp.purpose != "policy":
             raise RuntimeError(f"politique refusee : {resp.fields.get('reason', resp.purpose)}")
-        out = {"required": [], "forbidden": [], "ignored": [], "roles": []}
+        out = {"required": [], "permitted": [], "forbidden": [], "ignored": [], "roles": []}
         if resp.fields.get("roles"):
             out["roles"] = resp.fields["roles"].split()
+        out["default"] = resp.fields.get("default", "allow")
         for block in resp.relations:
             item = {k: v for k, v in block.items() if k not in ("block", "decision")}
             if block.get("block") == "POLICY_RULE":
-                out["required" if block.get("decision") == "required" else "forbidden"].append(item)
+                key = block.get("decision") if block.get("decision") in ("required", "permitted") else "forbidden"
+                out[key].append(item)
             elif block.get("block") == "POLICY_IGNORED":
                 out["ignored"].append(item)
         return out

@@ -166,6 +166,9 @@ pub struct DeonticRuleRow {
     pub attrs: HashMap<String, String>,
 }
 
+/// (expediteur, cle de signature verifiee) d'un message stocke.
+type MessageAuthor = (Option<String>, Option<String>);
+
 pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
 /// Ligne de `graph_relations` : (hash, subject, predicate, object, modality, created_at).
 pub type GraphRelationRow = (String, String, String, String, Option<String>, Option<i64>);
@@ -191,6 +194,12 @@ fn short(hash: &str) -> String {
 
 pub struct AdnStore {
     conn: Connection,
+    /// Auteur et cle de signature VERIFIEE de chaque message (hash) deja lu
+    /// par la couche 9 (2026-11-21). Un message stocke ne change plus : sans
+    /// ce cache, chaque demande d'action revalidait la signature de TOUTES
+    /// les regles du serveur (192 ms a 600 regles, puis des delais depasses
+    /// sous charge -- vu dans scripts/policy_history_benchmark.py).
+    authors_cache: std::sync::Mutex<HashMap<String, MessageAuthor>>,
     /// Cle du serveur et premier `seq` qui doit etre signe (2026-11-20) :
     /// `save_audit_entry` signe chaque maillon, `verify_integrity` verifie.
     audit_signer: Option<AuditSigner>,
@@ -653,7 +662,7 @@ impl AdnStore {
                 eprintln!("[AdnStore] ⚠️  migration payload_compressed echouee (inattendu): {}", msg);
             }
         }
-        Ok(Self { conn, audit_signer: None })
+        Ok(Self { conn, authors_cache: std::sync::Mutex::new(HashMap::new()), audit_signer: None })
     }
 
     /// Helper pour tests: créer un AdnStore depuis une connexion existante
@@ -780,7 +789,7 @@ impl AdnStore {
                 updated_at INTEGER NOT NULL
             );",
         )?;
-        Ok(Self { conn, audit_signer: None })
+        Ok(Self { conn, authors_cache: std::sync::Mutex::new(HashMap::new()), audit_signer: None })
     }
 
     /// Stocke un payload (ASSUMES / non-commité par défaut). Idempotent sur `hash`:
@@ -1640,7 +1649,14 @@ impl AdnStore {
     /// signature est valide. A l'appelant de comparer cette cle a la cle
     /// enregistree de l'auteur.
     pub fn deontic_rules_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
-        self.authored_relations("modality IS NOT NULL")
+        self.authored_relations("modality IS NOT NULL", &[])
+    }
+
+    /// Regles qui visent `agent` : par son nom, ou un role (`role:<nom>`).
+    /// Ce que la couche 9 lit a chaque demande : charger toutes les regles
+    /// de tous les agents rendait chaque demande de plus en plus lente.
+    pub fn deontic_rules_for(&self, agent: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        self.authored_relations("modality IS NOT NULL AND (subject = ?1 OR subject LIKE 'role:%')", &[agent])
     }
 
     /// Faits (`STATE`) et appartenances a un role (`POSSESSES ... role:<nom>`),
@@ -1650,36 +1666,52 @@ impl AdnStore {
     pub fn facts_and_roles_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         self.authored_relations(
             "modality IS NULL AND (predicate = 'STATE' OR (predicate = 'POSSESSES' AND object LIKE 'role:%'))",
+            &[],
         )
     }
 
-    fn authored_relations(&self, where_sql: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+    /// Comme `facts_and_roles_with_authors`, avec seulement les roles de `agent`.
+    pub fn facts_and_roles_for(&self, agent: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        self.authored_relations(
+            "modality IS NULL AND (predicate = 'STATE' OR (predicate = 'POSSESSES' AND subject = ?1 AND object LIKE 'role:%'))",
+            &[agent],
+        )
+    }
+
+    fn authored_relations(&self, where_sql: &str, args: &[&str]) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         type Row = (String, String, String, String, Option<String>, Option<String>);
         let rows: Vec<Row> = {
-            let mut stmt = self.conn.prepare(&format!(
+            let mut stmt = self.conn.prepare_cached(&format!(
                 "SELECT hash, subject, predicate, object, modality, extra_attrs FROM adn_relations
                  WHERE {where_sql} ORDER BY id"
             ))?;
-            let it = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?;
+            let it = stmt.query_map(rusqlite::params_from_iter(args.iter()), |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            })?;
             it.collect::<Result<_, _>>()?
         };
-        let mut authors: HashMap<String, (Option<String>, Option<String>)> = HashMap::new();
         let mut out = Vec::with_capacity(rows.len());
         for (hash, subject, predicate, object, modality, extra) in rows {
             let attrs: HashMap<String, String> = extra
                 .and_then(|j| serde_json::from_str::<HashMap<String, String>>(&j).ok())
                 .unwrap_or_default();
-            if !authors.contains_key(&hash) {
-                let info = match self.get(&hash)?.map(|e| crate::server::parser::parse_payload(&e.payload)) {
-                    Some(Ok(p)) => {
-                        let valid = crate::signing::check_signature(&p) == crate::signing::SignatureCheck::Valid;
-                        (p.intent.get("sender").cloned(), if valid { p.meta.get("public_key").cloned() } else { None })
+            let cached = self.authors_cache.lock().ok().and_then(|c| c.get(&hash).cloned());
+            let (author, signer_key) = match cached {
+                Some(info) => info,
+                None => {
+                    let info = match self.get(&hash)?.map(|e| crate::server::parser::parse_payload(&e.payload)) {
+                        Some(Ok(p)) => {
+                            let valid = crate::signing::check_signature(&p) == crate::signing::SignatureCheck::Valid;
+                            (p.intent.get("sender").cloned(), if valid { p.meta.get("public_key").cloned() } else { None })
+                        }
+                        _ => (None, None),
+                    };
+                    if let Ok(mut c) = self.authors_cache.lock() {
+                        c.insert(hash.clone(), info.clone());
                     }
-                    _ => (None, None),
-                };
-                authors.insert(hash.clone(), info);
-            }
-            let (author, signer_key) = authors[&hash].clone();
+                    info
+                }
+            };
             out.push(DeonticRuleRow {
                 subject, predicate, object,
                 modality: modality.unwrap_or_default(),

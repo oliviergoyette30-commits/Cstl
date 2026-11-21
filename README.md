@@ -702,6 +702,7 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 | `CSTL_SERVER_PUBLIC_KEY` | Pin the server key: startup is refused if the key loaded from disk is not this one (hex). Since 2026-11-20 the same key also **signs every audit link**, and startup re-verifies those signatures. That catches someone who rewrites the database **and** recomputes every hash, which the hash chain alone could not catch. Links older than the signing stay checked by hash only. The point where signing starts and the **last link written** are both recorded in `<key>.audit_since`, which is itself signed. Startup is also refused if the chain stops before that last link (its last links were deleted). An empty history (the database was deleted) is logged and restarts the count. Pin the key to also catch an attacker who replaces the key files together with the database. | `9f2c…` (64 hex) |
 | `CSTL_WITNESS_URL` | External witness of the audit chain (`sdk/python/cstl_witness.py`, run on **another machine**). The server sends it every new signed link. At startup the server refuses to start if its chain is older than what the witness has seen, which is how a restored old copy of the database and its marker is caught. It also refuses if the witness has a different link at that point (a fork), or if the witness is unreachable. The witness only accepts links signed by the pinned server key, and only ever moves forward. | `http://witness:8090` |
 | `CSTL_AUTHZ_TTL_SECS` | Layer 9: validity of an authorization token, in seconds (default `60`). | `30` |
+| `CSTL_KB_VERIFY` | `off`: no Wikidata requests. For a server without network access, or a benchmark sending thousands of messages. Relations stay `unchallenged_unproven`, with the reason `kb_verify_disabled`. | `off` |
 | `CSTL_ACCEPT_BROKEN_CHAIN` | At startup the server re-verifies the whole persisted audit history: chain links, each message's hash recomputed from its stored content, and derived relations. **If anything was altered, startup is refused** (since 2026-11-20; before, a tampered database was reloaded silently). Set to `1` to start anyway, knowingly — the alert stays in the log. | `1` |
 | `CSTL_REQUIRE_SIGNATURES` | Every sender must be registered with an Ed25519 key and sign every message (`signature_required_strict_mode`, `sender_not_registered_strict_mode`). **On by default since 2026-11-21**. Before, it was off, and any process could speak under any name. Set it to `false` only knowingly; the server then warns at startup. | `false` |
 | `CSTL_DEV_MODE` | Development mode, for local trials only: unsigned messages are accepted, and the demo agents `alice`/`bob` are created without a key. **Startup is refused if the listener is not local.** | `1` |
@@ -744,7 +745,7 @@ Deontic operators grounded in SDL (von Wright, 1951) with Kripke semantics. Epis
 
 Full spec: [`CSTL_SPEC_v5_0.md`](CSTL_SPEC_v5_0.md)
 
-Full architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+Full architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md) (rebuilt from the code on 2026-11-21)
 
 ---
 
