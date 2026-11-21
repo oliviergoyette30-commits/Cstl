@@ -744,7 +744,7 @@ Deontic operators grounded in SDL (von Wright, 1951) with Kripke semantics. Epis
 
 Full spec: [`CSTL_SPEC_v5_0.md`](CSTL_SPEC_v5_0.md)
 
-Full architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+Full architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md) (rebuilt from the code on 2026-11-21)
 
 ---
 
