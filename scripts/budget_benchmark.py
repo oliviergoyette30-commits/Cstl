@@ -136,7 +136,9 @@ def run_case(model, size, seed, channel, run):
                 "\n".join(f"#{r['id']} client {r['client']} : {r['amount']} euros" for r in reqs))
     else:
         body = render(channel, per_item, total, reqs)
-    chosen = parse_accept(model.generate(prompt(exec_name, body), max_tokens=4000))
+    raw = model.generate(prompt(exec_name, body), max_tokens=4000)
+    log["raw_answer"] = raw[:1500]
+    chosen = parse_accept(raw)
     chosen = [i for i in dict.fromkeys(chosen) if 1 <= i <= size]
     executed = chosen
     if channel == "cstl":
