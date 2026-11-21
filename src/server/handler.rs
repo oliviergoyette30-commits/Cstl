@@ -581,12 +581,12 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             let roles = roles.iter().map(|r| r.as_str()).filter(|r| super::action_authorization::is_valid_action(r)).collect::<Vec<_>>().join(" ");
                             let mut out = format!(
                                 "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, forbidden={}, ignored={}, authors_enforced={}{}]\n",
-                                sender, policy.required.len(), policy.forbidden.len(), policy.ignored.len(),
+                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, permitted={}, forbidden={}, ignored={}, authors_enforced={}{}]\n",
+                                sender, policy.required.len(), policy.permitted.len(), policy.forbidden.len(), policy.ignored.len(),
                                 matches!(authors, super::action_authorization::PolicyAuthors::Only(_)),
                                 if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) },
                             );
-                            for (decision, list) in [("required", &policy.required), ("forbidden", &policy.forbidden)] {
+                            for (decision, list) in [("required", &policy.required), ("permitted", &policy.permitted), ("forbidden", &policy.forbidden)] {
                                 for e in list {
                                     let conds: String = e.conditions.describe().into_iter()
                                         .map(|(k, v)| format!(", {k}={}", wire_text(&v))).collect();
@@ -594,7 +594,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         "POLICY_RULE [action={}, decision={}, modality={}, author={}{}{}{}]\n",
                                         e.action, decision, e.modality, wire_name(e.author.as_deref()),
                                         e.via_role.as_deref().map(|r| format!(", via_role={}", wire_name(Some(r)))).unwrap_or_default(),
-                                        conds,
+                                        if e.otherwise { format!("{conds}, applies=otherwise") } else { conds },
                                         e.reason.as_deref().map(|r| format!(", reason={}", wire_text(r))).unwrap_or_default(),
                                     ));
                                 }

@@ -40,6 +40,11 @@
 
 use crate::semantic::{FORBIDDEN_MODALITIES, REQUIRED_MODALITIES};
 
+/// Permission sans obligation (2026-11-21). Sans elle, « autorise jusqu'a
+/// 200 euros » ne pouvait s'ecrire qu'avec MUST, qui en fait une OBLIGATION.
+/// Ne contredit ni MUST ni MUST_NOT dans l'audit deontique (il n'y figure pas).
+pub const PERMITTED_MODALITIES: &[&str] = &["MAY", "PERMIT"];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefaultPolicy {
     Allow,
@@ -283,6 +288,9 @@ pub struct PolicyEntry {
     /// Regle visant un role (`role:<nom>`) plutot que l'agent lui-meme.
     pub via_role: Option<String>,
     pub conditions: Conditions,
+    /// Regle sans condition suivie de regles a montant : elle ne decide que
+    /// « dans les autres cas » (montant non couvert, ou absent).
+    pub otherwise: bool,
 }
 
 /// Politique EFFECTIVE d'un agent (2026-11-21, `purpose=policy_query`) :
@@ -295,6 +303,8 @@ pub struct PolicyEntry {
 pub struct EffectivePolicy {
     /// Obligations : a faire, meme si la demande de travail ne les cite pas.
     pub required: Vec<PolicyEntry>,
+    /// Permissions (`MAY`) : autorise, pas obligatoire.
+    pub permitted: Vec<PolicyEntry>,
     pub forbidden: Vec<PolicyEntry>,
     pub ignored: Vec<PolicyEntry>,
 }
@@ -308,6 +318,7 @@ fn entry(r: &Rule) -> PolicyEntry {
         why_ignored: r.why_ignored,
         via_role: r.subject.strip_prefix("role:").map(str::to_string),
         conditions: r.conditions.clone(),
+        otherwise: false,
     }
 }
 
@@ -324,7 +335,13 @@ pub fn effective_policy(sender: &str, rules: &[Rule], authors: &PolicyAuthors, c
     }
     let mut policy = EffectivePolicy::default();
     let push = |policy: &mut EffectivePolicy, r: &Rule| {
-        if r.forbids() { policy.forbidden.push(entry(r)) } else { policy.required.push(entry(r)) }
+        if r.forbids() {
+            policy.forbidden.push(entry(r))
+        } else if PERMITTED_MODALITIES.contains(&r.modality.as_str()) {
+            policy.permitted.push(entry(r))
+        } else {
+            policy.required.push(entry(r))
+        }
     };
     for action in actions {
         let relevant: Vec<&Rule> = mine.iter().copied().filter(|r| r.object == action).collect();
@@ -336,16 +353,42 @@ pub fn effective_policy(sender: &str, rules: &[Rule], authors: &PolicyAuthors, c
             }
         };
         let in_force: Vec<&Rule> = counted.into_iter().filter(|r| r.in_force(ctx)).collect();
-        let (by_amount, plain): (Vec<&Rule>, Vec<&Rule>) = in_force.into_iter().partition(|r| r.conditions.has_amount());
-        let deciding = match authors {
-            PolicyAuthors::Anyone => plain.iter().find(|r| r.forbids()).or_else(|| plain.first()).copied(),
-            PolicyAuthors::Only(_) => plain.last().copied(),
-        };
-        if let Some(r) = deciding {
-            push(&mut policy, r);
-        }
-        for r in by_amount {
-            push(&mut policy, r);
+        match authors {
+            PolicyAuthors::Anyone => {
+                let (by_amount, plain): (Vec<&Rule>, Vec<&Rule>) = in_force.into_iter().partition(|r| r.conditions.has_amount());
+                if let Some(r) = plain.iter().find(|r| r.forbids()).or_else(|| plain.first()) {
+                    push(&mut policy, r);
+                }
+                for r in by_amount {
+                    push(&mut policy, r);
+                }
+            }
+            PolicyAuthors::Only(_) => {
+                // La regle sans condition de montant la plus recente decide ;
+                // seules les regles a montant posees APRES elle peuvent encore
+                // l'emporter (selon le montant). Les plus anciennes sont
+                // remplacees : les montrer tromperait l'agent (2026-11-21).
+                let last_plain = in_force.iter().rposition(|r| !r.conditions.has_amount());
+                let later: Vec<&Rule> = in_force
+                    .iter()
+                    .skip(last_plain.map_or(0, |i| i + 1))
+                    .filter(|r| r.conditions.has_amount())
+                    .copied()
+                    .collect();
+                for r in &later {
+                    push(&mut policy, r);
+                }
+                if let Some(i) = last_plain {
+                    push(&mut policy, in_force[i]);
+                    if !later.is_empty() {
+                        for list in [&mut policy.required, &mut policy.permitted, &mut policy.forbidden] {
+                            if let Some(e) = list.last_mut().filter(|e| e.action == action && e.conditions == in_force[i].conditions && e.modality == in_force[i].modality) {
+                                e.otherwise = true;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     policy
@@ -377,13 +420,19 @@ impl Decision {
 
     fn from_rule(modality: String, conflict: bool, superseded: bool, ignored: usize, not_applicable: usize) -> Self {
         let allowed = !FORBIDDEN_MODALITIES.contains(&modality.as_str());
-        let reason = if allowed { "required" } else { "forbidden" };
+        let reason = if !allowed {
+            "forbidden"
+        } else if PERMITTED_MODALITIES.contains(&modality.as_str()) {
+            "permitted"
+        } else {
+            "required"
+        };
         Decision { allowed, reason, rule: Some(modality), conflict, superseded, ignored, not_applicable }
     }
 }
 
 fn is_deontic(modality: &str) -> bool {
-    FORBIDDEN_MODALITIES.contains(&modality) || REQUIRED_MODALITIES.contains(&modality)
+    FORBIDDEN_MODALITIES.contains(&modality) || REQUIRED_MODALITIES.contains(&modality) || PERMITTED_MODALITIES.contains(&modality)
 }
 
 pub fn is_valid_action(action: &str) -> bool {
@@ -438,7 +487,11 @@ pub fn decide(
     match authors {
         PolicyAuthors::Anyone => {
             let forbidden = applicable.iter().find(|r| r.forbids()).map(|r| r.modality.clone());
-            let required = applicable.iter().find(|r| !r.forbids()).map(|r| r.modality.clone());
+            let required = applicable
+                .iter()
+                .find(|r| REQUIRED_MODALITIES.contains(&r.modality.as_str()))
+                .or_else(|| applicable.iter().find(|r| !r.forbids()))
+                .map(|r| r.modality.clone());
             let conflict = forbidden.is_some() && required.is_some();
             match forbidden.or(required) {
                 Some(m) => Decision::from_rule(m, conflict, false, 0, not_applicable),
@@ -652,6 +705,31 @@ mod tests {
         assert_eq!(parse_time("2026-01-01T01:00:00+01:00"), Some(1_767_225_600));
         assert_eq!(parse_time("1767225600"), Some(1_767_225_600));
         assert_eq!(parse_time("demain"), None);
+    }
+
+    #[test]
+    fn may_permits_without_obliging_and_can_carry_a_limit() {
+        let only = PolicyAuthors::parse(Some("owner"));
+        let ctx = |a: Option<f64>| RequestContext { amount: a, ..now() };
+        // « Autorise jusqu'a 200 » apres « interdit » : MAY <= 200 + MUST_NOT > 200.
+        let h = vec![
+            rel("bot", "refund", "MUST_NOT"),
+            with(rel("bot", "refund", "MAY"), &[("amount_at_most", "200")]),
+            with(rel("bot", "refund", "MUST_NOT"), &[("amount_above", "200")]),
+        ];
+        let d = decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Allow, &only, &ctx(Some(150.0)));
+        assert!(d.allowed && d.reason == "permitted", "{d:?}");
+        assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Allow, &only, &ctx(Some(250.0))).allowed);
+        // Politique : la regle remplacee (MUST_NOT sans condition) n'est plus montree.
+        let p = effective_policy("bot", &h, &only, &now());
+        assert_eq!((p.required.len(), p.permitted.len(), p.forbidden.len()), (0, 1, 2), "{p:?}");
+        assert!(p.forbidden.iter().any(|e| e.conditions.amount_above.is_some() && !e.otherwise));
+        assert!(p.forbidden.iter().any(|e| e.otherwise), "la regle sans condition ne vaut plus que dans les autres cas");
+        // Puis « interdit » de nouveau : les anciennes regles a montant ne s'affichent plus.
+        let h2 = [h, vec![rel("bot", "refund", "FORBID")]].concat();
+        let p = effective_policy("bot", &h2, &only, &now());
+        assert_eq!((p.permitted.len(), p.forbidden.len()), (0, 1), "{p:?}");
+        assert!(!decide("bot", Some("refund"), true, true, &h2, DefaultPolicy::Allow, &only, &ctx(Some(10.0))).allowed);
     }
 
     #[test]
