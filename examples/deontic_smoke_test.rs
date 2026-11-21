@@ -117,6 +117,10 @@ fn arbitrage_channel_payload(action: &str, case_id: Option<&str>, extra: &str) -
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let tcp_port: u16 = 15200;
     let rest_port: u16 = 15201;
 

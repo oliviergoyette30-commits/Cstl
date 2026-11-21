@@ -205,6 +205,10 @@ fn make_test_server(port: u16, council: RestrictedCouncil, council_members: &[(&
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let mut csprng = OsRng;
 
     // Cles reelles pour chaque membre de conseil implique dans ce test,

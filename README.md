@@ -213,7 +213,7 @@ class CstlAgent:
 - All 4/4 pass (byte-perfect match)
 
 **Live Verification (Python + Rust Server):**
-1. Start Rust server: `cargo run --bin cstl_parser`
+1. Start Rust server: `CSTL_DEV_MODE=1 cargo run --bin cstl_parser`
 2. Run Python test: `cd sdk/python && python3 test_python_signing_verification.py` → ✓ Signing bytes match
 3. Generate real keypair and register:
 ```bash
@@ -612,7 +612,7 @@ EOF
 
 ```bash
 # Terminal 1: Start Rust server
-cargo run --bin cstl_parser
+CSTL_DEV_MODE=1 cargo run --bin cstl_parser
 
 # Terminal 2: Run Python tests
 python3 test_python_signing_verification.py  # Verify canonical signing_bytes match
@@ -703,7 +703,8 @@ INTENT_PAYLOAD [purpose=agent_register, sender=charlie, name=charlie, capabiliti
 | `CSTL_WITNESS_URL` | External witness of the audit chain (`sdk/python/cstl_witness.py`, run on **another machine**). The server sends it every new signed link. At startup the server refuses to start if its chain is older than what the witness has seen, which is how a restored old copy of the database and its marker is caught. It also refuses if the witness has a different link at that point (a fork), or if the witness is unreachable. The witness only accepts links signed by the pinned server key, and only ever moves forward. | `http://witness:8090` |
 | `CSTL_AUTHZ_TTL_SECS` | Layer 9: validity of an authorization token, in seconds (default `60`). | `30` |
 | `CSTL_ACCEPT_BROKEN_CHAIN` | At startup the server re-verifies the whole persisted audit history: chain links, each message's hash recomputed from its stored content, and derived relations. **If anything was altered, startup is refused** (since 2026-11-20; before, a tampered database was reloaded silently). Set to `1` to start anyway, knowingly — the alert stays in the log. | `1` |
-| `CSTL_REQUIRE_SIGNATURES` | Strict mode: every sender must be registered with an Ed25519 key and sign every message (`signature_required_strict_mode`, `sender_not_registered_strict_mode`). Off by default so the unsigned quick start in `AGENTS.md` keeps working; **turn it on as soon as the server is reachable from a network.** | `true` |
+| `CSTL_REQUIRE_SIGNATURES` | Every sender must be registered with an Ed25519 key and sign every message (`signature_required_strict_mode`, `sender_not_registered_strict_mode`). **On by default since 2026-11-21**. Before, it was off, and any process could speak under any name. Set it to `false` only knowingly; the server then warns at startup. | `false` |
+| `CSTL_DEV_MODE` | Development mode, for local trials only: unsigned messages are accepted, and the demo agents `alice`/`bob` are created without a key. **Startup is refused if the listener is not local.** | `1` |
 
 ### Database
 

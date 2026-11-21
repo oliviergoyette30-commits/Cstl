@@ -98,6 +98,28 @@ pub struct ServerContext {
     pub server_key: Arc<server_key::ServerKey>,
 }
 
+/// Mode developpement (`CSTL_DEV_MODE=1`, 2026-11-21). SEUL cas ou le serveur
+/// accepte des messages non signes par defaut et cree les agents de
+/// demonstration `alice`/`bob` sans cle. Refuse hors ecoute locale.
+pub fn dev_mode() -> bool {
+    std::env::var("CSTL_DEV_MODE").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false)
+}
+
+/// Signatures obligatoires : la valeur explicite de `CSTL_REQUIRE_SIGNATURES`
+/// si elle est donnee, sinon OUI hors mode developpement. Avant le
+/// 2026-11-21, le defaut etait NON : n'importe quel processus pouvait parler
+/// sous un nom libre sans rien prouver.
+pub fn require_signatures_from_env() -> bool {
+    match std::env::var("CSTL_REQUIRE_SIGNATURES") {
+        Ok(v) if !v.trim().is_empty() => v == "1" || v.eq_ignore_ascii_case("true"),
+        _ => !dev_mode(),
+    }
+}
+
+fn is_loopback(host: &str) -> bool {
+    matches!(host, "127.0.0.1" | "localhost" | "::1" | "[::1]") || host.starts_with("127.")
+}
+
 pub struct CstlNativeServer {
     pub port: u16,
     /// Mutable derriere un verrou depuis l'ajout de purpose=agent_register
@@ -175,7 +197,17 @@ impl CstlNativeServer {
         let entries = self.chain.lock().await.entries.clone();
         // Temoin configure mais injoignable : refus aussi. Demarrer sans lui
         // reviendrait a ne plus rien verifier, en silence.
-        let witnessed = match client.fetch(&self.server_key.public_hex()).await {
+        // Apres une rotation de cle, le temoin ne connait encore que
+        // l'ANCIENNE : on lui demande aussi, sinon la protection contre le
+        // retour en arriere sauterait a chaque changement de cle.
+        let mut lookup = client.fetch(&self.server_key.public_hex()).await;
+        for past in self.server_key.past_keys() {
+            if !matches!(lookup, Ok(None)) {
+                break;
+            }
+            lookup = client.fetch(&past.public_hex).await;
+        }
+        let witnessed = match lookup {
             Ok(w) => w,
             Err(e) if accept_broken => {
                 eprintln!("[Temoin] ⚠️  {e} -- demarrage FORCE (CSTL_ACCEPT_BROKEN_CHAIN=1)");
@@ -451,8 +483,13 @@ impl CstlNativeServer {
             .ok()
             .filter(|h| !h.is_empty())
             .unwrap_or_else(|| "127.0.0.1".to_string());
-        if bind_host == "0.0.0.0" && std::env::var("CSTL_REQUIRE_SIGNATURES").map(|v| v != "1" && !v.eq_ignore_ascii_case("true")).unwrap_or(true) {
-            eprintln!("[CSTL-Native Server] ATTENTION: ecoute sur toutes les interfaces SANS CSTL_REQUIRE_SIGNATURES -- n'importe quelle machine du reseau peut envoyer des messages non signes");
+        if dev_mode() && !is_loopback(&bind_host) {
+            return Err(format!(
+                "CSTL_DEV_MODE n'est autorise qu'en ecoute locale (CSTL_BIND_HOST={bind_host}) : il accepte des messages non signes -- demarrage refuse"
+            ).into());
+        }
+        if !is_loopback(&bind_host) && !require_signatures_from_env() {
+            eprintln!("[CSTL-Native Server] ATTENTION: ecoute sur {bind_host} avec CSTL_REQUIRE_SIGNATURES=false -- n'importe quelle machine du reseau peut envoyer des messages non signes");
         }
         let addr = format!("{}:{}", bind_host, self.port);
         let listener = listener::create_listener(&addr).await?;
@@ -530,13 +567,17 @@ impl CstlNativeServer {
             collect_response_corpus: std::env::var("CSTL_COLLECT_RESPONSE_CORPUS")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
-            require_signatures: std::env::var("CSTL_REQUIRE_SIGNATURES")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
+            require_signatures: require_signatures_from_env(),
             server_key: self.server_key.clone(),
         };
         if ctx.require_signatures {
-            eprintln!("[CSTL-Native Server] Mode strict ACTIF (CSTL_REQUIRE_SIGNATURES) -- tout message doit etre signe par un agent enregistre");
+            eprintln!("[CSTL-Native Server] Signatures OBLIGATOIRES -- tout message doit etre signe par un agent enregistre (CSTL_DEV_MODE=1 pour un essai local sans signature)");
+        } else {
+            eprintln!("[CSTL-Native Server] ⚠️  Signatures FACULTATIVES ({}) -- n'importe quel processus local peut parler sous un nom libre. A reserver aux essais.",
+                if dev_mode() { "CSTL_DEV_MODE" } else { "CSTL_REQUIRE_SIGNATURES=false" });
+        }
+        if !dev_mode() && matches!(action_authorization::PolicyAuthors::from_env(), action_authorization::PolicyAuthors::Anyone) {
+            eprintln!("[CSTL-Native Server] ⚠️  CSTL_POLICY_AUTHORS non defini -- les regles de TOUT agent enregistre comptent pour la couche 9, et une interdiction ne peut pas etre levee");
         }
 
         if ctx.collect_response_corpus {

@@ -7,6 +7,8 @@ __pycache__/
 *.server_key
 *.server_key.pub
 *.server_key.audit_since
+*.server_key.rotations
+*.server_key.tmp
 
 # Python venvs (graphify)
 .graphify-venv/

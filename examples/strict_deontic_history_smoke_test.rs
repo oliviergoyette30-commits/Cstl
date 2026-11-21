@@ -94,6 +94,10 @@ fn make_test_server(port: u16) -> CstlNativeServer {
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let port: u16 = 15181;
     let server = make_test_server(port);
     tokio::spawn(async move {

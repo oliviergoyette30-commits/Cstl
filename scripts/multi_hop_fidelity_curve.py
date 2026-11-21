@@ -135,6 +135,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import hashlib
 import json
 import subprocess
@@ -280,6 +281,7 @@ def start_server(port: int) -> tuple[subprocess.Popen, Path]:
     tmp_dir = Path(tempfile.mkdtemp(prefix="cstl_multihop_"))
     proc = subprocess.Popen(
         [str(binary)], cwd=str(tmp_dir),
+        env={**os.environ, "CSTL_DEV_MODE": "1"},  # demo agents non signes (alice) : mode developpement, signatures obligatoires par defaut depuis le 2026-11-21
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     deadline = time.time() + 10.0

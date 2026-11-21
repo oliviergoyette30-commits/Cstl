@@ -33,6 +33,7 @@ Usage :
   python3 scripts/llm_relay_fidelity.py --provider stub --hops 5      # plomberie seule
 """
 import argparse
+import os
 import difflib
 import json
 import re
@@ -104,6 +105,7 @@ def start_server():
     except OSError:
         pass
     proc = subprocess.Popen([str(binary)], cwd=tempfile.mkdtemp(prefix="cstl_relay_"),
+                            env={**os.environ, "CSTL_DEV_MODE": "1"},  # demo agents non signes (alice) : mode developpement, signatures obligatoires par defaut depuis le 2026-11-21
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(120):
         try:

@@ -2,9 +2,7 @@
 //! Main entry point - starts TCP listener on port 5050 (5000 est souvent pris par AirPlay Receiver sur macOS)
 
 use cstl_parser::server::CstlNativeServer;
-use cstl_parser::agent_discovery::{AgentCard, AgentRegistry};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use cstl_parser::agent_discovery::AgentCard;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,29 +15,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     eprintln!("🚀 CSTL-Native Server v1.0");
     eprintln!("===========================");
-
-    // Create registry and register agents
-    let mut registry = AgentRegistry::new();
-
-    registry.register(AgentCard {
-        name: "alice".to_string(),
-        version: "5.0.0".to_string(),
-        capabilities: vec!["communication".to_string(), "arbitration".to_string()],
-        trust_score: 0.95,
-        // Legacy, non signe -- ces deux agents bootstrap n'ont jamais eu de
-        // cle: aucune signature n'est exigee pour eux (voir src/signing.rs).
-        public_key: None,
-    });
-
-    registry.register(AgentCard {
-        name: "bob".to_string(),
-        version: "5.0.0".to_string(),
-        capabilities: vec!["communication".to_string(), "fact_checking".to_string()],
-        trust_score: 0.85,
-        public_key: None,
-    });
-
-    eprintln!("✅ Registered agents: alice, bob");
 
     // Create server with registry -- try_with_data_path plutot que new()/with_data_path
     // (qui paniquent avec un backtrace Rust brut) pour que le processus puisse sortir
@@ -57,16 +32,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => default,
         }
     };
+    // `cstl_parser --rotate-server-key` (2026-11-21) : remplace la cle du
+    // serveur, puis s'arrete. L'historique est d'abord verifie avec la cle
+    // actuelle (try_with_data_path refuse un historique compromis) ; les
+    // maillons deja ecrits restent verifiables avec l'ancienne cle, les
+    // suivants seront signes par la nouvelle.
+    if std::env::args().any(|a| a == "--rotate-server-key") {
+        let server = match CstlNativeServer::try_with_data_path(0, "cstl_adn.db") {
+            Ok(s) => s,
+            Err(msg) => {
+                eprintln!("❌ Rotation impossible : {msg}");
+                std::process::exit(1);
+            }
+        };
+        let at_seq = server.chain.lock().await.entries.len() as u64;
+        let result = server.server_key.read_audit_marker().and_then(|marker| {
+            let new = server.server_key.rotate(at_seq)?;
+            if let Some(m) = marker {
+                new.write_audit_marker(&m)?;
+            }
+            Ok(new)
+        });
+        match result {
+            Ok(new) => {
+                eprintln!("✅ Cle du serveur remplacee a seq={at_seq}");
+                eprintln!("   ancienne : {}", server.server_key.public_hex());
+                eprintln!("   nouvelle : {}", new.public_hex());
+                eprintln!("   A mettre a jour : CSTL_SERVER_PUBLIC_KEY, la cle des gardes (CstlGuard) et celle du temoin (--server-key).");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("❌ Rotation impossible : {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     let tcp_port = port_from_env("CSTL_PORT", 5050);
     let rest_port = port_from_env("CSTL_REST_PORT", 8000);
-    let mut server = match CstlNativeServer::try_with_data_path(tcp_port, "cstl_adn.db") {
+    let server = match CstlNativeServer::try_with_data_path(tcp_port, "cstl_adn.db") {
         Ok(server) => server,
         Err(msg) => {
             eprintln!("❌ Demarrage impossible: {msg}");
             std::process::exit(1);
         }
     };
-    server.agent_registry = Arc::new(RwLock::new(registry));
+    // Agents de demonstration, SEULEMENT en mode developpement (2026-11-21),
+    // et AJOUTES au registre recharge depuis la base. Avant, ce bloc
+    // REMPLACAIT ce registre : apres chaque redemarrage du binaire, tous les
+    // agents enregistres avec une cle etaient oublies, et n'importe qui
+    // pouvait reprendre leur nom avec sa propre cle (verifie en direct).
+    if cstl_parser::server::dev_mode() {
+        let mut registry = server.agent_registry.write().await;
+        for (name, caps, trust) in [("alice", ["communication", "arbitration"], 0.95), ("bob", ["communication", "fact_checking"], 0.85)] {
+            if !registry.agents.iter().any(|a| a.name == name) {
+                registry.register(AgentCard {
+                    name: name.to_string(),
+                    version: "5.0.0".to_string(),
+                    capabilities: caps.iter().map(|c| c.to_string()).collect(),
+                    trust_score: trust,
+                    // Sans cle : agents de demonstration, mode developpement uniquement.
+                    public_key: None,
+                });
+            }
+        }
+        eprintln!("✅ CSTL_DEV_MODE : agents de demonstration alice, bob (sans cle)");
+    }
+    let known = server.agent_registry.read().await.agents.len();
+    eprintln!("✅ {known} agent(s) connu(s) (recharges depuis la base)");
 
     eprintln!("📡 Starting server on port {tcp_port}...");
     eprintln!("💬 Ready to receive CSTL payloads\n");

@@ -157,7 +157,7 @@ fn signed_problems(path: &str) -> Vec<String> {
 }
 
 fn cleanup(path: &str) {
-    for suffix in ["", ".server_key", ".server_key.pub", ".server_key.audit_since", ".server_key.audit_since.tmp"] {
+    for suffix in ["", ".server_key", ".server_key.pub", ".server_key.audit_since", ".server_key.audit_since.tmp", ".server_key.rotations"] {
         std::fs::remove_file(format!("{path}{suffix}")).ok();
     }
 }
@@ -307,5 +307,44 @@ fn marker_for_an_empty_chain_round_trips_and_a_wiped_database_restarts() {
     drop(CstlNativeServer::try_with_data_path(0, &path).expect("base supprimee : nouveau depart"));
     let key = ServerKey::for_data_path(&path).unwrap();
     assert_eq!(key.read_audit_marker().unwrap(), Some(cstl_parser::server::server_key::AuditMarker { since: 0, head: None }));
+    cleanup(&path);
+}
+
+// -- Rotation de la cle du serveur (2026-11-21) ------------------------------
+
+#[test]
+fn rotated_key_keeps_history_valid_and_bounds_the_old_key() {
+    let path = temp_db("rotate");
+    let hashes = seed_signed(&path); // seq 0..2, signes par la cle n°1
+    let k1 = ServerKey::for_data_path(&path).unwrap();
+    let marker = k1.read_audit_marker().unwrap().unwrap();
+    let k2 = k1.rotate(3).unwrap();
+    k2.write_audit_marker(&marker).unwrap();
+    // L'historique signe par l'ancienne cle reste valide.
+    assert!(signed_problems(&path).is_empty(), "{:?}", signed_problems(&path));
+    assert!(CstlNativeServer::try_with_data_path(0, &path).is_ok());
+
+    // Un maillon RECENT (seq 3) signe avec l'ANCIENNE cle -- ce que pourrait
+    // fabriquer quelqu'un qui l'aurait volee -- est refuse.
+    let k2 = Arc::new(ServerKey::for_data_path(&path).unwrap());
+    let mut store = AdnStore::open(&path).unwrap();
+    let mut chain = store.load_chain().unwrap();
+    let raw = "#!CSTL v5.0.0 MODE=A\nMETA [encoder=t, produced_by=t]\nINTENT_PAYLOAD [purpose=inform, sender=alice, receiver=bob]\nRELATION [type=STATE, subject=payment_late, object=late]\n---END---\n";
+    let payload = parse_payload(raw).unwrap();
+    let entry = chain.append(&payload);
+    let m = k2.read_audit_marker().unwrap().unwrap();
+    store.set_audit_signer(k2.clone(), m);
+    store.save_audit_entry(&entry).unwrap();
+    store.put(&entry.hash, raw, Some("t"), Some("t"), 0.5, Some(&entry.parent_hash), None, None).unwrap();
+    store.put_relations(&entry.hash, &payload.relations).unwrap();
+    drop(store);
+    assert!(signed_problems(&path).is_empty(), "maillon signe par la nouvelle cle : valide");
+    let forged = k1.sign_hex(cstl_parser::server::server_key::audit_message(
+        entry.seq, &entry.hash, &entry.parent_hash, &entry.sender, &entry.receiver, &entry.purpose).as_bytes());
+    Connection::open(&path).unwrap()
+        .execute("UPDATE audit_trail SET server_signature=?1 WHERE seq=3", [forged]).unwrap();
+    let p = signed_problems(&path);
+    assert!(p.iter().any(|m| m.contains("seq=3") && m.contains("signature du serveur invalide")), "{p:?}");
+    assert_eq!(hashes.len(), 3);
     cleanup(&path);
 }

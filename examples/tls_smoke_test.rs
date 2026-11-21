@@ -108,6 +108,10 @@ fn extract_field(response: &str, block: &str, key: &str) -> Option<String> {
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let port: u16 = 15180;
 
     // Deux chaines de confiance DISTINCTES -- la deuxieme (`other_pki`) sert

@@ -21,7 +21,7 @@ file's prose — have the human get you a real answer in one copy-paste step:
 
 1. Ask the human running your chat to do this once (it stays running):
    ```bash
-   cargo run --bin cstl_parser &
+   CSTL_DEV_MODE=1 cargo run --bin cstl_parser &
    cargo run --example http_bridge_for_ai &
    ```
 2. Compose your own CSTL payload as plain text (see the format in Option 2
@@ -65,7 +65,7 @@ the file comments explain what each assertion is actually proving and why.
 ## Option 2 — talk to the server yourself, raw wire format, no library
 
 ```bash
-cargo run --bin cstl_parser &
+CSTL_DEV_MODE=1 cargo run --bin cstl_parser &
 sleep 3
 
 cat <<'EOF' > /tmp/try_cstl.cstl
@@ -82,8 +82,13 @@ timeout 3 cat <&3
 exec 3<&- 3>&-
 ```
 
-`alice` is one of two agents the server bootstraps itself (`src/main.rs`),
-pre-registered without a key, so this needs no signing step. Real
+`alice` is one of two demo agents the server creates itself
+(`src/main.rs`), without a key, so this needs no signing step. That only
+happens in **development mode** (`CSTL_DEV_MODE=1`). Development mode is
+allowed only on a local listener. Since 2026-11-21, **signatures are
+required by default**: without development mode, an unsigned message is
+refused (`signature_rejected`). Real agents register with their own key
+(`agent_register`, self-signed); see the Python SDK's `CstlAgent`. Real
 response, captured live:
 
 ```
@@ -224,6 +229,15 @@ startup is refused. If the history is empty, the database was deleted or
 reset: the server logs a warning and starts over, signed from `seq=0`.
 Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so that a swapped key
 file is caught too. Tests: `tests/audit_integrity_test.rs`.
+
+**Changing the server key.** Run `cargo run --bin cstl_parser --
+--rotate-server-key` with the server stopped. It first verifies the
+history with the current key, then creates a new key. The handover is
+signed by both keys and recorded in `<db>.server_key.rotations`. Links
+already written stay valid under the old key, but only for the seq range
+when it was in service, so a stolen old key cannot sign a new link. Then
+update `CSTL_SERVER_PUBLIC_KEY`, the guards' key and the witness's
+`--server-key`. Live test: `sdk/python/test_secure_defaults_live.py`.
 
 **Rollback to an old copy.** Someone who restores an old copy of the
 database *and* its marker together gets an old but valid, signed state.

@@ -1959,7 +1959,7 @@ impl AdnStore {
                     entry.seq, &entry.hash, &entry.parent_hash, &entry.sender, &entry.receiver, &entry.purpose,
                 );
                 match signatures.get(&entry.seq).cloned().flatten() {
-                    Some(sig) if key.verify_hex(message.as_bytes(), &sig) => report.signature_verified += 1,
+                    Some(sig) if key.verify_audit(entry.seq, message.as_bytes(), &sig) => report.signature_verified += 1,
                     Some(_) => report.problems.push(format!(
                         "seq={} : signature du serveur invalide -- maillon reecrit (ou cle du serveur remplacee)",
                         entry.seq

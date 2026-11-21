@@ -91,7 +91,10 @@ def test_unsigned_or_unregistered_requests_are_denied(servers):
     c = CstlClient(port=5353)
     r = c.send_raw(c.build_payload(encoder="t", produced_by="t", purpose="action_request",
                                    sender="alice", receiver="server", extra_intent={"action": "read_logs"}))
-    assert r.fields.get("decision") == "denied" and r.fields.get("reason") == "sender_not_registered", r.raw
+    # Depuis le 2026-11-21 (signatures obligatoires par defaut), le message
+    # non signe est refuse avant meme la couche 9.
+    assert r.fields.get("decision") != "allowed", r.raw
+    assert r.purpose == "signature_rejected" or r.fields.get("reason") == "sender_not_registered", r.raw
 
 
 def test_whitelist_policy_allows_only_explicit_obligations(servers, monkeypatch, tmp_path):
@@ -150,9 +153,15 @@ def test_rules_from_non_authors_and_forged_senders_are_ignored(authority_server,
     forged = c.send_raw(c.build_payload(
         encoder="t", produced_by="t", purpose="inform", sender=f"owner_{uuid.uuid4().hex[:8]}", receiver="server",
         relations=[{"type": "PERFORM", "subject": bot.name, "object": "check_backups", "modality": "MUST_NOT"}]))
-    assert not forged.is_error, forged.raw
+    if forged.is_error:
+        # Signatures obligatoires par defaut (2026-11-21) : le faux auteur est
+        # refuse a l'entree, sa regle n'est meme pas enregistree.
+        assert forged.purpose == "signature_rejected", forged.raw
+        expected_ignored = "1"
+    else:
+        expected_ignored = "2"
     allowed, resp = bot.request_action("check_backups")
-    assert allowed and resp.fields.get("ignored_rules") == "2", resp.raw
+    assert allowed and resp.fields.get("ignored_rules") == expected_ignored, resp.raw
 
 
 # -- Politique effective (2026-11-21) ----------------------------------------
@@ -187,4 +196,4 @@ def test_policy_query_requires_a_proven_identity(authority_server):
     from cstl_client import CstlClient
     c = CstlClient(port=5555)
     r = c.send_raw(c.build_payload(encoder="t", produced_by="t", purpose="policy_query", sender="alice", receiver="server"))
-    assert r.purpose == "policy_denied", r.raw
+    assert r.purpose in ("policy_denied", "signature_rejected"), r.raw

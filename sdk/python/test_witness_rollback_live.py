@@ -43,7 +43,8 @@ def wait_port(port, proc=None, tries=120):
 
 
 def start_server(workdir, witness=True):
-    env = {**os.environ, "CSTL_PORT": str(PORT), "CSTL_REST_PORT": str(REST)}
+    # Messages de demonstration non signes (alice) : mode developpement.
+    env = {**os.environ, "CSTL_PORT": str(PORT), "CSTL_REST_PORT": str(REST), "CSTL_DEV_MODE": "1"}
     env.pop("CSTL_WITNESS_URL", None)
     if witness:
         env["CSTL_WITNESS_URL"] = f"http://127.0.0.1:{WPORT}"

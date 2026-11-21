@@ -127,6 +127,10 @@ fn semantic_warning_payload(sender: &str, subject: &str) -> String {
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let tmp_path = std::env::temp_dir().join(format!(
         "cstl_governance_persistence_smoke_{}.db",
         std::process::id()

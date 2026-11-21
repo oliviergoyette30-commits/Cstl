@@ -72,6 +72,10 @@ fn payload(defines: &str, relations: &str) -> String {
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     let port: u16 = 15182;
     let server = make_test_server(port);
     tokio::spawn(async move {

@@ -130,6 +130,10 @@ fn sign_council_decision(sk: &SigningKey, sender: &str, target_hash: &str, decis
 
 #[tokio::main]
 async fn main() {
+    // Scenario avec des agents de demonstration NON signes (alice/bob) :
+    // depuis le 2026-11-21 les signatures sont obligatoires par defaut, ce
+    // mode developpement doit donc etre demande explicitement.
+    std::env::set_var("CSTL_DEV_MODE", "1");
     // --- Configuration REELLE via la variable d'environnement, exactement
     // comme en production (main.rs). Doit etre posee AVANT la construction
     // du serveur: RestrictedCouncil::from_env() est appele une seule fois,
