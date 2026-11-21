@@ -74,8 +74,9 @@ sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(REPO / "sdk" / "python"))
 import team_task_benchmark as tb  # noqa: E402
 import relay_tamper_benchmark as rt  # noqa: E402
+import cstl_compact  # noqa: E402
 
-CONDITIONS = ("json_sans", "cstl_sans", "json_serveur", "cstl_serveur", "phrases_serveur")
+CONDITIONS = ("json_sans", "cstl_sans", "json_serveur", "cstl_serveur", "phrases_serveur", "compact_serveur")
 
 ATTRS = ('Attributs optionnels, verifies par le serveur : amount_above (la regle ne vaut qu\'au-dela de ce montant ; '
          'pour une limite, MUST_NOT avec amount_above) ; unless_fact (la regle ne vaut pas si ce fait est enregistre). '
@@ -112,6 +113,8 @@ def forged_relations(sc, executor):
 
 
 def server_view(fmt, policy):
+    if fmt == "compact":
+        return cstl_compact.policy_to_compact(policy)
     if fmt == "phrases":
         return tb.render_policy(policy)
     if fmt == "json":
@@ -159,7 +162,7 @@ def run_case(model, sc, cond, run):
     messages = [("Message recu (relaye)", msg)]
     view = ""
     if with_server:
-        view = server_view("phrases" if cond == "phrases_serveur" else fmt, executor.policy())
+        view = server_view({"phrases_serveur": "phrases", "compact_serveur": "compact"}.get(cond, fmt), executor.policy())
         messages.append(("Serveur CSTL (politique effective)", view))
     log["tokens_message"] = count_tokens(model, msg)
     log["tokens_server_view"] = count_tokens(model, view) if view else 0
@@ -206,12 +209,15 @@ def summarize(rows):
 
 
 def main():
+    global CONDITIONS
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--stub", action="store_true")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--conditions", default=",".join(CONDITIONS), help="conditions a jouer, separees par des virgules")
     args = ap.parse_args()
+    CONDITIONS = tuple(c for c in args.conditions.split(",") if c)
     model = StubBrain() if args.stub else tb.ClaudeBrain(args.model)
     proc = tb.start_server("owner_*")
     try:

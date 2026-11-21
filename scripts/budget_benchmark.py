@@ -63,8 +63,9 @@ sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(REPO / "sdk" / "python"))
 import team_task_benchmark as tb  # noqa: E402
 import cstl_llm_agent as agent_mod  # noqa: E402
+import cstl_compact  # noqa: E402
 
-CHANNELS = ("texte", "json", "cstl")
+CHANNELS = ("texte", "json", "cstl", "cstl_compact")
 SIZES = (20, 40, 60)
 SEEDS = (1, 2, 3, 4)
 
@@ -135,10 +136,10 @@ def score(per_item, total, reqs, executed_ids, truth_ids):
 def run_case(model, size, seed, channel, run):
     per_item, total, reqs = generate(size, seed)
     want = truth(per_item, total, reqs)
-    tag = f"n{size}_s{seed}_r{run}"
+    tag = f"n{size}_s{seed}_r{run}" + ("_c" if channel == "cstl_compact" else "")
     exec_name = f"exec_{tag}"
     log = {"size": size, "seed": seed, "channel": channel, "run": run, "per_item": per_item, "total": total}
-    if channel == "cstl":
+    if channel in ("cstl", "cstl_compact"):
         executor = tb.new_agent(model, exec_name)
         owner = tb.new_agent(model, f"owner_{tag}")
         base = {"type": "PERFORM", "subject": exec_name, "object": "refund_order"}
@@ -149,7 +150,8 @@ def run_case(model, size, seed, channel, run):
             {**base, "modality": "MUST_NOT", "total_above": str(total), "reason": "au-dela du budget total"},
         ])
         policy = executor.policy()
-        body = (tb.render_policy(policy) + "\n\n" + policy_sentence(per_item, total) + "\n\nDemandes :\n" +
+        view = cstl_compact.policy_to_compact(policy) if channel == "cstl_compact" else tb.render_policy(policy)
+        body = (view + "\n\n" + policy_sentence(per_item, total) + "\n\nDemandes :\n" +
                 "\n".join(f"#{r['id']} client {r['client']} : {r['amount']} euros" for r in reqs))
     else:
         body = render(channel, per_item, total, reqs)
@@ -158,7 +160,7 @@ def run_case(model, size, seed, channel, run):
     chosen = parse_accept(raw)
     chosen = [i for i in dict.fromkeys(chosen) if 1 <= i <= size]
     executed = chosen
-    if channel == "cstl":
+    if channel in ("cstl", "cstl_compact"):
         by_id = {r["id"]: r for r in reqs}
         executed = [i for i in sorted(chosen) if executor.request_action("refund_order", by_id[i]["amount"])[0]]
     overs, refused, spent = score(per_item, total, reqs, executed, want)
@@ -193,12 +195,15 @@ def summarize(rows, size=None):
 
 
 def main():
+    global CHANNELS
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--stub", action="store_true")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--channels", default=",".join(CHANNELS), help="canaux a jouer, separes par des virgules")
     args = ap.parse_args()
+    CHANNELS = tuple(c for c in args.channels.split(",") if c)
     model = StubBrain() if args.stub else tb.ClaudeBrain(args.model)
     proc = tb.start_server("owner_*")
     try:
