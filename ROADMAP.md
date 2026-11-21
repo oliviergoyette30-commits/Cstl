@@ -81,6 +81,17 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Le JSON fait aussi 36/36.
   - Le texte libre fait 35/36, avec un cas de dépassement par modèle.
 
+- **`scripts/competition_benchmark.py` :** CSTL contre les garde-fous du
+  marché, face au même relais compromis (3 passes × 8 scénarios).
+  - CSTL : 24/24 avec Haiku 5.5 et Opus 5.5, 0 cas compromis.
+  - Garde LLM (façon NeMo ou Llama Guard) : 6 et 7 cas compromis.
+  - Moteur de règles (façon OPA ou Cedar) : 9 et 8 cas compromis.
+  - Ces deux approches jugent le message reçu, donc une limite relevée ou
+    un faux consentement passent à chaque fois.
+  - JSON signé : 0 cas compromis, mais tout est refusé quand le message est
+    falsifié. Résultat : 15 obligations oubliées et 9/24 parfaits.
+  - L'avantage de CSTL vient du serveur qui garde la copie signée.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
