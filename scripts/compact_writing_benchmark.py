@@ -42,17 +42,25 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import cstl_compact  # noqa: E402
 
 FORMATS = ("cstl", "json", "compact")
-SPEC_FIELDS = ("Champs : une regle est PERFORM avec subject (un agent, ou role:<nom>), object (l'action), modality "
-               "(MUST ou MUST_NOT) et, s'il y en a, amount_above (la regle ne vaut qu'au-dela de ce montant), if_fact "
-               "(seulement si ce fait est vrai), unless_fact (seulement si ce fait n'est pas vrai). Un role est "
-               "POSSESSES subject=<agent> object=role:<nom>. Un fait est STATE subject=<fait> object=true ou false.")
+SPEC_FIELDS = ("Une regle est PERFORM avec subject (un agent, ou role:<nom>), object (l'action), modality (MUST ou "
+               "MUST_NOT) et, s'il y en a, amount_above (la regle ne vaut qu'au-dela de ce montant), if_fact "
+               "(seulement si ce fait est vrai), unless_fact (sauf si ce fait est vrai). Un role est une relation "
+               "POSSESSES (subject = l'agent, object = role:<nom>). Un fait est une relation STATE (subject = le fait, "
+               "object = true ou false). N'ecris que les attributs qui existent.")
+# Meme exemple (memes 4 elements) dans chaque format, pour qu'aucun format ne soit desavantage par la consigne.
+# 2026-11-21 : la premiere serie ne montrait que la syntaxe des regles en CSTL complet ; Haiku ecrivait alors
+# « STATE subject=... object=... » sans RELATION [...] (illisible), et recopiait les crochets « [\"raison\"] » du
+# guide compact. Serie refaite avec ces exemples complets.
+EXAMPLE = [{"type": "POSSESSES", "subject": "agent_a", "object": "role:finance"},
+           {"type": "STATE", "subject": "audit_open", "object": "true"},
+           {"type": "PERFORM", "subject": "agent_a", "object": "wipe_db", "modality": "MUST_NOT", "amount_above": "100",
+            "unless_fact": "audit_open"},
+           {"type": "PERFORM", "subject": "role:finance", "object": "log_transaction", "modality": "MUST"}]
 SPEC = {
-    "cstl": ("Ecris la politique en CSTL, une relation par ligne, sous la forme "
-             "RELATION [type=PERFORM, subject=<qui>, object=<action>, modality=<MUST|MUST_NOT>, amount_above=<X>, "
-             "if_fact=<F>, unless_fact=<F>] (n'ecris que les attributs qui existent). " + SPEC_FIELDS),
-    "json": ('Ecris la politique en JSON : une liste de relations, par exemple {"type": "PERFORM", "subject": "<qui>", '
-             '"object": "<action>", "modality": "MUST_NOT", "amount_above": "100"} (n\'ecris que les champs qui '
-             "existent). " + SPEC_FIELDS),
+    "cstl": ("Ecris la politique en CSTL : une relation par ligne, RELATION [cle=valeur, ...]. " + SPEC_FIELDS +
+             "\nExemple :\n" + rt.render_relations(EXAMPLE)),
+    "json": ("Ecris la politique en JSON : une liste de relations, chacune un objet {cle: valeur}. " + SPEC_FIELDS +
+             "\nExemple :\n" + json.dumps(EXAMPLE, ensure_ascii=False)),
     "compact": "Ecris la politique en CSTL compact.\n" + cstl_compact.GUIDE,
 }
 

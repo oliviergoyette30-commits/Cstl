@@ -158,13 +158,19 @@ def decode(text):
 
 
 GUIDE = (
-    "Format CSTL compact (une ligne par element) :\n"
+    "Format CSTL compact (une ligne par element ; les crochets [ ] ci-dessous marquent ce qui est facultatif, "
+    "ne les ecris pas) :\n"
     "- ROLE <agent> <role> : l'agent a ce role.\n"
     "- FACT <fait> true|false : le fait est vrai ou faux.\n"
     "- <qui> <MUST|MUST_NOT|MAY> <action> [conditions] [\"raison\"] : une regle. <qui> est un agent ou role:<nom>.\n"
     "  Conditions : >X (montant au-dela de X), <=X (montant au plus X), total>X / total<=X (total deja autorise "
-    "plus ce montant), if:F (seulement si le fait F est vrai), unless:F (seulement si F n'est pas vrai), "
-    "from:D / until:D (periode de validite)."
+    "plus ce montant), if:F (seulement si le fait F est vrai), unless:F (sauf si le fait F est vrai), "
+    "from:D / until:D (periode de validite).\n"
+    "Exemple :\n"
+    "ROLE agent_a finance\n"
+    "FACT audit_open true\n"
+    "agent_a MUST_NOT wipe_db >100 unless:audit_open\n"
+    "role:finance MUST log_transaction \"tracabilite\""
 )
 
 
