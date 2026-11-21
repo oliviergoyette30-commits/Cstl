@@ -97,6 +97,60 @@ async fn send_response<S: AsyncWrite + Unpin>(
 /// (TLS active) -- le corps ne lit/ecrit que via `AsyncRead`/`AsyncWrite`,
 /// jamais une methode specifique a `TcpStream`, donc aucune duplication de
 /// code n'etait necessaire pour supporter les deux cas.
+/// Regles deontiques persistees, avec leur auteur et leur raison, pretes pour
+/// la couche 9. Une regle n'est "autorisee" que si son auteur est un auteur de
+/// politique ET que son message est signe avec la cle ENREGISTREE de cet
+/// auteur (sinon n'importe qui pourrait ecrire sender=policy_owner).
+async fn load_policy_rules(
+    ctx: &ServerContext,
+    authors: &super::action_authorization::PolicyAuthors,
+) -> Vec<super::action_authorization::Rule> {
+    let rows = {
+        let store = ctx.adn_store.lock().await;
+        store.deontic_rules_with_authors().unwrap_or_else(|e| {
+            error!("[Handler] deontic_rules_with_authors failed: {}", e);
+            Vec::new()
+        })
+    };
+    let reg = ctx.agent_registry.read().await;
+    rows.into_iter()
+        .map(|r| {
+            let is_author = r.author.as_deref().is_some_and(|a| authors.includes(a));
+            let proven = match (&r.author, &r.signer_key) {
+                (Some(author), Some(key)) => reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
+                _ => false,
+            };
+            let why_ignored = if !is_author {
+                Some("not_policy_author")
+            } else if !proven {
+                Some("identity_not_proven")
+            } else {
+                None
+            };
+            super::action_authorization::Rule {
+                subject: r.subject,
+                object: r.object,
+                modality: r.modality,
+                authorized: why_ignored.is_none(),
+                author: r.author,
+                reason: r.reason,
+                why_ignored,
+            }
+        })
+        .collect()
+}
+
+/// Valeur recopiee dans une reponse wire : jamais de `"`, `[`, `]` ni de
+/// saut de ligne, et entre guillemets (elle peut contenir des virgules).
+fn wire_text(v: &str) -> String {
+    let clean: String = v.chars().filter(|c| !matches!(c, '"' | '[' | ']' | '\n' | '\r')).take(300).collect();
+    format!("\"{clean}\"")
+}
+
+fn wire_name(v: Option<&str>) -> String {
+    v.filter(|a| super::action_authorization::is_valid_action(a)).unwrap_or("unknown").to_string()
+}
+
 pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
     mut socket: S,
     ctx: Arc<ServerContext>,
@@ -447,6 +501,51 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // decision sont inscrites dans la chaine d'audit, et le message
                     // est stocke (sans relation : ce n'est pas une affirmation, il ne
                     // doit pas alimenter l'historique deontique).
+                    // STEP 2-policy (Couche 9, 2026-11-21) : POLITIQUE EFFECTIVE de
+                    // l'expediteur -- obligations (a faire meme si la tache ne les
+                    // cite pas), interdictions, avec leurs raisons, et regles que le
+                    // serveur IGNORE (auteur sans autorite). Lecture seule : rien
+                    // n'est ajoute a la chaine d'audit.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("policy_query") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let response = if !identity_proven || !super::action_authorization::is_valid_action(&sender) {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=policy_denied, reason=signature_required]\n---END---\n".to_string()
+                        } else {
+                            let authors = super::action_authorization::PolicyAuthors::from_env();
+                            let rules = load_policy_rules(&ctx, &authors).await;
+                            let policy = super::action_authorization::effective_policy(&sender, &rules, &authors);
+                            let mut out = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, forbidden={}, ignored={}, authors_enforced={}]\n",
+                                sender, policy.required.len(), policy.forbidden.len(), policy.ignored.len(),
+                                matches!(authors, super::action_authorization::PolicyAuthors::Only(_)),
+                            );
+                            for (decision, list) in [("required", &policy.required), ("forbidden", &policy.forbidden)] {
+                                for e in list {
+                                    out.push_str(&format!(
+                                        "POLICY_RULE [action={}, decision={}, modality={}, author={}{}]\n",
+                                        e.action, decision, e.modality, wire_name(e.author.as_deref()),
+                                        e.reason.as_deref().map(|r| format!(", reason={}", wire_text(r))).unwrap_or_default(),
+                                    ));
+                                }
+                            }
+                            for e in &policy.ignored {
+                                out.push_str(&format!(
+                                    "POLICY_IGNORED [action={}, modality={}, author={}, why={}]\n",
+                                    e.action, e.modality, wire_name(e.author.as_deref()), e.why_ignored.unwrap_or("ignored"),
+                                ));
+                            }
+                            out.push_str("---END---\n");
+                            out
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     if payload.intent.get("purpose").map(String::as_str) == Some("action_request") {
                         let sender = payload.intent.get("sender").cloned().unwrap_or_default();
                         let action = payload.intent.get("action").cloned();
@@ -455,28 +554,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             && sig_check == SignatureCheck::Valid
                             && embedded_pubkey == registered_pubkey_for_sender;
                         let authors = super::action_authorization::PolicyAuthors::from_env();
-                        let rows = {
-                            let store = ctx.adn_store.lock().await;
-                            store.deontic_rules_with_authors().unwrap_or_else(|e| {
-                                error!("[Handler] action_request: deontic_rules_with_authors failed: {}", e);
-                                Vec::new()
-                            })
-                        };
-                        // Une regle n'est "autorisee" que si son auteur est un auteur
-                        // de politique ET que le message est signe avec la cle
-                        // ENREGISTREE de cet auteur (sinon n'importe qui pourrait
-                        // ecrire sender=policy_owner).
-                        let rules: Vec<super::action_authorization::Rule> = {
-                            let reg = ctx.agent_registry.read().await;
-                            rows.into_iter().map(|r| {
-                                let authorized = match (&r.author, &r.signer_key) {
-                                    (Some(author), Some(key)) => authors.includes(author)
-                                        && reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
-                                    _ => false,
-                                };
-                                super::action_authorization::Rule { subject: r.subject, object: r.object, modality: r.modality, authorized }
-                            }).collect()
-                        };
+                        let rules = load_policy_rules(&ctx, &authors).await;
                         let decision = super::action_authorization::decide(
                             &sender,
                             action.as_deref(),

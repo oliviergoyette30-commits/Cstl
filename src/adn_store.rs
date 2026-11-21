@@ -159,6 +159,8 @@ pub struct DeonticRuleRow {
     pub author: Option<String>,
     /// Cle publique du message, SEULEMENT si sa signature est valide.
     pub signer_key: Option<String>,
+    /// Attribut `reason` de la relation, s'il y en a un (2026-11-21).
+    pub reason: Option<String>,
 }
 
 pub type AgentRow = (String, String, Vec<String>, f64, Option<String>);
@@ -1635,17 +1637,21 @@ impl AdnStore {
     /// signature est valide. A l'appelant de comparer cette cle a la cle
     /// enregistree de l'auteur.
     pub fn deontic_rules_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
-        let rows: Vec<(String, String, String, String)> = {
+        type Row = (String, String, String, String, Option<String>);
+        let rows: Vec<Row> = {
             let mut stmt = self.conn.prepare(
-                "SELECT hash, subject, object, modality FROM adn_relations
+                "SELECT hash, subject, object, modality, extra_attrs FROM adn_relations
                  WHERE modality IS NOT NULL ORDER BY id",
             )?;
-            let it = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+            let it = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
             it.collect::<Result<_, _>>()?
         };
         let mut authors: HashMap<String, (Option<String>, Option<String>)> = HashMap::new();
         let mut out = Vec::with_capacity(rows.len());
-        for (hash, subject, object, modality) in rows {
+        for (hash, subject, object, modality, extra) in rows {
+            let reason = extra
+                .and_then(|j| serde_json::from_str::<HashMap<String, String>>(&j).ok())
+                .and_then(|m| m.get("reason").cloned());
             if !authors.contains_key(&hash) {
                 let info = match self.get(&hash)?.map(|e| crate::server::parser::parse_payload(&e.payload)) {
                     Some(Ok(p)) => {
@@ -1657,7 +1663,7 @@ impl AdnStore {
                 authors.insert(hash.clone(), info);
             }
             let (author, signer_key) = authors[&hash].clone();
-            out.push(DeonticRuleRow { subject, object, modality, author, signer_key });
+            out.push(DeonticRuleRow { subject, object, modality, author, signer_key, reason });
         }
         Ok(out)
     }

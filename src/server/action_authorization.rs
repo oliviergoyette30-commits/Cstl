@@ -102,6 +102,85 @@ pub struct Rule {
     /// Auteur dans `PolicyAuthors` ET identite prouvee (signature valide,
     /// cle = cle enregistree de l'auteur). Ignore en mode `Anyone`.
     pub authorized: bool,
+    /// Expediteur du message qui a pose la regle.
+    pub author: Option<String>,
+    /// Raison donnee avec la regle (`RELATION [..., reason=...]`), conditions
+    /// comprises : sans elle, un agent ne voit qu'un `MUST_NOT` nu (constate
+    /// le 2026-11-21 : Opus choisissait alors plus souvent l'action interdite).
+    pub reason: Option<String>,
+    /// Si `authorized` est faux en mode `Only` : pourquoi.
+    pub why_ignored: Option<&'static str>,
+}
+
+/// Une regle telle qu'elle s'applique a une action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolicyEntry {
+    pub action: String,
+    pub modality: String,
+    pub author: Option<String>,
+    pub reason: Option<String>,
+    /// Pour une regle ignoree : pourquoi.
+    pub why_ignored: Option<&'static str>,
+}
+
+/// Politique EFFECTIVE d'un agent (2026-11-21, `purpose=policy_query`) :
+/// ce que la couche 9 decidera, action par action, avec les raisons -- et
+/// les regles qu'elle ignore. Avant, l'agent ne voyait que les messages
+/// bruts des autres agents, y compris ceux d'agents sans autorite (cas 11
+/// du banc d'equipe : Haiku obeissait a une interdiction que le serveur
+/// ignorait), et rien ne lui rappelait les obligations absentes de sa tache.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EffectivePolicy {
+    /// Obligations : a faire, meme si la demande de travail ne les cite pas.
+    pub required: Vec<PolicyEntry>,
+    pub forbidden: Vec<PolicyEntry>,
+    pub ignored: Vec<PolicyEntry>,
+}
+
+fn entry(r: &Rule) -> PolicyEntry {
+    PolicyEntry {
+        action: r.object.clone(),
+        modality: r.modality.clone(),
+        author: r.author.clone(),
+        reason: r.reason.clone(),
+        why_ignored: r.why_ignored,
+    }
+}
+
+/// Meme logique que `decide`, pour toutes les actions qui ont une regle.
+pub fn effective_policy(sender: &str, rules: &[Rule], authors: &PolicyAuthors) -> EffectivePolicy {
+    let mut actions: Vec<&str> = Vec::new();
+    for r in rules.iter().filter(|r| r.subject == sender && is_deontic(&r.modality)) {
+        if !actions.contains(&r.object.as_str()) {
+            actions.push(&r.object);
+        }
+    }
+    let mut policy = EffectivePolicy::default();
+    for action in actions {
+        let relevant: Vec<&Rule> = rules
+            .iter()
+            .filter(|r| r.subject == sender && r.object == action && is_deontic(&r.modality))
+            .collect();
+        let deciding = match authors {
+            PolicyAuthors::Anyone => relevant
+                .iter()
+                .find(|r| FORBIDDEN_MODALITIES.contains(&r.modality.as_str()))
+                .or_else(|| relevant.first())
+                .copied(),
+            PolicyAuthors::Only(_) => {
+                policy.ignored.extend(relevant.iter().filter(|r| !r.authorized).map(|r| entry(r)));
+                relevant.iter().rev().find(|r| r.authorized).copied()
+            }
+        };
+        if let Some(r) = deciding {
+            if FORBIDDEN_MODALITIES.contains(&r.modality.as_str()) {
+                policy.forbidden.push(entry(r));
+            } else {
+                policy.required.push(entry(r));
+            }
+        }
+    }
+    policy
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -208,11 +287,11 @@ mod tests {
     use super::*;
 
     fn rel(subject: &str, object: &str, modality: &str) -> Rule {
-        Rule { subject: subject.into(), object: object.into(), modality: modality.into(), authorized: true }
+        Rule { subject: subject.into(), object: object.into(), modality: modality.into(), authorized: true, author: None, reason: None, why_ignored: None }
     }
 
     fn by(authorized: bool, r: Rule) -> Rule {
-        Rule { authorized, ..r }
+        Rule { authorized, why_ignored: (!authorized).then_some("not_policy_author"), ..r }
     }
 
     const ANY: PolicyAuthors = PolicyAuthors::Anyone;
@@ -280,6 +359,32 @@ mod tests {
         let h = vec![by(false, rel("bot", "x", "MUST"))];
         let d = decide("bot", Some("x"), true, true, &h, DefaultPolicy::Deny, &only);
         assert!(!d.allowed && d.reason == "default_deny_no_explicit_permission" && d.ignored == 1);
+    }
+
+    #[test]
+    fn effective_policy_lists_obligations_prohibitions_and_ignored_rules() {
+        let only = PolicyAuthors::parse(Some("owner"));
+        let mut lifted = rel("bot", "rotate_keys", "MUST_NOT");
+        lifted.reason = Some("pas sans accord".into());
+        let h = vec![
+            rel("bot", "check_backups", "MUST"),
+            by(false, rel("bot", "check_backups", "MUST_NOT")),
+            lifted,
+            rel("bot", "rotate_keys", "MUST"),
+            rel("bot", "purge", "FORBID"),
+            rel("other", "purge", "MUST"),
+        ];
+        let p = effective_policy("bot", &h, &only);
+        let names = |v: &[PolicyEntry]| v.iter().map(|e| e.action.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&p.required), ["check_backups", "rotate_keys"]);
+        assert_eq!(names(&p.forbidden), ["purge"]);
+        assert_eq!(names(&p.ignored), ["check_backups"]);
+        assert_eq!(p.ignored[0].why_ignored, Some("not_policy_author"));
+        // Mode d'origine : l'interdiction l'emporte, sa raison suit.
+        let p = effective_policy("bot", &h, &ANY);
+        assert_eq!(names(&p.forbidden), ["check_backups", "rotate_keys", "purge"]);
+        assert_eq!(p.forbidden[1].reason.as_deref(), Some("pas sans accord"));
+        assert!(p.ignored.is_empty() && p.required.is_empty());
     }
 
     #[test]
