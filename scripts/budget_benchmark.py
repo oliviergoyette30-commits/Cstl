@@ -33,6 +33,19 @@ SCORE :
   - refus a tort : remboursements dus mais non executes ;
   - pass^k : historiques reussis exactement a CHAQUE repetition.
 
+RESULTAT (2026-11-21, vraie API, 3 repetitions x 12 files, lecteur corrige) :
+                      texte    json     cstl
+  Haiku 5.5 exacts    35/36    36/36    36/36   (pass^3 : 11/12, 12/12, 12/12)
+  Opus 5.5  exacts    35/36    36/36    36/36   (pass^3 : 11/12, 12/12, 12/12)
+  argent parti en trop :
+            texte     1 cas par modele (1570 euros pour 1500, 1544 pour 1500)
+            json, cstl : 0
+- CSTL ne peut pas depasser le budget : c'est le serveur qui additionne.
+- Le JSON structure fait aussi bien ici. Le texte libre est le seul canal
+  qui a laisse partir de l'argent en trop.
+- Les series `*_before_policy_text.json` sont faussees par un bug de
+  lecture des reponses (« #2 » lu comme rien, corrige depuis).
+
 Usage :
   python3 scripts/budget_benchmark.py --model claude-haiku-5-5 --runs 3
   python3 scripts/budget_benchmark.py --stub      # plomberie seule, AUCUNE conclusion

@@ -74,6 +74,13 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     revérifiait toutes les signatures à chaque demande (192 ms à
     600 règles).
 
+- **`scripts/budget_benchmark.py` :** un plafond par remboursement et un
+  budget cumulé, sur 20 à 60 demandes, avec 3 répétitions.
+  - CSTL fait 36/36 avec les deux modèles, et 0 euro dépensé en trop,
+    puisque c'est le serveur qui additionne.
+  - Le JSON fait aussi 36/36.
+  - Le texte libre fait 35/36, avec un cas de dépassement par modèle.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
