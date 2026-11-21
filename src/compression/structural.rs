@@ -117,6 +117,13 @@ pub struct StructuralStreams {
     pub ids: Vec<u8>,
 }
 
+/// Attribut reserve (jamais un nom d'attribut CSTL valide : il commence par un
+/// caractere de controle) qui liste les champs de base absents d'une relation.
+/// Corrige le 2026-11-21 : `master_decompress` ajoutait `object=""` a une
+/// relation sans `object` (ex. `RELATION [type=received, subject=inform,
+/// status=valid]`), trouve par scripts/compression_benchmark.py.
+const ABSENT_CORE_FIELDS: &str = "\u{1}absent";
+
 struct StringTable {
     strings: Vec<String>,
     index_of: HashMap<String, u32>,
@@ -358,9 +365,19 @@ pub fn encode_structural(
             None => stable.push(0),
         }
 
-        let mut extras: Vec<(&String, &String)> = r.iter()
+        let mut extras: Vec<(&str, &str)> = r.iter()
             .filter(|(k, _)| !matches!(k.as_str(), "type" | "subject" | "object" | "modality" | "id"))
+            .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
+        // Champs de base ABSENTS (2026-11-21) : leur emplacement fixe recoit ""
+        // ci-dessus, et cet attribut reserve dit lesquels manquaient, pour que
+        // le decodage ne les invente pas. Format binaire inchange : un ancien
+        // flux (sans cet attribut) se decode exactement comme avant.
+        let absent: Vec<&str> = ["type", "subject", "object"].into_iter().filter(|k| !r.contains_key(*k)).collect();
+        let absent_joined = absent.join(",");
+        if !absent.is_empty() {
+            extras.push((ABSENT_CORE_FIELDS, absent_joined.as_str()));
+        }
         extras.sort_by(|a, b| a.0.cmp(b.0));
         variable.extend_from_slice(&encode_varint(extras.len() as u32));
         for (k, v) in extras {
@@ -542,6 +559,11 @@ pub fn decode_structural(streams: &StructuralStreams) -> Result<DecodedTriple, S
             let v_idx = read_varint(variable, &mut vpos, "relations: extra val")?;
             map.insert(read_string(&table, k_idx)?.to_string(), read_string(&table, v_idx)?.to_string());
         }
+        if let Some(absent) = map.remove(ABSENT_CORE_FIELDS) {
+            for k in absent.split(',').filter(|k| !k.is_empty()) {
+                map.remove(k);
+            }
+        }
         relations.push(map);
     }
 
@@ -588,6 +610,19 @@ pub fn decode_structural(streams: &StructuralStreams) -> Result<DecodedTriple, S
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn missing_core_fields_are_not_invented() {
+        let m = |pairs: &[(&str, &str)]| pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect::<HashMap<_, _>>();
+        let relations = vec![
+            m(&[("type", "received"), ("subject", "inform"), ("status", "valid")]),
+            m(&[("subject", "x"), ("object", "")]),
+            m(&[("type", "PERFORM"), ("subject", "A"), ("object", "B"), ("modality", "MUST")]),
+        ];
+        let streams = encode_structural(&[], &relations, &[]);
+        let (_, back, _) = decode_structural(&streams).unwrap();
+        assert_eq!(back, relations);
+    }
+
     use super::*;
 
     fn m(pairs: &[(&str, &str)]) -> HashMap<String, String> {

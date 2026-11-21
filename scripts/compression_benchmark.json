@@ -1,0 +1,342 @@
+{
+  "rows": [
+    {
+      "message": "enregistrement (owner) : requete",
+      "cstl": {
+        "brut": 423,
+        "gzip": 333,
+        "zstd": 328,
+        "brotli": 287,
+        "zstd_dict": 147,
+        "blocs_dico": 388,
+        "master_hybride": 388,
+        "fil_serveur": 423
+      },
+      "json": {
+        "brut": 453,
+        "gzip": 317,
+        "zstd": 324,
+        "brotli": 271,
+        "zstd_dict": 145
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "enregistrement (owner) : reponse",
+      "cstl": {
+        "brut": 162,
+        "gzip": 162,
+        "zstd": 147,
+        "brotli": 120,
+        "zstd_dict": 28,
+        "blocs_dico": 144,
+        "master_hybride": 144,
+        "fil_serveur": 162
+      },
+      "json": {
+        "brut": 180,
+        "gzip": 153,
+        "zstd": 141,
+        "brotli": 127,
+        "zstd_dict": 29
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "enregistrement (exec) : requete",
+      "cstl": {
+        "brut": 421,
+        "gzip": 328,
+        "zstd": 325,
+        "brotli": 290,
+        "zstd_dict": 145,
+        "blocs_dico": 387,
+        "master_hybride": 387,
+        "fil_serveur": 421
+      },
+      "json": {
+        "brut": 451,
+        "gzip": 314,
+        "zstd": 319,
+        "brotli": 269,
+        "zstd_dict": 143
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "enregistrement (exec) : reponse",
+      "cstl": {
+        "brut": 161,
+        "gzip": 162,
+        "zstd": 146,
+        "brotli": 128,
+        "zstd_dict": 26,
+        "blocs_dico": 143,
+        "master_hybride": 143,
+        "fil_serveur": 161
+      },
+      "json": {
+        "brut": 179,
+        "gzip": 153,
+        "zstd": 140,
+        "brotli": 128,
+        "zstd_dict": 25
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "politique, 4 regles avec conditions : requete",
+      "cstl": {
+        "brut": 932,
+        "gzip": 522,
+        "zstd": 520,
+        "brotli": 446,
+        "zstd_dict": 168,
+        "blocs_dico": 719,
+        "master_hybride": 583,
+        "fil_serveur": 932
+      },
+      "json": {
+        "brut": 1009,
+        "gzip": 517,
+        "zstd": 527,
+        "brotli": 447,
+        "zstd_dict": 165
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "politique, 4 regles avec conditions : reponse",
+      "cstl": {
+        "brut": 1340,
+        "gzip": 663,
+        "zstd": 677,
+        "brotli": 565,
+        "zstd_dict": 90,
+        "blocs_dico": 1007,
+        "master_hybride": 1018,
+        "fil_serveur": 1340
+      },
+      "json": {
+        "brut": 1495,
+        "gzip": 651,
+        "zstd": 664,
+        "brotli": 544,
+        "zstd_dict": 108
+      },
+      "roundtrip_ok": false
+    },
+    {
+      "message": "5 faits : requete",
+      "cstl": {
+        "brut": 645,
+        "gzip": 381,
+        "zstd": 373,
+        "brotli": 319,
+        "zstd_dict": 177,
+        "blocs_dico": 499,
+        "master_hybride": 443,
+        "fil_serveur": 645
+      },
+      "json": {
+        "brut": 687,
+        "gzip": 373,
+        "zstd": 376,
+        "brotli": 314,
+        "zstd_dict": 150
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "5 faits : reponse",
+      "cstl": {
+        "brut": 1640,
+        "gzip": 808,
+        "zstd": 819,
+        "brotli": 672,
+        "zstd_dict": 142,
+        "blocs_dico": 1283,
+        "master_hybride": 1295,
+        "fil_serveur": 1640
+      },
+      "json": {
+        "brut": 1822,
+        "gzip": 790,
+        "zstd": 803,
+        "brotli": 665,
+        "zstd_dict": 161
+      },
+      "roundtrip_ok": false
+    },
+    {
+      "message": "demande de politique : requete",
+      "cstl": {
+        "brut": 420,
+        "gzip": 332,
+        "zstd": 328,
+        "brotli": 300,
+        "zstd_dict": 162,
+        "blocs_dico": 395,
+        "master_hybride": 395,
+        "fil_serveur": 420
+      },
+      "json": {
+        "brut": 447,
+        "gzip": 314,
+        "zstd": 322,
+        "brotli": 278,
+        "zstd_dict": 170
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "demande de politique : reponse",
+      "cstl": {
+        "brut": 905,
+        "gzip": 458,
+        "zstd": 449,
+        "brotli": 376,
+        "zstd_dict": 51,
+        "blocs_dico": 670,
+        "master_hybride": 670,
+        "fil_serveur": 905
+      },
+      "json": {
+        "brut": 978,
+        "gzip": 447,
+        "zstd": 451,
+        "brotli": 379,
+        "zstd_dict": 61
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "autorisation accordee (jeton signe) : requete",
+      "cstl": {
+        "brut": 454,
+        "gzip": 355,
+        "zstd": 348,
+        "brotli": 318,
+        "zstd_dict": 158,
+        "blocs_dico": 431,
+        "master_hybride": 431,
+        "fil_serveur": 454
+      },
+      "json": {
+        "brut": 487,
+        "gzip": 341,
+        "zstd": 344,
+        "brotli": 295,
+        "zstd_dict": 158
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "autorisation accordee (jeton signe) : reponse",
+      "cstl": {
+        "brut": 856,
+        "gzip": 551,
+        "zstd": 551,
+        "brotli": 467,
+        "zstd_dict": 243,
+        "blocs_dico": 788,
+        "master_hybride": 788,
+        "fil_serveur": 856
+      },
+      "json": {
+        "brut": 925,
+        "gzip": 539,
+        "zstd": 546,
+        "brotli": 467,
+        "zstd_dict": 238
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "autorisation refusee : requete",
+      "cstl": {
+        "brut": 451,
+        "gzip": 355,
+        "zstd": 346,
+        "brotli": 305,
+        "zstd_dict": 164,
+        "blocs_dico": 427,
+        "master_hybride": 427,
+        "fil_serveur": 451
+      },
+      "json": {
+        "brut": 481,
+        "gzip": 337,
+        "zstd": 338,
+        "brotli": 292,
+        "zstd_dict": 158
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "autorisation refusee : reponse",
+      "cstl": {
+        "brut": 438,
+        "gzip": 345,
+        "zstd": 344,
+        "brotli": 288,
+        "zstd_dict": 127,
+        "blocs_dico": 432,
+        "master_hybride": 432,
+        "fil_serveur": 438
+      },
+      "json": {
+        "brut": 483,
+        "gzip": 332,
+        "zstd": 340,
+        "brotli": 297,
+        "zstd_dict": 113
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "20 relations causales : requete",
+      "cstl": {
+        "brut": 1790,
+        "gzip": 459,
+        "zstd": 418,
+        "brotli": 370,
+        "zstd_dict": 171,
+        "blocs_dico": 752,
+        "master_hybride": 530,
+        "fil_serveur": 1063
+      },
+      "json": {
+        "brut": 1907,
+        "gzip": 451,
+        "zstd": 426,
+        "brotli": 360,
+        "zstd_dict": 181
+      },
+      "roundtrip_ok": true
+    },
+    {
+      "message": "20 relations causales : reponse",
+      "cstl": {
+        "brut": 2008,
+        "gzip": 303,
+        "zstd": 285,
+        "brotli": 251,
+        "zstd_dict": 71,
+        "blocs_dico": 1993,
+        "master_hybride": 1993,
+        "fil_serveur": 2008
+      },
+      "json": {
+        "brut": 2026,
+        "gzip": 296,
+        "zstd": 282,
+        "brotli": 250,
+        "zstd_dict": 71
+      },
+      "roundtrip_ok": true
+    }
+  ],
+  "best_cstl": 2070,
+  "best_json": 2076
+}

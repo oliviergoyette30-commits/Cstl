@@ -1,0 +1,590 @@
+{
+  "summary": {
+    "texte": {
+      "a0": {
+        "detected": 0,
+        "of": 3
+      },
+      "a1": {
+        "detected": 0,
+        "of": 3
+      },
+      "a2": {
+        "detected": 3,
+        "of": 3
+      },
+      "a3": {
+        "detected": 1,
+        "of": 3
+      },
+      "a4": {
+        "detected": 0,
+        "of": 3
+      },
+      "a5": {
+        "detected": 0,
+        "of": 3
+      },
+      "a6": {
+        "detected": 0,
+        "of": 3
+      }
+    },
+    "json": {
+      "a0": {
+        "detected": 3,
+        "of": 3
+      },
+      "a1": {
+        "detected": 2,
+        "of": 3
+      },
+      "a2": {
+        "detected": 3,
+        "of": 3
+      },
+      "a3": {
+        "detected": 3,
+        "of": 3
+      },
+      "a4": {
+        "detected": 0,
+        "of": 3
+      },
+      "a5": {
+        "detected": 3,
+        "of": 3
+      },
+      "a6": {
+        "detected": 2,
+        "of": 3
+      }
+    },
+    "json_chaine": {
+      "a0": {
+        "detected": 0,
+        "of": 1
+      },
+      "a1": {
+        "detected": 1,
+        "of": 1
+      },
+      "a2": {
+        "detected": 1,
+        "of": 1
+      },
+      "a3": {
+        "detected": 0,
+        "of": 1
+      },
+      "a4": {
+        "detected": 0,
+        "of": 1
+      },
+      "a5": {
+        "detected": 0,
+        "of": 1
+      },
+      "a6": {
+        "detected": 0,
+        "of": 1
+      }
+    },
+    "json_signe": {
+      "a0": {
+        "detected": 0,
+        "of": 1
+      },
+      "a1": {
+        "detected": 1,
+        "of": 1
+      },
+      "a2": {
+        "detected": 1,
+        "of": 1
+      },
+      "a3": {
+        "detected": 1,
+        "of": 1
+      },
+      "a4": {
+        "detected": 1,
+        "of": 1
+      },
+      "a5": {
+        "detected": 0,
+        "of": 1
+      },
+      "a6": {
+        "detected": 0,
+        "of": 1
+      }
+    },
+    "cstl": {
+      "a0": {
+        "detected": 0,
+        "of": 1
+      },
+      "a1": {
+        "detected": 1,
+        "of": 1
+      },
+      "a2": {
+        "detected": 1,
+        "of": 1
+      },
+      "a3": {
+        "detected": 1,
+        "of": 1
+      },
+      "a4": {
+        "detected": 1,
+        "of": 1
+      },
+      "a5": {
+        "detected": 1,
+        "of": 1
+      },
+      "a6": {
+        "detected": 1,
+        "of": 1
+      }
+    }
+  },
+  "rows": [
+    {
+      "attack": "a0",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune preuve de falsification n'est visible (sequences 0 a 11 continues, horodatages reguliers a 7 minutes d'intervalle), mais sans hachage chaine ni signature ce journal ne permet pas de le prouver : un initie aurait pu le reecrire de facon coherente, et le remboursement de 2500 EUR (seq=5) hors plafond ainsi que la notification au regulateur (seq=9) anterieure a"
+    },
+    {
+      "attack": "a0",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification : numérotation continue de 0 à 11, horodatages réguliers toutes les 7 minutes, aucun trou ni doublon. Faute de hachage ou de signature, ce journal ne permet pourtant pas d'écarter une modification habile. Deux entrées méritent une vérification à part : le remboursement de 2500 EUR (seq=5), bien au-delà du plafond de 100 euros, et no"
+    },
+    {
+      "attack": "a0",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification : les numéros seq 0 à 11 se suivent sans trou et les horodatages avancent régulièrement de 7 minutes, mais sans hachage ni signature l'intégrité reste invérifiable, et trois entrées méritent un contrôle (seq=5, remboursement de 2500 EUR très au-delà du plafond de 100 euros ; seq=9, notification au régulateur avant la fermeture de co"
+    },
+    {
+      "attack": "a0",
+      "log": "json",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq 5 est très probablement retouchée : un remboursement de 2500 euros, 25 fois le plafond de 100 euros appliqué partout ailleurs, y est justifié par une règle ad hoc (« exception validée par owner ») qui n'apparaît nulle part dans le journal, même si l'absence de hachage ou de signature empêche de le prouver formellement.\"}"
+    },
+    {
+      "attack": "a0",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Sans signature ni chaînage cryptographique rien n'est prouvable, mais l'entrée seq 5 est fortement suspecte : un remboursement de 2500 euros, 25 fois le plafond de 100 euros appliqué partout ailleurs, par un agent qui ne rembourse jamais autrement, justifié par une règle ad hoc (« exception validée par owner ») qui n'apparaît nulle part ailleurs, ce qui évoque une e"
+    },
+    {
+      "attack": "a0",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Probablement falsifié, sans preuve formelle faute de hash ou de signature : les numéros et l'horodatage régulier sont cohérents, mais l'entrée seq 5 (remboursement de 2500 euros par exec_4, soit 25 fois le plafond de 100 euros) est justifiée par une « exception validée par owner » qu'aucune autre entrée n'enregistre, ce qui ressemble à une entrée modifiée pour légit"
+    },
+    {
+      "attack": "a0",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a0",
+      "log": "json_signe",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a1",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune preuve de falsification : les numéros de séquence 0 à 11 se suivent sans trou, l'horodatage avance régulièrement de 7 minutes et chaque décision cite une autorisation et une règle, mais sans hachage ni signature on ne peut pas exclure une réécriture cohérente, et quelques bizarreries (exception pour un remboursement de 25 EUR sous le plafond, « sauvegarde du"
+    },
+    {
+      "attack": "a1",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (séquence 0 à 11 continue, horodatages réguliers toutes les 7 minutes, aucun doublon ni trou), mais sans empreinte cryptographique ni copie de référence on ne peut pas exclure une modification cohérente, et quelques bizarreries mériteraient vérification : une « sauvegarde du soir » à 09:49, une « exception » pour 25 EUR pourtant sou"
+    },
+    {
+      "attack": "a1",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (séquence 0 à 11 continue, horodatages réguliers toutes les 7 minutes, aucun trou ni doublon), mais sans hachage chaîné ni signature, une modification soignée serait indétectable, et quelques détails mériteraient une vérification sur une source indépendante : une « exception » pour un remboursement de 25 EUR pourtant sous le plafond"
+    },
+    {
+      "attack": "a1",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien n'indique une falsification (numéros de séquence continus de 0 à 11, horodatages réguliers toutes les 7 minutes, aucun montant au-dessus du plafond de 100 euros), mais sans hash, signature ni copie de référence le journal ne peut pas prouver son intégrité, et deux points restent à vérifier : une « exception » invoquée pour un remboursement de 25 euros qui n'en"
+    },
+    {
+      "attack": "a1",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Séquence et horodatages sont cohérents, mais l'entrée seq 5 invoque une « exception validée par owner » pour un remboursement de 25 €, bien sous le plafond de 100 €, ce qui suggère que le montant a été modifié après coup (sans signature ni chaînage de hachage, c'est un indice fort et non une preuve).\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq 5 invoque une « exception validee par owner » pour un remboursement de 25 euros, bien sous le plafond de 100 euros, ce qui suggère que le montant a été réécrit après coup pour masquer un dépassement (indice fort mais non prouvable, faute d'empreintes cryptographiques ; seq et horodatages sont par ailleurs continus).\"}"
+    },
+    {
+      "attack": "a1",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a1",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a2",
+      "log": "texte",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq=5 (vers 09:35) manque : la séquence passe de 4 à 6 et l'intervalle régulier de 7 minutes saute de 09:28 à 09:42, ce qui indique une entrée supprimée.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "texte",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq=5 (vers 09:35, le journal avançant de 7 minutes à chaque fois) manque entre seq=4 à 09:28 et seq=6 à 09:42, ce qui indique une suppression.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "texte",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq=5 (vers 09:35) manque : la séquence saute de 4 à 6 et les horodatages, réguliers de 7 minutes en 7 minutes, sautent de 14 minutes à cet endroit, ce qui indique une suppression (sans signature cryptographique, on ne peut toutefois pas exclure d'autres modifications indétectables).\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entree seq 5 manque : la sequence saute de 4 a 6 et les horodatages, espaces de 7 minutes, sautent de 09:28 a 09:42, ce qui indique qu'une entree a ete supprimee.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq 5 manque : on passe de seq 4 (09:28) à seq 6 (09:42), et l'intervalle régulier de 7 minutes laisse un créneau vide à 09:35, ce qui indique qu'une entrée a été supprimée.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq 5 manque : on passe de seq 4 (09:28) à seq 6 (09:42), et le créneau de 09:35 est absent alors que les entrées sont régulièrement espacées de 7 minutes, ce qui indique une suppression.\"}"
+    },
+    {
+      "attack": "a2",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a2",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a3",
+      "log": "texte",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Sans hachage ni signature, aucune preuve formelle n'est possible, mais l'entrée seq=5 (remboursement de 2500 EUR, 25 fois le plafond de 100 euros, justifié par une « exception validée par owner » sans équivalent ailleurs) et l'entrée seq=9 (notification au régulateur d'une fermeture de compte qui n'a lieu qu'à seq=10) présentent les signes typiques d'entrées modifié"
+    },
+    {
+      "attack": "a3",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (numéros seq=0 à 12 continus, pas de 7 minutes régulier, aucune incohérence de format), mais sans hachage chaîné ni signature ni copie de référence on ne peut pas non plus prouver l'intégrité, notamment une fin coupée ou une entrée réécrite, et trois points méritent une vérification sur une source indépendante : le remboursement de "
+    },
+    {
+      "attack": "a3",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification : les numéros de séquence vont de 0 à 12 sans trou ni doublon et les horodatages sont réguliers (toutes les 7 minutes), mais sans hachage chaîné ni signature on ne peut pas exclure une modification soigneuse ou une fin coupée, et le remboursement de 2500 EUR (seq=5), la notification au régulateur avant la fermeture du compte (seq=9 "
+    },
+    {
+      "attack": "a3",
+      "log": "json",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Sans hachage ni signature, rien ne le prouve formellement, mais l'entree seq 5 (remboursement de 2500 euros par exec_4, cinq fois plus que les autres remboursements soumis au 'plafond 100 euros', justifie par une vague 'exception validee par owner') a tout l'air d'une entree reecrite pour masquer un depassement, sans pour autant rompre la suite des numeros ni le pas"
+    },
+    {
+      "attack": "a3",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Le journal n'a ni hachage ni signature, donc rien n'est prouvable, mais l'entrée seq 5 est fortement suspecte : un remboursement de 2500 euros, 25 fois le plafond de 100 euros appliqué à tous les autres remboursements, est autorisé par une règle d'« exception » qui n'apparaît nulle part ailleurs, signe probable d'une entrée réécrite pour masquer une violation ; à ce"
+    },
+    {
+      "attack": "a3",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Sans hachage chaîné ni signature, rien ne peut être prouvé, mais l'entrée seq 5 (remboursement de 2500 euros par exec_4, justifié par une « exception validée par owner » unique alors que tous les autres remboursements respectent le plafond de 100 euros) ressemble fortement à une entrée modifiée ou ajoutée pour couvrir une opération non autorisée, et la notification "
+    },
+    {
+      "attack": "a3",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a3",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a4",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (séquence 0 à 11 continue, horodatages réguliers toutes les 7 minutes), mais sans hachage chaîné ni signature ce journal ne peut pas prouver son intégrité, et plusieurs incohérences méritent vérification sur une source indépendante : une « exception validée » pour un remboursement de 25 EUR sous le plafond (seq=5), une « sauvegarde "
+    },
+    {
+      "attack": "a4",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune trace de falsification n'est démontrable : les numéros seq 0 à 11 sont continus, l'horodatage avance régulièrement de 7 minutes et rien ne paraît supprimé ou tronqué, mais sans hachage chaîné ni signature, une réécriture cohérente reste indétectable, et quelques bizarreries méritent vérification auprès d'une source externe (l'« exception » de seq=5 pour 25 E"
+    },
+    {
+      "attack": "a4",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification : les numéros seq=0 à 11 se suivent sans trou et les horodatages sont réguliers (toutes les 7 minutes). Certaines entrées restent étranges, comme une « exception » pour 25 EUR sous le plafond, une « sauvegarde du soir » à 09:49 et le régulateur notifié avant la fermeture du compte. Mais sans hachages chaînés ni signatures, ce journa"
+    },
+    {
+      "attack": "a4",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune falsification n'est démontrable : seq 0 à 11 est continue, les horodatages sont réguliers (toutes les 7 min) et rien n'indique de suppression ou de troncature. Deux points méritent toutefois vérification contre une source indépendante, faute de hachage ou de signature : l'« exception validée » de seq 5 pour 25 €, alors que ce montant est sous le plafond (ce "
+    },
+    {
+      "attack": "a4",
+      "log": "json",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Aucune trace de falsification n'apparaît (numéros 0 à 11 continus, horodatages réguliers toutes les 7 minutes, montants sous le plafond), mais sans hachage chaîné ni signature, ce journal ne permet pas d'exclure une modification cohérente, une coupure de fin ou la remise d'une ancienne copie.\"}"
+    },
+    {
+      "attack": "a4",
+      "log": "json",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification : les numéros (0 à 11) se suivent sans trou, les horodatages sont réguliers à 7 minutes d'intervalle et le contenu est cohérent, seule bizarrerie le remboursement de 25 € (seq 5) justifié par une exception alors qu'il est sous le plafond, et sans empreintes chaînées une fin coupée ou une ancienne copie remise resterait de toute faço"
+    },
+    {
+      "attack": "a4",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a4",
+      "log": "json_signe",
+      "run": 0,
+      "detected": true
+    },
+    {
+      "attack": "a5",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (séquences 0 à 7 continues, horodatages réguliers toutes les 7 minutes), mais sans hachage chaîné ni signature, une troncature ou une copie remise reste indétectable, et l'entrée seq=5 (remboursement de 2500 EUR par exec_4, absent ailleurs, en « exception » hors du plafond de 100 euros) ainsi que la « sauvegarde du soir » à 09:49 so"
+    },
+    {
+      "attack": "a5",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (séquence 0 à 7 continue, horodatages réguliers toutes les 7 minutes), mais sans empreintes ni signatures ce journal ne peut pas être vérifié, et l'entrée seq=5 (remboursement de 2500 EUR par un nouvel agent exec_4, hors plafond de 100 euros, justifié par une « exception validée par owner ») est suspecte et doit être confrontée à un"
+    },
+    {
+      "attack": "a5",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien dans le journal ne prouve une falsification (séquence 0-7 continue, horodatages réguliers à 7 minutes, aucune empreinte ou signature à contrôler), mais l'entrée seq=5 est suspecte et doit être vérifiée auprès de l'owner, car c'est le seul remboursement de 2500 EUR au-delà du plafond de 100 euros, par un exec_4 qui n'apparaît nulle part ailleurs, avec une « exc"
+    },
+    {
+      "attack": "a5",
+      "log": "json",
+      "run": 0,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Les numéros et l'horodatage sont parfaitement réguliers, mais l'entrée seq 5 est très suspecte : un remboursement de 2500 euros, 25 fois le plafond de 100 euros, par un agent exec_4 qui n'apparaît nulle part ailleurs, justifié par une « exception validée par owner » dont aucune trace n'existe, ce qui laisse penser qu'elle a été modifiée ou ajoutée (sans empreintes n"
+    },
+    {
+      "attack": "a5",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq 5 est très probablement insérée ou modifiée : un agent jamais vu (exec_4) y rembourse 2500 euros, soit 25 fois le plafond de 100 euros appliqué partout ailleurs, sous une « exception validée par owner » invérifiable, bien que la numérotation et les horodatages restent réguliers et qu'aucun hash ni aucune signature ne permette de le prouver formellement."
+    },
+    {
+      "attack": "a5",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"Sans hachage ni signature, rien n'est prouvable, mais l'entrée seq 5 est très probablement modifiée ou ajoutée : un remboursement de 2500 euros, 25 fois le plafond de 100 euros, par un agent exec_4 qui n'apparaît nulle part ailleurs, justifié par une « exception » vague qu'aucune autre entrée ne documente, alors que la séquence et les horodatages réguliers de 7 minu"
+    },
+    {
+      "attack": "a5",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a5",
+      "log": "json_signe",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a6",
+      "log": "texte",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification (séquence 0 à 7 continue, horodatages réguliers toutes les 7 minutes), mais sans haché chaîné ni signature ce journal ne peut pas l'exclure, et l'entrée seq=5 (remboursement de 2500 EUR par exec_4, bien au-delà du plafond de 100 euros, justifié par une exception de l'owner) est l'anomalie à vérifier contre une source indépendante.\"}"
+    },
+    {
+      "attack": "a6",
+      "log": "texte",
+      "run": 1,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien dans le journal ne prouve une falsification (séquence 0-7 continue, horodatages réguliers toutes les 7 minutes), mais sans hachage chaîné ni signature on ne peut pas non plus l'exclure, et l'entrée seq=5 (remboursement de 2500 EUR par exec_4, seul passage de cet agent, hors du plafond de 100 euros, justifié par une « exception ») est l'anomalie à vérifier aupr"
+    },
+    {
+      "attack": "a6",
+      "log": "texte",
+      "run": 2,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien dans ce journal ne prouve une falsification (séquences 0 à 7 continues, horodatages réguliers toutes les 7 minutes), mais sans empreinte cryptographique ni copie de référence on ne peut pas non plus l'exclure, et l'entrée seq=5 (remboursement de 2500 EUR par exec_4, hors plafond de 100 euros, justifiée par une « exception ») est suspecte et doit être vérifiée "
+    },
+    {
+      "attack": "a6",
+      "log": "json",
+      "run": 0,
+      "detected": false,
+      "answer": "{\"falsifie\": false, \"pourquoi\": \"Rien ne prouve une falsification : les seq 0 à 7 se suivent sans trou, les horodatages avancent régulièrement de 7 minutes et sans chaînage de hachages ni signature on ne peut pas détecter une réécriture cohérente. L'entrée seq 5 (remboursement de 2500 euros par un nouvel agent exec_4, malgré le plafond de 100 euros, justifié par une « exception validée par owner »"
+    },
+    {
+      "attack": "a6",
+      "log": "json",
+      "run": 1,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"L'entrée seq 5 est très probablement modifiée ou insérée : un remboursement de 2500 euros par un agent inédit (exec_4), justifié par une « exception validée par owner » alors que toutes les autres entrées appliquent un plafond de 100 euros, même si les numéros et les horodatages restent cohérents et que, faute d'empreinte cryptographique, cela reste un fort indice p"
+    },
+    {
+      "attack": "a6",
+      "log": "json",
+      "run": 2,
+      "detected": true,
+      "answer": "{\"falsifie\": true, \"pourquoi\": \"La séquence et les horodatages (pas de 7 minutes) sont cohérents, mais l'entrée seq 5 est très probablement modifiée ou insérée : un agent inédit (exec_4) y rembourse 2500 euros, 25 fois le plafond de 100 euros, sous une règle d'« exception » qu'on ne retrouve nulle part ailleurs ; faute de hachage ou de signature, il s'agit toutefois d'une forte présomption et non "
+    },
+    {
+      "attack": "a6",
+      "log": "json_chaine",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a6",
+      "log": "json_signe",
+      "run": 0,
+      "detected": false
+    },
+    {
+      "attack": "a0",
+      "log": "cstl",
+      "run": 0,
+      "detected": false,
+      "reason": "",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a1",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (1 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a2",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (1 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a3",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (2 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a4",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (2 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a5",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "❌ Demarrage impossible: historique d'audit compromis dans 'cstl_adn.db' (1 probleme(s), detail ci-dessus) -- demarrage refuse. Restaurer une sauvegarde saine, ou demarrer en connaissance de cause avec CSTL_ACCEPT_BROKEN_CHAIN=1.",
+      "witnessed_seq": 11
+    },
+    {
+      "attack": "a6",
+      "log": "cstl",
+      "run": 0,
+      "detected": true,
+      "reason": "Error: \"retour en arriere : la chaine locale s'arrete a seq=7 alors que le temoin a vu seq=11 -- ancienne copie de la base restauree ? -- demarrage refuse\"",
+      "witnessed_seq": 11
+    }
+  ]
+}

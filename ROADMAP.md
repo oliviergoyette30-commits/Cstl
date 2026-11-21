@@ -74,6 +74,172 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     revérifiait toutes les signatures à chaque demande (192 ms à
     600 règles).
 
+- **`scripts/budget_benchmark.py` :** un plafond par remboursement et un
+  budget cumulé, sur 20 à 60 demandes, avec 3 répétitions.
+  - CSTL fait 36/36 avec les deux modèles, et 0 euro dépensé en trop,
+    puisque c'est le serveur qui additionne.
+  - Le JSON fait aussi 36/36.
+  - Le texte libre fait 35/36, avec un cas de dépassement par modèle.
+
+- **`scripts/competition_benchmark.py` :** CSTL contre les garde-fous du
+  marché, face au même relais compromis (3 passes × 8 scénarios).
+  - CSTL : 24/24 avec Haiku 5.5 et Opus 5.5, 0 cas compromis.
+  - Garde LLM (façon NeMo ou Llama Guard) : 6 et 7 cas compromis.
+  - Moteur de règles (façon OPA ou Cedar) : 9 et 8 cas compromis.
+  - Ces deux approches jugent le message reçu, donc une limite relevée ou
+    un faux consentement passent à chaque fois.
+  - JSON signé : 0 cas compromis, mais tout est refusé quand le message est
+    falsifié. Résultat : 15 obligations oubliées et 9/24 parfaits.
+  - L'avantage de CSTL vient du serveur qui garde la copie signée.
+
+- **`scripts/format_vs_server_benchmark.py` :** il sépare le format CSTL
+  du serveur CSTL (2 formats × avec ou sans serveur).
+  - Sans serveur, JSON et format CSTL laissent passer les mêmes attaques :
+    6 cas compromis sur 24 pour chacun.
+  - Avec le serveur, les deux formats font 0 cas compromis. JSON 24/24
+    avec les deux modèles, CSTL 23/24 et 24/24.
+  - Le format CSTL est environ 12 % plus court en tokens, mais pas plus
+    fiable.
+  - **Conclusion : l'avantage de CSTL face au JSON vient entièrement du
+    serveur.** Le serveur peut servir des agents qui parlent JSON. C'est un
+    argument de plus pour le point 1 : faire de CSTL une couche de contrôle
+    par-dessus JSON, MCP et A2A.
+
+- **`scripts/audit_benchmark.py` :** un initié falsifie le journal après
+  coup. Six attaques sur le vrai fichier SQLite du serveur : montant
+  modifié, entrée supprimée, fausse entrée, réécriture avec empreintes
+  recalculées, fin coupée et retour à une ancienne copie.
+  - CSTL les détecte toutes, sans fausse alerte. Il refuse de démarrer et
+    dit pourquoi.
+  - Un modèle qui lit un journal texte ou JSON ne voit avec certitude que
+    l'entrée supprimée, à cause du trou de numérotation. Le reste, ce sont
+    des intuitions, avec des fausses alertes : 3 sur 3 pour Opus en JSON.
+  - La chaîne d'empreintes est trompée par un attaquant qui recalcule. Les
+    signatures par entrée ne voient ni la fin coupée ni l'ancienne copie.
+  - Un journal signé avec un ancrage externe ferait aussi bien. CSTL l'a
+    déjà, intégré à l'autorisation.
+
+- **`scripts/wire_size_benchmark.py` :** la taille, mesurée sur 16 vrais
+  messages capturés sur le serveur (signatures, clés, jetons, audit
+  compris). Le JSON porte exactement les mêmes informations, vérifié dans
+  les deux sens.
+  - Face au JSON compact, CSTL est 7 % plus petit en octets et 3 % en
+    tokens, mais 3 % plus gros après gzip.
+  - Face au JSON indenté, CSTL est 26 % plus petit en octets et 21 % en
+    tokens.
+  - Le gain est réel mais faible, et il disparaît une fois compressé.
+
+- **`scripts/format_comprehension_benchmark.py` :** un modèle
+  comprend-il aussi bien les trois formats ? La même politique de 10 à 60
+  règles, avec rôles, faits et conditions, en CSTL, en JSON compact et en
+  JSON indenté.
+  - Aucune différence de compréhension entre les formats.
+  - Opus fait tout juste dans les trois formats.
+  - Haiku rate les obligations des grandes politiques, quel que soit le
+    format : 18/36 en CSTL, 16/36 en JSON compact, 17/36 en JSON indenté.
+  - C'est la taille de la politique qui fait échouer, pas le format, d'où
+    l'intérêt que le serveur calcule la politique effective.
+
+- **`scripts/compression_benchmark.py` :** toute la chaîne de compression
+  de CSTL contre un JSON compressé avec les mêmes armes, sur les mêmes 16
+  vrais messages.
+  - Côté CSTL : Master hybride (dictionnaires réseau fixes, gzip
+    structurel, zstd avec dictionnaire embarqué), dictionnaire de texte avec
+    deltas, et réponses compressées du serveur.
+  - Côté JSON : gzip, zstd, brotli, et zstd avec un dictionnaire entraîné.
+  - Avec la meilleure méthode de chaque côté, la taille est la même :
+    2 070 contre 2 076 octets. La méthode gagnante est la même pour les
+    deux : zstd avec un dictionnaire entraîné.
+  - Les compresseurs maison de CSTL font environ 5 fois moins bien
+    (environ 10 000 octets).
+  - Défaut trouvé puis corrigé : `master_decompress` ajoutait
+    `object=""` aux relations qui n'en avaient pas. La correction garde le
+    même format binaire, donc les données déjà stockées se lisent comme
+    avant.
+  - Piste : remplacer les compresseurs maison par zstd avec un
+    dictionnaire entraîné, qui vaudrait aussi pour les agents JSON.
+
+- **`scripts/format_short_benchmark.py` :** un format abrégé qui n'écrit
+  pas ce qui est prévisible (idée d'Olivier). Il n'envoie que l'imprévisible
+  : qui, quoi, quelle règle, quel montant. Un programme reconstruit le
+  message complet pour le serveur.
+  - Le CSTL abrégé divise les tokens des données par 2,5 (782 contre 1 971
+    pour le CSTL complet et 2 039 pour le JSON compact).
+  - Avec la convention de lecture comprise, la consigne complète coûte
+    39 % de moins.
+  - Aucune perte de compréhension : Opus fait tout juste dans les quatre
+    formats, et Haiku fait un peu mieux en abrégé (23/36 contre 17/36).
+  - Le JSON abrégé coûte 32 % de plus que le CSTL abrégé.
+  - C'est le premier avantage mesuré du format CSTL face au JSON.
+  - À faire :
+    - une vue abrégée de la politique effective dans le SDK, à la place de
+      `policy_to_text` ;
+    - un programme qui reconstruit le message complet à partir de la forme
+      abrégée.
+
+- **CSTL compact, module et tests (`sdk/python/cstl_compact.py`) :**
+  conversion sans perte dans les deux sens (12 tests, dont 300 allers-retours
+  aléatoires), et vue compacte de la politique effective.
+  - **Écriture (`scripts/compact_writing_benchmark.py`) :** Opus écrit le
+    compact sans aucune erreur (36/36), mieux que le CSTL complet (31/36) et
+    le JSON (30/36). Haiku l'écrit moins bien (21/36 contre 33/36 en JSON) :
+    il oublie des règles et confond if: et unless:. Le compact coûte 2,4 fois
+    moins de tokens à écrire.
+  - **Vue du serveur (relais compromis, budget) :** même fiabilité que les
+    autres vues (24/24 et 0 cas compromis, 36/36 au budget). Mais sur une
+    petite politique, elle n'est pas plus courte que les lignes CSTL
+    complètes (291 tokens contre 250) : ses 4 lignes d'explication pèsent
+    plus que les 2 ou 3 règles.
+  - À faire :
+    - raccourcir l'explication de la vue compacte ;
+    - pour Haiku, éviter « sauf si » ou ajouter un exemple avec unless: ;
+    - utiliser le compact pour les modèles forts et le JSON pour les petits
+      modèles, tant que l'écart n'est pas comblé.
+
+- **Comparaison avec TOON (`scripts/toon_lite.py`)** : encodeur fidèle à
+  la spécification officielle (v4.4). TOON reçoit sa forme la plus
+  favorable : des tableaux avec `null` pour les conditions absentes.
+  - **Lecture :** le CSTL compact coûte 25 % de tokens de moins que TOON
+    (782 contre 1 046), à compréhension égale. Opus fait 36/36 partout, et
+    Haiku 24, 22 et 20 sur 36.
+  - **Écriture avec Haiku :** TOON fait mieux que le CSTL compact (32/36
+    contre 18/36) et que le JSON (30/36). Il coûte 1 045 tokens, contre 785
+    pour le CSTL compact.
+  - **Écriture avec Opus :** TOON n'a pas été mesuré (crédit épuisé). En
+    CSTL compact, Opus faisait 36/36.
+  - **Conclusion :** le CSTL compact est le plus court. TOON est plus facile
+    à écrire pour un petit modèle, sans doute parce que ses colonnes sont
+    nommées une fois dans l'en-tête.
+  - Piste : un en-tête de colonnes dans le CSTL compact pour les petits
+    modèles. **Fait (mode tableau, `encode(..., table=True)`)** :
+    - une section par type d'élément, chacune avec son nombre de lignes et
+      ses colonnes ;
+    - des colonnes nommées en français (`au_dela si sauf_si`), et `-` pour
+      une case vide ;
+    - un nombre de lignes faux est refusé : une règle oubliée ne passe plus
+      en silence ;
+    - taille : 22 091 caractères sur les 12 politiques, contre 19 923 en
+      lignes et 25 229 en TOON ;
+    - **Mesuré (3 passes × 12 politiques, `scripts/tableau_*.json`) : le
+      mode tableau n'aide pas.**
+
+      | | Lecture Haiku | Lecture Opus | Écriture Haiku | Écriture Opus | Tokens lus / écrits |
+      |---|---|---|---|---|---|
+      | CSTL compact en lignes | 26/36 | 36/36 | 23/36 | 36/36 | 782 / 784 |
+      | CSTL compact en tableaux | 15/36 | 36/36 | 24/36 (10 illisibles) | 35/36 | 873 / 875 |
+      | TOON | 22/36 | 36/36 | 31/36 | 35/36 | 1 046 / 1 047 |
+
+    - Haiku décale les colonnes : il écrit `- - - patient_consent`, trois
+      tirets comme dans la ligne d'exemple qui finit par une raison, puis le
+      fait dans une 7ᵉ colonne. Le nombre de lignes vérifié a bien repéré
+      un oubli (`RULES[66]` annoncé, 60 lignes écrites).
+    - Conclusion : le mode ligne reste le meilleur CSTL compact. Il est le
+      plus court, et Opus l'écrit sans faute. Pour un petit modèle qui
+      écrit, TOON reste le plus sûr.
+    - Piste suivante, sans colonnes à compter : garder le mode ligne mais
+      nommer les conditions en français (`si:F`, `sauf_si:F`) pour éviter la
+      confusion if/unless de Haiku.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

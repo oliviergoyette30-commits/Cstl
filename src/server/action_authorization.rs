@@ -120,6 +120,15 @@ pub struct Conditions {
     pub valid_until: Option<u64>,
     pub amount_above: Option<f64>,
     pub amount_at_most: Option<f64>,
+    /// Total CUMULE (2026-11-21) : montants deja autorises a cet agent pour
+    /// cette action, plus celui demande. `total_above=X` : la regle ne vaut
+    /// que si ce total depasse X ; `total_at_most=X` : seulement s'il reste
+    /// au plus X. `total_window_secs` : fenetre glissante (sinon, depuis
+    /// toujours). Additionner des dizaines de montants est une faiblesse
+    /// connue des LLM : ici, c'est le serveur qui compte.
+    pub total_above: Option<f64>,
+    pub total_at_most: Option<f64>,
+    pub total_window_secs: Option<u64>,
     pub if_fact: Option<String>,
     pub unless_fact: Option<String>,
     /// Attributs de condition illisibles (nom=valeur).
@@ -150,7 +159,8 @@ pub fn parse_amount(v: &str) -> Option<f64> {
 }
 
 impl Conditions {
-    pub const KEYS: [&'static str; 6] = ["valid_from", "valid_until", "amount_above", "amount_at_most", "if_fact", "unless_fact"];
+    pub const KEYS: [&'static str; 9] = ["valid_from", "valid_until", "amount_above", "amount_at_most",
+        "total_above", "total_at_most", "total_window_secs", "if_fact", "unless_fact"];
 
     pub fn from_attrs(attrs: &std::collections::HashMap<String, String>) -> Self {
         let mut c = Conditions::default();
@@ -161,6 +171,9 @@ impl Conditions {
                 "valid_until" => match parse_time(v) { Some(t) => c.valid_until = Some(t), None => bad(&mut c) },
                 "amount_above" => match parse_amount(v) { Some(a) => c.amount_above = Some(a), None => bad(&mut c) },
                 "amount_at_most" => match parse_amount(v) { Some(a) => c.amount_at_most = Some(a), None => bad(&mut c) },
+                "total_above" => match parse_amount(v) { Some(a) => c.total_above = Some(a), None => bad(&mut c) },
+                "total_at_most" => match parse_amount(v) { Some(a) => c.total_at_most = Some(a), None => bad(&mut c) },
+                "total_window_secs" => match v.trim().parse::<u64>() { Ok(t) if t > 0 => c.total_window_secs = Some(t), _ => bad(&mut c) },
                 "if_fact" if is_valid_action(v) => c.if_fact = Some(v.clone()),
                 "unless_fact" if is_valid_action(v) => c.unless_fact = Some(v.clone()),
                 "if_fact" | "unless_fact" => bad(&mut c),
@@ -172,7 +185,11 @@ impl Conditions {
     }
 
     fn has_amount(&self) -> bool {
-        self.amount_above.is_some() || self.amount_at_most.is_some()
+        self.amount_above.is_some() || self.amount_at_most.is_some() || self.has_total()
+    }
+
+    fn has_total(&self) -> bool {
+        self.total_above.is_some() || self.total_at_most.is_some()
     }
 
     /// Paires (nom, valeur) a montrer a l'agent (wire : valeurs sans `,`/`]`).
@@ -185,6 +202,9 @@ impl Conditions {
         if let Some(t) = self.valid_until { out.push(("valid_until", date(t))); }
         if let Some(a) = self.amount_above { out.push(("amount_above", a.to_string())); }
         if let Some(a) = self.amount_at_most { out.push(("amount_at_most", a.to_string())); }
+        if let Some(a) = self.total_above { out.push(("total_above", a.to_string())); }
+        if let Some(a) = self.total_at_most { out.push(("total_at_most", a.to_string())); }
+        if let Some(w) = self.total_window_secs { out.push(("total_window_secs", w.to_string())); }
         if let Some(f) = &self.if_fact { out.push(("if_fact", f.clone())); }
         if let Some(f) = &self.unless_fact { out.push(("unless_fact", f.clone())); }
         if !self.invalid.is_empty() { out.push(("invalid_conditions", self.invalid.len().to_string())); }
@@ -204,9 +224,21 @@ pub struct RequestContext {
     /// Roles de l'expediteur (`RELATION [type=POSSESSES, subject=<agent>,
     /// object=role:<nom>]`, pose par un auteur de politique en mode `Only`).
     pub roles: std::collections::HashSet<String>,
+    /// Montants deja AUTORISES a l'expediteur pour l'action demandee :
+    /// (secondes unix, montant). Pour `total_above` / `total_at_most`.
+    pub spent: Vec<(u64, f64)>,
 }
 
 impl RequestContext {
+    /// Somme des montants deja autorises, dans la fenetre si elle est donnee.
+    pub fn spent_within(&self, window: Option<u64>) -> f64 {
+        self.spent
+            .iter()
+            .filter(|(t, _)| window.is_none_or(|w| t + w >= self.now))
+            .map(|(_, a)| a)
+            .sum()
+    }
+
     pub fn now() -> Self {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         RequestContext { now, ..Default::default() }
@@ -271,7 +303,13 @@ impl Rule {
         }
         match ctx.amount {
             None => self.forbids(),
-            Some(a) => !c.amount_above.is_some_and(|x| a <= x) && !c.amount_at_most.is_some_and(|x| a > x),
+            Some(a) => {
+                let total = a + ctx.spent_within(c.total_window_secs);
+                !c.amount_above.is_some_and(|x| a <= x)
+                    && !c.amount_at_most.is_some_and(|x| a > x)
+                    && !c.total_above.is_some_and(|x| total <= x)
+                    && !c.total_at_most.is_some_and(|x| total > x)
+            }
         }
     }
 }
@@ -741,6 +779,25 @@ mod tests {
         let p = effective_policy("bot", &h2, &only, &now());
         assert_eq!((p.permitted.len(), p.forbidden.len()), (0, 1), "{p:?}");
         assert!(!decide("bot", Some("refund"), true, true, &h2, DefaultPolicy::Allow, &only, &ctx(Some(10.0))).allowed);
+    }
+
+    #[test]
+    fn cumulative_total_is_counted_by_the_server() {
+        // « 150 au plus par remboursement, 1000 au total sur 24 h ».
+        let h = vec![
+            with(rel("bot", "refund", "MAY"), &[("amount_at_most", "150"), ("total_at_most", "1000"), ("total_window_secs", "86400")]),
+            with(rel("bot", "refund", "MUST_NOT"), &[("amount_above", "150")]),
+            with(rel("bot", "refund", "MUST_NOT"), &[("total_above", "1000"), ("total_window_secs", "86400")]),
+        ];
+        let only = PolicyAuthors::parse(Some("owner"));
+        let at = |amount: f64, spent: Vec<(u64, f64)>| RequestContext { amount: Some(amount), spent, ..now() };
+        let t = now().now;
+        assert!(decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &at(100.0, vec![(t - 10, 850.0)])).allowed);
+        let d = decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &at(100.0, vec![(t - 10, 950.0)]));
+        assert!(!d.allowed && d.reason == "forbidden", "1050 > 1000 : {d:?}");
+        // Hors fenetre, les anciens montants ne comptent plus.
+        assert!(decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &at(100.0, vec![(t - 90_000, 950.0)])).allowed);
+        assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &at(151.0, vec![])).allowed);
     }
 
     #[test]

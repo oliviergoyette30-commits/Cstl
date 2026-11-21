@@ -1,0 +1,2930 @@
+{
+  "summary": {
+    "cstl_court": {
+      "cases": 36,
+      "perm_ok": 108,
+      "perm_total": 108,
+      "obl_ok": 26,
+      "all_ok": 26,
+      "pass_k": 7,
+      "policies": 12,
+      "tokens_data": 782,
+      "tokens_prompt": 1569
+    },
+    "toon": {
+      "cases": 36,
+      "perm_ok": 107,
+      "perm_total": 108,
+      "obl_ok": 23,
+      "all_ok": 22,
+      "pass_k": 5,
+      "policies": 12,
+      "tokens_data": 1046,
+      "tokens_prompt": 1786
+    },
+    "cstl_tableau": {
+      "cases": 36,
+      "perm_ok": 99,
+      "perm_total": 108,
+      "obl_ok": 16,
+      "all_ok": 15,
+      "pass_k": 4,
+      "policies": 12,
+      "tokens_data": 873,
+      "tokens_prompt": 1653
+    }
+  },
+  "rows": [
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 658,
+      "tokens_data": 312,
+      "tokens_prompt": 1099,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "chars": 852,
+      "tokens_data": 418,
+      "tokens_prompt": 1158,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 762,
+      "tokens_data": 359,
+      "tokens_prompt": 1139,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": []}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 679,
+      "tokens_data": 315,
+      "tokens_prompt": 1102,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "chars": 851,
+      "tokens_data": 416,
+      "tokens_prompt": 1156,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 765,
+      "tokens_data": 353,
+      "tokens_prompt": 1133,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 778,
+      "tokens_data": 360,
+      "tokens_prompt": 1146,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "toon",
+      "run": 0,
+      "chars": 924,
+      "tokens_data": 446,
+      "tokens_prompt": 1185,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 847,
+      "tokens_data": 386,
+      "tokens_prompt": 1165,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 793,
+      "tokens_data": 368,
+      "tokens_prompt": 1155,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "toon",
+      "run": 0,
+      "chars": 950,
+      "tokens_data": 457,
+      "tokens_prompt": 1197,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 865,
+      "tokens_data": 394,
+      "tokens_prompt": 1174,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1522,
+      "tokens_data": 733,
+      "tokens_prompt": 1520,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "chars": 1902,
+      "tokens_data": 963,
+      "tokens_prompt": 1703,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1677,
+      "tokens_data": 812,
+      "tokens_prompt": 1592,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1616,
+      "tokens_data": 735,
+      "tokens_prompt": 1523,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "chars": 1997,
+      "tokens_data": 972,
+      "tokens_prompt": 1713,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1757,
+      "tokens_data": 809,
+      "tokens_prompt": 1590,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1496,
+      "tokens_data": 692,
+      "tokens_prompt": 1480,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "toon",
+      "run": 0,
+      "chars": 1903,
+      "tokens_data": 937,
+      "tokens_prompt": 1678,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1666,
+      "tokens_data": 783,
+      "tokens_prompt": 1564,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1480,
+      "tokens_data": 731,
+      "tokens_prompt": 1519,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "toon",
+      "run": 0,
+      "chars": 1903,
+      "tokens_data": 975,
+      "tokens_prompt": 1716,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1661,
+      "tokens_data": 816,
+      "tokens_prompt": 1597,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2660,
+      "tokens_data": 1219,
+      "tokens_prompt": 2003,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "chars": 3440,
+      "tokens_data": 1689,
+      "tokens_prompt": 2426,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 2971,
+      "tokens_data": 1386,
+      "tokens_prompt": 2163,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"log_transaction\", \"grant_admin\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2686,
+      "tokens_data": 1281,
+      "tokens_prompt": 2067,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"send_receipt\", \"notify_regulator\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "chars": 3490,
+      "tokens_data": 1754,
+      "tokens_prompt": 2493,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 3004,
+      "tokens_data": 1449,
+      "tokens_prompt": 2228,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"wipe_db\", \"log_transaction\", \"notify_regulator\", \"send_receipt\", \"refund_order\", \"backup_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2741,
+      "tokens_data": 1327,
+      "tokens_prompt": 2115,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"backup_db\", \"notify_regulator\", \"refund_order\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "toon",
+      "run": 0,
+      "chars": 3467,
+      "tokens_data": 1766,
+      "tokens_prompt": 2507,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "```json\n{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"backup_db\", \"export_customer_data\"]}\n```",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 3023,
+      "tokens_data": 1474,
+      "tokens_prompt": 2255,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"backup_db\", \"notify_regulator\", \"refund_order\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2814,
+      "tokens_data": 1314,
+      "tokens_prompt": 2103,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"share_medical_record\", \"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "toon",
+      "run": 0,
+      "chars": 3550,
+      "tokens_data": 1761,
+      "tokens_prompt": 2503,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"grant_admin\", \"share_medical_record\", \"refund_order\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 3093,
+      "tokens_data": 1455,
+      "tokens_prompt": 2237,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [true, false, false], \"obligations\": [\"grant_admin\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 658,
+      "tokens_data": 312,
+      "tokens_prompt": 1099,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "chars": 852,
+      "tokens_data": 418,
+      "tokens_prompt": 1158,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 762,
+      "tokens_data": 359,
+      "tokens_prompt": 1139,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": []}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 679,
+      "tokens_data": 315,
+      "tokens_prompt": 1102,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "chars": 851,
+      "tokens_data": 416,
+      "tokens_prompt": 1156,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 765,
+      "tokens_data": 353,
+      "tokens_prompt": 1133,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": []}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 778,
+      "tokens_data": 360,
+      "tokens_prompt": 1146,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "toon",
+      "run": 1,
+      "chars": 924,
+      "tokens_data": 446,
+      "tokens_prompt": 1185,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 847,
+      "tokens_data": 386,
+      "tokens_prompt": 1165,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 793,
+      "tokens_data": 368,
+      "tokens_prompt": 1155,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "toon",
+      "run": 1,
+      "chars": 950,
+      "tokens_data": 457,
+      "tokens_prompt": 1197,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 865,
+      "tokens_data": 394,
+      "tokens_prompt": 1174,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 1522,
+      "tokens_data": 733,
+      "tokens_prompt": 1520,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"send_receipt\", \"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "chars": 1902,
+      "tokens_data": 963,
+      "tokens_prompt": 1703,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 1677,
+      "tokens_data": 812,
+      "tokens_prompt": 1592,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 1616,
+      "tokens_data": 735,
+      "tokens_prompt": 1523,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "chars": 1997,
+      "tokens_data": 972,
+      "tokens_prompt": 1713,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 1757,
+      "tokens_data": 809,
+      "tokens_prompt": 1590,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 1496,
+      "tokens_data": 692,
+      "tokens_prompt": 1480,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "toon",
+      "run": 1,
+      "chars": 1903,
+      "tokens_data": 937,
+      "tokens_prompt": 1678,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 1666,
+      "tokens_data": 783,
+      "tokens_prompt": 1564,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 1480,
+      "tokens_data": 731,
+      "tokens_prompt": 1519,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"notify_regulator\", \"wipe_db\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "toon",
+      "run": 1,
+      "chars": 1903,
+      "tokens_data": 975,
+      "tokens_prompt": 1716,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"notify_regulator\", \"wipe_db\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 1661,
+      "tokens_data": 816,
+      "tokens_prompt": 1597,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"notify_regulator\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 2660,
+      "tokens_data": 1219,
+      "tokens_prompt": 2003,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "chars": 3440,
+      "tokens_data": 1689,
+      "tokens_prompt": 2426,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 2971,
+      "tokens_data": 1386,
+      "tokens_prompt": 2163,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"grant_admin\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 2686,
+      "tokens_data": 1281,
+      "tokens_prompt": 2067,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"wipe_db\", \"log_transaction\", \"send_receipt\", \"notify_regulator\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "chars": 3490,
+      "tokens_data": 1754,
+      "tokens_prompt": 2493,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"refund_order\", \"wipe_db\", \"log_transaction\", \"send_receipt\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 3004,
+      "tokens_data": 1449,
+      "tokens_prompt": 2228,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 2741,
+      "tokens_data": 1327,
+      "tokens_prompt": 2115,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"grant_admin\", \"backup_db\", \"export_customer_data\", \"notify_regulator\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "toon",
+      "run": 1,
+      "chars": 3467,
+      "tokens_data": 1766,
+      "tokens_prompt": 2507,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"backup_db\", \"notify_regulator\", \"refund_order\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 3023,
+      "tokens_data": 1474,
+      "tokens_prompt": 2255,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"backup_db\", \"notify_regulator\", \"refund_order\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 1,
+      "chars": 2814,
+      "tokens_data": 1314,
+      "tokens_prompt": 2103,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"share_medical_record\", \"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "toon",
+      "run": 1,
+      "chars": 3550,
+      "tokens_data": 1761,
+      "tokens_prompt": 2503,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "```json\n{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"close_account\", \"share_medical_record\"]}\n```",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 1,
+      "chars": 3093,
+      "tokens_data": 1455,
+      "tokens_prompt": 2237,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [true, false, false], \"obligations\": [\"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 658,
+      "tokens_data": 312,
+      "tokens_prompt": 1099,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "chars": 852,
+      "tokens_data": 418,
+      "tokens_prompt": 1158,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 762,
+      "tokens_data": 359,
+      "tokens_prompt": 1139,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": []}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 679,
+      "tokens_data": 315,
+      "tokens_prompt": 1102,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "chars": 851,
+      "tokens_data": 416,
+      "tokens_prompt": 1156,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 765,
+      "tokens_data": 353,
+      "tokens_prompt": 1133,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": []}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 778,
+      "tokens_data": 360,
+      "tokens_prompt": 1146,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "toon",
+      "run": 2,
+      "chars": 924,
+      "tokens_data": 446,
+      "tokens_prompt": 1185,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 847,
+      "tokens_data": 386,
+      "tokens_prompt": 1165,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 793,
+      "tokens_data": 368,
+      "tokens_prompt": 1155,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "toon",
+      "run": 2,
+      "chars": 950,
+      "tokens_data": 457,
+      "tokens_prompt": 1197,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 865,
+      "tokens_data": 394,
+      "tokens_prompt": 1174,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 1522,
+      "tokens_data": 733,
+      "tokens_prompt": 1520,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"send_receipt\", \"notify_regulator\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "chars": 1902,
+      "tokens_data": 963,
+      "tokens_prompt": 1703,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 1677,
+      "tokens_data": 812,
+      "tokens_prompt": 1592,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 1616,
+      "tokens_data": 735,
+      "tokens_prompt": 1523,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "chars": 1997,
+      "tokens_data": 972,
+      "tokens_prompt": 1713,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 1757,
+      "tokens_data": 809,
+      "tokens_prompt": 1590,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 1496,
+      "tokens_data": 692,
+      "tokens_prompt": 1480,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "toon",
+      "run": 2,
+      "chars": 1903,
+      "tokens_data": 937,
+      "tokens_prompt": 1678,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 1666,
+      "tokens_data": 783,
+      "tokens_prompt": 1564,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"log_transaction\", \"close_account\", \"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 1480,
+      "tokens_data": 731,
+      "tokens_prompt": 1519,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"notify_regulator\", \"wipe_db\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "toon",
+      "run": 2,
+      "chars": 1903,
+      "tokens_data": 975,
+      "tokens_prompt": 1716,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"export_customer_data\", \"share_medical_record\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 1661,
+      "tokens_data": 816,
+      "tokens_prompt": 1597,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\", \"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 2660,
+      "tokens_data": 1219,
+      "tokens_prompt": 2003,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "chars": 3440,
+      "tokens_data": 1689,
+      "tokens_prompt": 2426,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"refund_order\", \"notify_regulator\", \"send_receipt\", \"export_customer_data\", \"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 2971,
+      "tokens_data": 1386,
+      "tokens_prompt": 2163,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"log_transaction\", \"grant_admin\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 2686,
+      "tokens_data": 1281,
+      "tokens_prompt": 2067,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "chars": 3490,
+      "tokens_data": 1754,
+      "tokens_prompt": 2493,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"refund_order\", \"wipe_db\", \"log_transaction\", \"send_receipt\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 3004,
+      "tokens_data": 1449,
+      "tokens_prompt": 2228,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"send_receipt\", \"notify_regulator\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 2741,
+      "tokens_data": 1327,
+      "tokens_prompt": 2115,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"grant_admin\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "toon",
+      "run": 2,
+      "chars": 3467,
+      "tokens_data": 1766,
+      "tokens_prompt": 2507,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"notify_regulator\", \"refund_order\", \"grant_admin\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 3023,
+      "tokens_data": 1474,
+      "tokens_prompt": 2255,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"grant_admin\", \"backup_db\", \"notify_regulator\", \"refund_order\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 2,
+      "chars": 2814,
+      "tokens_data": 1314,
+      "tokens_prompt": 2103,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"share_medical_record\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "toon",
+      "run": 2,
+      "chars": 3550,
+      "tokens_data": 1761,
+      "tokens_prompt": 2503,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"grant_admin\", \"share_medical_record\", \"refund_order\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 2,
+      "chars": 3093,
+      "tokens_data": 1455,
+      "tokens_prompt": 2237,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt"
+      ],
+      "raw": "{\"permis\": [true, false, false], \"obligations\": [\"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    }
+  ]
+}
