@@ -48,10 +48,11 @@ RESULTAT (2026-11-21, 16 vrais messages, octets au total) :
   compressee du serveur gagne a peine 6 %, a cause du base64.
 - Les dictionnaires sont entraines sur 8 autres captures du MEME scenario :
   c'est un cas tres favorable, mais il l'est autant pour les deux formats.
-- Defaut trouve : `master_decompress` ajoute `object=""` a une relation
-  qui n'avait pas de champ `object` (ex. RELATION [type=received,
-  subject=inform, status=valid]). 2 messages sur 16 ne repassent donc pas
-  a l'identique par le Master ; leurs tailles restent valables.
+- Defaut trouve puis CORRIGE (2026-11-21) : `master_decompress` ajoutait
+  `object=""` a une relation sans champ `object` (ex. RELATION
+  [type=received, subject=inform, status=valid]). 2 messages sur 16 ne
+  repassaient pas a l'identique. Depuis le correctif dans
+  `src/compression/structural.rs`, 16/16 repassent ; tailles inchangees.
 
 Necessite : cargo build --release --example full_compression_sizes,
 pip install zstandard brotli.

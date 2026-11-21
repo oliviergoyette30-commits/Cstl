@@ -152,8 +152,10 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     deux : zstd avec un dictionnaire entraîné.
   - Les compresseurs maison de CSTL font environ 5 fois moins bien
     (environ 10 000 octets).
-  - Défaut trouvé : `master_decompress` ajoute `object=""` aux relations
-    qui n'en ont pas.
+  - Défaut trouvé puis corrigé : `master_decompress` ajoutait
+    `object=""` aux relations qui n'en avaient pas. La correction garde le
+    même format binaire, donc les données déjà stockées se lisent comme
+    avant.
   - Piste : remplacer les compresseurs maison par zstd avec un
     dictionnaire entraîné, qui vaudrait aussi pour les agents JSON.
 
