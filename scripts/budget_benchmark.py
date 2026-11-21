@@ -98,7 +98,11 @@ def parse_accept(text):
     start, end = text.find("{"), text.rfind("}")
     try:
         ids = json.loads(text[start:end + 1]).get("accept", [])
-        return [int(i) for i in ids if str(i).strip().lstrip("#").isdigit()]
+        # Les modeles ecrivent parfois "#2" au lieu de 2. Avant cette ligne,
+        # int("#2") levait une erreur et TOUTE la reponse etait lue comme une
+        # liste vide (bug du banc d'essai, vu le 2026-11-21).
+        norm = [str(i).strip().lstrip("#") for i in ids]
+        return [int(i) for i in norm if i.isdigit()]
     except (ValueError, AttributeError, TypeError):
         return []
 
