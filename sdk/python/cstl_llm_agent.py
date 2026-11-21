@@ -546,6 +546,7 @@ class CstlAgent:
         out = {"required": [], "permitted": [], "forbidden": [], "ignored": [], "roles": []}
         if resp.fields.get("roles"):
             out["roles"] = resp.fields["roles"].split()
+        out["default"] = resp.fields.get("default", "allow")
         for block in resp.relations:
             item = {k: v for k, v in block.items() if k not in ("block", "decision")}
             if block.get("block") == "POLICY_RULE":

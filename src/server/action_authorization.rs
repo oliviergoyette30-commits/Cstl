@@ -378,7 +378,14 @@ pub fn effective_policy(sender: &str, rules: &[Rule], authors: &PolicyAuthors, c
                 for r in &later {
                     push(&mut policy, r);
                 }
-                if let Some(i) = last_plain {
+                // Des regles a montant qui couvrent TOUS les montants (« au plus
+                // X » et « au-dela de X ») remplacent entierement la regle sans
+                // condition : l'afficher quand meme trompait l'agent (2026-11-21,
+                // scripts/policy_history_benchmark.py).
+                let covered = later.iter().any(|a| {
+                    a.conditions.amount_at_most.is_some_and(|x| later.iter().any(|b| b.conditions.amount_above == Some(x)))
+                });
+                if let Some(i) = last_plain.filter(|_| !covered) {
                     push(&mut policy, in_force[i]);
                     if !later.is_empty() {
                         for list in [&mut policy.required, &mut policy.permitted, &mut policy.forbidden] {
@@ -721,10 +728,14 @@ mod tests {
         assert!(d.allowed && d.reason == "permitted", "{d:?}");
         assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Allow, &only, &ctx(Some(250.0))).allowed);
         // Politique : la regle remplacee (MUST_NOT sans condition) n'est plus montree.
+        // La paire « <= 200 » / « > 200 » couvre tous les montants : la regle
+        // sans condition qu'elle remplace n'est plus montree.
         let p = effective_policy("bot", &h, &only, &now());
-        assert_eq!((p.required.len(), p.permitted.len(), p.forbidden.len()), (0, 1, 2), "{p:?}");
-        assert!(p.forbidden.iter().any(|e| e.conditions.amount_above.is_some() && !e.otherwise));
-        assert!(p.forbidden.iter().any(|e| e.otherwise), "la regle sans condition ne vaut plus que dans les autres cas");
+        assert_eq!((p.required.len(), p.permitted.len(), p.forbidden.len()), (0, 1, 1), "{p:?}");
+        // Une limite seule ne couvre pas tout : la regle sans condition reste, « dans les autres cas ».
+        let partial = vec![rel("bot", "refund", "MUST"), with(rel("bot", "refund", "MUST_NOT"), &[("amount_above", "200")])];
+        let p = effective_policy("bot", &partial, &only, &now());
+        assert!(p.required.iter().any(|e| e.otherwise) && p.forbidden.len() == 1, "{p:?}");
         // Puis « interdit » de nouveau : les anciennes regles a montant ne s'affichent plus.
         let h2 = [h, vec![rel("bot", "refund", "FORBID")]].concat();
         let p = effective_policy("bot", &h2, &only, &now());

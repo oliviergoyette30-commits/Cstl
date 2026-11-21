@@ -582,15 +582,27 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             let roles = roles.iter().map(|r| r.as_str()).filter(|r| super::action_authorization::is_valid_action(r)).collect::<Vec<_>>().join(" ");
                             let mut out = format!(
                                 "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, permitted={}, forbidden={}, ignored={}, authors_enforced={}{}]\n",
+                                 INTENT_PAYLOAD [purpose=policy, sender=server, receiver={}, required={}, permitted={}, forbidden={}, ignored={}, authors_enforced={}, default={}{}]\n",
                                 sender, policy.required.len(), policy.permitted.len(), policy.forbidden.len(), policy.ignored.len(),
                                 matches!(authors, super::action_authorization::PolicyAuthors::Only(_)),
+                                // Ce que decide le serveur pour une action SANS regle
+                                // (2026-11-21) : sans ca, l'agent refusait par prudence
+                                // des actions autorisees.
+                                match super::action_authorization::DefaultPolicy::from_env() {
+                                    super::action_authorization::DefaultPolicy::Allow => "allow",
+                                    super::action_authorization::DefaultPolicy::Deny => "deny",
+                                },
                                 if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) },
                             );
                             for (decision, list) in [("required", &policy.required), ("permitted", &policy.permitted), ("forbidden", &policy.forbidden)] {
                                 for e in list {
-                                    let conds: String = e.conditions.describe().into_iter()
+                                    // Une regle listee est en vigueur : ses conditions de
+                                    // faits sont donc REMPLIES, et le serveur le dit
+                                    // (fact_now), au lieu de laisser l'agent deviner.
+                                    let mut conds: String = e.conditions.describe().into_iter()
                                         .map(|(k, v)| format!(", {k}={}", wire_text(&v))).collect();
+                                    if e.conditions.if_fact.is_some() { conds.push_str(", if_fact_now=true"); }
+                                    if e.conditions.unless_fact.is_some() { conds.push_str(", unless_fact_now=false"); }
                                     out.push_str(&format!(
                                         "POLICY_RULE [action={}, decision={}, modality={}, author={}{}{}{}]\n",
                                         e.action, decision, e.modality, wire_name(e.author.as_deref()),
