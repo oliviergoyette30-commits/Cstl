@@ -58,8 +58,9 @@ sys.path.insert(0, str(REPO / "sdk" / "python"))
 import format_comprehension_benchmark as fc  # noqa: E402
 import relay_tamper_benchmark as rt  # noqa: E402
 import cstl_compact  # noqa: E402
+import toon_lite  # noqa: E402
 
-FORMATS = ("cstl", "json", "compact")
+FORMATS = ("cstl", "json", "compact", "toon")
 SPEC_FIELDS = ("Une regle est PERFORM avec subject (un agent, ou role:<nom>), object (l'action), modality (MUST ou "
                "MUST_NOT) et, s'il y en a, amount_above (la regle ne vaut qu'au-dela de ce montant), if_fact "
                "(seulement si ce fait est vrai), unless_fact (sauf si ce fait est vrai). Un role est une relation "
@@ -80,6 +81,12 @@ SPEC = {
     "json": ("Ecris la politique en JSON : une liste de relations, chacune un objet {cle: valeur}. " + SPEC_FIELDS +
              "\nExemple :\n" + json.dumps(EXAMPLE, ensure_ascii=False)),
     "compact": "Ecris la politique en CSTL compact.\n" + cstl_compact.GUIDE,
+    "toon": ("Ecris la politique en TOON (Token-Oriented Object Notation) : un tableau roles[N]{agent,role}, un objet "
+             "facts (fait: true|false) et un tableau rules[N]{subject,modality,action,amount_above,if_fact,unless_fact}, "
+             "une ligne par element, null quand une condition n'existe pas, N = nombre exact de lignes. Une chaine qui "
+             "contient « : » (comme role:<nom>) s'ecrit entre guillemets. " +
+             SPEC_FIELDS.replace(" N'ecris que les attributs qui existent.", "") +
+             "\nExemple :\n" + toon_lite.encode(toon_lite.policy_object(EXAMPLE))),
 }
 
 
@@ -112,6 +119,14 @@ def norm(r):
 
 
 def parse(fmt, text):
+    if fmt == "toon":
+        body = "\n".join(ln for ln in text.strip().splitlines() if not ln.startswith("```"))
+        try:
+            obj, errors = toon_lite.decode(body)
+            PARSE_NOTES[text] = errors
+            return toon_lite.relations_of(obj)
+        except (toon_lite.ToonError, KeyError, TypeError, AttributeError):
+            return None
     if fmt == "cstl":
         return rt.relations_in_text(text)
     if fmt == "json":
@@ -131,6 +146,7 @@ def parse(fmt, text):
 
 
 TOKENS = {}
+PARSE_NOTES = {}   # longueurs [N] fausses en TOON (signalees, pas fatales)
 
 
 def count(model, text):
@@ -153,7 +169,7 @@ def run_case(model, size, seed, fmt, run):
     missing, extra = sum((want - have).values()), sum((have - want).values())
     return {"size": size, "seed": seed, "format": fmt, "run": run, "unreadable": got is None,
             "missing": missing, "extra": extra, "exact": got is not None and missing == 0 and extra == 0,
-            "tokens_out": count(model, raw), "raw": raw[:30000]}
+            "tokens_out": count(model, raw), "raw": raw[:30000], "toon_count_errors": PARSE_NOTES.get(raw, [])}
 
 
 class StubBrain:
@@ -178,12 +194,15 @@ def summarize(rows, size=None):
 
 
 def main():
+    global FORMATS
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--stub", action="store_true")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--formats", default=",".join(FORMATS), help="formats a jouer, separes par des virgules")
     args = ap.parse_args()
+    FORMATS = tuple(f for f in args.formats.split(",") if f)
     if args.stub:
         model = StubBrain()
     else:

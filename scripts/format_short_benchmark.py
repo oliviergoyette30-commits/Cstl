@@ -63,8 +63,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 import format_comprehension_benchmark as fc  # noqa: E402
+import toon_lite  # noqa: E402
 
-FORMATS = ("cstl", "json_compact", "cstl_court", "json_court")
+FORMATS = ("cstl", "json_compact", "cstl_court", "json_court", "toon")
 
 NOTES = {
     "cstl_court": (
@@ -79,10 +80,18 @@ NOTES = {
         "- \"facts\" : {fait: true|false} (comme STATE). Un fait absent est faux.\n"
         "- \"rules\" : liste de [subject, modality, action, amount_above, if_fact, unless_fact] ; null quand la "
         "condition n'existe pas."),
+    "toon": (
+        "Lecture du format TOON :\n"
+        "- \"roles[N]{agent,role}:\" puis une ligne par role : l'agent a ce role (comme POSSESSES).\n"
+        "- \"facts:\" puis \"<fait>: true|false\" (comme STATE). Un fait absent est faux.\n"
+        "- \"rules[N]{subject,modality,action,amount_above,if_fact,unless_fact}:\" puis une ligne par regle PERFORM ; "
+        "null quand la condition n'existe pas."),
 }
 
 
 def render(fmt, rels):
+    if fmt == "toon":
+        return toon_lite.encode(toon_lite.policy_object(rels))
     if fmt in ("cstl", "json_compact"):
         return fc.render(fmt, rels)
     roles = [(r["subject"], r["object"][5:]) for r in rels if r["type"] == "POSSESSES"]
@@ -157,12 +166,15 @@ def summarize(rows, size=None):
 
 
 def main():
+    global FORMATS
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--stub", action="store_true")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--formats", default=",".join(FORMATS), help="formats a jouer, separes par des virgules")
     args = ap.parse_args()
+    FORMATS = tuple(f for f in args.formats.split(",") if f)
     if args.stub:
         model = fc.StubBrain()
     else:
