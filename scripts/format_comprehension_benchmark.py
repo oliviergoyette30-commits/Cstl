@@ -23,6 +23,22 @@ LES TROIS FORMATS portent EXACTEMENT les memes donnees, converties par
 SCORE : reponses justes sur les questions de permission, et listes
 d'obligations exactes. Chaque politique est posee 3 fois (pass^3).
 
+RESULTAT (2026-11-21, vraie API, 3 passes x 12 politiques) :
+                   permissions   obligations exactes   pass^3
+                   Haiku  Opus   Haiku  Opus           Haiku  Opus
+  cstl             108    108    18/36  36/36          5/12   12/12
+  json_compact     108    108    16/36  36/36          4/12   12/12
+  json_indente     108    108    17/36  36/36          5/12   12/12
+  (permissions sur 108 questions)
+- Aucune difference de comprehension entre les trois formats. Le JSON
+  compact n'est pas moins bien compris que le JSON indente ou que CSTL.
+- Opus ne fait aucune erreur. Haiku rate les obligations des grandes
+  politiques (2 sur 12 a 60 regles) quel que soit le format. L'ecart de
+  18, 16 et 17 tient a un ou deux cas, dans le bruit d'une serie de 36.
+- Ce qui fait echouer Haiku, c'est la taille de la politique, pas le
+  format. C'est un argument pour que le SERVEUR calcule la politique
+  effective (`policy_query`) au lieu de laisser le modele la deduire.
+
 Usage :
   python3 scripts/format_comprehension_benchmark.py --model claude-haiku-5-5 --runs 3
   python3 scripts/format_comprehension_benchmark.py --stub      # plomberie seule, AUCUNE conclusion

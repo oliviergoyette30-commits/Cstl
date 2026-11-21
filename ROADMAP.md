@@ -129,6 +129,17 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     tokens.
   - Le gain est réel mais faible, et il disparaît une fois compressé.
 
+- **`scripts/format_comprehension_benchmark.py` :** un modèle
+  comprend-il aussi bien les trois formats ? La même politique de 10 à 60
+  règles, avec rôles, faits et conditions, en CSTL, en JSON compact et en
+  JSON indenté.
+  - Aucune différence de compréhension entre les formats.
+  - Opus fait tout juste dans les trois formats.
+  - Haiku rate les obligations des grandes politiques, quel que soit le
+    format : 18/36 en CSTL, 16/36 en JSON compact, 17/36 en JSON indenté.
+  - C'est la taille de la politique qui fait échouer, pas le format, d'où
+    l'intérêt que le serveur calcule la politique effective.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

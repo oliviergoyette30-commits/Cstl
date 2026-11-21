@@ -1,0 +1,3769 @@
+{
+  "summary": {
+    "cstl": {
+      "cases": 36,
+      "perm_ok": 108,
+      "perm_total": 108,
+      "obl_ok": 18,
+      "all_ok": 18,
+      "pass_k": 5,
+      "policies": 12,
+      "chars": 4191
+    },
+    "json_compact": {
+      "cases": 36,
+      "perm_ok": 108,
+      "perm_total": 108,
+      "obl_ok": 16,
+      "all_ok": 16,
+      "pass_k": 4,
+      "policies": 12,
+      "chars": 4446
+    },
+    "json_indente": {
+      "cases": 36,
+      "perm_ok": 108,
+      "perm_total": 108,
+      "obl_ok": 17,
+      "all_ok": 17,
+      "pass_k": 5,
+      "policies": 12,
+      "chars": 6508
+    }
+  },
+  "rows": [
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "chars": 1869,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 1976,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 2928,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "chars": 1776,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 1881,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 2765,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl",
+      "run": 0,
+      "chars": 2065,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 2185,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 3203,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl",
+      "run": 0,
+      "chars": 2132,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 2245,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 3307,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3916,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 4160,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 6104,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3865,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 4103,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 5937,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3714,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 3951,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 5751,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3912,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 4140,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 6104,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6503,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 6905,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 10085,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6842,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 7253,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 10645,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6866,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"refund_order\", \"notify_regulator\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 7299,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 10687,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6832,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"share_medical_record\", \"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 0,
+      "chars": 7252,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"close_account\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 0,
+      "chars": 10574,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"share_medical_record\", \"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "chars": 1869,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 1976,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 2928,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "chars": 1776,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 1881,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 2765,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl",
+      "run": 1,
+      "chars": 2065,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 2185,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 3203,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl",
+      "run": 1,
+      "chars": 2132,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 2245,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 3307,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "chars": 3916,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 4160,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\", \"refund_order\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 6104,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "chars": 3865,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 4103,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 5937,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl",
+      "run": 1,
+      "chars": 3714,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"close_account\", \"log_transaction\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 3951,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 5751,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl",
+      "run": 1,
+      "chars": 3912,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 4140,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 6104,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "chars": 6503,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 6905,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 10085,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "chars": 6842,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 7253,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"send_receipt\", \"notify_regulator\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 10645,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"send_receipt\", \"notify_regulator\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl",
+      "run": 1,
+      "chars": 6866,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 7299,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 10687,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"grant_admin\", \"backup_db\", \"export_customer_data\", \"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl",
+      "run": 1,
+      "chars": 6832,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 1,
+      "chars": 7252,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"share_medical_record\", \"refund_order\", \"send_receipt\", \"close_account\", \"grant_admin\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 1,
+      "chars": 10574,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"share_medical_record\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "chars": 1869,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 1976,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 2928,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "chars": 1776,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 1881,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 2765,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl",
+      "run": 2,
+      "chars": 2065,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 2185,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 3203,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl",
+      "run": 2,
+      "chars": 2132,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 2245,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 3307,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"log_transaction\", \"export_customer_data\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "chars": 3916,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 4160,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 6104,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        true,
+        false
+      ],
+      "answer": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [false, true, false], \"obligations\": [\"close_account\", \"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "chars": 3865,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 4103,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 5937,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        true,
+        false,
+        true
+      ],
+      "answer": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [true, false, true], \"obligations\": [\"refund_order\", \"notify_regulator\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl",
+      "run": 2,
+      "chars": 3714,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"notify_regulator\", \"close_account\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 3951,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 5751,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "log_transaction",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"share_medical_record\", \"log_transaction\", \"close_account\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl",
+      "run": 2,
+      "chars": 3912,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"wipe_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 4140,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 6104,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "truth": [
+        false,
+        false,
+        true
+      ],
+      "answer": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"permis\": [false, false, true], \"obligations\": [\"share_medical_record\", \"export_customer_data\", \"wipe_db\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "chars": 6503,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"refund_order\", \"notify_regulator\", \"export_customer_data\", \"send_receipt\", \"share_medical_record\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 6905,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 10085,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"share_medical_record\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "chars": 6842,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 7253,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 10645,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"send_receipt\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl",
+      "run": 2,
+      "chars": 6866,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"backup_db\", \"export_customer_data\", \"notify_regulator\", \"refund_order\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 7299,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"notify_regulator\", \"refund_order\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 10687,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "truth": [
+        false,
+        false,
+        false
+      ],
+      "answer": [
+        false,
+        false,
+        false
+      ],
+      "raw": "{\"permis\": [false, false, false], \"obligations\": [\"refund_order\", \"notify_regulator\", \"backup_db\", \"export_customer_data\"]}",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl",
+      "run": 2,
+      "chars": 6832,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"share_medical_record\", \"refund_order\", \"send_receipt\", \"close_account\", \"grant_admin\"]}",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "json_compact",
+      "run": 2,
+      "chars": 7252,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"close_account\", \"share_medical_record\"]}\n```",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "json_indente",
+      "run": 2,
+      "chars": 10574,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "truth": [
+        true,
+        true,
+        false
+      ],
+      "answer": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"permis\": [true, true, false], \"obligations\": [\"send_receipt\", \"close_account\", \"share_medical_record\"]}",
+      "all_ok": false
+    }
+  ]
+}
