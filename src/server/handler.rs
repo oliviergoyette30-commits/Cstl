@@ -125,10 +125,11 @@ fn why_not_authorized(
 async fn load_policy_rules(
     ctx: &ServerContext,
     authors: &super::action_authorization::PolicyAuthors,
+    sender: &str,
 ) -> Vec<super::action_authorization::Rule> {
     let rows = {
         let store = ctx.adn_store.lock().await;
-        store.deontic_rules_with_authors().unwrap_or_else(|e| {
+        store.deontic_rules_for(sender).unwrap_or_else(|e| {
             error!("[Handler] deontic_rules_with_authors failed: {}", e);
             Vec::new()
         })
@@ -165,7 +166,7 @@ async fn load_request_context(
 ) -> super::action_authorization::RequestContext {
     let rows = {
         let store = ctx.adn_store.lock().await;
-        store.facts_and_roles_with_authors().unwrap_or_else(|e| {
+        store.facts_and_roles_for(sender).unwrap_or_else(|e| {
             error!("[Handler] facts_and_roles_with_authors failed: {}", e);
             Vec::new()
         })
@@ -573,7 +574,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                              INTENT_PAYLOAD [purpose=policy_denied, reason=signature_required]\n---END---\n".to_string()
                         } else {
                             let authors = super::action_authorization::PolicyAuthors::from_env();
-                            let rules = load_policy_rules(&ctx, &authors).await;
+                            let rules = load_policy_rules(&ctx, &authors, &sender).await;
                             let req_ctx = load_request_context(&ctx, &authors, &sender, None).await;
                             let policy = super::action_authorization::effective_policy(&sender, &rules, &authors, &req_ctx);
                             let mut roles: Vec<&String> = req_ctx.roles.iter().collect();
@@ -620,7 +621,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             && sig_check == SignatureCheck::Valid
                             && embedded_pubkey == registered_pubkey_for_sender;
                         let authors = super::action_authorization::PolicyAuthors::from_env();
-                        let rules = load_policy_rules(&ctx, &authors).await;
+                        let rules = load_policy_rules(&ctx, &authors, &sender).await;
                         // Montant de la demande (2026-11-21), pour les regles
                         // `amount_above` / `amount_at_most`. Illisible -> refus.
                         let amount_raw = payload.intent.get("amount").cloned();
