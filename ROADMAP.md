@@ -119,6 +119,16 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Un journal signé avec un ancrage externe ferait aussi bien. CSTL l'a
     déjà, intégré à l'autorisation.
 
+- **`scripts/wire_size_benchmark.py` :** la taille, mesurée sur 16 vrais
+  messages capturés sur le serveur (signatures, clés, jetons, audit
+  compris). Le JSON porte exactement les mêmes informations, vérifié dans
+  les deux sens.
+  - Face au JSON compact, CSTL est 7 % plus petit en octets et 3 % en
+    tokens, mais 3 % plus gros après gzip.
+  - Face au JSON indenté, CSTL est 26 % plus petit en octets et 21 % en
+    tokens.
+  - Le gain est réel mais faible, et il disparaît une fois compressé.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
