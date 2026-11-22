@@ -230,8 +230,8 @@ def main():
             model = Stub()
         else:
             import team_task_benchmark as tb
-            model = tb.ClaudeBrain(args.comprehension)
-        rows = comprehension(model, args.runs, [f for f in args.formats.split(",") if f], 8)
+            model = tb.make_brain(args.comprehension)
+        rows = comprehension(model, args.runs, [f for f in args.formats.split(",") if f], int(os.environ.get("BENCH_WORKERS", "8")))
         dest = REPO / "scripts" / f"domains_comprehension_{args.comprehension}.json"
         dest.write_text(json.dumps({"rows": rows}, indent=2, ensure_ascii=False) + "\n")
         print(f"  Resultats bruts : {dest.relative_to(REPO)}")

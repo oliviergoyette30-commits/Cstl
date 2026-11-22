@@ -328,7 +328,7 @@ def main():
         model = StubBrain()
     else:
         import team_task_benchmark as tb
-        model = tb.ClaudeBrain(args.model)
+        model = tb.make_brain(args.model)
     jobs = [(k, n, s, f, run) for run in range(args.runs) for k in TYPES for n in SIZES for s in SEEDS for f in FORMATS]
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
         rows = list(pool.map(lambda j: run_case(model, *j), jobs))
