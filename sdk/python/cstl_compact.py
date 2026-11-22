@@ -48,6 +48,7 @@ CONDITIONS d'une regle (dans n'importe quel ordre) :
   unless:F     unless_fact=F         from:D       valid_from=D
   until:D      valid_until=D         cle=valeur   tout autre attribut
 """
+import json
 import re
 
 MODALITIES = ("MUST", "MUST_NOT", "MAY", "REQUIRE", "FORBID", "PERMIT")
@@ -644,3 +645,161 @@ def policy_to_symbols(p):
     for e in p.get("ignored", []):
         lines.append(f"# IGNORE (auteur sans autorite, ne pas suivre) : {e['action']} par {e.get('author', '?')}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- arbres
+# 2026-11-22 : donnees IMBRIQUEES (commande -> lignes -> options). Aplatir en
+# relations « REL type sujet objet » repete l'id de chaque element ET celui de
+# son parent, et coutait 23 % de tokens de plus que le JSON
+# (scripts/nested_benchmark.py). Ici, une section par liste :
+#   orders[2]#: client date          # : 1re colonne = id propre de l'element
+#     o0 client_5 2026-11-25
+#   lines[3]^: item qty price        ^ : 1re colonne = id du parent ; la
+#     o0 gpu_rack 5 714                  position vient de l'ordre des lignes
+#   teams[1]#^: lead                 #^ : id propre, puis id du parent
+#     team_0_0 dept_0 agent_7
+# Un element sans id propre a pour id <id du parent>.<position> (o0.1), ce qui
+# permet a ses propres enfants de le designer. Les valeurs gardent leur type
+# (nombre, booleen, null, chaine) ; « - » = champ absent.
+
+_TREE_HEAD = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]*)\[(\d+)\](#?)(\^?):((?:\s+\S+)*)\s*$")
+_NUMLIKE = re.compile(r"^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$")
+
+
+def _tree_cell(v):
+    if v is None:
+        return "null"
+    if v is True or v is False:
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return json.dumps(v)
+    if isinstance(v, (list, dict)):
+        return _quote(json.dumps(v, ensure_ascii=False, separators=(",", ":"))) + "~"
+    s = str(v)
+    if s in ("", "-", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#]', s) or s.endswith("~"):
+        return _quote(s)
+    return s
+
+
+def _tree_value(word):
+    text, quoted = word
+    if quoted:
+        return text
+    if text.endswith("~") and len(text) > 1:
+        # cellule JSON (liste ou objet) : "..."~
+        try:
+            return json.loads(text[:-1])
+        except ValueError:
+            raise CompactError(f"valeur JSON illisible : {text!r}") from None
+    if text == "null":
+        return None
+    if text in ("true", "false"):
+        return text == "true"
+    if _NUMLIKE.match(text):
+        return json.loads(text) if not re.search(r"^[+-]?0\d", text) else text
+    return text
+
+
+def _child_lists(o):
+    return [(k, v) for k, v in o.items() if isinstance(v, list) and v and all(isinstance(x, dict) for x in v)]
+
+
+def encode_tree(data):
+    """Arbre JSON {liste: [objets...]} -> CSTL compact en sections. Sans perte
+    (`decode_tree` redonne exactement `data`), y compris quand un meme nom de
+    liste revient a plusieurs niveaux."""
+    if not isinstance(data, dict) or not all(isinstance(v, list) for v in data.values()):
+        raise CompactError("encode_tree attend {nom: [objets]} a la racine")
+    order, own, nested, cols = [], {}, {}, {}
+
+    def shape(key, objs, is_nested):
+        if key not in own:
+            order.append(key)
+            own[key], nested[key], cols[key] = True, False, []
+        nested[key] = nested[key] or is_nested
+        for o in objs:
+            if not isinstance(o, dict):
+                raise CompactError(f"{key} : liste d'objets attendue")
+            if not (isinstance(o.get("id"), str) and o["id"] and "." not in o["id"]):
+                own[key] = False
+            kids = {k for k, _ in _child_lists(o)}
+            cols[key] += [k for k in o if k not in kids and k not in cols[key]]
+            for k, v in _child_lists(o):
+                shape(k, v, True)
+
+    for key, objs in data.items():
+        shape(key, objs, False)
+    rows = {k: [] for k in order}
+
+    def assign(key, objs, parent):
+        for i, o in enumerate(objs):
+            oid = o["id"] if own[key] else (f"{parent}.{i}" if parent is not None else str(i))
+            rows[key].append((o, parent))
+            for k, v in _child_lists(o):
+                assign(k, v, oid)
+
+    for key, objs in data.items():
+        assign(key, objs, None)
+    lines = []
+    for key in order:
+        c = [x for x in cols[key] if not (own[key] and x == "id")]
+        lines.append(f"{key}[{len(rows[key])}]{'#' if own[key] else ''}{'^' if nested[key] else ''}:" + "".join(f" {x}" for x in c))
+        for o, parent in rows[key]:
+            cells = ([_tree_cell(o["id"])] if own[key] else []) + ([_tree_cell(parent) if parent is not None else '""'] if nested[key] else [])
+            lines.append("  " + " ".join(cells + [_tree_cell(o[x]) if x in o else "-" for x in c]))
+    return "\n".join(lines)
+
+
+def decode_tree(text):
+    """Inverse de `encode_tree`. Leve CompactError si une ligne, un nombre de
+    lignes ou un parent ne colle pas."""
+    sections, cur = [], None
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        if not line[:1].isspace():
+            m = _TREE_HEAD.match(line.strip())
+            if not m:
+                raise CompactError(f"ligne {n} : en-tete de section attendu : {line!r}")
+            cur = {"key": m.group(1), "n": int(m.group(2)), "own": bool(m.group(3)), "nested": bool(m.group(4)),
+                   "cols": m.group(5).split(), "rows": []}
+            sections.append(cur)
+            continue
+        if cur is None:
+            raise CompactError(f"ligne {n} : ligne de donnees hors section")
+        cur["rows"].append((n, _split(line)))
+    # 1re passe : chaque element et son id ; 2e passe : rattachement au parent.
+    nodes, links, root = {}, [], {}
+    for sec in sections:
+        if len(sec["rows"]) != sec["n"]:
+            raise CompactError(f"{sec['key']}[{sec['n']}] annonce, {len(sec['rows'])} ligne(s) ecrite(s)")
+        width = len(sec["cols"]) + sec["own"] + sec["nested"]
+        pos = {}
+        for n, words in sec["rows"]:
+            if len(words) != width:
+                raise CompactError(f"ligne {n} : {sec['key']} attend {width} valeurs, {len(words)} lues")
+            i, obj, parent = 0, {}, None
+            if sec["own"]:
+                obj["id"] = _tree_value(words[0])
+                i = 1
+            if sec["nested"]:
+                parent = str(_tree_value(words[i])) if words[i] != ("", True) else None
+                i += 1
+            for c, w in zip(sec["cols"], words[i:]):
+                if w != ("-", False):
+                    obj[c] = _tree_value(w)
+            k = pos.get(parent, 0)
+            pos[parent] = k + 1
+            oid = str(obj["id"]) if sec["own"] else (f"{parent}.{k}" if parent is not None else str(k))
+            if oid in nodes:
+                raise CompactError(f"ligne {n} : id en double {oid!r}")
+            nodes[oid] = obj
+            links.append((sec["key"], obj, parent, n))
+    for key, obj, parent, n in links:
+        if parent is None:
+            root.setdefault(key, []).append(obj)
+        elif parent in nodes:
+            nodes[parent].setdefault(key, []).append(obj)
+        else:
+            raise CompactError(f"ligne {n} : parent inconnu {parent!r}")
+    return root

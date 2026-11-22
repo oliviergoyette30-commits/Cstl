@@ -315,3 +315,50 @@ def test_policy_view_without_keywords():
                           "!share_record -consent etat=consent=faux role:support"]
     assert lines[5].startswith("# IGNORE") and "grant_admin" in lines[5]
     assert "priority=10" in policy_to_compact(p)
+
+
+# ---- arbres (donnees imbriquees, 2026-11-22) ----
+from cstl_compact import decode_tree, encode_tree  # noqa: E402
+
+
+def test_tree_round_trip_and_shape():
+    data = {"orders": [{"id": "o0", "client": "c5", "lines": [
+                {"item": "gpu", "qty": 5, "price": 714.5, "options": [{"name": "warranty", "price": 9}]},
+                {"item": "lic", "qty": 1, "price": 20}]},
+               {"id": "o1", "client": "c3", "note": "two words", "lines": [{"item": "gpu", "qty": 2, "price": 1}]}]}
+    text = encode_tree(data)
+    assert text.splitlines()[0] == "orders[2]#: client note"
+    assert "lines[3]^: item qty price" in text and "options[1]^: name price" in text
+    assert "  o0.0 warranty 9" in text, text
+    assert decode_tree(text) == data
+
+
+def test_tree_keeps_types_and_odd_values():
+    data = {"x": [{"id": "a", "s": "05", "n": 5, "f": 1.5, "b": True, "z": None, "d": "-", "e": "", "w": "two words",
+                   "tags": ["p", "q"], "meta": {"k": 1}, "tilde": "x~"}]}
+    assert decode_tree(encode_tree(data)) == data
+
+
+def test_tree_errors_are_not_guessed():
+    with pytest.raises(CompactError, match=r"lines\[2\] annonce"):
+        decode_tree("orders[1]#: c\n  o0 x\nlines[2]^: item\n  o0 gpu")
+    with pytest.raises(CompactError, match="parent inconnu"):
+        decode_tree("lines[1]^: item\n  o9 gpu")
+    with pytest.raises(CompactError, match="attend 2 valeurs"):
+        decode_tree("orders[1]#: c\n  o0")
+
+
+def test_tree_random_round_trips():
+    rnd = random.Random(41)
+
+    def obj(depth, with_id, i):
+        o = {"id": f"n{depth}_{i}_{rnd.randint(0, 9999)}"} if with_id else {}
+        for k in rnd.sample(["a", "b", "c", "d"], rnd.randint(1, 3)):
+            o[k] = rnd.choice([1, 2.5, "x", "two words", "-", "", None, True, "07", ["l"], {"m": 1}])
+        if depth < 3 and rnd.random() < 0.6:
+            o["kids"] = [obj(depth + 1, rnd.random() < 0.3, j) for j in range(rnd.randint(1, 3))]
+        return o
+    for _ in range(300):
+        with_id = rnd.random() < 0.5
+        data = {"root": [obj(0, with_id, i) for i in range(rnd.randint(1, 4))]}
+        assert decode_tree(encode_tree(data)) == data

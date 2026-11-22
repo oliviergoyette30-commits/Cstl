@@ -233,3 +233,128 @@ if __name__ == "__main__":
     assert encode({"user": {"id": 123, "name": "Ada"}}) == "user:\n  id: 123\n  name: Ada"
     assert decode(encode(users))[0] == users
     print(json.dumps(decode(encode(users))[0]))
+
+
+# ---------------------------------------------------------------- imbrication
+# 2026-11-22 : donnees imbriquees (scripts/nested_benchmark.py), meme
+# specification (v4.4) :
+#   - tableau de primitives : cle[N]: a,b,c
+#   - tableau d'objets aux MEMES cles et aux valeurs toutes primitives : forme
+#     tabulaire cle[N]{c1,c2}: puis une ligne par objet ;
+#   - sinon, forme liste : cle[N]: puis un element par ligne « - » au niveau
+#     suivant ; pour un objet, son premier champ va sur la ligne du tiret et
+#     les suivants un niveau plus loin ;
+#   - objet imbrique : cle: puis ses champs un niveau plus loin.
+
+def _is_prim(v):
+    return v is None or isinstance(v, (str, int, float, bool))
+
+
+def _field_lines(k, v, depth):
+    pad = "  " * depth
+    if isinstance(v, dict):
+        return [f"{pad}{_key(k)}:"] + _object_lines(v, depth + 1)
+    if isinstance(v, list):
+        if not v:
+            return [f"{pad}{_key(k)}: []"]
+        if all(_is_prim(x) for x in v):
+            return [f"{pad}{_key(k)}[{len(v)}]: " + ",".join(_prim(x) for x in v)]
+        if all(isinstance(x, dict) and x for x in v):
+            fields = list(v[0].keys())
+            if all(set(x) == set(fields) and all(_is_prim(y) for y in x.values()) for x in v):
+                return ([f"{pad}{_key(k)}[{len(v)}]{{{','.join(_key(f) for f in fields)}}}:"]
+                        + [f"{pad}  " + ",".join(_prim(x[f]) for f in fields) for x in v])
+        out = [f"{pad}{_key(k)}[{len(v)}]:"]
+        for x in v:
+            out += _item_lines(x, depth + 1)
+        return out
+    return [f"{pad}{_key(k)}: {_prim(v)}"]
+
+
+def _item_lines(x, depth):
+    pad = "  " * depth
+    if not isinstance(x, dict):
+        return [f"{pad}- {_prim(x)}"]
+    items = list(x.items())
+    k0, v0 = items[0]
+    assert _is_prim(v0), "premier champ d'un element de liste : primitive attendue"
+    return [f"{pad}- {_key(k0)}: {_prim(v0)}"] + [ln for k, v in items[1:] for ln in _field_lines(k, v, depth + 1)]
+
+
+def _object_lines(obj, depth):
+    return [ln for k, v in obj.items() for ln in _field_lines(k, v, depth)]
+
+
+def encode_nested(obj):
+    """Objet JSON quelconque (objets, listes, primitives) -> TOON."""
+    return "\n".join(_object_lines(obj, 0))
+
+
+_HEAD = re.compile(r'^("(?:[^"\\]|\\.)*"|[^\s:\[]+)\[(\d+)\](?:\{(.*)\})?:\s*(.*)$')
+_KV = re.compile(r'^("(?:[^"\\]|\\.)*"|[^\s:\[]+):\s*(.*)$')
+
+
+def _unkey(k):
+    return json.loads(k) if k.startswith('"') else k
+
+
+def decode_nested(text):
+    """Inverse de `encode_nested` (meme sous-ensemble de la specification)."""
+    lines = [(len(ln) - len(ln.lstrip(" ")), ln.strip()) for ln in text.splitlines() if ln.strip()]
+    pos = [0]
+
+    def field(obj, depth, content):
+        h = _HEAD.match(content)
+        if h:
+            key, n, fields, rest = _unkey(h.group(1)), int(h.group(2)), h.group(3), h.group(4)
+            if fields is not None:
+                names = [_unkey(f) for f in fields.split(",")]
+                rows = []
+                while pos[0] < len(lines) and lines[pos[0]][0] > depth * 2:
+                    rows.append(dict(zip(names, [_value(c) for c in _split_cells(lines[pos[0]][1])])))
+                    pos[0] += 1
+                obj[key] = rows
+            elif rest:
+                obj[key] = [_value(c) for c in _split_cells(rest)]
+            else:
+                items = []
+                while pos[0] < len(lines) and lines[pos[0]][0] == (depth + 1) * 2 and lines[pos[0]][1].startswith("- "):
+                    first = lines[pos[0]][1][2:]
+                    pos[0] += 1
+                    m = _KV.match(first)
+                    if m and not first.startswith('"') or (m and first.startswith('"') and m.group(2)):
+                        item = {}
+                        field(item, depth + 2, first)
+                        while pos[0] < len(lines) and lines[pos[0]][0] == (depth + 2) * 2 and not lines[pos[0]][1].startswith("- "):
+                            c = lines[pos[0]][1]
+                            pos[0] += 1
+                            field(item, depth + 2, c)
+                        items.append(item)
+                    else:
+                        items.append(_value(_split_cells(first)[0]))
+                if len(items) != n:
+                    raise ToonError(f"{key}[{n}] annonce, {len(items)} elements")
+                obj[key] = items
+            return
+        m = _KV.match(content)
+        if not m:
+            raise ToonError(f"ligne illisible : {content!r}")
+        key, rest = _unkey(m.group(1)), m.group(2)
+        if rest == "[]":
+            obj[key] = []
+        elif rest:
+            obj[key] = _value(_split_cells(rest)[0])
+        else:
+            child = {}
+            while pos[0] < len(lines) and lines[pos[0]][0] == (depth + 1) * 2:
+                c = lines[pos[0]][1]
+                pos[0] += 1
+                field(child, depth + 1, c)
+            obj[key] = child
+
+    root = {}
+    while pos[0] < len(lines):
+        c = lines[pos[0]][1]
+        pos[0] += 1
+        field(root, 0, c)
+    return root

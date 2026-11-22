@@ -330,6 +330,17 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   sans dépendance. Il est testé de bout en bout contre le vrai serveur.
   Reste à faire : A2A, et l'entrée JSON directe sur le serveur.
 
+- **`scripts/nested_benchmark.py` : données imbriquées (2026-11-22).** Trois
+  jeux : commandes → lignes → options, départements → équipes → membres,
+  contrats → sections → clauses. Les tokens sont comptés avec Gemini.
+  - Aplatir l'arbre en relations CSTL coûte plus que le JSON : 21 637 tokens
+    contre 17 577 au mieux. C'est le point faible attendu, et il est
+    confirmé.
+  - Le nouveau mode arbre du CSTL compact (`encode_tree`) bat le JSON de
+    17 % (14 524 tokens) et TOON de 31 %. Il est sans perte, vérifié par
+    300 arbres aléatoires.
+  - La compréhension reste à mesurer.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
