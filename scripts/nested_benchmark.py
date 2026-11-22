@@ -81,7 +81,7 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import toon_lite  # noqa: E402
 import cstl_compact  # noqa: E402
 
-FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau", "cstl_symboles", "cstl_arbre")
+FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau", "cstl_symboles", "cstl_arbre", "cstl_indent")
 KINDS = ("commandes", "organisation", "contrats")
 SIZES = (8, 24)
 SEEDS = (1, 2)
@@ -233,6 +233,8 @@ def render(fmt, data):
         return toon_lite.encode_nested(data)
     if fmt == "cstl_arbre":
         return cstl_compact.encode_tree(data)
+    if fmt == "cstl_indent":
+        return cstl_compact.encode_tree_indented(data)
     rels = flatten(data)
     if fmt == "cstl":
         return rt.render_relations(rels)
@@ -250,6 +252,8 @@ def decode(fmt, text):
         return toon_lite.decode_nested(text)
     if fmt == "cstl_arbre":
         return cstl_compact.decode_tree(text)
+    if fmt == "cstl_indent":
+        return cstl_compact.decode_tree_indented(text)
     rels = rt.relations_in_text(text) if fmt == "cstl" else cstl_compact.decode(text)
     by_subject = {r["subject"]: r for r in rels}
     ordered = [by_subject[r["subject"]] for r in flatten_order(rels)]
@@ -286,6 +290,10 @@ NOTES = {
                    "par element. # = la 1re valeur est l'id propre de l'element ; ^ = la valeur suivante est l'id de son "
                    "parent. Un element sans id propre a pour id <id du parent>.<position parmi ses freres, a partir de "
                    "0> ; « - » = champ absent."),
+    "cstl_indent": ("Format : CSTL compact en arbre indente. En tete, une ligne par liste : « @nom[N]^parent: "
+                    "colonnes » (N elements en tout ; ^parent = liste dont ce sont les enfants). Puis l'arbre : un "
+                    "element par ligne, ses enfants en dessous, indentes de 2 espaces. Les valeurs suivent les colonnes ; "
+                    "un champ facultatif s'ecrit nom=valeur, et seulement s'il existe."),
     "cstl_symboles": ("Format : CSTL compact aplati sans mot-cle. « <type>[N]: col... » puis une ligne par element : "
                       "id de l'element, id du parent (« - » a la racine), puis les colonnes ; « - » = absent."),
 }

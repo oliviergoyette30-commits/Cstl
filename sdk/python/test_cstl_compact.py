@@ -399,3 +399,49 @@ def test_tree_relations_random_round_trips():
     for _ in range(300):
         data = {"root": [obj(0, i) for i in range(rnd.randint(1, 4))]}
         assert relations_to_tree(tree_to_relations(data, "t"), "t") == data
+
+
+# ---- arbres indentes (v2, 2026-11-22) ----
+from cstl_compact import decode_tree_indented, encode_tree_indented  # noqa: E402
+
+
+def test_indented_tree_shape_and_round_trip():
+    data = {"orders": [{"id": "o0", "client": "c5", "lines": [{"item": "gpu", "qty": 5, "options": [{"name": "w", "price": 9}]},
+                                                              {"item": "lic", "qty": 1}]},
+                       {"id": "o1", "client": "c3", "note": "two words", "lines": [{"item": "r", "qty": 3}]}]}
+    text = encode_tree_indented(data)
+    assert text.splitlines()[:3] == ["@orders[2]: id client", "@lines[3]^orders: item qty", "@options[1]^lines: name price"]
+    assert '  o1 c3 note="two words"'.strip() in text and "\n    w 9" in text, text
+    assert decode_tree_indented(text) == data
+
+
+def test_indented_tree_tags_when_a_parent_has_several_lists():
+    data = {"a": [{"x": 1, "b": [{"y": 2}], "c": [{"z": 3}]}], "d": [{}]}
+    text = encode_tree_indented(data)
+    assert "a> 1" in text and "  b> 2" in text and "  c> 3" in text and "d> ." in text, text
+    assert decode_tree_indented(text) == data
+
+
+def test_indented_tree_errors_are_not_guessed():
+    with pytest.raises(CompactError, match=r"lines\[2\] annonce, 1"):
+        decode_tree_indented("@orders[1]: id\n@lines[2]^orders: item\no0\n  gpu")
+    with pytest.raises(CompactError, match="sans parent"):
+        decode_tree_indented("@orders[1]: id\n@lines[1]^orders: item\n    gpu\no0")
+    with pytest.raises(CompactError, match="attend 2 valeurs"):
+        decode_tree_indented("@orders[1]: id client\no0")
+
+
+def test_indented_tree_random_round_trips():
+    rnd = random.Random(61)
+
+    def obj(depth):
+        o = {}
+        for k in rnd.sample(["a", "b", "c", "id"], rnd.randint(0, 3)):
+            o[k] = rnd.choice([1, 2.5, "x", "two words", "-", "", None, True, "07", "k=v", "x>", ".", ["l"], {"m": 1}])
+        if depth < 3 and rnd.random() < 0.6:
+            for key in rnd.sample(["kids", "items"], rnd.randint(1, 2)):
+                o[key] = [obj(depth + 1) for _ in range(rnd.randint(1, 3))]
+        return o
+    for _ in range(300):
+        data = {"root": [obj(0) for _ in range(rnd.randint(1, 4))]}
+        assert decode_tree_indented(encode_tree_indented(data)) == data

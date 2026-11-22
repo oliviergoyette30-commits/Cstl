@@ -914,3 +914,161 @@ def relations_to_tree(rels, tree_id=None):
         else:
             raise CompactError(f"parent inconnu {r['object']!r} pour {r['subject']!r}")
     return root
+
+
+# ------------------------------------------------- arbres indentes (v2)
+# 2026-11-22. Le mode arbre par identifiants (`encode_tree`) etait le plus
+# court, mais Gemma le suivait moins bien que le JSON (32/36 contre 32/33) :
+# il fallait relier chaque element a son parent par id, et un champ absent
+# note « - » etait parfois pris pour une valeur. Ici :
+#   - les colonnes de chaque liste sont declarees UNE fois en tete :
+#       @lines[3]^orders: item qty price
+#     (3 elements en tout, enfants des elements de « orders ») ;
+#   - l'arbre est ecrit par INDENTATION (2 espaces par niveau), sans id : un
+#     element est sous son parent, comme en JSON indente ou en YAML ;
+#   - un champ present dans TOUS les elements de la liste est une colonne ;
+#     les autres s'ecrivent « nom=valeur », seulement s'ils existent ;
+#   - si un parent peut avoir plusieurs listes d'enfants, la ligne commence par
+#     « nom> » ; un element sans aucun champ s'ecrit « . ».
+
+_TREE2_HEAD = re.compile(r"^@([A-Za-z_][A-Za-z0-9_.]*)\[(\d+)\](?:\^([A-Za-z0-9_.,-]+))?:((?:\s+\S+)*)\s*$")
+
+
+def _raw_tokens(line):
+    """Mots d'une ligne, guillemets compris (pour relire « nom=valeur »)."""
+    out, cur, quoted, i = [], [], False, 0
+    while i < len(line):
+        ch = line[i]
+        if quoted:
+            cur.append(ch)
+            if ch == "\\" and i + 1 < len(line):
+                cur.append(line[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                quoted = False
+        elif ch == '"':
+            quoted = True
+            cur.append(ch)
+        elif ch.isspace():
+            if cur:
+                out.append("".join(cur))
+                cur = []
+        else:
+            cur.append(ch)
+        i += 1
+    if quoted:
+        raise CompactError(f"guillemets mal fermes : {line!r}")
+    if cur:
+        out.append("".join(cur))
+    return out
+
+
+def encode_tree_indented(data):
+    """Arbre JSON {liste: [objets]} -> CSTL compact en arbre indente. Sans
+    perte (`decode_tree_indented` redonne exactement `data`)."""
+    if not isinstance(data, dict) or not all(isinstance(v, list) for v in data.values()):
+        raise CompactError("encode_tree_indented attend {nom: [objets]} a la racine")
+    order, parents, counts, dense, kids_of = [], {}, {}, {}, {None: list(data.keys())}
+
+    def shape(key, objs, parent_key):
+        if key not in counts:
+            order.append(key)
+            counts[key], parents[key], dense[key] = 0, [], None
+        if parent_key not in parents[key]:
+            parents[key].append(parent_key)
+        for o in objs:
+            if not isinstance(o, dict):
+                raise CompactError(f"{key} : liste d'objets attendue")
+            counts[key] += 1
+            fields = [k for k in o if (k, o[k]) not in _child_lists(o)]
+            dense[key] = fields if dense[key] is None else [c for c in dense[key] if c in fields]
+            for k, v in _child_lists(o):
+                kids_of.setdefault(key, [])
+                if k not in kids_of[key]:
+                    kids_of[key].append(k)
+                shape(k, v, key)
+
+    for key, objs in data.items():
+        shape(key, objs, None)
+    lines = []
+    for key in order:
+        ps = ",".join(p for p in parents[key] if p is not None)
+        if None in parents[key] and ps:
+            raise CompactError(f"{key} : liste a la fois a la racine et imbriquee")
+        lines.append(f"@{key}[{counts[key]}]{'^' + ps if ps else ''}:" + "".join(f" {c}" for c in dense[key] or []))
+
+    def rows(key, objs, parent_key, depth):
+        tag = f"{key}> " if len(kids_of.get(parent_key, [])) > 1 else ""
+        for o in objs:
+            cells = [_tree_cell(o[c]) for c in dense[key] or []]
+            cells += [f"{k}={_tree_cell(v)}" for k, v in o.items()
+                      if k not in (dense[key] or []) and (k, v) not in _child_lists(o)]
+            lines.append("  " * depth + tag + (" ".join(cells) if cells else "."))
+            for k, v in _child_lists(o):
+                rows(k, v, key, depth + 1)
+
+    for key, objs in data.items():
+        rows(key, objs, None, 0)
+    return "\n".join(lines)
+
+
+def decode_tree_indented(text):
+    """Inverse de `encode_tree_indented`. Leve CompactError si une ligne, un
+    nombre d'elements ou une indentation ne colle pas."""
+    heads, kids_of, root_keys, root = {}, {}, [], {}
+    stack = []          # (profondeur, objet, nom de sa liste)
+    seen = {}
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        if line.startswith("@"):
+            m = _TREE2_HEAD.match(line.strip())
+            if not m:
+                raise CompactError(f"ligne {n} : en-tete illisible : {line!r}")
+            key = m.group(1)
+            heads[key] = {"n": int(m.group(2)), "cols": m.group(4).split()}
+            if m.group(3):
+                for p in m.group(3).split(","):
+                    kids_of.setdefault(p, []).append(key)
+            else:
+                root_keys.append(key)
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent % 2:
+            raise CompactError(f"ligne {n} : indentation impaire")
+        depth = indent // 2
+        while stack and stack[-1][0] >= depth:
+            stack.pop()
+        if depth and (not stack or stack[-1][0] != depth - 1):
+            raise CompactError(f"ligne {n} : element sans parent (indentation)")
+        parent_key = stack[-1][2] if stack else None
+        cands = kids_of.get(parent_key, []) if parent_key else root_keys
+        toks = _raw_tokens(line.strip())
+        if len(cands) > 1:
+            if not toks or not toks[0].endswith(">") or toks[0][:-1] not in cands:
+                raise CompactError(f"ligne {n} : « nom> » attendu parmi {cands}")
+            key = toks.pop(0)[:-1]
+        elif len(cands) == 1:
+            key = cands[0]
+        else:
+            raise CompactError(f"ligne {n} : aucune liste d'enfants declaree ici")
+        cols = heads[key]["cols"]
+        if toks == ["."] and not cols:
+            toks = []
+        if len(toks) < len(cols):
+            raise CompactError(f"ligne {n} : {key} attend {len(cols)} valeurs")
+        obj = {c: _tree_value(_split(t)[0]) for c, t in zip(cols, toks)}
+        for t in toks[len(cols):]:
+            name, sep, raw = t.partition("=")
+            if not sep or not name:
+                raise CompactError(f"ligne {n} : « nom=valeur » attendu : {t!r}")
+            words = _split(raw)
+            obj[name] = _tree_value(words[0]) if words else ""
+        (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
+        seen[key] = seen.get(key, 0) + 1
+        stack.append((depth, obj, key))
+    for key, h in heads.items():
+        if seen.get(key, 0) != h["n"]:
+            raise CompactError(f"{key}[{h['n']}] annonce, {seen.get(key, 0)} element(s) ecrit(s)")
+    return root
