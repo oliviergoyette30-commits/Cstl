@@ -26,6 +26,12 @@ lignes ; les lignes de la section sont indentees, « - » marque une case vide.
   RULES[2] qui modalite action au_dela si sauf_si
     agent_a MUST_NOT wipe_db 100 - audit_open
     role:finance MUST log_transaction - - - "tracabilite"
+Les autres relations (taches, commandes, evenements...) sont regroupees par
+type dans une section generique, dont l'en-tete commence par « subject
+object » puis nomme les autres colonnes (2026-11-22) :
+  ORDER[2] subject object amount status
+    o1 client_3 450 paid
+    o2 client_1 80 -
 Apres les 6 colonnes d'une regle viennent les autres conditions (prefixes
 ci-dessous) et la raison. Un nombre [N] faux est une erreur : c'est ce qui
 permet de reperer une ligne oubliee au lieu de l'accepter en silence.
@@ -67,10 +73,19 @@ def _rule_extras(r, skip):
     for k, v in r.items():
         if k in skip or k == "reason":
             continue
-        parts.append(SHORT[k] + _token(v) if k in SHORT else f"{k}={_token(v)}")
+        parts.append(SHORT[k] + _token(v) if k in SHORT else f"{_key(k)}={_token(v)}")
     if "reason" in r:
         parts.append(_quote(r["reason"]))
     return parts
+
+
+def _key(k):
+    """Nom d'attribut ecrit en ligne (cle=valeur). Corrige le 2026-11-22 : un
+    nom avec un espace n'etait pas mis entre guillemets, et la ligne devenait
+    illisible (trouve par test_generic_random_round_trips)."""
+    if "=" in k:
+        raise CompactError(f"nom d'attribut avec « = » non representable : {k!r}")
+    return _token(k)
 
 
 def _is_role(r):
@@ -93,7 +108,7 @@ def _line(r):
     if _is_rule(r):
         return " ".join([_token(r["subject"]), r["modality"], _token(r["object"])]
                         + _rule_extras(r, ("type", "subject", "object", "modality")))
-    rest = [f"{k}={_token(v)}" for k, v in r.items() if k not in ("type", "subject", "object")]
+    rest = [f"{_key(k)}={_token(v)}" for k, v in r.items() if k not in ("type", "subject", "object")]
     return " ".join(["REL", _token(r.get("type", "")), _token(r.get("subject", "")), _token(r.get("object", ""))] + rest)
 
 
@@ -123,7 +138,25 @@ def encode(relations, table=False):
                      _cell(r.get("if_fact")), _cell(r.get("unless_fact"))]
             extras = _rule_extras(r, ("type", "subject", "object", "modality", "amount_above", "if_fact", "unless_fact"))
             lines.append("  " + " ".join(cells + extras))
-    lines += [_line(r) for r in others]
+    # Section generique (2026-11-22) : les autres relations, regroupees par
+    # type, en tableau. Les noms de colonnes ne s'ecrivent qu'une fois ; « - »
+    # marque une case vide. Une relation sans subject ou object reste en ligne.
+    groups = {}
+    for r in others:
+        if r.get("subject") is None or r.get("object") is None or not GENERIC_TYPE.match(r.get("type", "")) \
+                or r.get("type") in ("ROLES", "FACTS", "RULES") \
+                or not all(GENERIC_TYPE.match(k) for k in r if k not in ("type", "subject", "object")):
+            lines.append(_line(r))
+            continue
+        groups.setdefault(r["type"], []).append(r)
+    for t, rs in groups.items():
+        cols = []
+        for r in rs:
+            cols += [k for k in r if k not in ("type", "subject", "object") and k not in cols]
+        lines.append(f"{t}[{len(rs)}] subject object" + "".join(f" {_token(c)}" for c in cols))
+        lines += ["  " + " ".join([_cell(r["subject"]) if r["subject"] != "" else '""',
+                                   _cell(r["object"]) if r["object"] != "" else '""']
+                                  + [_cell(r.get(c)) if r.get(c) != "" else '""' for c in cols]) for r in rs]
     return "\n".join(lines)
 
 
@@ -167,6 +200,8 @@ def _split(line):
 
 
 SECTION = re.compile(r"^(ROLES|FACTS|RULES)(?:\[(\d+)\])?(?:\s.*)?$")
+GENERIC_TYPE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
+GENERIC = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]*)\[(\d+)\]\s+subject\s+object((?:\s+\S+)*)\s*$")
 
 
 def _empty(word):
@@ -202,7 +237,8 @@ def decode_report(text):
 
     def close():
         if section and section[1] is not None and section[1] != section[2]:
-            problems.append(f"{section[0]}[{section[1]}] annonce, {section[2]} ligne(s) ecrite(s)")
+            name = section[4] if section[0] == "GENERIC" else section[0]
+            problems.append(f"{name}[{section[1]}] annonce, {section[2]} ligne(s) ecrite(s)")
 
     for n, line in enumerate(text.splitlines(), 1):
         words = _split(line)
@@ -221,6 +257,16 @@ def decode_report(text):
                 if len(toks) != 2 or toks[1] not in ("true", "false"):
                     raise CompactError(f"ligne {n} : FACTS attend <fait> true|false")
                 out.append({"type": "STATE", "subject": toks[0], "object": toks[1]})
+            elif kind == "GENERIC":
+                cols = section[3]
+                if len(words) != len(cols) + 2:
+                    raise CompactError(f"ligne {n} : {section[4]} attend {len(cols) + 2} valeurs, {len(words)} lues : {line!r}")
+                r = {"type": section[4], "subject": toks[0], "object": toks[1]}
+                for c, w in zip(cols, words[2:]):
+                    v = _empty(w)
+                    if v is not None:
+                        r[c] = v
+                out.append(r)
             else:
                 if len(toks) < 6 or toks[1] not in MODALITIES:
                     raise CompactError(f"ligne {n} : RULES attend <qui> <modalite> <action> <au_dela> <si> <sauf_si> : {line!r}")
@@ -235,6 +281,12 @@ def decode_report(text):
         if m:
             close()
             section = [m.group(1), int(m.group(2)) if m.group(2) else None, 0]
+            continue
+        g = GENERIC.match(line.strip()) if not indented else None
+        if g:
+            close()
+            cols = [w for w, _ in _split(g.group(3))] if g.group(3).strip() else []
+            section = ["GENERIC", int(g.group(2)), 0, cols, g.group(1)]
             continue
         close()
         section = None

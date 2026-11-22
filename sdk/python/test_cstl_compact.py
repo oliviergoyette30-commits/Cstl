@@ -88,12 +88,25 @@ def test_policy_view():
 
 
 # ---- mode tableau (en-tetes de colonnes) ----
-from cstl_compact import decode_report, _is_fact, _is_role, _is_rule  # noqa: E402
+from cstl_compact import GENERIC_TYPE, decode_report, _is_fact, _is_role, _is_rule  # noqa: E402
+
+
+def _generic_ok(r):
+    return (r.get("subject") is not None and r.get("object") is not None and GENERIC_TYPE.match(r.get("type", ""))
+            and r["type"] not in ("ROLES", "FACTS", "RULES")
+            and all(GENERIC_TYPE.match(k) for k in r if k not in ("type", "subject", "object")))
 
 
 def _grouped(rels):
+    """Ordre du mode tableau : roles, faits, regles, relations restees en
+    ligne, puis les sections generiques par type (ordre d'apparition)."""
     other = [r for r in rels if not (_is_role(r) or _is_fact(r) or _is_rule(r))]
-    return [r for r in rels if _is_role(r)] + [r for r in rels if _is_fact(r)] + [r for r in rels if _is_rule(r)] + other
+    by_type = {}
+    for r in other:
+        if _generic_ok(r):
+            by_type.setdefault(r["type"], []).append(r)
+    return ([r for r in rels if _is_role(r)] + [r for r in rels if _is_fact(r)] + [r for r in rels if _is_rule(r)]
+            + [r for r in other if not _generic_ok(r)] + [r for rs in by_type.values() for r in rs])
 
 
 def test_table_round_trip_keeps_everything():
@@ -152,4 +165,36 @@ def test_table_random_round_trips():
                                        rnd.randint(0, 4)):
                     r[attr] = rnd.choice(["10", "f", "deux mots", 'avec "guillemets"', "x#y", "-"])
                 rels.append(r)
+        assert decode(encode(rels, table=True)) == _grouped(rels)
+
+
+# ---- sections generiques (2026-11-22) ----
+def test_generic_section_round_trip_and_shape():
+    rels = [{"type": "ORDER", "subject": "o1", "object": "client_3", "amount": "450", "status": "paid"},
+            {"type": "ORDER", "subject": "o2", "object": "client_1", "amount": "80"},
+            {"type": "EVENT", "subject": "agent_a", "object": "error", "code": "E500", "note": "-"},
+            {"type": "ORDER", "subject": "o3", "object": "", "amount": "", "status": "deux mots"}]
+    text = encode(rels, table=True)
+    assert text.splitlines()[0] == "ORDER[3] subject object amount status"
+    assert text.splitlines()[2] == "  o2 client_1 80 -"
+    assert decode(text) == _grouped(rels)
+
+
+def test_generic_section_wrong_width_or_count_is_refused():
+    with pytest.raises(CompactError, match="attend 4 valeurs"):
+        decode("ORDER[1] subject object amount status\n  o1 client 5")
+    with pytest.raises(CompactError, match=r"ORDER\[2\] annonce, 1 ligne"):
+        decode("ORDER[2] subject object amount\n  o1 client 5")
+
+
+def test_generic_random_round_trips():
+    rnd = random.Random(23)
+    for _ in range(300):
+        rels = []
+        for _ in range(rnd.randint(1, 10)):
+            r = {"type": rnd.choice(["ORDER", "EVENT", "TASK", "x.y"]), "subject": rnd.choice(["a", "b c", "-", ""]),
+                 "object": rnd.choice(["o", "role:z", "#x"])}
+            for k in rnd.sample(["amount", "status", "due", "weird key", "ms"], rnd.randint(0, 4)):
+                r[k] = rnd.choice(["1", "", "-", "deux mots", 'q"uote', "x#y"])
+            rels.append(r)
         assert decode(encode(rels, table=True)) == _grouped(rels)

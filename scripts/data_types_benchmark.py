@@ -77,7 +77,7 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import toon_lite  # noqa: E402
 import cstl_compact  # noqa: E402
 
-FORMATS = ("json", "toon", "cstl", "cstl_compact")
+FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau")
 TYPES = ("taches", "faits", "commandes", "evenements", "negociation")
 SIZES = (20, 60)
 SEEDS = (1, 2)
@@ -89,6 +89,8 @@ NOTES = {
              "champs ; null = champ absent."),
     "cstl": ("Format : CSTL. Une ligne RELATION [type=..., subject=..., object=..., cle=valeur, ...] par element."),
     "cstl_compact": ("Format : CSTL compact. Une ligne « REL <type> <subject> <object> cle=valeur ... » par element."),
+    "cstl_tableau": ("Format : CSTL compact en tableau. « <TYPE>[N] subject object col1 col2 ... » puis une ligne par "
+                     "element, valeurs dans l'ordre des colonnes ; « - » = champ absent."),
 }
 
 
@@ -230,6 +232,8 @@ def render(fmt, kind, recs, rtype, subj, obj):
             fields += [k for k in r if k not in fields]
         return toon_lite.encode({kind: [{f: r.get(f) for f in fields} for r in clean]})
     rels = to_relations(recs, rtype, subj, obj)
+    if fmt == "cstl_tableau":
+        return cstl_compact.encode(rels, table=True)
     return rt.render_relations(rels) if fmt == "cstl" else cstl_compact.encode(rels)
 
 
@@ -306,12 +310,15 @@ def summarize(rows, kind=None):
 
 
 def main():
+    global FORMATS
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--stub", action="store_true")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--formats", default=",".join(FORMATS), help="formats a jouer, separes par des virgules")
     args = ap.parse_args()
+    FORMATS = tuple(f for f in args.formats.split(",") if f)
     if args.stub:
         model = StubBrain()
     else:
