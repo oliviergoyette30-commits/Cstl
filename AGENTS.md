@@ -196,6 +196,24 @@ them. Nothing is guessed: an unreadable line, a wrong row count or a badly
 typed value raises `cstl_compact.CompactError`. Format and tests:
 `sdk/python/cstl_compact.py`, `sdk/python/test_cstl_compact.py`.
 
+**From any MCP client.** `sdk/python/cstl_mcp_server.py` is an MCP server
+(stdio, JSON-RPC, no dependency beyond the SDK). An agent that speaks MCP
+(Claude Desktop, Claude Code, other clients) uses CSTL through tools,
+without learning the format: `cstl_policy` (its effective policy),
+`cstl_authorize` (ask before acting; returns the decision and the signed
+token), `cstl_send_compact`, `cstl_send_relations` and
+`cstl_compact_guide`. Set `CSTL_AGENT` (the agent's name; its key is
+created in `~/.cstl/`), and `CSTL_HOST` / `CSTL_PORT`. Client config:
+
+```json
+{"mcpServers": {"cstl": {"command": "python3",
+  "args": ["/path/to/Cstl/sdk/python/cstl_mcp_server.py"],
+  "env": {"CSTL_AGENT": "agent_support", "CSTL_PORT": "5050"}}}}
+```
+
+Live test: `test_mcp_server_exposes_policy_and_authorization` in
+`sdk/python/test_action_authorization_live.py`.
+
 **Conditions the server enforces.** A rule can carry extra attributes,
 which layer 9 checks itself (not just their text):
 

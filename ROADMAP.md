@@ -323,6 +323,13 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     donc 43 %, 16 % et 26 % de moins.
   - Le JSON compact fait 15 064, 32 358 et 30 968 tokens.
 
+- **Point 1, premier pas : serveur MCP (`sdk/python/cstl_mcp_server.py`,
+  2026-11-22).** N'importe quel agent qui parle MCP lit sa politique,
+  demande une autorisation et reçoit un jeton signé, ou envoie des
+  relations, sans apprendre CSTL. Le serveur passe par stdio en JSON-RPC,
+  sans dépendance. Il est testé de bout en bout contre le vrai serveur.
+  Reste à faire : A2A, et l'entrée JSON directe sur le serveur.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

@@ -334,6 +334,53 @@ def test_agents_can_write_and_read_policy_without_keywords(authority_server, mon
         owner.send_compact("server", f"{bot.name} !refund_order >cent")
 
 
+def test_mcp_server_exposes_policy_and_authorization(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un agent qui parle MCP utilise CSTL sans l'apprendre. Le
+    serveur MCP (stdio, JSON-RPC) lit la politique, demande l'autorisation et
+    envoie des relations ; c'est le vrai serveur CSTL qui decide."""
+    import json as _json
+    import subprocess
+    m, owner = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    bot_name = f"mcp_{uuid.uuid4().hex[:8]}"
+    env = {**os.environ, "HOME": str(tmp_path), "CSTL_AGENT": bot_name, "CSTL_PORT": "5555"}
+    proc = subprocess.Popen([sys.executable, str(Path(__file__).parent / "cstl_mcp_server.py")], env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def rpc(i, method, params=None):
+        proc.stdin.write(_json.dumps({"jsonrpc": "2.0", "id": i, "method": method, "params": params or {}}) + "\n")
+        proc.stdin.flush()
+        return _json.loads(proc.stdout.readline())
+
+    def tool(i, name, **args):
+        r = rpc(i, "tools/call", {"name": name, "arguments": args})["result"]
+        return r["isError"], r["content"][0]["text"]
+
+    try:
+        assert rpc(1, "initialize", {"protocolVersion": "2025-06-18"})["result"]["serverInfo"]["name"] == "cstl"
+        proc.stdin.write(_json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        names = {t["name"] for t in rpc(2, "tools/list")["result"]["tools"]}
+        assert {"cstl_policy", "cstl_authorize", "cstl_send_compact"} <= names
+        err, guide = tool(3, "cstl_compact_guide")
+        assert not err and "!<action>" in guide
+        err, _ = tool(4, "cstl_policy")            # enregistre l'agent
+        assert not err
+        owner.send_compact("server", f"{bot_name} !wipe_db\n{bot_name} ?refund_order <=100")
+        err, text = tool(5, "cstl_policy", format="symboles")
+        assert not err and "!wipe_db" in text and "?refund_order <=100" in text, text
+        err, text = tool(6, "cstl_authorize", action="wipe_db")
+        assert not err and _json.loads(text)["allowed"] is False, text
+        err, text = tool(7, "cstl_authorize", action="refund_order", amount=80)
+        decision = _json.loads(text)
+        assert decision["allowed"] is True and decision["token"]["authorization"], text
+        err, text = tool(8, "cstl_send_compact", text=f"{bot_name} !refund_order >cent")
+        assert err and "CompactError" in text, text
+        assert rpc(9, "nope")["error"]["code"] == -32601
+    finally:
+        proc.stdin.close()
+        proc.wait(timeout=10)
+
+
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
     m, bot = agent(monkeypatch, tmp_path, 5555)
     owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)

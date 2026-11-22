@@ -455,6 +455,12 @@ class CstlAgent:
             self.llm = AnthropicAgentBrain.from_env()
             if not self.llm:
                 raise ImportError("Anthropic unavailable: pip3 install anthropic && export ANTHROPIC_API_KEY")
+        elif provider_name == "none":
+            # Sans modele (2026-11-22) : pour un usage purement programmatique,
+            # par exemple le serveur MCP (cstl_mcp_server.py), ou le modele est
+            # cote client MCP. Les methodes qui demandent un modele (tell...)
+            # ne sont alors pas utilisables.
+            self.llm = None
         elif provider_name == "gemini":
             self.llm = GeminiAgentBrain.from_env()
             if not self.llm:
