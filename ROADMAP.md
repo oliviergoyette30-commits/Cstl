@@ -299,8 +299,21 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     `if_fact_now` / `unless_fact_now` = `true`, `false` ou `unknown`.
   - Tests : test unitaire `unknown_facts_are_treated_with_prudence`, et test
     de bout en bout `test_unknown_fact_keeps_a_prohibition`.
-  - Encore à faire (même évaluation) : le typage des colonnes, puis des
-    exceptions et priorités explicites entre règles.
+- **Priorités et exceptions (couche 9, 2026-11-22).**
+  - Avec `CSTL_POLICY_AUTHORS`, les règles sont classées par `priority`,
+    puis par date. Une exception prioritaire l'emporte sur une règle
+    générale, même plus récente, dans sa plage de montants.
+  - En mode `Anyone`, la priorité est ignorée : sinon, n'importe quel agent
+    pourrait lever une interdiction avec une priorité élevée.
+- **Typage (2026-11-22).**
+  - Sur le serveur : `RELATION [type=SCHEMA, subject=<type>,
+    champ=num|int|date|bool|str]`. Une relation mal typée fait refuser tout
+    le message (`schema_rejected`). Seuls comptent les schémas d'un auteur
+    de politique.
+  - Dans le CSTL compact : des colonnes typées (`amount:num`), reprises des
+    déclarations `SCHEMA` ou données à l'encodeur, et vérifiées à l'encodage
+    comme au décodage. Les conditions des règles sont typées aussi :
+    montants, dates, durée et priorité.
 
 ## Déjà fait (PR #3 à #11)
 

@@ -24,6 +24,16 @@ FULL = [
 ]
 
 
+def _value(rnd, attr, extra=()):
+    """Valeur aleatoire : valide si l'attribut est type (montant, priorite...),
+    sinon n'importe quelle chaine, y compris bizarre."""
+    typed = {"num": ["10", "-3", "2.5"], "int": ["7", "-2"], "date": ["2026-11-22", "2026-01-01T10:00:00Z"]}
+    from cstl_compact import CONDITION_TYPES
+    if attr in CONDITION_TYPES:
+        return rnd.choice(typed[CONDITION_TYPES[attr]])
+    return rnd.choice(["10", "f", "deux mots", 'avec "guillemets"', "x#y", *extra])
+
+
 def test_round_trip_keeps_everything():
     assert decode(encode(FULL)) == FULL
 
@@ -68,7 +78,7 @@ def test_random_round_trips():
                  "modality": rnd.choice(["MUST", "MUST_NOT", "MAY"])}
             for attr in rnd.sample(["amount_above", "amount_at_most", "if_fact", "unless_fact", "total_above", "reason"],
                                    rnd.randint(0, 3)):
-                r[attr] = rnd.choice(["10", "f", "deux mots", 'avec "guillemets"', "x#y"])
+                r[attr] = _value(rnd, attr)
             if r.get("reason") is None:
                 r.pop("reason", None)
             rels.append(r)
@@ -163,7 +173,7 @@ def test_table_random_round_trips():
                      "modality": rnd.choice(["MUST", "MUST_NOT", "MAY"])}
                 for attr in rnd.sample(["amount_above", "amount_at_most", "if_fact", "unless_fact", "total_above", "reason"],
                                        rnd.randint(0, 4)):
-                    r[attr] = rnd.choice(["10", "f", "deux mots", 'avec "guillemets"', "x#y", "-"])
+                    r[attr] = _value(rnd, attr, extra=["-"])
                 rels.append(r)
         assert decode(encode(rels, table=True)) == _grouped(rels)
 
@@ -247,7 +257,7 @@ def test_symbols_random_round_trips():
                      "modality": rnd.choice(["MUST", "MUST_NOT", "MAY", "REQUIRE"])}
                 for attr in rnd.sample(["amount_above", "amount_at_most", "if_fact", "unless_fact", "total_above", "reason"],
                                        rnd.randint(0, 4)):
-                    r[attr] = rnd.choice(["10", "f", "deux mots", 'q"t', "-x", "+y"])
+                    r[attr] = _value(rnd, attr, extra=['q"t', "-x", "+y"])
                 rels.append(r)
             else:
                 r = {"type": rnd.choice(["ORDER", "EVENT"]), "subject": rnd.choice(["o1", "-", "", "a b"]), "object": rnd.choice(["c", "@d", "e=1"])}
@@ -255,3 +265,32 @@ def test_symbols_random_round_trips():
                     r[col] = rnd.choice(["1", "", "-", "deux mots", "x#y"])
                 rels.append(r)
         assert sorted(map(_key, decode(encode_symbols(rels)))) == sorted(map(_key, rels)), rels
+
+
+# ---- typage (2026-11-22) ----
+def test_typed_columns_are_written_and_checked():
+    rels = [{"type": "SCHEMA", "subject": "order_r", "object": "v1", "amount": "num", "date": "date"},
+            {"type": "order_r", "subject": "o1", "object": "c3", "amount": "450", "date": "2026-11-04", "status": "paid"},
+            {"type": "order_r", "subject": "o2", "object": "c1", "amount": "80"}]
+    text = encode_symbols(rels)
+    assert "order_r[2]: amount:num date:date status" in text
+    assert sorted(map(_key, decode(text))) == sorted(map(_key, rels))
+    assert "order_r[2] subject object amount:num date:date status" in encode(rels, table=True)
+    with pytest.raises(CompactError, match="order_r.amount='beaucoup'"):
+        decode("order_r[1]: amount:num\n  o1 c3 beaucoup")
+    with pytest.raises(CompactError, match="type inconnu 'money'"):
+        decode("order_r[1]: amount:money\n  o1 c3 5")
+    with pytest.raises(CompactError, match="n'est pas de type num"):
+        encode_symbols([{"type": "order_r", "subject": "o1", "object": "c", "amount": "x"}], types={"order_r": {"amount": "num"}})
+
+
+def test_rule_conditions_are_typed():
+    with pytest.raises(CompactError, match="amount_above='cent'"):
+        decode("agent_a !refund >cent")
+    with pytest.raises(CompactError, match="valid_until='hier'"):
+        decode("agent_a MUST_NOT refund until:hier")
+    with pytest.raises(CompactError, match="priority"):
+        decode("agent_a ?refund priority=haute")
+    with pytest.raises(CompactError):
+        encode([{"type": "PERFORM", "subject": "a", "object": "b", "modality": "MUST_NOT", "amount_above": "beaucoup"}])
+    assert decode("agent_a ?refund <=50 priority=10 until:2026-12-31")[0]["priority"] == "10"

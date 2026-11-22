@@ -15,6 +15,7 @@ pub mod quorum;
 pub mod quorum_wire;
 pub mod action_authorization;
 pub mod server_key;
+pub mod schema;
 pub mod witness;
 pub mod arbitrage;
 pub mod castle;

@@ -135,6 +135,13 @@ pub struct Conditions {
     pub total_window_secs: Option<u64>,
     pub if_fact: Option<String>,
     pub unless_fact: Option<String>,
+    /// Priorite explicite (2026-11-22), entier de -1000 a 1000, 0 par defaut.
+    /// En mode `Only` (auteurs de politique), les regles sont classees d'abord
+    /// par priorite, puis par date : une exception (« MAY ... priority=10 »)
+    /// l'emporte sur une interdiction generale de priorite 0, meme plus
+    /// recente. En mode `Anyone`, elle est IGNOREE : n'importe quel agent
+    /// pourrait sinon lever une interdiction avec une priorite elevee.
+    pub priority: Option<i64>,
     /// Attributs de condition illisibles (nom=valeur).
     pub invalid: Vec<String>,
 }
@@ -163,8 +170,8 @@ pub fn parse_amount(v: &str) -> Option<f64> {
 }
 
 impl Conditions {
-    pub const KEYS: [&'static str; 9] = ["valid_from", "valid_until", "amount_above", "amount_at_most",
-        "total_above", "total_at_most", "total_window_secs", "if_fact", "unless_fact"];
+    pub const KEYS: [&'static str; 10] = ["valid_from", "valid_until", "amount_above", "amount_at_most",
+        "total_above", "total_at_most", "total_window_secs", "if_fact", "unless_fact", "priority"];
 
     pub fn from_attrs(attrs: &std::collections::HashMap<String, String>) -> Self {
         let mut c = Conditions::default();
@@ -181,6 +188,7 @@ impl Conditions {
                 "if_fact" if is_valid_action(v) => c.if_fact = Some(v.clone()),
                 "unless_fact" if is_valid_action(v) => c.unless_fact = Some(v.clone()),
                 "if_fact" | "unless_fact" => bad(&mut c),
+                "priority" => match v.trim().parse::<i64>() { Ok(p) if (-1000..=1000).contains(&p) => c.priority = Some(p), _ => bad(&mut c) },
                 _ => {}
             }
         }
@@ -209,6 +217,7 @@ impl Conditions {
         if let Some(a) = self.total_above { out.push(("total_above", a.to_string())); }
         if let Some(a) = self.total_at_most { out.push(("total_at_most", a.to_string())); }
         if let Some(w) = self.total_window_secs { out.push(("total_window_secs", w.to_string())); }
+        if let Some(p) = self.priority { out.push(("priority", p.to_string())); }
         if let Some(f) = &self.if_fact { out.push(("if_fact", f.clone())); }
         if let Some(f) = &self.unless_fact { out.push(("unless_fact", f.clone())); }
         if !self.invalid.is_empty() { out.push(("invalid_conditions", self.invalid.len().to_string())); }
@@ -428,7 +437,12 @@ pub fn effective_policy(sender: &str, rules: &[Rule], authors: &PolicyAuthors, c
                 relevant.iter().copied().filter(|r| r.authorized).collect()
             }
         };
-        let in_force: Vec<&Rule> = counted.into_iter().filter(|r| r.in_force(ctx)).collect();
+        let mut in_force: Vec<&Rule> = counted.into_iter().filter(|r| r.in_force(ctx)).collect();
+        if matches!(authors, PolicyAuthors::Only(_)) {
+            // Priorite d'abord, date ensuite (tri stable : a priorite egale,
+            // l'ordre d'affirmation est garde).
+            in_force.sort_by_key(|r| r.conditions.priority.unwrap_or(0));
+        }
         match authors {
             PolicyAuthors::Anyone => {
                 let (by_amount, plain): (Vec<&Rule>, Vec<&Rule>) = in_force.into_iter().partition(|r| r.conditions.has_amount());
@@ -582,6 +596,9 @@ pub fn decide(
             }
         }
         PolicyAuthors::Only(_) => {
+            // Priorite d'abord, date ensuite (tri stable).
+            let mut applicable = applicable;
+            applicable.sort_by_key(|r| r.conditions.priority.unwrap_or(0));
             let Some(latest) = applicable.last() else { return fallback(false) };
             let superseded = applicable.iter().any(|r| r.forbids() != latest.forbids());
             Decision::from_rule(latest.modality.clone(), false, superseded, ignored, not_applicable)
@@ -746,6 +763,31 @@ mod tests {
         let mut incident = now();
         incident.facts.insert("incident_open".into());
         assert!(decide("bot", Some("rotate_keys"), true, true, &h, DefaultPolicy::Deny, &ANY, &incident).allowed);
+    }
+
+    #[test]
+    fn priority_orders_rules_before_recency_for_policy_authors_only() {
+        let only = PolicyAuthors::Only(vec!["owner".into()]);
+        let auth = |r: Rule| Rule { author: Some("owner".into()), ..r };
+        // Exception explicite : permis malgre une interdiction generale PLUS RECENTE.
+        let h = vec![auth(with(rel("bot", "refund", "MAY"), &[("priority", "10")])), auth(rel("bot", "refund", "MUST_NOT"))];
+        assert!(decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &now()).allowed);
+        let p = effective_policy("bot", &h, &only, &now());
+        assert!(p.forbidden.is_empty() && p.permitted.len() == 1, "{p:?}");
+        // Sans priorite, la plus recente l'emporte (comportement inchange).
+        let h = vec![auth(rel("bot", "refund", "MAY")), auth(rel("bot", "refund", "MUST_NOT"))];
+        assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &now()).allowed);
+        // Une exception a montant : prioritaire seulement dans sa plage.
+        let h = vec![auth(rel("bot", "refund", "MUST_NOT")),
+                     auth(with(rel("bot", "refund", "MAY"), &[("priority", "5"), ("amount_at_most", "50")]))];
+        assert!(decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &RequestContext { amount: Some(40.0), ..now() }).allowed);
+        assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Deny, &only, &RequestContext { amount: Some(400.0), ..now() }).allowed);
+        // Mode Anyone : la priorite est ignoree, l'interdiction l'emporte.
+        let h = vec![with(rel("bot", "refund", "MAY"), &[("priority", "1000")]), rel("bot", "refund", "MUST_NOT")];
+        assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Allow, &ANY, &now()).allowed);
+        // Priorite illisible ou hors bornes : condition invalide (prudence).
+        let h = vec![auth(with(rel("bot", "x", "MAY"), &[("priority", "5000")]))];
+        assert!(!decide("bot", Some("x"), true, true, &h, DefaultPolicy::Deny, &only, &now()).allowed);
     }
 
     #[test]

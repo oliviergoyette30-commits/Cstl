@@ -1706,6 +1706,12 @@ impl AdnStore {
         )
     }
 
+    /// Declarations de schema (`RELATION [type=SCHEMA, subject=<type>, ...]`),
+    /// avec leur auteur, dans l'ordre (2026-11-22, voir server/schema.rs).
+    pub fn schemas_with_authors(&self) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        self.authored_relations("modality IS NULL AND predicate = 'SCHEMA'", &[])
+    }
+
     fn authored_relations(&self, where_sql: &str, args: &[&str]) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         type Row = (String, String, String, String, Option<String>, Option<String>);
         let rows: Vec<Row> = {

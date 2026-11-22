@@ -61,6 +61,86 @@ class CompactError(ValueError):
     pass
 
 
+# ---- typage (2026-11-22), memes types que le serveur (src/server/schema.rs) ----
+TYPES = ("num", "int", "date", "bool", "str")
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$")
+
+
+def check_value(ty, v):
+    """La valeur (chaine) est-elle du type `ty` ?"""
+    v = str(v).strip()
+    if ty == "num":
+        try:
+            f = float(v)
+            return f == f and f not in (float("inf"), float("-inf"))
+        except ValueError:
+            return False
+    if ty == "int":
+        return re.fullmatch(r"[+-]?\d+", v) is not None
+    if ty == "date":
+        if not _DATE.match(v):
+            return False
+        import datetime
+        try:
+            datetime.date.fromisoformat(v[:10])
+            return True
+        except ValueError:
+            return False
+    if ty == "bool":
+        return v in ("true", "false", "1", "0")
+    return ty == "str"
+
+
+# Conditions de regle dont la valeur a un type impose (verifie au decodage,
+# comme le fait le serveur : un montant « beaucoup » est refuse, pas devine).
+CONDITION_TYPES = {"amount_above": "num", "amount_at_most": "num", "total_above": "num", "total_at_most": "num",
+                   "total_window_secs": "int", "valid_from": "date", "valid_until": "date", "priority": "int"}
+
+
+def _check_rule(r, n):
+    for attr, ty in CONDITION_TYPES.items():
+        if attr in r and not check_value(ty, r[attr]):
+            raise CompactError(f"ligne {n} : {attr}={r[attr]!r} n'est pas de type {ty}")
+    return r
+
+
+def _check_typed(rels, types):
+    """Refuse a l'encodage ce que le decodage refuserait : on n'ecrit jamais un
+    message illisible."""
+    for i, r in enumerate(rels, 1):
+        if r.get("type") == "PERFORM":
+            _check_rule(r, i)
+        for col, ty in (types.get(r.get("type")) or {}).items():
+            if col in r and r[col] != "" and not check_value(ty, r[col]):
+                raise CompactError(f"relation {i} : {r['type']}.{col}={r[col]!r} n'est pas de type {ty}")
+
+
+def _schema_types(rels):
+    """Types declares par les relations SCHEMA du message : {type: {col: ty}}."""
+    out = {}
+    for r in rels:
+        if r.get("type") == "SCHEMA" and r.get("subject"):
+            out[r["subject"]] = {k: v for k, v in r.items() if k not in ("type", "subject", "object") and v in TYPES}
+    return out
+
+
+def _col(c, types):
+    ty = (types or {}).get(c)
+    return f"{c}:{ty}" if ty and ty != "str" else c
+
+
+def _parse_cols(names, n):
+    cols, types = [], {}
+    for raw in names:
+        name, sep, ty = raw.partition(":")
+        if sep:
+            if ty not in TYPES:
+                raise CompactError(f"ligne {n} : type inconnu {ty!r} pour la colonne {name} (types : {', '.join(TYPES)})")
+            types[name] = ty
+        cols.append(name)
+    return cols, types
+
+
 def _quote(text):
     return '"' + str(text).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -118,10 +198,15 @@ def _cell(value):
     return "-" if value in (None, "") else (_quote(value) if str(value) == "-" else _token(value))
 
 
-def encode(relations, table=False):
+def encode(relations, table=False, types=None):
     """Relations (dicts, comme pour CstlAgent.send_relations) -> texte compact.
-    `table=True` : mode tableau (en-tetes de colonnes, voir la doc du module)."""
+    `table=True` : mode tableau (en-tetes de colonnes, voir la doc du module).
+    `types` : {type de relation: {colonne: num|int|date|bool|str}}, ecrits dans
+    les en-tetes (`amount:num`) et verifies au decodage ; les declarations
+    SCHEMA presentes dans `relations` sont reprises automatiquement."""
     rels = [{k: str(v) for k, v in r.items()} for r in relations]
+    types = {**_schema_types(rels), **(types or {})}
+    _check_typed(rels, types)
     if not table:
         return "\n".join(_line(r) for r in rels)
     roles, facts, rules = [r for r in rels if _is_role(r)], [r for r in rels if _is_fact(r)], [r for r in rels if _is_rule(r)]
@@ -155,7 +240,7 @@ def encode(relations, table=False):
         cols = []
         for r in rs:
             cols += [k for k in r if k not in ("type", "subject", "object") and k not in cols]
-        lines.append(f"{t}[{len(rs)}] subject object" + "".join(f" {_token(c)}" for c in cols))
+        lines.append(f"{t}[{len(rs)}] subject object" + "".join(f" {_col(c, types.get(t))}" for c in cols))
         lines += ["  " + " ".join([_cell(r["subject"]) if r["subject"] != "" else '""',
                                    _cell(r["object"]) if r["object"] != "" else '""']
                                   + [_cell(r.get(c)) if r.get(c) != "" else '""' for c in cols]) for r in rs]
@@ -189,7 +274,7 @@ def _sym_line(r):
     return None
 
 
-def encode_symbols(relations):
+def encode_symbols(relations, types=None):
     """CSTL compact SANS MOT-CLE (2026-11-22). Politiques, une ligne chacune :
       agent_a @finance                         role
       kyc_done=1  /  kyc_done=0                fait vrai / faux
@@ -203,6 +288,8 @@ def encode_symbols(relations):
     Ce qui ne s'y prete pas (noms avec espaces, autres modalites...) reste en
     CSTL compact ordinaire, que `decode` lit aussi."""
     rels = [{k: str(v) for k, v in r.items()} for r in relations]
+    types = {**_schema_types(rels), **(types or {})}
+    _check_typed(rels, types)
     lines, groups = [], {}
     for r in rels:
         sym = _sym_line(r) if (_is_role(r) or _is_fact(r) or _is_rule(r)) else None
@@ -216,7 +303,7 @@ def encode_symbols(relations):
         cols = []
         for r in rs:
             cols += [k for k in r if k not in ("type", "subject", "object") and k not in cols]
-        lines.append(f"{t}[{len(rs)}]:" + "".join(f" {c}" for c in cols))
+        lines.append(f"{t}[{len(rs)}]:" + "".join(f" {_col(c, types.get(t))}" for c in cols))
         lines += ["  " + " ".join([_cell(r["subject"]) if r["subject"] != "" else '""',
                                    _cell(r["object"]) if r["object"] != "" else '""']
                                   + [_cell(r.get(c)) if r.get(c) != "" else '""' for c in cols]) for r in rs]
@@ -334,6 +421,9 @@ def decode_report(text):
                 for c, w in zip(cols, words[2:]):
                     v = _empty(w)
                     if v is not None:
+                        ty = section[5].get(c)
+                        if ty and not check_value(ty, v):
+                            raise CompactError(f"ligne {n} : {section[4]}.{c}={v!r} n'est pas de type {ty}")
                         r[c] = v
                 out.append(r)
             else:
@@ -344,7 +434,7 @@ def decode_report(text):
                     v = _empty(w)
                     if v is not None:
                         r[attr] = v
-                out.append(_rule_from(toks[6:], words[6:], n, line, r))
+                out.append(_check_rule(_rule_from(toks[6:], words[6:], n, line, r), n))
             continue
         m = SECTION.match(line.strip()) if not indented else None
         if m:
@@ -354,14 +444,14 @@ def decode_report(text):
         hs = HEADER_SYM.match(line.strip()) if not indented else None
         if hs:
             close()
-            cols = hs.group(3).split()
-            section = ["GENERIC", int(hs.group(2)), 0, cols, hs.group(1)]
+            cols, ctypes = _parse_cols(hs.group(3).split(), n)
+            section = ["GENERIC", int(hs.group(2)), 0, cols, hs.group(1), ctypes]
             continue
         g = GENERIC.match(line.strip()) if not indented else None
         if g:
             close()
-            cols = [w for w, _ in _split(g.group(3))] if g.group(3).strip() else []
-            section = ["GENERIC", int(g.group(2)), 0, cols, g.group(1)]
+            cols, ctypes = _parse_cols([w for w, _ in _split(g.group(3))] if g.group(3).strip() else [], n)
+            section = ["GENERIC", int(g.group(2)), 0, cols, g.group(1), ctypes]
             continue
         close()
         section = None
@@ -391,7 +481,7 @@ def decode_report(text):
             if len(toks) < 3 or toks[1] not in MODALITIES:
                 raise CompactError(f"ligne {n} : <subject> <MODALITE> <action> attendu : {line!r}")
             base = {"type": "PERFORM", "subject": toks[0], "object": toks[2], "modality": toks[1]}
-            out.append(_rule_from(toks[3:], words[3:], n, line, base))
+            out.append(_check_rule(_rule_from(toks[3:], words[3:], n, line, base), n))
     close()
     return out, problems
 
@@ -415,7 +505,7 @@ def _decode_symbol_line(toks, words, n, line):
             else:
                 keep.append(t)
                 keep_words.append(w)
-        return _rule_from(keep, keep_words, n, line, r)
+        return _check_rule(_rule_from(keep, keep_words, n, line, r), n)
     return None
 
 
