@@ -284,6 +284,48 @@ class ClaudeBrain(agent_mod.LLMProvider):
         return "".join(b.text for b in msg.content if b.type == "text").strip()
 
 
+class GeminiBrain(agent_mod.LLMProvider):
+    """Gemini via l'API Google (generativelanguage.googleapis.com), modele au
+    choix (`--model gemini-...`). Cle : GEMINI_API_KEY. Attend et reessaie sur
+    429 (limites de l'offre gratuite) ; une erreur persistante leve RuntimeError
+    plutot que de renvoyer une reponse vide qui fausserait le score.
+    Ajoute le 2026-11-22 : premier fournisseur teste en dehors d'Anthropic."""
+
+    def __init__(self, model):
+        key = os.environ.get("GEMINI_API_KEY")
+        if not key:
+            sys.exit("GEMINI_API_KEY manquante")
+        self.key, self.model = key, model
+
+    def generate(self, prompt, max_tokens=500):
+        import time
+        import urllib.error
+        import urllib.request
+        body = json.dumps({"contents": [{"parts": [{"text": prompt}]}],
+                           "generationConfig": {"maxOutputTokens": 16000}}).encode()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        delay = 10
+        for attempt in range(8):
+            req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "x-goog-api-key": self.key})
+            try:
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    d = json.load(r)
+                parts = (d.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+                return "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 500, 503) and attempt < 7:
+                    time.sleep(delay)
+                    delay = min(delay * 2, 120)
+                    continue
+                raise RuntimeError(f"Gemini {e.code} : {e.read()[:300]!r}") from e
+        raise RuntimeError("Gemini : trop d'echecs")
+
+
+def make_brain(model):
+    """ClaudeBrain ou GeminiBrain selon le nom du modele."""
+    return GeminiBrain(model) if model.startswith(("gemini", "gemma")) else ClaudeBrain(model)
+
+
 def brain(name, answers_path=None, model=None):
     if name == "claude":
         return ClaudeBrain(model)

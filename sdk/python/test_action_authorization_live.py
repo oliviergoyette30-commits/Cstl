@@ -248,6 +248,66 @@ def test_fact_condition_lifts_a_prohibition_only_when_an_author_records_it(autho
     assert not bot.request_action("share_data")[0], "fait retire : l'interdiction revient"
 
 
+def test_unknown_fact_keeps_a_prohibition(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un fait jamais declare est INCONNU, pas faux. « Interdit de
+    liquider s'il y a un incident » reste en place tant que personne n'a dit
+    s'il y a un incident ; la politique effective donne l'etat du fait."""
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    fact = f"incident_{uuid.uuid4().hex[:6]}"
+    owner.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "liquidate",
+                                     "modality": "MUST_NOT", "if_fact": fact}])
+    assert not bot.request_action("liquidate")[0], "fait inconnu : l'interdiction doit tenir"
+    rule = [r for r in bot.policy()["forbidden"] if r["action"] == "liquidate"][0]
+    assert rule["if_fact_now"] == "unknown", rule
+    owner.send_relations("server", [{"type": "STATE", "subject": fact, "object": "false"}])
+    assert bot.request_action("liquidate")[0], "pas d'incident declare : permis"
+    owner.send_relations("server", [{"type": "STATE", "subject": fact, "object": "true"}])
+    assert not bot.request_action("liquidate")[0], "incident declare : interdit"
+
+
+def test_priority_lets_an_author_write_an_exception(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : une exception prioritaire l'emporte sur une interdiction
+    generale, meme posee APRES elle ; un agent sans autorite ne peut pas
+    l'utiliser pour lever sa propre interdiction."""
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    owner.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "refund_order",
+                                     "modality": "MAY", "amount_at_most": "50", "priority": "10",
+                                     "reason": "petits remboursements toujours permis"}])
+    owner.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "refund_order",
+                                     "modality": "MUST_NOT", "reason": "gel des remboursements"}])
+    assert bot.request_action("refund_order", 40)[0], "exception prioritaire dans sa plage"
+    assert not bot.request_action("refund_order", 400)[0], "hors de la plage : l'interdiction tient"
+    rule = [r for r in bot.policy()["permitted"] if r["action"] == "refund_order"][0]
+    assert rule["priority"] == "10", rule
+    bot.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "refund_order",
+                                   "modality": "MAY", "priority": "1000"}])
+    assert not bot.request_action("refund_order", 400)[0], "une priorite posee par l'agent lui-meme ne compte pas"
+
+
+def test_schema_types_relations(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un auteur declare les types d'un type de relation ; une
+    relation mal typee est refusee (rien n'est stocke). Un schema pose par un
+    agent sans autorite ne compte pas ; un type inconnu est refuse."""
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    # Type en minuscules (comme les predicats located_in, part_of) : un type en
+    # MAJUSCULES doit etre un operateur officiel ou de domaine.
+    kind = f"order_{uuid.uuid4().hex[:6]}"
+    unknown = owner.send_relations("server", [{"type": "SCHEMA", "subject": kind, "object": "v1", "amount": "money"}])
+    assert unknown.purpose == "schema_rejected" and "money" in unknown.raw, unknown.raw
+    resp = owner.send_relations("server", [{"type": "SCHEMA", "subject": kind, "object": "v1", "amount": "num", "date": "date"}])
+    assert resp.purpose != "schema_rejected", resp.raw
+    bad = bot.send_relations("server", [{"type": kind, "subject": "o1", "object": "client_3", "amount": "beaucoup"}])
+    assert bad.purpose == "schema_rejected" and f"{kind}.amount" in bad.raw, bad.raw
+    good = bot.send_relations("server", [{"type": kind, "subject": "o1", "object": "client_3", "amount": "450", "date": "2026-11-04"}])
+    assert good.purpose != "schema_rejected", good.raw
+    # Un agent sans autorite ne peut pas assouplir le schema.
+    bot.send_relations("server", [{"type": "SCHEMA", "subject": kind, "object": "v2", "amount": "str"}])
+    assert bot.send_relations("server", [{"type": kind, "subject": "o2", "object": "c", "amount": "x"}]).purpose == "schema_rejected"
+
+
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
     m, bot = agent(monkeypatch, tmp_path, 5555)
     owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)

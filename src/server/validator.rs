@@ -351,7 +351,9 @@ pub fn check_sdl_operator_whitelist(payload: &CstlPayload) -> Vec<String> {
     let relations: Vec<AstRelation> = payload.relations.iter().enumerate()
         .filter_map(|(idx, r)| {
             let operator = r.get("type").cloned().unwrap_or_default();
-            if !looks_like_sdl_operator(&operator) {
+            // SCHEMA (2026-11-22) : declaration de types reservee au serveur
+            // (voir server/schema.rs), pas un operateur SDL.
+            if !looks_like_sdl_operator(&operator) || operator == "SCHEMA" {
                 return None;
             }
             Some(AstRelation {

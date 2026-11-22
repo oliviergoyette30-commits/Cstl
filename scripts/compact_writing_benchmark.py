@@ -60,7 +60,7 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import cstl_compact  # noqa: E402
 import toon_lite  # noqa: E402
 
-FORMATS = ("cstl", "json", "compact", "toon", "compact_tableau")
+FORMATS = ("cstl", "json", "compact", "toon", "compact_tableau", "compact_symboles")
 SPEC_FIELDS = ("Une regle est PERFORM avec subject (un agent, ou role:<nom>), object (l'action), modality (MUST ou "
                "MUST_NOT) et, s'il y en a, amount_above (la regle ne vaut qu'au-dela de ce montant), if_fact "
                "(seulement si ce fait est vrai), unless_fact (sauf si ce fait est vrai). Un role est une relation "
@@ -81,6 +81,7 @@ SPEC = {
     "json": ("Ecris la politique en JSON : une liste de relations, chacune un objet {cle: valeur}. " + SPEC_FIELDS +
              "\nExemple :\n" + json.dumps(EXAMPLE, ensure_ascii=False)),
     "compact": "Ecris la politique en CSTL compact.\n" + cstl_compact.GUIDE,
+    "compact_symboles": ("Ecris la politique en CSTL compact sans mot-cle.\n" + cstl_compact.GUIDE_SYMBOLS),
     "compact_tableau": "Ecris la politique en CSTL compact en tableaux.\n" + cstl_compact.GUIDE_TABLE,
     "toon": ("Ecris la politique en TOON (Token-Oriented Object Notation) : un tableau roles[N]{agent,role}, un objet "
              "facts (fait: true|false) et un tableau rules[N]{subject,modality,action,amount_above,if_fact,unless_fact}, "
@@ -120,6 +121,8 @@ def norm(r):
 
 
 def parse(fmt, text):
+    if fmt == "compact_symboles":
+        fmt = "compact_tableau"   # meme decodeur, qui lit aussi la forme sans mot-cle
     if fmt == "compact_tableau":
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.startswith("```"))
         try:
@@ -216,7 +219,7 @@ def main():
         model = StubBrain()
     else:
         import team_task_benchmark as tb
-        model = tb.ClaudeBrain(args.model)
+        model = tb.make_brain(args.model)
     jobs = [(size, seed, f, run) for run in range(args.runs) for size in fc.SIZES for seed in fc.SEEDS for f in FORMATS]
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
         rows = list(pool.map(lambda j: run_case(model, *j), jobs))

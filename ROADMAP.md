@@ -240,6 +240,81 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       nommer les conditions en français (`si:F`, `sauf_si:F`) pour éviter la
       confusion if/unless de Haiku.
 
+- **`scripts/data_types_benchmark.py` :** cinq autres types de données
+  (tâches, faits, commandes, événements, négociation), 20 jeux de données
+  et 180 questions.
+  - **Hors politiques, TOON est le plus court.** Le CSTL compact coûte 33 %
+    de tokens de plus (1 571 contre 1 185), parce qu'il répète le nom de
+    chaque champ à chaque ligne.
+  - Le CSTL compact reste 22 % plus court que le JSON compact.
+  - La compréhension est la même dans tous les formats (174 à 179 sur 180).
+  - Le CSTL compact n'est donc le plus court que pour les politiques, dont
+    les conditions sont facultatives.
+  - Piste : une section en tableau générique dans le CSTL compact, pour
+    les données régulières, qui n'écrirait les noms de champs qu'une fois.
+
+- **Sections en tableau génériques et mode sans mot-clé (`cstl_compact`)**
+  : tout est prêt, mais rien n'est encore mesuré avec un modèle, car la
+  limite de dépense de l'API est atteinte jusqu'au 1er décembre.
+  - Le tableau générique écrit `ORDER[N] subject object amount ...` puis une
+    ligne de valeurs par élément. Les sections s'inspirent de TOON.
+  - Le mode sans mot-clé (`encode_symbols`) n'a plus aucun mot-clé :
+    `agent_a @finance`, `kyc_done=1`, `agent_f !wipe_db >100 -audit_open`,
+    et pour les données `ORDER[N]: amount ...`.
+  - Taille hors ligne, en caractères :
+
+    | | CSTL compact (lignes) | tableau | sans mot-clé | TOON | JSON |
+    |---|---|---|---|---|---|
+    | politiques (12) | 19 923 | 22 091 | **15 647** | 25 229 | – |
+    | données (20 jeux) | 59 057 | 37 281 | **36 791** | 40 992 | 82 789 |
+
+  - Mesures à lancer :
+    - `format_short_benchmark.py --formats cstl_court,toon,cstl_symboles` ;
+    - `compact_writing_benchmark.py --formats compact,toon,compact_symboles` ;
+    - `data_types_benchmark.py --formats json,toon,cstl_tableau,cstl_symboles`.
+
+- **`scripts/domains_benchmark.py` : les 18 domaines de `src/domains.rs`.**
+  Chaque domaine a une politique de 15 règles sur ses propres opérateurs,
+  plus 30 relations du domaine. La mesure est hors ligne, en caractères.
+  - Le mode sans mot-clé est le plus court dans les 18 domaines : 23 % de
+    moins que TOON et 53 % de moins que le JSON compact.
+  - Même le mode ligne bat TOON ici (49 675 contre 52 920 caractères), car
+    les données mélangent de nombreux types de relations.
+  - Allers-retours sans perte partout.
+  - Tokens et compréhension à mesurer quand l'API sera de nouveau
+    disponible : `python3 scripts/domains_benchmark.py --tokens`.
+  - Test de compréhension prêt (6 questions par domaine : 3 permissions,
+    1 liste d'obligations, 1 comptage, 1 somme) :
+    `python3 scripts/domains_benchmark.py --comprehension claude-haiku-5-5`,
+    puis la même commande avec `claude-opus-5-5`.
+
+- **Faits à trois états (couche 9, 2026-11-22)** : vrai, faux ou inconnu.
+  Recommandation tirée de l'évaluation de ChatGPT.
+  - Défaut corrigé : un fait jamais déclaré valait faux, donc « interdit de
+    liquider s'il y a un incident » (`if_fact=incident_open`) était levé tant
+    que personne n'avait déclaré l'état de l'incident.
+  - Maintenant, un fait inconnu suit la règle de prudence : l'interdiction
+    s'applique, l'obligation et la permission non.
+  - La politique effective donne l'état de chaque fait cité :
+    `if_fact_now` / `unless_fact_now` = `true`, `false` ou `unknown`.
+  - Tests : test unitaire `unknown_facts_are_treated_with_prudence`, et test
+    de bout en bout `test_unknown_fact_keeps_a_prohibition`.
+- **Priorités et exceptions (couche 9, 2026-11-22).**
+  - Avec `CSTL_POLICY_AUTHORS`, les règles sont classées par `priority`,
+    puis par date. Une exception prioritaire l'emporte sur une règle
+    générale, même plus récente, dans sa plage de montants.
+  - En mode `Anyone`, la priorité est ignorée : sinon, n'importe quel agent
+    pourrait lever une interdiction avec une priorité élevée.
+- **Typage (2026-11-22).**
+  - Sur le serveur : `RELATION [type=SCHEMA, subject=<type>,
+    champ=num|int|date|bool|str]`. Une relation mal typée fait refuser tout
+    le message (`schema_rejected`). Seuls comptent les schémas d'un auteur
+    de politique.
+  - Dans le CSTL compact : des colonnes typées (`amount:num`), reprises des
+    déclarations `SCHEMA` ou données à l'encodeur, et vérifiées à l'encodage
+    comme au décodage. Les conditions des règles sont typées aussi :
+    montants, dates, durée et priorité.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

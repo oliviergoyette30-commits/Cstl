@@ -180,11 +180,8 @@ async fn load_request_context(
             continue;
         }
         if r.predicate == "STATE" {
-            if r.object.eq_ignore_ascii_case("false") {
-                out.facts.remove(&r.subject);
-            } else {
-                out.facts.insert(r.subject.clone());
-            }
+            // Trois etats : vrai, faux, ou inconnu (jamais declare).
+            out.set_fact(&r.subject, !r.object.eq_ignore_ascii_case("false"));
         } else if r.subject == sender {
             if let Some(role) = r.object.strip_prefix("role:") {
                 if r.attrs.get("role").is_some_and(|v| v.eq_ignore_ascii_case("false")) {
@@ -196,6 +193,41 @@ async fn load_request_context(
         }
     }
     out
+}
+
+/// Premiere violation de schema dans ces relations (voir server/schema.rs),
+/// ou une declaration SCHEMA avec un type inconnu. Avec CSTL_POLICY_AUTHORS,
+/// seuls les schemas poses (et signes) par un auteur de politique comptent ;
+/// le plus recent d'un type remplace les precedents.
+async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::HashMap<String, String>]) -> Option<String> {
+    for r in relations.iter().filter(|r| r.get("type").map(String::as_str) == Some("SCHEMA")) {
+        if let Err(e) = super::schema::columns(r) {
+            return Some(format!("SCHEMA {} : {e}", r.get("subject").map(String::as_str).unwrap_or("?")));
+        }
+    }
+    let rows = {
+        let store = ctx.adn_store.lock().await;
+        store.schemas_with_authors().unwrap_or_else(|e| {
+            error!("[Handler] schemas_with_authors failed: {}", e);
+            Vec::new()
+        })
+    };
+    if rows.is_empty() {
+        return None;
+    }
+    let authors = super::action_authorization::PolicyAuthors::from_env();
+    let enforced = matches!(authors, super::action_authorization::PolicyAuthors::Only(_));
+    let reg = ctx.agent_registry.read().await;
+    let mut schemas: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
+    for row in rows {
+        if enforced && why_not_authorized(&row, &authors, &reg).is_some() {
+            continue;
+        }
+        if let Ok(cols) = super::schema::columns(&row.attrs) {
+            schemas.insert(row.subject.clone(), cols);
+        }
+    }
+    relations.iter().find_map(|r| super::schema::violation(r, &schemas))
 }
 
 /// Valeur recopiee dans une reponse wire : jamais de `"`, `[`, `]` ni de
@@ -546,6 +578,23 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // STEP 2-schema (2026-11-22) : TYPAGE. Une relation dont le type
+                    // a un schema declare (RELATION [type=SCHEMA, subject=<type>,
+                    // champ=num|int|date|bool|str]) doit en respecter les types ; une
+                    // declaration SCHEMA doit n'utiliser que des types connus. Sinon,
+                    // le message entier est refuse et rien n'est stocke.
+                    if !payload.relations.is_empty() {
+                        if let Some(detail) = schema_violation(&ctx, &payload.relations).await {
+                            warn!("[Handler] Schema rejected for '{}': {}", sig_sender, detail);
+                            let response = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=schema_rejected, detail={}]\n---END---\n",
+                                wire_text(&detail)
+                            );
+                            send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                            continue;
+                        }
+                    }
+
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
                     // — purpose=council_decision est traite a part: ce n'est pas un
                     // nouveau fait a verifier/stocker, c'est une action sur une entree
@@ -608,8 +657,14 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         let view = super::action_authorization::RequestContext { spent, ..req_ctx.clone() };
                                         conds.push_str(&format!(", spent_now={}", view.spent_within(e.conditions.total_window_secs)));
                                     }
-                                    if e.conditions.if_fact.is_some() { conds.push_str(", if_fact_now=true"); }
-                                    if e.conditions.unless_fact.is_some() { conds.push_str(", unless_fact_now=false"); }
+                                    // Etat ACTUEL de chaque fait cite : true, false ou unknown
+                                    // (un fait inconnu peut maintenir une interdiction).
+                                    for (key, fact) in [("if_fact_now", &e.conditions.if_fact), ("unless_fact_now", &e.conditions.unless_fact)] {
+                                        if let Some(f) = fact {
+                                            let state = match req_ctx.fact(f) { Some(true) => "true", Some(false) => "false", None => "unknown" };
+                                            conds.push_str(&format!(", {key}={state}"));
+                                        }
+                                    }
                                     out.push_str(&format!(
                                         "POLICY_RULE [action={}, decision={}, modality={}, author={}{}{}{}]\n",
                                         e.action, decision, e.modality, wire_name(e.author.as_deref()),

@@ -1,0 +1,194 @@
+{
+  "unit": "caracteres",
+  "totals": {
+    "json": 87405,
+    "toon": 52920,
+    "cstl": 89108,
+    "cstl_compact": 49675,
+    "cstl_tableau": 48549,
+    "cstl_symboles": 40753
+  },
+  "rows": [
+    {
+      "domain": "diplomatique",
+      "operators": 11,
+      "json": 4889,
+      "toon": 2953,
+      "cstl": 4979,
+      "cstl_compact": 2780,
+      "cstl_tableau": 2749,
+      "cstl_symboles": 2307
+    },
+    {
+      "domain": "juridique",
+      "operators": 12,
+      "json": 5112,
+      "toon": 3032,
+      "cstl": 5347,
+      "cstl_compact": 2907,
+      "cstl_tableau": 2891,
+      "cstl_symboles": 2412
+    },
+    {
+      "domain": "médical",
+      "operators": 11,
+      "json": 4973,
+      "toon": 3073,
+      "cstl": 5129,
+      "cstl_compact": 2835,
+      "cstl_tableau": 2791,
+      "cstl_symboles": 2336
+    },
+    {
+      "domain": "corporate",
+      "operators": 11,
+      "json": 4893,
+      "toon": 2885,
+      "cstl": 4914,
+      "cstl_compact": 2768,
+      "cstl_tableau": 2683,
+      "cstl_symboles": 2261
+    },
+    {
+      "domain": "archéologique",
+      "operators": 10,
+      "json": 4863,
+      "toon": 2951,
+      "cstl": 4985,
+      "cstl_compact": 2757,
+      "cstl_tableau": 2653,
+      "cstl_symboles": 2225
+    },
+    {
+      "domain": "astronomique",
+      "operators": 9,
+      "json": 4811,
+      "toon": 2936,
+      "cstl": 4937,
+      "cstl_compact": 2708,
+      "cstl_tableau": 2651,
+      "cstl_symboles": 2234
+    },
+    {
+      "domain": "financier",
+      "operators": 13,
+      "json": 4785,
+      "toon": 2985,
+      "cstl": 4947,
+      "cstl_compact": 2736,
+      "cstl_tableau": 2794,
+      "cstl_symboles": 2328
+    },
+    {
+      "domain": "cyber_securite",
+      "operators": 12,
+      "json": 4810,
+      "toon": 2910,
+      "cstl": 4873,
+      "cstl_compact": 2742,
+      "cstl_tableau": 2738,
+      "cstl_symboles": 2291
+    },
+    {
+      "domain": "reglementaire",
+      "operators": 12,
+      "json": 4823,
+      "toon": 2937,
+      "cstl": 4882,
+      "cstl_compact": 2765,
+      "cstl_tableau": 2745,
+      "cstl_symboles": 2285
+    },
+    {
+      "domain": "supply_chain",
+      "operators": 11,
+      "json": 4853,
+      "toon": 2863,
+      "cstl": 4957,
+      "cstl_compact": 2718,
+      "cstl_tableau": 2749,
+      "cstl_symboles": 2307
+    },
+    {
+      "domain": "rh",
+      "operators": 10,
+      "json": 4897,
+      "toon": 2979,
+      "cstl": 5101,
+      "cstl_compact": 2780,
+      "cstl_tableau": 2677,
+      "cstl_symboles": 2231
+    },
+    {
+      "domain": "recherche",
+      "operators": 10,
+      "json": 4843,
+      "toon": 2918,
+      "cstl": 4945,
+      "cstl_compact": 2732,
+      "cstl_tableau": 2611,
+      "cstl_symboles": 2204
+    },
+    {
+      "domain": "marketing",
+      "operators": 10,
+      "json": 4804,
+      "toon": 2947,
+      "cstl": 4820,
+      "cstl_compact": 2732,
+      "cstl_tableau": 2647,
+      "cstl_symboles": 2229
+    },
+    {
+      "domain": "immobilier",
+      "operators": 9,
+      "json": 4805,
+      "toon": 2886,
+      "cstl": 4848,
+      "cstl_compact": 2756,
+      "cstl_tableau": 2603,
+      "cstl_symboles": 2197
+    },
+    {
+      "domain": "assurance",
+      "operators": 9,
+      "json": 4815,
+      "toon": 2945,
+      "cstl": 4907,
+      "cstl_compact": 2764,
+      "cstl_tableau": 2643,
+      "cstl_symboles": 2231
+    },
+    {
+      "domain": "education",
+      "operators": 9,
+      "json": 4861,
+      "toon": 2915,
+      "cstl": 4884,
+      "cstl_compact": 2769,
+      "cstl_tableau": 2695,
+      "cstl_symboles": 2281
+    },
+    {
+      "domain": "journalisme",
+      "operators": 9,
+      "json": 4854,
+      "toon": 2920,
+      "cstl": 4953,
+      "cstl_compact": 2724,
+      "cstl_tableau": 2653,
+      "cstl_symboles": 2238
+    },
+    {
+      "domain": "energie",
+      "operators": 9,
+      "json": 4714,
+      "toon": 2885,
+      "cstl": 4700,
+      "cstl_compact": 2702,
+      "cstl_tableau": 2576,
+      "cstl_symboles": 2156
+    }
+  ],
+  "broken": []
+}

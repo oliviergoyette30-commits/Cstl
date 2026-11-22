@@ -193,18 +193,41 @@ which layer 9 checks itself (not just their text):
 | `subject=role:<name>` | to the agents that have this role |
 | `valid_from` / `valid_until` | inside this period (ISO 8601 date or unix seconds) |
 | `amount_above=X` / `amount_at_most=X` | when the requested `amount` is above X / at most X |
-| `if_fact=F` / `unless_fact=F` | when the fact F is / is not recorded |
+| `if_fact=F` / `unless_fact=F` | when the fact F is true / is false |
+| `priority=N` | (ordering, not a condition) see below |
 
 - A **role** is given by `RELATION [type=POSSESSES, subject=<agent>,
   object=role:<name>]`, and taken back with `role=false`.
-- A **fact** is recorded by `RELATION [type=STATE, subject=F,
-  object=true]`, and withdrawn with `object=false`.
+- A **fact** has three states: true (`RELATION [type=STATE, subject=F,
+  object=true]`), false (`object=false`), or unknown (never declared).
+  The most recent declaration counts. The effective policy reports each
+  cited fact as `if_fact_now` / `unless_fact_now` = `true`, `false` or
+  `unknown`.
 - With `CSTL_POLICY_AUTHORS`, only roles and facts from a policy author
   count. So an agent can neither give itself a role nor declare the
   consent that would lift its own prohibition.
 - **Prudence:** a condition the server cannot evaluate (no amount in the
-  request, an unreadable value) makes a prohibition apply and an
-  obligation not apply.
+  request, an unreadable value, an unknown fact) makes a prohibition apply,
+  and an obligation or a permission not apply. So "forbidden to liquidate
+  during an incident" (`if_fact=incident_open`) holds until a policy author
+  declares `incident_open=false`. Before 2026-11-22, an unknown fact counted
+  as false and lifted that prohibition.
+- **Priority (exceptions):** with `CSTL_POLICY_AUTHORS`, rules are ranked
+  by `priority` (integer from -1000 to 1000, default 0), then by date. So
+  an author can write an exception that wins over a general rule, even a
+  later one: `MAY refund_order amount_at_most=50 priority=10` beats a later
+  `MUST_NOT refund_order`, for amounts up to 50 only. Without
+  `CSTL_POLICY_AUTHORS`, priority is ignored and a prohibition always wins,
+  since anyone could otherwise lift one with a high priority.
+- **Typed relations:** a policy author declares the types of a relation
+  type with `RELATION [type=SCHEMA, subject=order_record, object=v1,
+  amount=num, date=date]` (types: `num`, `int`, `date`, `bool`, `str`). A
+  later relation of that type with a badly typed attribute is refused,
+  whole message included: `INTENT_PAYLOAD [purpose=schema_rejected,
+  detail=...]`. The latest schema of a type wins; with
+  `CSTL_POLICY_AUTHORS`, only schemas from a policy author count. The
+  described type follows the usual rule: lowercase (`order_record`), or an
+  official or domain operator in uppercase.
 - **Amounts:** send `amount=` with `action_request`
   (`agent.authorize("refund_order", amount=80)`). The token then carries
   that amount, and the guard refuses to execute any other
