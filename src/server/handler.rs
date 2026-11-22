@@ -180,11 +180,8 @@ async fn load_request_context(
             continue;
         }
         if r.predicate == "STATE" {
-            if r.object.eq_ignore_ascii_case("false") {
-                out.facts.remove(&r.subject);
-            } else {
-                out.facts.insert(r.subject.clone());
-            }
+            // Trois etats : vrai, faux, ou inconnu (jamais declare).
+            out.set_fact(&r.subject, !r.object.eq_ignore_ascii_case("false"));
         } else if r.subject == sender {
             if let Some(role) = r.object.strip_prefix("role:") {
                 if r.attrs.get("role").is_some_and(|v| v.eq_ignore_ascii_case("false")) {
@@ -608,8 +605,14 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         let view = super::action_authorization::RequestContext { spent, ..req_ctx.clone() };
                                         conds.push_str(&format!(", spent_now={}", view.spent_within(e.conditions.total_window_secs)));
                                     }
-                                    if e.conditions.if_fact.is_some() { conds.push_str(", if_fact_now=true"); }
-                                    if e.conditions.unless_fact.is_some() { conds.push_str(", unless_fact_now=false"); }
+                                    // Etat ACTUEL de chaque fait cite : true, false ou unknown
+                                    // (un fait inconnu peut maintenir une interdiction).
+                                    for (key, fact) in [("if_fact_now", &e.conditions.if_fact), ("unless_fact_now", &e.conditions.unless_fact)] {
+                                        if let Some(f) = fact {
+                                            let state = match req_ctx.fact(f) { Some(true) => "true", Some(false) => "false", None => "unknown" };
+                                            conds.push_str(&format!(", {key}={state}"));
+                                        }
+                                    }
                                     out.push_str(&format!(
                                         "POLICY_RULE [action={}, decision={}, modality={}, author={}{}{}{}]\n",
                                         e.action, decision, e.modality, wire_name(e.author.as_deref()),

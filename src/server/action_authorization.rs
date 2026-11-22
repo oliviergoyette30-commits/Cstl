@@ -105,15 +105,19 @@ impl PolicyAuthors {
 ///       8601, ex. 2026-12-31 ou 2026-12-31T23:59:59Z, ou secondes unix) ;
 ///   amount_above=X   : la regle ne vaut que si le montant demande > X ;
 ///   amount_at_most=X : la regle ne vaut que si le montant demande <= X ;
-///   if_fact=F        : la regle ne vaut que si le fait F est enregistre ;
-///   unless_fact=F    : la regle ne vaut pas si le fait F est enregistre.
-/// Un fait F est enregistre par `RELATION [type=STATE, subject=F, object=true]`
-/// (le plus recent compte : `object=false` le retire), pose par un auteur
-/// de politique en mode `Only`.
+///   if_fact=F        : la regle ne vaut que si le fait F est vrai ;
+///   unless_fact=F    : la regle ne vaut que si le fait F est faux.
+/// Un fait a TROIS etats (2026-11-22) : vrai (`RELATION [type=STATE,
+/// subject=F, object=true]`), faux (`object=false`) ou INCONNU (jamais
+/// declare). Le plus recent compte ; en mode `Only`, seuls ceux d'un auteur de
+/// politique comptent.
 ///
 /// Principe de prudence : une condition qu'on ne peut pas evaluer (montant
-/// absent de la demande, attribut illisible) fait APPLIQUER une interdiction
-/// et NE PAS appliquer une obligation.
+/// absent de la demande, attribut illisible, fait inconnu) fait APPLIQUER une
+/// interdiction et NE PAS appliquer une obligation ni une permission.
+/// Avant le 2026-11-22, un fait inconnu valait faux : « interdit de liquider
+/// s'il y a un incident » (`if_fact=incident_open`) etait LEVE tant que
+/// personne n'avait declare l'etat de l'incident.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Conditions {
     pub valid_from: Option<u64>,
@@ -219,8 +223,10 @@ pub struct RequestContext {
     pub now: u64,
     /// Montant demande (`INTENT_PAYLOAD [..., amount=...]`), s'il y en a un.
     pub amount: Option<f64>,
-    /// Faits enregistres (voir `Conditions`).
+    /// Faits declares VRAIS (voir `Conditions`).
     pub facts: std::collections::HashSet<String>,
+    /// Faits declares FAUX. Un fait absent des deux ensembles est inconnu.
+    pub false_facts: std::collections::HashSet<String>,
     /// Roles de l'expediteur (`RELATION [type=POSSESSES, subject=<agent>,
     /// object=role:<nom>]`, pose par un auteur de politique en mode `Only`).
     pub roles: std::collections::HashSet<String>,
@@ -237,6 +243,28 @@ impl RequestContext {
             .filter(|(t, _)| window.is_none_or(|w| t + w >= self.now))
             .map(|(_, a)| a)
             .sum()
+    }
+
+    /// Etat d'un fait : `Some(true)` vrai, `Some(false)` faux, `None` inconnu.
+    pub fn fact(&self, name: &str) -> Option<bool> {
+        if self.facts.contains(name) {
+            Some(true)
+        } else if self.false_facts.contains(name) {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Enregistre un fait (le plus recent l'emporte).
+    pub fn set_fact(&mut self, name: &str, value: bool) {
+        if value {
+            self.false_facts.remove(name);
+            self.facts.insert(name.to_string());
+        } else {
+            self.facts.remove(name);
+            self.false_facts.insert(name.to_string());
+        }
     }
 
     pub fn now() -> Self {
@@ -286,8 +314,18 @@ impl Rule {
         if c.valid_from.is_some_and(|t| ctx.now < t) || c.valid_until.is_some_and(|t| ctx.now > t) {
             return false;
         }
-        if c.if_fact.as_ref().is_some_and(|f| !ctx.facts.contains(f)) || c.unless_fact.as_ref().is_some_and(|f| ctx.facts.contains(f)) {
-            return false;
+        for (fact, wanted) in [(&c.if_fact, true), (&c.unless_fact, false)] {
+            let Some(f) = fact else { continue };
+            match ctx.fact(f) {
+                Some(v) if v == wanted => {}
+                Some(_) => return false,
+                // Fait inconnu : prudence, comme pour un montant absent.
+                None => {
+                    if !self.forbids() {
+                        return false;
+                    }
+                }
+            }
         }
         true
     }
@@ -708,6 +746,42 @@ mod tests {
         let mut incident = now();
         incident.facts.insert("incident_open".into());
         assert!(decide("bot", Some("rotate_keys"), true, true, &h, DefaultPolicy::Deny, &ANY, &incident).allowed);
+    }
+
+    #[test]
+    fn unknown_facts_are_treated_with_prudence() {
+        // « Interdit de liquider s'il y a un incident » : incident inconnu.
+        let h = vec![with(rel("bot", "liquidate", "MUST_NOT"), &[("if_fact", "incident_open")])];
+        assert!(!decide("bot", Some("liquidate"), true, true, &h, DefaultPolicy::Allow, &ANY, &now()).allowed,
+                "un fait inconnu ne doit pas lever une interdiction");
+        let mut no_incident = now();
+        no_incident.set_fact("incident_open", false);
+        assert!(decide("bot", Some("liquidate"), true, true, &h, DefaultPolicy::Allow, &ANY, &no_incident).allowed);
+        let mut incident = now();
+        incident.set_fact("incident_open", true);
+        assert!(!decide("bot", Some("liquidate"), true, true, &h, DefaultPolicy::Allow, &ANY, &incident).allowed);
+
+        // « Interdit de rembourser sans accord » : accord faux = interdit,
+        // inconnu = interdit, vrai = permis.
+        let h = vec![with(rel("bot", "refund", "MUST_NOT"), &[("unless_fact", "consent_given")])];
+        let mut refused = now();
+        refused.set_fact("consent_given", false);
+        assert!(!decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Allow, &ANY, &refused).allowed);
+        let mut later = refused.clone();
+        later.set_fact("consent_given", true);
+        assert!(decide("bot", Some("refund"), true, true, &h, DefaultPolicy::Allow, &ANY, &later).allowed);
+
+        // Permission et obligation : un fait inconnu ne les declenche pas.
+        let h = vec![with(rel("bot", "export", "MAY"), &[("unless_fact", "freeze_period")])];
+        assert!(!decide("bot", Some("export"), true, true, &h, DefaultPolicy::Deny, &ANY, &now()).allowed);
+        let mut open = now();
+        open.set_fact("freeze_period", false);
+        assert!(decide("bot", Some("export"), true, true, &h, DefaultPolicy::Deny, &ANY, &open).allowed);
+        let h = vec![with(rel("bot", "notify", "MUST"), &[("unless_fact", "already_notified")])];
+        assert_eq!(decide("bot", Some("notify"), true, true, &h, DefaultPolicy::Deny, &ANY, &now()).reason, "conditions_not_met");
+        let mut todo = now();
+        todo.set_fact("already_notified", false);
+        assert!(decide("bot", Some("notify"), true, true, &h, DefaultPolicy::Deny, &ANY, &todo).allowed);
     }
 
     #[test]

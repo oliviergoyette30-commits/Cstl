@@ -288,6 +288,20 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     `python3 scripts/domains_benchmark.py --comprehension claude-haiku-5-5`,
     puis la même commande avec `claude-opus-5-5`.
 
+- **Faits à trois états (couche 9, 2026-11-22)** : vrai, faux ou inconnu.
+  Recommandation tirée de l'évaluation de ChatGPT.
+  - Défaut corrigé : un fait jamais déclaré valait faux, donc « interdit de
+    liquider s'il y a un incident » (`if_fact=incident_open`) était levé tant
+    que personne n'avait déclaré l'état de l'incident.
+  - Maintenant, un fait inconnu suit la règle de prudence : l'interdiction
+    s'applique, l'obligation et la permission non.
+  - La politique effective donne l'état de chaque fait cité :
+    `if_fact_now` / `unless_fact_now` = `true`, `false` ou `unknown`.
+  - Tests : test unitaire `unknown_facts_are_treated_with_prudence`, et test
+    de bout en bout `test_unknown_fact_keeps_a_prohibition`.
+  - Encore à faire (même évaluation) : le typage des colonnes, puis des
+    exceptions et priorités explicites entre règles.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

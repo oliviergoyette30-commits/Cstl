@@ -615,13 +615,16 @@ def policy_to_text(p: dict) -> str:
         if e.get("applies") == "otherwise":
             parts.append("aucune des regles a montant ci-dessus ne s'applique")
         text = (" -- SEULEMENT SI " + " ET ".join(parts)) if parts else ""
+        # Etat actuel des faits cites, donne par le serveur : true, false ou
+        # unknown (2026-11-22 : un fait inconnu maintient une interdiction).
+        state = {"true": "vrai", "false": "faux", "unknown": "INCONNU (personne ne l'a declare)"}
         facts = []
-        if e.get("if_fact"):
-            facts.append(f"le fait {e['if_fact']} est vrai en ce moment")
-        if e.get("unless_fact"):
-            facts.append(f"le fait {e['unless_fact']} est faux en ce moment")
+        for attr, label in (("if_fact", "seulement si"), ("unless_fact", "sauf si")):
+            if e.get(attr):
+                now = state.get(str(e.get(attr + "_now", "unknown")), "INCONNU (personne ne l'a declare)")
+                facts.append(f"{label} le fait {e[attr]} est vrai ; en ce moment il est {now}")
         if facts:
-            text += " (condition deja verifiee par le serveur : " + ", ".join(facts) + ")"
+            text += " (" + " ; ".join(facts) + ". Un fait inconnu laisse l'interdiction en place, par prudence)"
         if e.get("via_role"):
             text += f" (via ton role {e['via_role']})"
         if e.get("reason"):

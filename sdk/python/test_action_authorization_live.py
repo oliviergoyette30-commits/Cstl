@@ -248,6 +248,24 @@ def test_fact_condition_lifts_a_prohibition_only_when_an_author_records_it(autho
     assert not bot.request_action("share_data")[0], "fait retire : l'interdiction revient"
 
 
+def test_unknown_fact_keeps_a_prohibition(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un fait jamais declare est INCONNU, pas faux. « Interdit de
+    liquider s'il y a un incident » reste en place tant que personne n'a dit
+    s'il y a un incident ; la politique effective donne l'etat du fait."""
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    fact = f"incident_{uuid.uuid4().hex[:6]}"
+    owner.send_relations("server", [{"type": "PERFORM", "subject": bot.name, "object": "liquidate",
+                                     "modality": "MUST_NOT", "if_fact": fact}])
+    assert not bot.request_action("liquidate")[0], "fait inconnu : l'interdiction doit tenir"
+    rule = [r for r in bot.policy()["forbidden"] if r["action"] == "liquidate"][0]
+    assert rule["if_fact_now"] == "unknown", rule
+    owner.send_relations("server", [{"type": "STATE", "subject": fact, "object": "false"}])
+    assert bot.request_action("liquidate")[0], "pas d'incident declare : permis"
+    owner.send_relations("server", [{"type": "STATE", "subject": fact, "object": "true"}])
+    assert not bot.request_action("liquidate")[0], "incident declare : interdit"
+
+
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
     m, bot = agent(monkeypatch, tmp_path, 5555)
     owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)

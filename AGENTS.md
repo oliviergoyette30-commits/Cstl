@@ -193,18 +193,24 @@ which layer 9 checks itself (not just their text):
 | `subject=role:<name>` | to the agents that have this role |
 | `valid_from` / `valid_until` | inside this period (ISO 8601 date or unix seconds) |
 | `amount_above=X` / `amount_at_most=X` | when the requested `amount` is above X / at most X |
-| `if_fact=F` / `unless_fact=F` | when the fact F is / is not recorded |
+| `if_fact=F` / `unless_fact=F` | when the fact F is true / is false |
 
 - A **role** is given by `RELATION [type=POSSESSES, subject=<agent>,
   object=role:<name>]`, and taken back with `role=false`.
-- A **fact** is recorded by `RELATION [type=STATE, subject=F,
-  object=true]`, and withdrawn with `object=false`.
+- A **fact** has three states: true (`RELATION [type=STATE, subject=F,
+  object=true]`), false (`object=false`), or unknown (never declared).
+  The most recent declaration counts. The effective policy reports each
+  cited fact as `if_fact_now` / `unless_fact_now` = `true`, `false` or
+  `unknown`.
 - With `CSTL_POLICY_AUTHORS`, only roles and facts from a policy author
   count. So an agent can neither give itself a role nor declare the
   consent that would lift its own prohibition.
 - **Prudence:** a condition the server cannot evaluate (no amount in the
-  request, an unreadable value) makes a prohibition apply and an
-  obligation not apply.
+  request, an unreadable value, an unknown fact) makes a prohibition apply,
+  and an obligation or a permission not apply. So "forbidden to liquidate
+  during an incident" (`if_fact=incident_open`) holds until a policy author
+  declares `incident_open=false`. Before 2026-11-22, an unknown fact counted
+  as false and lifted that prohibition.
 - **Amounts:** send `amount=` with `action_request`
   (`agent.authorize("refund_order", amount=80)`). The token then carries
   that amount, and the guard refuses to execute any other
