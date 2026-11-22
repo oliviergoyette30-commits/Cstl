@@ -240,6 +240,19 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       nommer les conditions en français (`si:F`, `sauf_si:F`) pour éviter la
       confusion if/unless de Haiku.
 
+- **`scripts/data_types_benchmark.py` :** cinq autres types de données
+  (tâches, faits, commandes, événements, négociation), 20 jeux de données
+  et 180 questions.
+  - **Hors politiques, TOON est le plus court.** Le CSTL compact coûte 33 %
+    de tokens de plus (1 571 contre 1 185), parce qu'il répète le nom de
+    chaque champ à chaque ligne.
+  - Le CSTL compact reste 22 % plus court que le JSON compact.
+  - La compréhension est la même dans tous les formats (174 à 179 sur 180).
+  - Le CSTL compact n'est donc le plus court que pour les politiques, dont
+    les conditions sont facultatives.
+  - Piste : une section en tableau générique dans le CSTL compact, pour
+    les données régulières, qui n'écrirait les noms de champs qu'une fois.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

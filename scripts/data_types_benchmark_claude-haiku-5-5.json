@@ -1,0 +1,9352 @@
+{
+  "summary": {
+    "json": {
+      "questions_ok": 179,
+      "questions": 180,
+      "cases_ok": 59,
+      "cases": 60,
+      "pass_k": 19,
+      "datasets": 20,
+      "tokens_data": 2006
+    },
+    "toon": {
+      "questions_ok": 176,
+      "questions": 180,
+      "cases_ok": 56,
+      "cases": 60,
+      "pass_k": 18,
+      "datasets": 20,
+      "tokens_data": 1185
+    },
+    "cstl": {
+      "questions_ok": 178,
+      "questions": 180,
+      "cases_ok": 58,
+      "cases": 60,
+      "pass_k": 18,
+      "datasets": 20,
+      "tokens_data": 2146
+    },
+    "cstl_compact": {
+      "questions_ok": 177,
+      "questions": 180,
+      "cases_ok": 57,
+      "cases": 60,
+      "pass_k": 18,
+      "datasets": 20,
+      "tokens_data": 1571
+    }
+  },
+  "by_type": {
+    "taches": {
+      "json": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1788
+      },
+      "toon": {
+        "questions_ok": 35,
+        "questions": 36,
+        "cases_ok": 11,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 973
+      },
+      "cstl": {
+        "questions_ok": 35,
+        "questions": 36,
+        "cases_ok": 11,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 1922
+      },
+      "cstl_compact": {
+        "questions_ok": 34,
+        "questions": 36,
+        "cases_ok": 10,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 1362
+      }
+    },
+    "faits": {
+      "json": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1958
+      },
+      "toon": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1054
+      },
+      "cstl": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 2009
+      },
+      "cstl_compact": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1478
+      }
+    },
+    "commandes": {
+      "json": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1862
+      },
+      "toon": {
+        "questions_ok": 33,
+        "questions": 36,
+        "cases_ok": 9,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 995
+      },
+      "cstl": {
+        "questions_ok": 35,
+        "questions": 36,
+        "cases_ok": 11,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 2052
+      },
+      "cstl_compact": {
+        "questions_ok": 35,
+        "questions": 36,
+        "cases_ok": 11,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 1492
+      }
+    },
+    "evenements": {
+      "json": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1962
+      },
+      "toon": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1540
+      },
+      "cstl": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 2177
+      },
+      "cstl_compact": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1585
+      }
+    },
+    "negociation": {
+      "json": {
+        "questions_ok": 35,
+        "questions": 36,
+        "cases_ok": 11,
+        "cases": 12,
+        "pass_k": 3,
+        "datasets": 4,
+        "tokens_data": 2457
+      },
+      "toon": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1364
+      },
+      "cstl": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 2570
+      },
+      "cstl_compact": {
+        "questions_ok": 36,
+        "questions": 36,
+        "cases_ok": 12,
+        "cases": 12,
+        "pass_k": 4,
+        "datasets": 4,
+        "tokens_data": 1940
+      }
+    }
+  },
+  "rows": [
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 961,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 508,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 1007,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 727,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 907,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 504,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 968,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 688,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2631,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 1438,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2847,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        14,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2007,
+      "raw": "```json\n{\"r1\": 14, \"r2\": [\"t53\"], \"r3\": \"t40\"}\n```"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2655,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 1442,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2865,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2025,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 984,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 540,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 1005,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 737,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 983,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 539,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 1006,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 738,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 2933,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 1569,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 3020,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 2227,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 2931,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 1567,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 3005,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 2211,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 942,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 515,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 1032,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 752,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 944,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 517,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 1034,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 754,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2781,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        767,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 1474,
+      "raw": "{\"r1\": 767, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 3071,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2231,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2781,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 1474,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 3071,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        833,
+        8,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2231,
+      "raw": "{\"r1\": 833, \"r2\": 8, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1002,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 796,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_h",
+          "agent_d",
+          "agent_b",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1099,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_h\", \"agent_d\", \"agent_b\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_h",
+          "agent_d",
+          "agent_b",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 802,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_h\", \"agent_d\", \"agent_b\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1035,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_h",
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 809,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_h\", \"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1134,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_h",
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 833,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_h\", \"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2955,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_a\", \"agent_e\", \"agent_f\", \"agent_g\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_f",
+          "agent_h",
+          "agent_g",
+          "agent_a",
+          "agent_e"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2299,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_f\", \"agent_h\", \"agent_g\", \"agent_a\", \"agent_e\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 3286,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_a\", \"agent_e\", \"agent_f\", \"agent_g\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2395,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_a\", \"agent_e\", \"agent_f\", \"agent_g\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2857,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_c\", \"agent_e\", \"agent_f\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2256,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 3189,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2309,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 1259,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 706,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 1308,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 993,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 1223,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 698,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 1276,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 962,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 3623,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 2016,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 3804,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 2861,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 3724,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 2035,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 3893,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 2942,
+      "raw": "```json\n{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}\n```"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 961,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 508,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 1007,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 727,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 907,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 504,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 968,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 688,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2631,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        14,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 1438,
+      "raw": "{\"r1\": 14, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2847,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2007,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2655,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 1442,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2865,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2025,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 984,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 540,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 1005,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 737,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 983,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 539,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 1006,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 738,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 2933,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 1569,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 3020,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 2227,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 2931,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 1567,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 3005,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 2211,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 942,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 515,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 1032,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 752,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 944,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 517,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 1034,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 754,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2781,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        "Indéterminable : client_3 n'a qu'une commande paid (o53, 767 USD), et aucun taux de change USD→EUR n'est fourni",
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 1474,
+      "raw": "{\"r1\": \"Indéterminable : client_3 n'a qu'une commande paid (o53, 767 USD), et aucun taux de change USD→EUR n'est fourni\", \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 3071,
+      "raw": "```json\n{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2231,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2781,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 1474,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 3071,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2231,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1002,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_h",
+          "agent_d",
+          "agent_b",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 796,
+      "raw": "```json\n{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_h\", \"agent_d\", \"agent_b\", \"agent_c\"]}\n```"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1099,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 802,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1035,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_h",
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 809,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_h\", \"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_h",
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1134,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_h\", \"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 833,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_f",
+          "agent_h",
+          "agent_g",
+          "agent_a",
+          "agent_e"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2955,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_f\", \"agent_h\", \"agent_g\", \"agent_a\", \"agent_e\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2299,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_a\", \"agent_e\", \"agent_f\", \"agent_g\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 3286,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_a\", \"agent_e\", \"agent_f\", \"agent_g\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_f",
+          "agent_h",
+          "agent_g",
+          "agent_a",
+          "agent_e"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2395,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_f\", \"agent_h\", \"agent_g\", \"agent_a\", \"agent_e\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2857,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_c\", \"agent_e\", \"agent_f\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2256,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 3189,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2309,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_c\", \"agent_e\", \"agent_f\", \"agent_h\"]}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 1259,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 706,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 1308,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 993,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 1223,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 698,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 1276,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 962,
+      "raw": "```json\n{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}\n```"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 3623,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 2016,
+      "raw": "```json\n{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}\n```"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 3804,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 2861,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 3724,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 2035,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 3893,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 2942,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 961,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 508,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 1007,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        6,
+        [],
+        "t19"
+      ],
+      "truth": [
+        6,
+        [],
+        "t19"
+      ],
+      "tokens_data": 727,
+      "raw": "{\"r1\": 6, \"r2\": [], \"r3\": \"t19\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 907,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 504,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 968,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3,
+        [
+          "t6",
+          "t19"
+        ],
+        "t15"
+      ],
+      "truth": [
+        3,
+        [
+          "t19",
+          "t6"
+        ],
+        "t15"
+      ],
+      "tokens_data": 688,
+      "raw": "{\"r1\": 3, \"r2\": [\"t6\", \"t19\"], \"r3\": \"t15\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2631,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 1438,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2847,
+      "raw": "{\"r1\": 13, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        14,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "truth": [
+        13,
+        [
+          "t53"
+        ],
+        "t40"
+      ],
+      "tokens_data": 2007,
+      "raw": "{\"r1\": 14, \"r2\": [\"t53\"], \"r3\": \"t40\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2655,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 1442,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2865,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "taches",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        16,
+        [
+          "t5",
+          "t32",
+          "t39"
+        ],
+        "t3"
+      ],
+      "truth": [
+        16,
+        [
+          "t32",
+          "t39",
+          "t5"
+        ],
+        "t3"
+      ],
+      "tokens_data": 2025,
+      "raw": "{\"r1\": 16, \"r2\": [\"t5\", \"t32\", \"t39\"], \"r3\": \"t3\"}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 984,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 540,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 1005,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "truth": [
+        1,
+        [
+          "f1",
+          "f5",
+          "f10",
+          "f11",
+          "f12",
+          "f17"
+        ],
+        0.65
+      ],
+      "tokens_data": 737,
+      "raw": "{\"r1\": 1, \"r2\": [\"f1\", \"f5\", \"f10\", \"f11\", \"f12\", \"f17\"], \"r3\": 0.65}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 983,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 539,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 1006,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0
+      ],
+      "truth": [
+        0,
+        [
+          "f2",
+          "f3",
+          "f7",
+          "f8",
+          "f10",
+          "f14",
+          "f16",
+          "f18",
+          "f19"
+        ],
+        0.0
+      ],
+      "tokens_data": 738,
+      "raw": "{\"r1\": 0, \"r2\": [\"f2\", \"f3\", \"f7\", \"f8\", \"f10\", \"f14\", \"f16\", \"f18\", \"f19\"], \"r3\": 0}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 2933,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 1569,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 3020,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "truth": [
+        7,
+        [
+          "f8",
+          "f9",
+          "f16",
+          "f39"
+        ],
+        0.68
+      ],
+      "tokens_data": 2227,
+      "raw": "{\"r1\": 7, \"r2\": [\"f8\", \"f9\", \"f16\", \"f39\"], \"r3\": 0.68}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 2931,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 1567,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 3005,
+      "raw": "```json\n{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}\n```"
+    },
+    {
+      "kind": "faits",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "truth": [
+        7,
+        [
+          "f3",
+          "f4",
+          "f18",
+          "f25",
+          "f46",
+          "f49",
+          "f50",
+          "f52",
+          "f58"
+        ],
+        0.63
+      ],
+      "tokens_data": 2211,
+      "raw": "{\"r1\": 7, \"r2\": [\"f3\", \"f4\", \"f18\", \"f25\", \"f46\", \"f49\", \"f50\", \"f52\", \"f58\"], \"r3\": 0.63}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 942,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 515,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 1032,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "truth": [
+        799,
+        2,
+        [
+          "o9",
+          "o10",
+          "o14",
+          "o19"
+        ]
+      ],
+      "tokens_data": 752,
+      "raw": "{\"r1\": 799, \"r2\": 2, \"r3\": [\"o9\", \"o10\", \"o14\", \"o19\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 944,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 517,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 1034,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "truth": [
+        0,
+        2,
+        [
+          "o1",
+          "o14"
+        ]
+      ],
+      "tokens_data": 754,
+      "raw": "{\"r1\": 0, \"r2\": 2, \"r3\": [\"o1\", \"o14\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2781,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        "Impossible à calculer en EUR : la seule commande paid de client_3 est o53, de 767 USD, et aucun taux de change n'est fourni",
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 1474,
+      "raw": "{\"r1\": \"Impossible à calculer en EUR : la seule commande paid de client_3 est o53, de 767 USD, et aucun taux de change n'est fourni\", \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        "Non calculable en EUR : une seule commande payée pour client_3 (o53, 767 USD) et aucun taux de change fourni",
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 3071,
+      "raw": "```json\n{\"r1\": \"Non calculable en EUR : une seule commande payée pour client_3 (o53, 767 USD) et aucun taux de change fourni\", \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "truth": [
+        0,
+        9,
+        [
+          "o2",
+          "o14",
+          "o15",
+          "o18",
+          "o23",
+          "o31",
+          "o33",
+          "o35",
+          "o36",
+          "o38",
+          "o39",
+          "o40",
+          "o41",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2231,
+      "raw": "{\"r1\": 0, \"r2\": 9, \"r3\": [\"o2\", \"o14\", \"o15\", \"o18\", \"o23\", \"o31\", \"o33\", \"o35\", \"o36\", \"o38\", \"o39\", \"o40\", \"o41\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2781,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 1474,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 3071,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "truth": [
+        833,
+        9,
+        [
+          "o4",
+          "o7",
+          "o19",
+          "o22",
+          "o23",
+          "o24",
+          "o34",
+          "o41",
+          "o49",
+          "o58"
+        ]
+      ],
+      "tokens_data": 2231,
+      "raw": "{\"r1\": 833, \"r2\": 9, \"r3\": [\"o4\", \"o7\", \"o19\", \"o22\", \"o23\", \"o24\", \"o34\", \"o41\", \"o49\", \"o58\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1002,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_h",
+          "agent_d",
+          "agent_b",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 796,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_h\", \"agent_d\", \"agent_b\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_h",
+          "agent_d",
+          "agent_b",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1099,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_h\", \"agent_d\", \"agent_b\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1371,
+        [
+          "agent_h",
+          "agent_d",
+          "agent_b",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1371,
+        [
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 802,
+      "raw": "{\"r1\": 0, \"r2\": 1371, \"r3\": [\"agent_h\", \"agent_d\", \"agent_b\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1035,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_h",
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 809,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_h\", \"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 1134,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1,
+        7450,
+        [
+          "agent_h",
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d"
+        ]
+      ],
+      "truth": [
+        1,
+        7450,
+        [
+          "agent_a",
+          "agent_b",
+          "agent_c",
+          "agent_d",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 833,
+      "raw": "{\"r1\": 1, \"r2\": 7450, \"r3\": [\"agent_h\", \"agent_a\", \"agent_b\", \"agent_c\", \"agent_d\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2955,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_a\", \"agent_e\", \"agent_f\", \"agent_g\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_f",
+          "agent_h",
+          "agent_g",
+          "agent_a",
+          "agent_e"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2299,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_f\", \"agent_h\", \"agent_g\", \"agent_a\", \"agent_e\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_f",
+          "agent_h",
+          "agent_g",
+          "agent_a",
+          "agent_e"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 3286,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_f\", \"agent_h\", \"agent_g\", \"agent_a\", \"agent_e\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2,
+        6514,
+        [
+          "agent_f",
+          "agent_h",
+          "agent_g",
+          "agent_a",
+          "agent_e"
+        ]
+      ],
+      "truth": [
+        2,
+        6514,
+        [
+          "agent_a",
+          "agent_e",
+          "agent_f",
+          "agent_g",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2395,
+      "raw": "{\"r1\": 2, \"r2\": 6514, \"r3\": [\"agent_f\", \"agent_h\", \"agent_g\", \"agent_a\", \"agent_e\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2857,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_c\", \"agent_e\", \"agent_f\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2256,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 3189,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_c\", \"agent_e\", \"agent_f\", \"agent_h\"]}"
+    },
+    {
+      "kind": "evenements",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        0,
+        1681,
+        [
+          "agent_e",
+          "agent_h",
+          "agent_f",
+          "agent_c"
+        ]
+      ],
+      "truth": [
+        0,
+        1681,
+        [
+          "agent_c",
+          "agent_e",
+          "agent_f",
+          "agent_h"
+        ]
+      ],
+      "tokens_data": 2309,
+      "raw": "{\"r1\": 0, \"r2\": 1681, \"r3\": [\"agent_e\", \"agent_h\", \"agent_f\", \"agent_c\"]}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "all_ok": false,
+      "answers": [
+        2570,
+        [
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 1259,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 706,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 1308,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "truth": [
+        2570,
+        [
+          "m3",
+          "m6",
+          "m17"
+        ],
+        0
+      ],
+      "tokens_data": 993,
+      "raw": "{\"r1\": 2570, \"r2\": [\"m3\", \"m6\", \"m17\"], \"r3\": 0}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 1223,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 698,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 1276,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 20,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "truth": [
+        1620,
+        [
+          "m3",
+          "m5",
+          "m6"
+        ],
+        19440
+      ],
+      "tokens_data": 962,
+      "raw": "{\"r1\": 1620, \"r2\": [\"m3\", \"m5\", \"m6\"], \"r3\": 19440}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 3623,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 2016,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 3804,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "truth": [
+        1790,
+        [
+          "m12",
+          "m17",
+          "m20",
+          "m21",
+          "m23",
+          "m24",
+          "m32",
+          "m42",
+          "m44",
+          "m47",
+          "m55",
+          "m56"
+        ],
+        104020
+      ],
+      "tokens_data": 2861,
+      "raw": "{\"r1\": 1790, \"r2\": [\"m12\", \"m17\", \"m20\", \"m21\", \"m23\", \"m24\", \"m32\", \"m42\", \"m44\", \"m47\", \"m55\", \"m56\"], \"r3\": 104020}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 3724,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 2035,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 3893,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    },
+    {
+      "kind": "negociation",
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_compact",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "all_ok": true,
+      "answers": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "truth": [
+        3970,
+        [
+          "m0",
+          "m2",
+          "m12",
+          "m25",
+          "m26",
+          "m33",
+          "m38",
+          "m42",
+          "m45",
+          "m47",
+          "m58"
+        ],
+        226080
+      ],
+      "tokens_data": 2942,
+      "raw": "{\"r1\": 3970, \"r2\": [\"m0\", \"m2\", \"m12\", \"m25\", \"m26\", \"m33\", \"m38\", \"m42\", \"m45\", \"m47\", \"m58\"], \"r3\": 226080}"
+    }
+  ]
+}

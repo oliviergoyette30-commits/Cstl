@@ -34,6 +34,30 @@ QUESTIONS : 3 par jeu de donnees (somme, filtre, dependance, derniere
 offre...), verite calculee par programme. 5 types x 2 tailles (20 et 60
 elements) x 2 graines = 20 jeux de donnees, 3 passes.
 
+RESULTAT (2026-11-22, vraie API, 3 passes x 20 jeux de donnees, 180 questions) :
+                 questions justes      tokens donnees (moyenne)
+                 Haiku     Opus
+  json           179       178          2 006
+  toon           176       178          1 185
+  cstl           178       174          2 146
+  cstl_compact   177       177          1 571
+  par type, tokens (json / toon / cstl / cstl_compact) :
+    taches       1 788 /   973 / 1 922 / 1 362
+    faits        1 958 / 1 054 / 2 009 / 1 478
+    commandes    1 862 /   995 / 2 052 / 1 492
+    evenements   1 962 / 1 540 / 2 177 / 1 585
+    negociation  2 457 / 1 364 / 2 570 / 1 940
+- Hors politiques, TOON est le plus court : le CSTL compact coute 33 % de
+  tokens de plus (1 571 contre 1 185), car il repete le nom de chaque champ
+  (status=, due=) a chaque ligne, alors que TOON l'ecrit une fois dans son
+  en-tete. Seule exception, le journal irregulier : 1 585 contre 1 540.
+- Le CSTL compact reste 22 % plus court que le JSON compact et 27 % plus
+  court que le CSTL complet.
+- La comprehension est la meme dans les quatre formats (174 a 179 sur 180).
+- Sur les politiques (`format_short_benchmark.py`), c'etait l'inverse : le
+  CSTL compact etait 25 % plus court que TOON, parce que les regles ont des
+  conditions facultatives que TOON doit remplir de null.
+
 Usage :
   python3 scripts/data_types_benchmark.py --model claude-haiku-5-5 --runs 3
   python3 scripts/data_types_benchmark.py --stub      # plomberie seule, AUCUNE conclusion
