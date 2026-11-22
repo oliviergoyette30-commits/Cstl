@@ -315,6 +315,14 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     comme au décodage. Les conditions des règles sont typées aussi :
     montants, dates, durée et priorité.
 
+- **`scripts/gemini_tokens.py` : les tokens comptés par le tokenizer de
+  Gemini (2026-11-22).** C'est un deuxième tokenizer, après celui de Claude.
+  - Le CSTL sans mot-clé est le plus court partout : 5 540 tokens sur les
+    politiques, 20 743 sur les données, 20 284 sur les domaines.
+  - TOON fait 9 788, 24 817 et 27 399 tokens. Le CSTL sans mot-clé fait
+    donc 43 %, 16 % et 26 % de moins.
+  - Le JSON compact fait 15 064, 32 358 et 30 968 tokens.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
