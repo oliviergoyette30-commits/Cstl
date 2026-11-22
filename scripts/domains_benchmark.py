@@ -195,6 +195,7 @@ def comprehension(model, runs, formats, workers):
         except ValueError:
             ans = {}
         ok = [same(ans.get(f"r{i + 1}"), t) for i, (_, t) in enumerate(qs)]
+        print(f"    r{run} {name:16} {fmt:13} : {sum(ok)}/{len(ok)}", flush=True)
         return {"domain": name, "format": fmt, "run": run, "ok": ok, "raw": raw[:800]}
 
     jobs = [(n, o, f, r) for r in range(runs) for n, o in domains().items() for f in formats]
