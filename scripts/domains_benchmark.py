@@ -198,7 +198,11 @@ def comprehension(model, runs, formats, workers):
         prompt = (f"Voici un echange entre agents, domaine {name}.\n{NOTES[fmt]}\n{RULES}\n\nDonnees :\n{render(fmt, rels)}\n\n"
                   f"Questions :\n{lines}\n\nReponds uniquement par un objet JSON "
                   + "{" + ", ".join(f'"r{i + 1}": <reponse>' for i in range(len(qs))) + "}.")
-        raw = model.generate(prompt, max_tokens=4000)
+        try:
+            raw = model.generate(prompt, max_tokens=4000)
+        except RuntimeError as e:   # API indisponible apres reessais : cas note en erreur, pas compte
+            print(f"    r{run} {name:16} {fmt:13} : ERREUR API ({str(e)[:60]})", flush=True)
+            return {"domain": name, "format": fmt, "run": run, "ok": None, "error": str(e)[:300]}
         start, end = raw.find("{"), raw.rfind("}")
         try:
             ans = json.loads(raw[start:end + 1])
@@ -212,8 +216,11 @@ def comprehension(model, runs, formats, workers):
     with ThreadPoolExecutor(max_workers=workers) as pool:
         rows = list(pool.map(one, jobs))
     print(f"\n  Comprehension, {runs} passe(s) x {len(domains())} domaines x 6 questions :")
+    errors = sum(x["ok"] is None for x in rows)
+    if errors:
+        print(f"    ({errors} cas en erreur d'API, exclus du score)")
     for f in formats:
-        r = [x for x in rows if x["format"] == f]
+        r = [x for x in rows if x["format"] == f and x["ok"] is not None]
         pol = sum(sum(x["ok"][:4]) for x in r)
         dat = sum(sum(x["ok"][4:]) for x in r)
         print(f"    {f:13} | politique {pol:>3}/{4 * len(r):<3} | donnees {dat:>3}/{2 * len(r):<3} | "
