@@ -346,6 +346,14 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Limite : tout agent enregistré peut relire un arbre s'il connaît son
     id.
 
+- **Compréhension des 18 domaines sur Gemma 4 31B (2026-11-22, partiel).**
+  Le modèle ouvert de Google a été testé avec les questions qui mélangent
+  « permis » et « interdit ».
+  - 47 cas notés, tous parfaits : JSON 72/72, TOON 72/72, CSTL compact
+    78/78 et CSTL sans mot-clé 60/60.
+  - Une coupure réseau a interrompu le test, et 3 cas ont échoué côté API.
+  - Résultats : `scripts/domains_comprehension_gemma-4-31b-it_partiel.json`.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
