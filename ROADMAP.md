@@ -273,6 +273,17 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - `compact_writing_benchmark.py --formats compact,toon,compact_symboles` ;
     - `data_types_benchmark.py --formats json,toon,cstl_tableau,cstl_symboles`.
 
+- **`scripts/domains_benchmark.py` : les 18 domaines de `src/domains.rs`.**
+  Chaque domaine a une politique de 15 règles sur ses propres opérateurs,
+  plus 30 relations du domaine. La mesure est hors ligne, en caractères.
+  - Le mode sans mot-clé est le plus court dans les 18 domaines : 23 % de
+    moins que TOON et 53 % de moins que le JSON compact.
+  - Même le mode ligne bat TOON ici (49 675 contre 52 920 caractères), car
+    les données mélangent de nombreux types de relations.
+  - Allers-retours sans perte partout.
+  - Tokens et compréhension à mesurer quand l'API sera de nouveau
+    disponible : `python3 scripts/domains_benchmark.py --tokens`.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
