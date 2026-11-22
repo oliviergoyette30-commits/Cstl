@@ -1182,10 +1182,18 @@ def _inamed(tok):
     return name, raw
 
 
-def encode_tree_indented(data):
+def encode_tree_indented(data, counts="head"):
     """Document JSON -> CSTL compact en arbre indente. Sans perte
     (`decode_tree_indented` redonne exactement `data`), quelle que soit la
-    racine (objet, liste, valeur)."""
+    racine (objet, liste, valeur).
+
+    counts="head" : nombre d'elements en en-tete (`@orders[8]: ...`).
+    counts="end"  : en-tetes sans nombre, et une derniere ligne
+    `@end orders=8 lines=21` (2026-11-22). Pour qui ECRIT de gauche a droite
+    (un modele), compter apres coup est plus sur qu'annoncer avant ; et
+    `@end` seul suffit deja a detecter un document coupe."""
+    if counts not in ("head", "end"):
+        raise CompactError(f"counts : head ou end, pas {counts!r}")
     head = []
     if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
         head, tables, fields = ["@@list"], {"_": data}, {}
@@ -1197,16 +1205,16 @@ def encode_tree_indented(data):
     else:
         return "@@= " + _inline(data)
 
-    order, parents, counts, dense, kids_of = [], {}, {}, {}, {None: list(tables)}
+    order, parents, counts_of, dense, kids_of = [], {}, {}, {}, {None: list(tables)}
 
     def shape(key, objs, parent_key):
-        if key not in counts:
+        if key not in counts_of:
             order.append(key)
-            counts[key], parents[key], dense[key] = 0, [], None
+            counts_of[key], parents[key], dense[key] = 0, [], None
         if parent_key not in parents[key]:
             parents[key].append(parent_key)
         for o in objs:
-            counts[key] += 1
+            counts_of[key] += 1
             kids = _ikids(o)
             cols = [k for k in o if (k, o[k]) not in kids and _IKEY_OK.match(k)]
             dense[key] = cols if dense[key] is None else [c for c in dense[key] if c in cols]
@@ -1231,7 +1239,8 @@ def encode_tree_indented(data):
     for key in order:
         ps = parents[key]
         tag = "" if ps == [None] else "^" + ",".join("." if p is None else p for p in ps)
-        lines.append(f"@{key}[{counts[key]}]{tag}:" + "".join(f" {c}" for c in dense[key] or []))
+        n = f"[{counts_of[key]}]" if counts == "head" else ""
+        lines.append(f"@{key}{n}{tag}:" + "".join(f" {c}" for c in dense[key] or []))
 
     def rows(key, objs, parent_key, depth):
         tag = f"{key}> " if len(kids_of.get(parent_key, [])) > 1 else ""
@@ -1247,6 +1256,8 @@ def encode_tree_indented(data):
 
     for key, objs in tables.items():
         rows(key, objs, None, 0)
+    if counts == "end":
+        lines.append("@end" + "".join(f" {k}={counts_of[k]}" for k in order))
     return "\n".join(lines)
 
 
@@ -1281,6 +1292,7 @@ def decode_tree_indented(text, lenient=False, warnings=None):
     heads, kids_of, root_keys, root = {}, {}, [], {}
     stack = []          # (profondeur, objet, nom de sa liste)
     seen, as_list, value = {}, False, None
+    ended = False
     widths = [0]        # mode tolerant : largeur d'indentation de chaque niveau
     lines = text.split("\n")
     if lenient:   # tabulations de tete seulement : une valeur peut en contenir
@@ -1325,6 +1337,20 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         line, n = lines[i], i + 1
         i += 1
         if not line.strip():
+            continue
+        if ended:
+            raise CompactError(f"ligne {n} : contenu apres « @end »")
+        if re.match(r"^@end(\s|$)", line):
+            ended = True
+            for tok in line.split()[1:]:
+                name, sep, num = tok.partition("=")
+                if not sep or not num.isdigit():
+                    raise CompactError(f"ligne {n} : « @end nom=nombre ... » attendu : {tok!r}")
+                if name not in heads:
+                    raise CompactError(f"ligne {n} : liste inconnue dans « @end » : {name!r}")
+                if heads[name]["n"] is not None and heads[name]["n"] != int(num):
+                    raise CompactError(f"ligne {n} : {name} compte deux fois, differemment")
+                heads[name]["n"] = int(num)
             continue
         if line.startswith("@@"):
             rest = line[2:]

@@ -514,6 +514,7 @@ def test_indented_tree_any_json_random_round_trips():
         data = rnd.choice([lambda: obj(0), lambda: [obj(0) for _ in range(2)], lambda: val(0)])()
         assert decode_tree_indented(encode_tree_indented(data)) == data, (seed, data)
         assert decode_tree_indented(encode_tree_indented(data), lenient=True) == data, (seed, data)
+        assert decode_tree_indented(encode_tree_indented(data, counts="end")) == data, (seed, data)
 
 
 def test_indented_tree_lenient_mode_for_model_written_text():
@@ -535,3 +536,22 @@ def test_indented_tree_lenient_mode_for_model_written_text():
     # Une indentation incoherente reste refusee.
     with pytest.raises(CompactError):
         decode_tree_indented("@o: a\n@l^o: b\nx\n    y\n  z", lenient=True)
+
+
+def test_indented_tree_counts_at_the_end():
+    """2026-11-22 : les nombres d'elements peuvent venir APRES l'arbre
+    (`@end orders=2 lines=3`) : qui ecrit de gauche a droite compte ce qu'il
+    vient d'ecrire au lieu de l'annoncer. `@end` seul detecte deja une coupure."""
+    data = {"orders": [{"id": "o0", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o1", "lines": [{"q": 3}]}]}
+    text = encode_tree_indented(data, counts="end")
+    assert text.splitlines() == ["@orders: id", "@lines^orders: q", "o0", "  1", "  2", "o1", "  3",
+                                 "@end orders=2 lines=3"]
+    assert decode_tree_indented(text) == data
+    assert decode_tree_indented(text.replace("@end orders=2 lines=3", "@end")) == data
+    for bad in (text.replace("lines=3", "lines=4"), text + "\no2", text.replace("@end", "@end x=1"),
+                text.replace("lines=3", "lines=trois")):
+        with pytest.raises(CompactError):
+            decode_tree_indented(bad)
+    warn = []
+    assert decode_tree_indented(text.replace("lines=3", "lines=4"), lenient=True, warnings=warn) == data
+    assert warn == ["lines[4] annonce, 3 element(s) ecrit(s)"]
