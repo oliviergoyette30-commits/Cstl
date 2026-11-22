@@ -513,3 +513,25 @@ def test_indented_tree_any_json_random_round_trips():
 
         data = rnd.choice([lambda: obj(0), lambda: [obj(0) for _ in range(2)], lambda: val(0)])()
         assert decode_tree_indented(encode_tree_indented(data)) == data, (seed, data)
+        assert decode_tree_indented(encode_tree_indented(data), lenient=True) == data, (seed, data)
+
+
+def test_indented_tree_lenient_mode_for_model_written_text():
+    """2026-11-22 : un modele avait ecrit `@orders[8]: id client date note`
+    (note n'existe que sur une commande) et `@options[7]` (il y en avait 10).
+    Le mode tolerant relit ce texte sans rien deviner ; le mode strict le
+    refuse toujours."""
+    text = ("@orders[2]: id client note\n@lines[9]^orders: item qty\n"
+            "o0 c5\n    gpu 5\n    lic 3\no1 c3 note=fragile\n\trouter 1")
+    with pytest.raises(CompactError):
+        decode_tree_indented(text)
+    warn = []
+    got = decode_tree_indented(text, lenient=True, warnings=warn)
+    assert got == {"orders": [{"id": "o0", "client": "c5", "lines": [{"item": "gpu", "qty": 5}, {"item": "lic", "qty": 3}]},
+                              {"id": "o1", "client": "c3", "note": "fragile", "lines": [{"item": "router", "qty": 1}]}]}
+    assert warn == ["lines[9] annonce, 3 element(s) ecrit(s)"]
+    # [N] facultatif, dans les deux modes.
+    assert decode_tree_indented("@t: a\n1\n2") == {"t": [{"a": 1}, {"a": 2}]}
+    # Une indentation incoherente reste refusee.
+    with pytest.raises(CompactError):
+        decode_tree_indented("@o: a\n@l^o: b\nx\n    y\n  z", lenient=True)

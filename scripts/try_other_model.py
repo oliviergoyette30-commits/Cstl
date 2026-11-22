@@ -93,6 +93,17 @@ def main():
     truth = nw.leaves(data)
     got = nw.leaves(back) if err is None else set()
     score = len(truth & got) / max(len(truth), len(got), 1)
+    if err and args.format == "cstl_indent":
+        warn = []
+        try:
+            soft = nb.cstl_compact.decode_tree_indented(text, lenient=True, warnings=warn)
+        except Exception as e:  # noqa: BLE001
+            soft, warn = None, [f"{type(e).__name__}: {e}"]
+        if soft == data:
+            print(f"STRICT : refuse ({err}).\nTOLERANT : IDENTIQUE au JSON de depart."
+                  + "".join(f"\n  avertissement : {w}" for w in warn))
+            print(f"\nEcriture ({args.format}) : valeurs justes 100.0 % en mode tolerant")
+            return
     if err:
         print(f"ILLISIBLE : le decodeur refuse la reponse.\n  {err}")
     elif back == data:

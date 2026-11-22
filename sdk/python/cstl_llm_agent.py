@@ -563,7 +563,8 @@ class CstlAgent:
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
         return self.send_relations(receiver, cstl_compact.decode(body), purpose)
 
-    def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None) -> Tuple[str, CstlResponse]:
+    def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None,
+                  lenient: bool = False) -> Tuple[str, CstlResponse]:
         """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
         `tree` : n'importe quel document JSON (objet, liste, valeur), ou un
         texte en CSTL compact mode arbre : arbre indente
@@ -573,10 +574,13 @@ class CstlAgent:
         signees et envoyees : le serveur les verifie (types declares par
         SCHEMA compris) et les inscrit dans l'audit. Une liste, un objet ou un
         texte multiligne dans une cellule part en JSON base64url (type json).
+        lenient=True : un arbre indente ECRIT PAR UN MODELE est relu en mode
+        tolerant (`[N]` faux, colonnes finales omises, autre indentation ; voir
+        `cstl_compact.decode_tree_indented`). Rien n'est devine.
         Renvoie (tree_id, reponse). Relire avec `fetch_tree(tree_id)`."""
         import cstl_compact
         if isinstance(tree, str):
-            tree = (cstl_compact.decode_tree_indented(tree) if tree.lstrip().startswith("@")
+            tree = (cstl_compact.decode_tree_indented(tree, lenient=lenient) if tree.lstrip().startswith("@")
                     else cstl_compact.decode_tree(tree))
         tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
         return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id))

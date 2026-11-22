@@ -981,7 +981,7 @@ def relations_to_tree(rels, tree_id=None):
 #   - si un parent peut avoir plusieurs listes d'enfants, la ligne commence par
 #     « nom> » ; un element sans aucun champ s'ecrit « . ».
 
-_TREE2_HEAD = re.compile(r"^@([A-Za-z_][A-Za-z0-9_.]*)\[(\d+)\](?:\^([A-Za-z0-9_.,-]+))?:((?:\s+\S+)*)\s*$")
+_TREE2_HEAD = re.compile(r"^@([A-Za-z_][A-Za-z0-9_.]*)(?:\[(\d+)\])?(?:\^([A-Za-z0-9_.,-]+))?:((?:\s+\S+)*)\s*$")
 
 
 def _raw_tokens(line):
@@ -1145,7 +1145,7 @@ def _icell(v, blocks):
         part = s.split("\n")
         blocks.append(part)
         return f"|{len(part)}"
-    if (s in ("", "-", ".", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#]', s)
+    if (s in ("", "-", ".", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#=]', s)
             or s[0] in "[{|@"):
         return _quote(s)
     return s
@@ -1250,13 +1250,42 @@ def encode_tree_indented(data):
     return "\n".join(lines)
 
 
-def decode_tree_indented(text):
+def _is_named(tok):
+    """Mot de la forme nom=valeur (nom eventuellement entre guillemets) ?"""
+    if tok.startswith('"'):
+        try:
+            name, j = _parse_inline(tok)
+        except CompactError:
+            return False
+        return isinstance(name, str) and tok[j:j + 1] == "="
+    head = tok.split("=", 1)[0]
+    return "=" in tok and bool(head) and _IKEY_OK.match(head) is not None
+
+
+def decode_tree_indented(text, lenient=False, warnings=None):
     """Inverse de `encode_tree_indented`. Leve CompactError si une ligne, un
-    nombre d'elements, une indentation ou un bloc ne colle pas."""
+    nombre d'elements, une indentation ou un bloc ne colle pas.
+
+    `[N]` est facultatif dans un en-tete (absent : pas de verification).
+
+    lenient=True (2026-11-22), pour un texte ECRIT PAR UN MODELE : rien n'est
+    devine, seules trois regles de forme sont assouplies, parce que
+    l'information reste complete sans elles :
+      - un `[N]` faux devient un avertissement (l'indentation suffit a
+        reconstruire l'arbre) ;
+      - une ligne peut omettre ses DERNIERES colonnes : ces champs sont
+        absents (le modele a mis en colonne un champ facultatif) ;
+      - l'indentation peut etre de n'importe quelle largeur (tabulation = 4
+        espaces), pourvu qu'elle soit coherente.
+    Les avertissements sont ajoutes a la liste `warnings` si elle est donnee."""
     heads, kids_of, root_keys, root = {}, {}, [], {}
     stack = []          # (profondeur, objet, nom de sa liste)
     seen, as_list, value = {}, False, None
+    widths = [0]        # mode tolerant : largeur d'indentation de chaque niveau
     lines = text.split("\n")
+    if lenient:   # tabulations de tete seulement : une valeur peut en contenir
+        lines = [(lambda body: line[:len(line) - len(body)].replace("\t", "    ") + body)(line.lstrip(" \t"))
+                 for line in lines]
     i = 0
 
     def take_blocks(n, pending):
@@ -1315,7 +1344,7 @@ def decode_tree_indented(text):
             if not m:
                 raise CompactError(f"ligne {n} : en-tete illisible : {line!r}")
             key = m.group(1)
-            heads[key] = {"n": int(m.group(2)), "cols": m.group(4).split()}
+            heads[key] = {"n": int(m.group(2)) if m.group(2) else None, "cols": m.group(4).split()}
             for p in (m.group(3).split(",") if m.group(3) else ["."]):
                 if p == ".":
                     root_keys.append(key)
@@ -1323,9 +1352,22 @@ def decode_tree_indented(text):
                     kids_of.setdefault(p, []).append(key)
             continue
         indent = len(line) - len(line.lstrip(" "))
-        if indent % 2:
-            raise CompactError(f"ligne {n} : indentation impaire")
-        depth = indent // 2
+        if not lenient:
+            if indent % 2:
+                raise CompactError(f"ligne {n} : indentation impaire")
+            depth = indent // 2
+        else:
+            popped = False
+            while len(widths) > 1 and indent < widths[-1]:
+                widths.pop()
+                popped = True
+            if indent > widths[-1] and popped:
+                raise CompactError(f"ligne {n} : indentation incoherente")
+            if indent > widths[-1]:
+                widths.append(indent)
+            elif indent != widths[-1]:
+                raise CompactError(f"ligne {n} : indentation incoherente")
+            depth = len(widths) - 1
         while stack and stack[-1][0] >= depth:
             stack.pop()
         if depth and (not stack or stack[-1][0] != depth - 1):
@@ -1343,16 +1385,21 @@ def decode_tree_indented(text):
         cols = heads[key]["cols"]
         if toks == ["."] and not cols:
             toks = []
-        if len(toks) < len(cols):
+        if not lenient and len(toks) < len(cols):
             raise CompactError(f"ligne {n} : {key} attend {len(cols)} valeurs")
+        npos = next((j for j, t in enumerate(toks) if _is_named(t)), len(toks)) if lenient else len(cols)
         obj = {}
-        fill(obj, toks, cols, n)
+        fill(obj, toks, cols[:npos], n)
         (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
         seen[key] = seen.get(key, 0) + 1
         stack.append((depth, obj, key))
     for key, h in heads.items():
-        if seen.get(key, 0) != h["n"]:
-            raise CompactError(f"{key}[{h['n']}] annonce, {seen.get(key, 0)} element(s) ecrit(s)")
+        if h["n"] is not None and seen.get(key, 0) != h["n"]:
+            msg = f"{key}[{h['n']}] annonce, {seen.get(key, 0)} element(s) ecrit(s)"
+            if not lenient:
+                raise CompactError(msg)
+            if warnings is not None:
+                warnings.append(msg)
     if as_list == "value":
         if root or heads:
             raise CompactError("« @@= » : la racine est une valeur, rien d'autre n'est attendu")

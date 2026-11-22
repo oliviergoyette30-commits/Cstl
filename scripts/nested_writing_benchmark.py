@@ -14,8 +14,9 @@ Protocole, identique pour chaque format :
     petit exemple d'une AUTRE famille de donnees (le JSON et sa forme dans le
     format, produits par l'encodeur), puis un document JSON a convertir ;
   - sa sortie est relue par le VRAI decodeur du format (rien n'est devine) ;
-  - mesures : relu sans erreur, identique au JSON de depart, et part des
-    valeurs feuilles correctes (chemin + valeur ; 0 si illisible).
+  - mesures : relu sans erreur, identique au JSON de depart, identique en
+    mode tolerant (cstl_indent : `decode_tree_indented(lenient=True)`), et
+    part des valeurs feuilles correctes (chemin + valeur ; 0 si illisible).
 
 Jeux : les 12 jeux imbriques de `nested_benchmark.py` (commandes, organisation,
 contrats ; 8 et 24 elements ; 2 graines).
@@ -36,6 +37,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 import nested_benchmark as nb  # noqa: E402
 
+LENIENT = {"cstl_indent": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True)}
 DECODE = {"json": json.loads, "toon": nb.toon_lite.decode_nested,
           "cstl_arbre": nb.cstl_compact.decode_tree, "cstl_indent": nb.cstl_compact.decode_tree_indented}
 
@@ -93,10 +95,16 @@ def main():
         got = leaves(back) if err is None else set()
         score = len(truth & got) / max(len(truth), len(got), 1)
         exact = err is None and back == d
+        # Mode tolerant (cstl_indent) : [N] faux, colonnes finales omises,
+        # autre largeur d'indentation. Sans objet pour les autres formats.
+        try:
+            soft = LENIENT.get(f, DECODE[f])(text) == d
+        except Exception:  # noqa: BLE001
+            soft = False
         print(f"    {k:13} n={n:<3} s{s} {f:12} : {'identique' if exact else 'lisible' if err is None else 'ILLISIBLE'}"
-              f"  feuilles {100 * score:5.1f} %" + (f"  ({err[:70]})" if err else ""), flush=True)
-        return {**base, "ok": True, "parsed": err is None, "exact": exact, "leaf_score": round(score, 4),
-                "error_decode": err, "chars_out": len(text), "raw": text[:1500]}
+              f"  feuilles {100 * score:5.1f} %" + ("  tolerant: identique" if soft and not exact else "") + (f"  ({err[:70]})" if err else ""), flush=True)
+        return {**base, "ok": True, "parsed": err is None, "exact": exact, "exact_lenient": soft, "leaf_score": round(score, 4),
+                "error_decode": err, "chars_out": len(text), "raw": text}
 
     dest = REPO / "scripts" / f"nested_writing_{args.model}.json"
     rows = [None] * len(jobs)
@@ -114,6 +122,7 @@ def main():
         if not r:
             continue
         print(f"    {f:12} | relus {sum(x['parsed'] for x in r):>2}/{len(r)} | identiques {sum(x['exact'] for x in r):>2}/{len(r)}"
+              f" | identiques en mode tolerant {sum(x.get('exact_lenient', x['exact']) for x in r):>2}/{len(r)}"
               f" | feuilles {100 * sum(x['leaf_score'] for x in r) / len(r):5.1f} %"
               + (f" | erreurs d'API {sum(1 for x in rows if x['format'] == f and x['ok'] is None)}"
                  if any(x["format"] == f and x["ok"] is None for x in rows) else ""))

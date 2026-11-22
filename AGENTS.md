@@ -228,6 +228,17 @@ How to read it:
 - `@@ ...` holds the plain fields of the root. `@@list` marks a root that is
   a list of objects. `@@= value` marks any other root.
 
+`[N]` is optional; when present, it is checked. For a tree written by a
+model, use `decode_tree_indented(text, lenient=True)` or
+`send_tree(..., lenient=True)`. This relaxes three rules, so nothing is
+guessed:
+- a wrong `[N]` is only a warning;
+- a row may omit its last columns (those fields are absent);
+- any consistent indentation is accepted.
+
+A model that wrote `@orders[8]: id client date note` and `@options[7]`
+(instead of 10) is read back identical this way.
+
 Round trips are lossless: tested on 30,000 random JSON documents with trap
 values. In a comprehension test on Gemma 4 31B (36 questions), the indented
 tree scored 36/36, against 35/36 for JSON, and used 39 % fewer tokens.
