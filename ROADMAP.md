@@ -283,6 +283,10 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Allers-retours sans perte partout.
   - Tokens et compréhension à mesurer quand l'API sera de nouveau
     disponible : `python3 scripts/domains_benchmark.py --tokens`.
+  - Test de compréhension prêt (6 questions par domaine : 3 permissions,
+    1 liste d'obligations, 1 comptage, 1 somme) :
+    `python3 scripts/domains_benchmark.py --comprehension claude-haiku-5-5`,
+    puis la même commande avec `claude-opus-5-5`.
 
 ## Déjà fait (PR #3 à #11)
 

@@ -116,6 +116,100 @@ def render(fmt, rels):
     return cstl_compact.encode_symbols(rels)
 
 
+# ------------------------------------------------------------ comprehension
+
+NOTES = {
+    "json": "Format : JSON. roles = [agent, role] ; facts = {fait: vrai/faux} ; rules = regles PERFORM ; records = relations du domaine.",
+    "toon": ("Format : TOON. « nom[N]{champs}: » puis une ligne par element, valeurs dans l'ordre des champs ; null = absent. "
+             "roles, facts et rules forment la politique ; records = relations du domaine."),
+    "cstl_compact": ("Format : CSTL compact. ROLE <agent> <role> ; FACT <fait> true|false ; regle : <qui> <MUST|MUST_NOT|MAY> "
+                     "<action> [>X] [if:F] [unless:F] ; relation du domaine : REL <type> <subject> <object> cle=valeur."),
+    "cstl_symboles": ("Format : CSTL compact sans mot-cle. <agent> @<role> ; <fait>=1|0 ; regle : <qui> *<action> (MUST), "
+                      "!<action> (MUST_NOT), ?<action> (MAY), avec >X, +F (si F vrai), -F (sauf si F vrai) ; relations du "
+                      "domaine : « <TYPE>[N]: col1 col2 ... » puis une ligne par relation : subject object puis les colonnes."),
+}
+RULES = ("Regles : une regle PERFORM interdit (MUST_NOT), oblige (MUST) ou permet (MAY) l'action a son subject ; "
+         "subject=role:<nom> vise les agents qui ont ce role. Conditions : amount_above=X (>X) : seulement si le montant "
+         "demande depasse X ; if_fact=F : seulement si F est vrai ; unless_fact=F : sauf si F est vrai. Un fait absent "
+         "est faux. Une action est interdite si au moins une regle MUST_NOT qui vaut la vise ; sinon elle est permise.")
+
+
+def holds(r, facts, amount):
+    if "amount_above" in r and not (amount is not None and amount > float(r["amount_above"])):
+        return False
+    return ("if_fact" not in r or r["if_fact"] in facts) and ("unless_fact" not in r or r["unless_fact"] not in facts)
+
+
+def questions(name, rels):
+    rnd = random.Random(zlib.crc32(("q/" + name).encode()))
+    facts = {r["subject"] for r in rels if r["type"] == "STATE" and r["object"] == "true"}
+    roles = lambda a: {r["object"][5:] for r in rels if r["type"] == "POSSESSES" and r["subject"] == a}  # noqa: E731
+    targets = lambda r, a: r["subject"] == a or (r["subject"].startswith("role:") and r["subject"][5:] in roles(a))  # noqa: E731
+    rules = [r for r in rels if r["type"] == "PERFORM"]
+    qs = []
+    for r in rnd.sample([x for x in rules if x["modality"] == "MUST_NOT"], 3):
+        agent = r["subject"] if not r["subject"].startswith("role:") else next(
+            (a for a in [f"agent_{c}" for c in "abcdef"] if r["subject"][5:] in roles(a)), "agent_a")
+        amount = int(float(r.get("amount_above", 300)) + rnd.choice([-1, 1, 50]))
+        ok = not any(x["modality"] == "MUST_NOT" and x["object"] == r["object"] and targets(x, agent) and holds(x, facts, amount)
+                     for x in rules)
+        qs.append((f"{agent} veut lancer {r['object']} pour {amount} : est-ce permis ? (true ou false)", ok))
+    agent = max([f"agent_{c}" for c in "abcdef"], key=lambda a: sum(x["modality"] == "MUST" and targets(x, a) for x in rules))
+    must = sorted({x["object"] for x in rules if x["modality"] == "MUST" and targets(x, agent) and holds(x, facts, None)})
+    qs.append((f"Quelles actions {agent} est-il OBLIGE de lancer ? (liste)", must))
+    recs = [r for r in rels if r["type"] not in ("POSSESSES", "STATE", "PERFORM")]
+    t = rnd.choice(sorted({r["type"] for r in recs}))
+    qs.append((f"Combien de relations du domaine ont le type {t} ?", sum(r["type"] == t for r in recs)))
+    a = rnd.choice(sorted({r["subject"] for r in recs}))
+    qs.append((f"Quelle est la somme des amount des relations du domaine dont le subject est {a} ? (0 si aucune)",
+               sum(int(r["amount"]) for r in recs if r["subject"] == a and "amount" in r)))
+    return qs
+
+
+def same(answer, truth):
+    if isinstance(truth, bool):
+        return str(answer).strip().lower() == str(truth).lower()
+    if isinstance(truth, list):
+        return isinstance(answer, list) and sorted(str(x).strip() for x in answer) == truth
+    try:
+        return abs(float(answer) - float(truth)) < 0.006
+    except (TypeError, ValueError):
+        return False
+
+
+def comprehension(model, runs, formats, workers):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(job):
+        name, ops, fmt, run = job
+        rels = scenario(name, ops)
+        qs = questions(name, rels)
+        lines = "\n".join(f"{i + 1}. {q}" for i, (q, _) in enumerate(qs))
+        prompt = (f"Voici un echange entre agents, domaine {name}.\n{NOTES[fmt]}\n{RULES}\n\nDonnees :\n{render(fmt, rels)}\n\n"
+                  f"Questions :\n{lines}\n\nReponds uniquement par un objet JSON "
+                  + "{" + ", ".join(f'"r{i + 1}": <reponse>' for i in range(len(qs))) + "}.")
+        raw = model.generate(prompt, max_tokens=4000)
+        start, end = raw.find("{"), raw.rfind("}")
+        try:
+            ans = json.loads(raw[start:end + 1])
+        except ValueError:
+            ans = {}
+        ok = [same(ans.get(f"r{i + 1}"), t) for i, (_, t) in enumerate(qs)]
+        return {"domain": name, "format": fmt, "run": run, "ok": ok, "raw": raw[:800]}
+
+    jobs = [(n, o, f, r) for r in range(runs) for n, o in domains().items() for f in formats]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        rows = list(pool.map(one, jobs))
+    print(f"\n  Comprehension, {runs} passe(s) x {len(domains())} domaines x 6 questions :")
+    for f in formats:
+        r = [x for x in rows if x["format"] == f]
+        pol = sum(sum(x["ok"][:4]) for x in r)
+        dat = sum(sum(x["ok"][4:]) for x in r)
+        print(f"    {f:13} | politique {pol:>3}/{4 * len(r):<3} | donnees {dat:>3}/{2 * len(r):<3} | "
+              f"tout juste {sum(all(x['ok']) for x in r):>3}/{len(r)}")
+    return rows
+
+
 def same_relations(a, b):
     key = lambda r: sorted(r.items())  # noqa: E731
     return sorted(map(key, a)) == sorted(map(key, b))
@@ -124,7 +218,24 @@ def same_relations(a, b):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tokens", action="store_true", help="compter aussi les tokens (API Anthropic requise)")
+    ap.add_argument("--comprehension", metavar="MODELE", help="poser les questions a ce modele (ex. claude-haiku-5-5), ou « stub »")
+    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--formats", default="json,toon,cstl_compact,cstl_symboles")
     args = ap.parse_args()
+    if args.comprehension:
+        if args.comprehension == "stub":
+            class Stub:
+                def generate(self, prompt, max_tokens=0):
+                    return '{"r1": true, "r2": true, "r3": true, "r4": [], "r5": 0, "r6": 0}'
+            model = Stub()
+        else:
+            import team_task_benchmark as tb
+            model = tb.ClaudeBrain(args.comprehension)
+        rows = comprehension(model, args.runs, [f for f in args.formats.split(",") if f], 8)
+        dest = REPO / "scripts" / f"domains_comprehension_{args.comprehension}.json"
+        dest.write_text(json.dumps({"rows": rows}, indent=2, ensure_ascii=False) + "\n")
+        print(f"  Resultats bruts : {dest.relative_to(REPO)}")
+        return
     count = None
     if args.tokens:
         import anthropic
