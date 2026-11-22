@@ -380,10 +380,23 @@ def test_tree_relations_round_trip_and_escaping():
 
 
 def test_tree_relations_refuse_what_the_server_would_lose():
-    for bad in ({"a": [{"x": "avec [crochet]"}]}, {"a": [{"x": 'guil"lemet'}]}, {"a": [{"x": "y" * 301}]},
-                {"a": [{"bad name": 1}]}, {"a": [{"x": ["l"]}]}, {"a": [{"id": "d"}, {"id": "d"}]}):
+    for bad in ({"a": [{"x": "y" * 301}]}, {"a": [{"bad name": 1}]}, {"a": [{"id": "d"}, {"id": "d"}]},
+                {"a": [{"x": list(range(200))}]}):
         with pytest.raises(CompactError):
             tree_to_relations(bad, "t1")
+
+
+def test_tree_relations_carry_lists_text_and_any_root():
+    """2026-11-22 : listes, objets et textes multilignes passent en JSON
+    base64url (type json) ; la racine peut etre libre."""
+    from cstl_compact import relations_to_tree
+    for data in ({"a": [{"x": "avec [crochet]", "q": 'guil"lemet', "t": "l1\nl2", "tags": ["p", "q"],
+                         "geo": {"lat": 1.5}, "m": [[1, 2], [3, 4]]}]},
+                 {"service": "billing", "tags": ["eu"], "tickets": [{"id": "t1", "n": 2}]},
+                 [{"a": 1}, {"a": 2, "kids": [{"b": True}]}], 42, "texte", [1, "deux", None], {}):
+        rels = tree_to_relations(data, "t1")
+        assert all(not any(c in str(v) for c in '"[]\n') for r in rels for v in r.values())
+        assert relations_to_tree(rels, "t1") == data
 
 
 def test_tree_relations_random_round_trips():
@@ -445,3 +458,58 @@ def test_indented_tree_random_round_trips():
     for _ in range(300):
         data = {"root": [obj(0) for _ in range(rnd.randint(1, 4))]}
         assert decode_tree_indented(encode_tree_indented(data)) == data
+
+
+def test_indented_tree_inline_lists_blocks_and_free_root():
+    """2026-11-22 : listes et objets en ligne, texte multiligne en bloc « | »,
+    racine libre (champs, liste, valeur seule)."""
+    data = {"service": "billing", "tags": ["prod", "eu"],
+            "tickets": [{"id": "t1", "geo": {"lat": 45.5, "lon": -73.6}, "desc": "Bloque.\nRelance demain.",
+                         "m": [[1, 2], [3, 4]]}, {"id": "t2", "desc": "ok"}]}
+    text = encode_tree_indented(data)
+    assert text.splitlines() == [
+        "@@ service=billing tags=[prod,eu]", "@tickets[2]: id desc",
+        "t1 |2 geo={lat:45.5,lon:-73.6} m=[[1,2],[3,4]]", "  | Bloque.", "  | Relance demain.", "t2 ok"]
+    assert decode_tree_indented(text) == data
+    assert encode_tree_indented([1, "deux", None]) == "@@= [1,deux,null]"
+    assert encode_tree_indented([{"a": 1}, {"a": 2}]).splitlines()[0] == "@@list"
+    for d in ({}, [], 7, "x y", None, [{"a": 1}], {"orders": [{"lines": [{"x": 1}]}], "lines": [{"x": 2}]},
+              {"a b": 1, '"': "@x", "k": "|2", "e": "", "n": "\n"}):
+        assert decode_tree_indented(encode_tree_indented(d)) == d
+
+
+def test_indented_tree_blocks_are_checked():
+    with pytest.raises(CompactError):
+        decode_tree_indented("@t[1]: d\n|2\n  | une seule ligne")
+    with pytest.raises(CompactError):
+        decode_tree_indented("@t[1]: d\n|1\n  pas un bloc")
+    with pytest.raises(CompactError):
+        decode_tree_indented("@t[1]: d\n[a,b")
+
+
+def test_indented_tree_any_json_random_round_trips():
+    nasty = ["", " ", "a b", "-", ".", "null", "true", "1", "01", "1e5", "x>", "k=v", "|", "|2", "[a", "{", "a,b",
+             "a:b", '"q"', "back\\slash", "#tag", "l1\nl2", "\n", "fin\n", "\r\n", "tab\tx", "é 漢", "\u2028",
+             "  lead", "trail  ", "~", "@x", "@@", "| x"]
+    keys = ["id", "name", "a b", "x=y", "", "list", "_", "tree", "lines", "opts", "é", '"', "k.1", "-"]
+    for seed in range(3000):
+        rnd = random.Random(seed)
+
+        def scalar():
+            return rnd.choice([None, True, False, rnd.randint(-5, 99), rnd.random() * 100, rnd.choice(nasty)])
+
+        def val(d):
+            c = rnd.random()
+            if d > 3 or c < 0.5:
+                return scalar()
+            if c < 0.7:
+                return [val(d + 1) for _ in range(rnd.randint(0, 3))]
+            if c < 0.85:
+                return {rnd.choice(keys): val(d + 1) for _ in range(rnd.randint(0, 3))}
+            return [obj(d + 1) for _ in range(rnd.randint(1, 3))]
+
+        def obj(d):
+            return {rnd.choice(keys): val(d) for _ in range(rnd.randint(0, 4))}
+
+        data = rnd.choice([lambda: obj(0), lambda: [obj(0) for _ in range(2)], lambda: val(0)])()
+        assert decode_tree_indented(encode_tree_indented(data)) == data, (seed, data)

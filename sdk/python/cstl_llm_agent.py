@@ -565,19 +565,23 @@ class CstlAgent:
 
     def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None) -> Tuple[str, CstlResponse]:
         """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
-        `tree` : un dict {liste: [objets]}, ou un texte en CSTL compact mode
-        arbre (`cstl_compact.encode_tree`). Il est converti en relations
-        marquees tree=<tree_id> (`cstl_compact.tree_to_relations`), signees et
-        envoyees : le serveur les verifie (types declares par SCHEMA compris)
-        et les inscrit dans l'audit. Renvoie (tree_id, reponse). Relire avec
-        `fetch_tree(tree_id)`."""
+        `tree` : n'importe quel document JSON (objet, liste, valeur), ou un
+        texte en CSTL compact mode arbre : arbre indente
+        (`cstl_compact.encode_tree_indented`, commence par « @ ») ou arbre par
+        identifiants (`cstl_compact.encode_tree`). Il est converti en
+        relations marquees tree=<tree_id> (`cstl_compact.tree_to_relations`),
+        signees et envoyees : le serveur les verifie (types declares par
+        SCHEMA compris) et les inscrit dans l'audit. Une liste, un objet ou un
+        texte multiligne dans une cellule part en JSON base64url (type json).
+        Renvoie (tree_id, reponse). Relire avec `fetch_tree(tree_id)`."""
         import cstl_compact
         if isinstance(tree, str):
-            tree = cstl_compact.decode_tree(tree)
+            tree = (cstl_compact.decode_tree_indented(tree) if tree.lstrip().startswith("@")
+                    else cstl_compact.decode_tree(tree))
         tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
         return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id))
 
-    def fetch_tree(self, tree_id: str) -> dict:
+    def fetch_tree(self, tree_id: str):
         """Relit un arbre envoye avec `send_tree` (sa derniere version), depuis
         le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse."""
         import cstl_compact

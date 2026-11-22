@@ -352,9 +352,18 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - Compréhension (Gemma 4 31B, mêmes 36 questions) : arbre indenté
       **36/36**, JSON 35/36, TOON 35/36, arbre par identifiants 31/36.
     - Un seul modèle et une passe : à confirmer sur d'autres modèles.
-    - Limites relevées : un texte sur plusieurs lignes est mal relu (à
-      refuser ou à écrire en bloc), les listes et objets dans une cellule
-      passent en JSON échappé, et la racine doit être `{nom: [objets]}`.
+    - Les trois limites relevées ensuite sont levées (2026-11-22) :
+      - un texte multiligne s'écrit en bloc (`|N`, puis N lignes `| `) ;
+      - les listes et objets s'écrivent en ligne (`tags=[a,b]`,
+        `geo={lat:1}`) ;
+      - la racine est libre (`@@ champs`, `@@list`, `@@= valeur`).
+    - Allers-retours sans perte sur 30 000 documents JSON aléatoires,
+      valeurs pièges comprises. Sur les 12 jeux du banc d'essai, la sortie
+      est identique au token près.
+    - Branché au serveur : `send_tree` accepte l'arbre indenté et n'importe
+      quel document JSON. Une liste, un objet ou un texte multiligne part en
+      JSON base64url (type `json`). Seules limites : 300 caractères par
+      valeur et noms de champ `[A-Za-z0-9_.-]`.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

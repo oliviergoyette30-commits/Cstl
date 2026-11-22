@@ -48,6 +48,7 @@ CONDITIONS d'une regle (dans n'importe quel ordre) :
   unless:F     unless_fact=F         from:D       valid_from=D
   until:D      valid_until=D         cle=valeur   tout autre attribut
 """
+import base64
 import json
 import re
 
@@ -835,13 +836,70 @@ def _unfield(k):
     return k[2:] if k.startswith("f_") else k
 
 
+def _b64(text):
+    return base64.urlsafe_b64encode(text.encode()).decode().rstrip("=")
+
+
+def _unb64(text):
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode()
+
+
+def _wire_value(where, v):
+    """Valeur -> (texte transmissible, type). Une liste, un objet ou un texte
+    que le format filaire ne peut pas porter (guillemet, crochet, retour a la
+    ligne) part en JSON encode en base64url, de type « json » (2026-11-22)."""
+    if v is None:
+        return "", "null"
+    if v is True or v is False:
+        return ("true" if v else "false"), "bool"
+    if isinstance(v, int):
+        return str(v), "int"
+    if isinstance(v, float):
+        return json.dumps(v), "num"
+    if isinstance(v, (list, dict)) or any(c in str(v) for c in '"[]\n\r'):
+        out, t = _b64(json.dumps(v, ensure_ascii=False, separators=(",", ":"))), "json"
+    else:
+        out, t = str(v), None
+    if len(out) > 300:
+        raise CompactError(f"{where} : valeur trop longue pour le serveur ({len(out)} > 300) : {str(v)[:40]!r}")
+    return out, t
+
+
+def _from_wire(v, t):
+    if t == "json":
+        return json.loads(_unb64(v))
+    return None if t == "null" else v == "true" if t == "bool" else int(v) if t == "int" else float(v) if t == "num" else v
+
+
 def tree_to_relations(data, tree_id):
-    """Arbre {liste: [objets]} -> relations CSTL, toutes marquees tree=<tree_id>."""
+    """Document JSON -> relations CSTL, toutes marquees tree=<tree_id>. Les
+    listes d'objets deviennent des relations (une par objet) ; le reste de la
+    racine (champs simples, liste d'objets en racine, valeur seule) part dans
+    une relation « tree_root » (tree_kind=fields|list|value)."""
     if not _NAME_OK.match(str(tree_id)):
         raise CompactError(f"id d'arbre invalide : {tree_id!r}")
-    if not isinstance(data, dict) or not all(isinstance(v, list) for v in data.values()):
-        raise CompactError("tree_to_relations attend {nom: [objets]} a la racine")
     rels, seen = [], set()
+    kind, extra = None, {}
+    if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
+        kind, data = "list", {"_": data}
+    elif isinstance(data, dict):
+        extra = {k: v for k, v in data.items()
+                 if not (_NAME_OK.match(k) and isinstance(v, list) and v and all(isinstance(x, dict) for x in v))}
+        data = {k: v for k, v in data.items() if k not in extra}
+        kind = "fields" if extra else None
+    else:
+        kind, extra, data = "value", {"v": data}, {}
+    if kind:
+        rel = {"type": "tree_root", "subject": "tree_root", "object": "-", "tree": str(tree_id), "tree_kind": kind}
+        types = []
+        for k, v in extra.items():
+            name = _field_name(k)
+            rel[name], t = _wire_value(f"racine.{k}", v)
+            if t:
+                types.append(f"{name}:{t}")
+        if types:
+            rel["tree_types"] = " ".join(types)
+        rels.append(rel)
 
     def walk(key, objs, parent):
         if not _NAME_OK.match(key):
@@ -864,21 +922,8 @@ def tree_to_relations(data, tree_id):
                 if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
                     kids.append((k, v))
                     continue
-                if isinstance(v, (list, dict)):
-                    raise CompactError(f"{key}.{k} : liste ou objet dans une cellule, non transmissible au serveur")
                 name = _field_name(k)
-                if v is None:
-                    rel[name], t = "", "null"
-                elif v is True or v is False:
-                    rel[name], t = ("true" if v else "false"), "bool"
-                elif isinstance(v, int):
-                    rel[name], t = str(v), "int"
-                elif isinstance(v, float):
-                    rel[name], t = json.dumps(v), "num"
-                else:
-                    rel[name], t = str(v), None
-                    if any(c in rel[name] for c in '"[]\n\r') or len(rel[name]) > 300:
-                        raise CompactError(f"{key}.{k} : valeur non transmissible au serveur : {rel[name][:40]!r}")
+                rel[name], t = _wire_value(f"{key}.{k}", v)
                 if t:
                     types.append(f"{name}:{t}")
             if types:
@@ -894,18 +939,19 @@ def tree_to_relations(data, tree_id):
 
 def relations_to_tree(rels, tree_id=None):
     """Inverse de `tree_to_relations` (relations dans l'ordre d'envoi)."""
-    nodes, root = {}, {}
+    nodes, root, kind, extra = {}, {}, None, {}
     for r in rels:
         if tree_id is not None and r.get("tree") != str(tree_id):
             continue
         types = dict(t.split(":", 1) for t in r.get("tree_types", "").split() if ":" in t)
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
-            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "block"):
+            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "block"):
                 continue
-            t = types.get(k)
-            o[_unfield(k)] = (None if t == "null" else v == "true" if t == "bool" else int(v) if t == "int"
-                             else float(v) if t == "num" else v)
+            o[_unfield(k)] = _from_wire(v, types.get(k))
+        if r.get("tree_kind"):
+            kind, extra = r["tree_kind"], o
+            continue
         nodes[r["subject"]] = o
         if r["object"] == "-":
             root.setdefault(r["type"], []).append(o)
@@ -913,7 +959,11 @@ def relations_to_tree(rels, tree_id=None):
             nodes[r["object"]].setdefault(r["type"], []).append(o)
         else:
             raise CompactError(f"parent inconnu {r['object']!r} pour {r['subject']!r}")
-    return root
+    if kind == "value":
+        return extra.get("v")
+    if kind == "list":
+        return root.get("_", [])
+    return {**extra, **root}
 
 
 # ------------------------------------------------- arbres indentes (v2)
@@ -964,12 +1014,190 @@ def _raw_tokens(line):
     return out
 
 
+# Extensions (2026-11-22), pour que tout document JSON passe sans perte :
+#   - listes et objets EN LIGNE dans une cellule : tags=[a,b,3]
+#     geo={lat:45.5,lon:-73.6}, matrice [[1,2],[3,4]] ; une chaine y est
+#     ecrite entre guillemets (avec les echappements JSON) si elle contient
+#     un espace, une virgule, « : », un crochet, une accolade ou un guillemet ;
+#   - texte sur PLUSIEURS lignes : la cellule vaut « |N » et les N lignes
+#     suivantes, sous l'element, commencent par « | » :
+#       t1 desc=|2
+#         | premiere ligne
+#         | seconde ligne
+#   - racine LIBRE : « @@ nom=valeur ... » pour les champs simples de la
+#     racine, « @@list » si la racine est une liste d'objets (ecrite comme la
+#     liste « _ »), « @@= valeur » pour toute autre valeur (nombre, texte,
+#     liste de valeurs) ;
+#   - une liste presente a la racine ET sous un parent : « ^.,parent » (« . »
+#     designe la racine).
+# Un nom de champ hors de [A-Za-z0-9_.-] s'ecrit entre guillemets ("a b"=1).
+
+_IKEY_OK = re.compile(r"^[A-Za-z0-9_.\-]+$")
+_ITABLE_OK = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
+_IBLOCK = re.compile(r"^\|(\d+)$")
+
+
+def _ikids(o):
+    return [(k, v) for k, v in o.items()
+            if _ITABLE_OK.match(k) and isinstance(v, list) and v and all(isinstance(x, dict) for x in v)]
+
+
+def _iscalar_out(v):
+    if v is None:
+        return "null"
+    if v is True or v is False:
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+            raise CompactError(f"nombre non representable en JSON : {v!r}")
+        return json.dumps(v)
+    return None
+
+
+def _inline(v):
+    """Valeur -> texte en ligne, sans espace hors guillemets."""
+    out = _iscalar_out(v)
+    if out is not None:
+        return out
+    if isinstance(v, list):
+        return "[" + ",".join(_inline(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ",".join((k if _IKEY_OK.match(k) else json.dumps(k, ensure_ascii=False)) + ":" + _inline(x)
+                              for k, x in v.items()) + "}"
+    s = str(v)
+    if (s == "" or s in ("null", "true", "false") or _NUMLIKE.match(s)
+            or re.search(r'[\s",\[\]{}:\\]', s)):
+        return json.dumps(s, ensure_ascii=False)
+    return s
+
+
+def _parse_inline(s, i=0):
+    """Texte en ligne -> (valeur, position suivante)."""
+    if i >= len(s):
+        raise CompactError(f"valeur en ligne incomplete : {s!r}")
+    ch = s[i]
+    if ch == '"':
+        j = i + 1
+        while j < len(s) and s[j] != '"':
+            j += 2 if s[j] == "\\" else 1
+        if j >= len(s):
+            raise CompactError(f"guillemets mal fermes : {s!r}")
+        try:
+            return json.loads(s[i:j + 1]), j + 1
+        except ValueError:
+            raise CompactError(f"chaine illisible : {s[i:j + 1]!r}") from None
+    if ch in "[{":
+        close, out, i = ("]" if ch == "[" else "}"), ([] if ch == "[" else {}), i + 1
+        if i < len(s) and s[i] == close:
+            return out, i + 1
+        while True:
+            if ch == "{":
+                if i < len(s) and s[i] == '"':
+                    key, i = _parse_inline(s, i)
+                else:
+                    j = i
+                    while j < len(s) and s[j] not in ":,]}":
+                        j += 1
+                    key, i = s[i:j], j
+                if not isinstance(key, str) or i >= len(s) or s[i] != ":":
+                    raise CompactError(f"« cle:valeur » attendu : {s!r}")
+                val, i = _parse_inline(s, i + 1)
+                out[key] = val
+            else:
+                val, i = _parse_inline(s, i)
+                out.append(val)
+            if i < len(s) and s[i] == ",":
+                i += 1
+                continue
+            if i < len(s) and s[i] == close:
+                return out, i + 1
+            raise CompactError(f"« , » ou « {close} » attendu : {s!r}")
+    j = i
+    while j < len(s) and s[j] not in ",]}":
+        j += 1
+    word = s[i:j]
+    if not word:
+        raise CompactError(f"valeur vide en ligne : {s!r}")
+    return _iscalar_in(word, False), j
+
+
+def _iscalar_in(text, quoted):
+    if quoted:
+        return text
+    if text == "null":
+        return None
+    if text in ("true", "false"):
+        return text == "true"
+    if _NUMLIKE.match(text) and not re.search(r"^[+-]?0\d", text):
+        return json.loads(text)
+    return text
+
+
+def _icell(v, blocks):
+    """Valeur -> cellule ; un texte multiligne ajoute ses lignes a `blocks`."""
+    out = _iscalar_out(v)
+    if out is not None:
+        return out
+    if isinstance(v, (list, dict)):
+        return _inline(v)
+    s = str(v)
+    if "\n" in s:
+        part = s.split("\n")
+        blocks.append(part)
+        return f"|{len(part)}"
+    if (s in ("", "-", ".", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#]', s)
+            or s[0] in "[{|@"):
+        return _quote(s)
+    return s
+
+
+def _iname(k):
+    return k if _IKEY_OK.match(k) else json.dumps(k, ensure_ascii=False)
+
+
+def _icell_in(raw):
+    """Cellule brute -> (valeur, nombre de lignes de bloc attendues ou None)."""
+    m = _IBLOCK.match(raw)
+    if m:
+        return None, int(m.group(1))
+    if raw[0] in "[{":
+        val, j = _parse_inline(raw)
+        if j != len(raw):
+            raise CompactError(f"texte en trop apres la valeur en ligne : {raw!r}")
+        return val, None
+    words = _split(raw)
+    return (_iscalar_in(*words[0]) if words else ""), None
+
+
+def _inamed(tok):
+    """« nom=valeur » (nom eventuellement entre guillemets) -> (nom, brut)."""
+    if tok.startswith('"'):
+        name, j = _parse_inline(tok)
+        if not isinstance(name, str) or tok[j:j + 1] != "=":
+            raise CompactError(f"« nom=valeur » attendu : {tok!r}")
+        return name, tok[j + 1:]
+    name, sep, raw = tok.partition("=")
+    if not sep or not name:
+        raise CompactError(f"« nom=valeur » attendu : {tok!r}")
+    return name, raw
+
+
 def encode_tree_indented(data):
-    """Arbre JSON {liste: [objets]} -> CSTL compact en arbre indente. Sans
-    perte (`decode_tree_indented` redonne exactement `data`)."""
-    if not isinstance(data, dict) or not all(isinstance(v, list) for v in data.values()):
-        raise CompactError("encode_tree_indented attend {nom: [objets]} a la racine")
-    order, parents, counts, dense, kids_of = [], {}, {}, {}, {None: list(data.keys())}
+    """Document JSON -> CSTL compact en arbre indente. Sans perte
+    (`decode_tree_indented` redonne exactement `data`), quelle que soit la
+    racine (objet, liste, valeur)."""
+    head = []
+    if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
+        head, tables, fields = ["@@list"], {"_": data}, {}
+    elif isinstance(data, dict):
+        tables = {k: v for k, v in data.items() if (k, v) in _ikids(data)}
+        fields = {k: v for k, v in data.items() if k not in tables}
+        if not tables and not fields:
+            return "@@= {}"
+    else:
+        return "@@= " + _inline(data)
+
+    order, parents, counts, dense, kids_of = [], {}, {}, {}, {None: list(tables)}
 
     def shape(key, objs, parent_key):
         if key not in counts:
@@ -978,49 +1206,109 @@ def encode_tree_indented(data):
         if parent_key not in parents[key]:
             parents[key].append(parent_key)
         for o in objs:
-            if not isinstance(o, dict):
-                raise CompactError(f"{key} : liste d'objets attendue")
             counts[key] += 1
-            fields = [k for k in o if (k, o[k]) not in _child_lists(o)]
-            dense[key] = fields if dense[key] is None else [c for c in dense[key] if c in fields]
-            for k, v in _child_lists(o):
+            kids = _ikids(o)
+            cols = [k for k in o if (k, o[k]) not in kids and _IKEY_OK.match(k)]
+            dense[key] = cols if dense[key] is None else [c for c in dense[key] if c in cols]
+            for k, v in kids:
                 kids_of.setdefault(key, [])
                 if k not in kids_of[key]:
                     kids_of[key].append(k)
                 shape(k, v, key)
 
-    for key, objs in data.items():
+    for key, objs in tables.items():
         shape(key, objs, None)
-    lines = []
+    lines = list(head)
+
+    def emit(prefix, cells, blocks, depth):
+        lines.append(prefix + " ".join(cells))
+        for part in blocks:
+            lines.extend("  " * (depth + 1) + ("| " + t if t else "|") for t in part)
+
+    if fields:
+        blocks = []
+        emit("@@ ", [f"{_iname(k)}={_icell(v, blocks)}" for k, v in fields.items()], blocks, -1)
     for key in order:
-        ps = ",".join(p for p in parents[key] if p is not None)
-        if None in parents[key] and ps:
-            raise CompactError(f"{key} : liste a la fois a la racine et imbriquee")
-        lines.append(f"@{key}[{counts[key]}]{'^' + ps if ps else ''}:" + "".join(f" {c}" for c in dense[key] or []))
+        ps = parents[key]
+        tag = "" if ps == [None] else "^" + ",".join("." if p is None else p for p in ps)
+        lines.append(f"@{key}[{counts[key]}]{tag}:" + "".join(f" {c}" for c in dense[key] or []))
 
     def rows(key, objs, parent_key, depth):
         tag = f"{key}> " if len(kids_of.get(parent_key, [])) > 1 else ""
         for o in objs:
-            cells = [_tree_cell(o[c]) for c in dense[key] or []]
-            cells += [f"{k}={_tree_cell(v)}" for k, v in o.items()
-                      if k not in (dense[key] or []) and (k, v) not in _child_lists(o)]
-            lines.append("  " * depth + tag + (" ".join(cells) if cells else "."))
-            for k, v in _child_lists(o):
+            kids = _ikids(o)
+            blocks = []
+            cells = [_icell(o[c], blocks) for c in dense[key] or []]
+            cells += [f"{_iname(k)}={_icell(v, blocks)}" for k, v in o.items()
+                      if k not in (dense[key] or []) and (k, v) not in kids]
+            emit("  " * depth + tag, cells or ["."], blocks, depth)
+            for k, v in kids:
                 rows(k, v, key, depth + 1)
 
-    for key, objs in data.items():
+    for key, objs in tables.items():
         rows(key, objs, None, 0)
     return "\n".join(lines)
 
 
 def decode_tree_indented(text):
     """Inverse de `encode_tree_indented`. Leve CompactError si une ligne, un
-    nombre d'elements ou une indentation ne colle pas."""
+    nombre d'elements, une indentation ou un bloc ne colle pas."""
     heads, kids_of, root_keys, root = {}, {}, [], {}
     stack = []          # (profondeur, objet, nom de sa liste)
-    seen = {}
-    for n, line in enumerate(text.splitlines(), 1):
+    seen, as_list, value = {}, False, None
+    lines = text.split("\n")
+    i = 0
+
+    def take_blocks(n, pending):
+        """Lit les lignes « | ... » des cellules multilignes de la ligne n."""
+        nonlocal i
+        for setter, count in pending:
+            part = []
+            for _ in range(count):
+                if i >= len(lines):
+                    raise CompactError(f"ligne {n} : bloc « | » incomplet")
+                body = lines[i].lstrip(" ")
+                if body == "|":
+                    part.append("")
+                elif body.startswith("| "):
+                    part.append(body[2:])
+                else:
+                    raise CompactError(f"ligne {i + 1} : ligne de bloc « | » attendue : {lines[i]!r}")
+                i += 1
+            setter("\n".join(part))
+
+    def fill(obj, toks, cols, n):
+        pending = []
+        for c, t in zip(cols, toks):
+            val, blk = _icell_in(t)
+            obj[c] = val
+            if blk is not None:
+                pending.append((lambda v, c=c: obj.__setitem__(c, v), blk))
+        for t in toks[len(cols):]:
+            name, raw = _inamed(t)
+            val, blk = _icell_in(raw) if raw else ("", None)
+            obj[name] = val
+            if blk is not None:
+                pending.append((lambda v, name=name: obj.__setitem__(name, v), blk))
+        take_blocks(n, pending)
+
+    while i < len(lines):
+        line, n = lines[i], i + 1
+        i += 1
         if not line.strip():
+            continue
+        if line.startswith("@@"):
+            rest = line[2:]
+            if rest.strip() == "list":
+                as_list = True
+            elif rest.startswith("="):
+                body = rest[1:].strip()
+                value, j = _parse_inline(body) if body else (None, 0)
+                if not body or j != len(body):
+                    raise CompactError(f"ligne {n} : valeur de racine illisible : {line!r}")
+                as_list = "value"
+            else:
+                fill(root, _raw_tokens(rest.strip()), [], n)
             continue
         if line.startswith("@"):
             m = _TREE2_HEAD.match(line.strip())
@@ -1028,11 +1316,11 @@ def decode_tree_indented(text):
                 raise CompactError(f"ligne {n} : en-tete illisible : {line!r}")
             key = m.group(1)
             heads[key] = {"n": int(m.group(2)), "cols": m.group(4).split()}
-            if m.group(3):
-                for p in m.group(3).split(","):
+            for p in (m.group(3).split(",") if m.group(3) else ["."]):
+                if p == ".":
+                    root_keys.append(key)
+                else:
                     kids_of.setdefault(p, []).append(key)
-            else:
-                root_keys.append(key)
             continue
         indent = len(line) - len(line.lstrip(" "))
         if indent % 2:
@@ -1042,8 +1330,7 @@ def decode_tree_indented(text):
             stack.pop()
         if depth and (not stack or stack[-1][0] != depth - 1):
             raise CompactError(f"ligne {n} : element sans parent (indentation)")
-        parent_key = stack[-1][2] if stack else None
-        cands = kids_of.get(parent_key, []) if parent_key else root_keys
+        cands = kids_of.get(stack[-1][2], []) if stack else root_keys
         toks = _raw_tokens(line.strip())
         if len(cands) > 1:
             if not toks or not toks[0].endswith(">") or toks[0][:-1] not in cands:
@@ -1058,17 +1345,20 @@ def decode_tree_indented(text):
             toks = []
         if len(toks) < len(cols):
             raise CompactError(f"ligne {n} : {key} attend {len(cols)} valeurs")
-        obj = {c: _tree_value(_split(t)[0]) for c, t in zip(cols, toks)}
-        for t in toks[len(cols):]:
-            name, sep, raw = t.partition("=")
-            if not sep or not name:
-                raise CompactError(f"ligne {n} : « nom=valeur » attendu : {t!r}")
-            words = _split(raw)
-            obj[name] = _tree_value(words[0]) if words else ""
+        obj = {}
+        fill(obj, toks, cols, n)
         (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
         seen[key] = seen.get(key, 0) + 1
         stack.append((depth, obj, key))
     for key, h in heads.items():
         if seen.get(key, 0) != h["n"]:
             raise CompactError(f"{key}[{h['n']}] annonce, {seen.get(key, 0)} element(s) ecrit(s)")
+    if as_list == "value":
+        if root or heads:
+            raise CompactError("« @@= » : la racine est une valeur, rien d'autre n'est attendu")
+        return value
+    if as_list:
+        if set(root) - {"_"}:
+            raise CompactError("« @@list » : seule la liste « _ » est attendue")
+        return root.get("_", [])
     return root

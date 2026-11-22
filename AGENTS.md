@@ -196,17 +196,55 @@ them. Nothing is guessed: an unreadable line, a wrong row count or a badly
 typed value raises `cstl_compact.CompactError`. Format and tests:
 `sdk/python/cstl_compact.py`, `sdk/python/test_cstl_compact.py`.
 
-**Nested data (trees).** `agent.send_tree(receiver, tree)` sends nested
-data (`{"orders": [{"id": "o1", "lines": [{"item": ..., "options": [...]}]}]}`,
-or the same written in compact CSTL tree mode, `cstl_compact.encode_tree`).
+**Nested data (trees).** `agent.send_tree(receiver, tree)` sends any JSON
+document: an object, a list or a single value, nested to any depth. It also
+takes the same document written in compact CSTL tree mode.
+
+The recommended text form is the **indented tree**
+(`cstl_compact.encode_tree_indented`). The id-based form
+(`cstl_compact.encode_tree`) is also accepted.
+
+```
+@@ service=billing tags=[prod,eu]
+@orders[2]: id client
+@lines[3]^orders: item qty
+o1 client_3 note=fragile
+  gpu_rack 2 dims=[[1,2],[3,4]]
+  lic 1
+o2 client_1 desc=|2
+  | first line
+  | second line
+  router 3
+```
+
+How to read it:
+- `@name[N]^parent: cols` declares each list once: `N` elements, which are
+  children of `parent`, with these columns.
+- Children are written under their parent, indented 2 spaces per level.
+- A field that only some elements have is written `name=value`, and only
+  when it is present.
+- Lists and objects are written inline (`[a,b]`, `{lat:1}`).
+- A multiline text is written `|N`, then `N` lines that start with `| `.
+- `@@ ...` holds the plain fields of the root. `@@list` marks a root that is
+  a list of objects. `@@= value` marks any other root.
+
+Round trips are lossless: tested on 30,000 random JSON documents with trap
+values. In a comprehension test on Gemma 4 31B (36 questions), the indented
+tree scored 36/36, against 35/36 for JSON, and used 39 % fewer tokens.
+
 Each element becomes a relation marked `tree=<id>`, so the server signs,
-checks (`SCHEMA` types) and audits it like any other.
-`agent.fetch_tree(tree_id)` reads it back, identical, through the signed
-`purpose=tree_query`. Sending again with the same id replaces it. What the
-server could not return intact is refused before sending: a field name
-outside `[A-Za-z0-9_.-]`, a value with `"`, `[`, `]` or a newline, a value
-over 300 characters, or a list or object in a cell. Any registered agent can
-read a tree by its id. Live test: `test_tree_mode_goes_through_the_server`.
+checks (`SCHEMA` types) and audits it like any other. A list, an object or a
+text the wire cannot carry (`"`, `[`, `]`, a newline) is sent as base64url
+JSON, with the type `json`. `agent.fetch_tree(tree_id)` reads the document
+back, identical, through the signed `purpose=tree_query`. Sending again with
+the same id replaces it.
+
+Refused before sending:
+- a field name outside `[A-Za-z0-9_.-]`;
+- a value over 300 characters on the wire.
+
+Any registered agent can read a tree by its id. Live test:
+`test_tree_mode_goes_through_the_server`.
 
 **From any MCP client.** `sdk/python/cstl_mcp_server.py` is an MCP server
 (stdio, JSON-RPC, no dependency beyond the SDK). An agent that speaks MCP

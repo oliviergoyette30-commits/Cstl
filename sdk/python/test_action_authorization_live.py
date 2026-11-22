@@ -411,7 +411,18 @@ def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_pa
     assert bot.fetch_tree(tree_id)["orders"][1]["client"] == "client_9"
     assert bot.fetch_tree("tree_inconnu") == {}
     with pytest.raises(cstl_compact.CompactError):
-        bot.send_tree("server", {"orders": [{"id": "o1", "note": "avec [crochet]"}]})
+        bot.send_tree("server", {"orders": [{"id": "o1", "note": "x" * 301}]})
+    # 2026-11-22 : arbre indente, listes et objets en cellule, texte
+    # multiligne, racine libre.
+    doc = {"service": "billing", "tags": ["prod", "eu"], "orders": [
+        {"id": "o7", "note": "avec [crochet] et \"guillemets\"\nsur deux lignes", "geo": {"lat": 45.5},
+         kind: [{"item": "x", "qty": 1, "price": 2.5, "dims": [[1, 2], [3, 4]]}]}]}
+    tid3, resp3 = bot.send_tree("server", cstl_compact.encode_tree_indented(doc))
+    assert not resp3.is_error, resp3.raw
+    assert bot.fetch_tree(tid3) == doc
+    for other in ([{"a": 1}, {"a": 2}], [1, "deux", None], 42):
+        tid4, _ = bot.send_tree("server", other)
+        assert bot.fetch_tree(tid4) == other
 
 
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
