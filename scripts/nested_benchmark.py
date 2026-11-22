@@ -316,6 +316,8 @@ def main():
     ap.add_argument("--comprehension", metavar="MODELE")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--formats", default=",".join(FORMATS))
+    ap.add_argument("--resume", action="store_true",
+                    help="relit le fichier de resultats et ne repose que les jeux en erreur (API surchargee)")
     args = ap.parse_args()
     formats = [f for f in args.formats.split(",") if f]
     datasets = [(k, n, s, gen(k, n, s)) for k in KINDS for n in SIZES for s in SEEDS]
@@ -355,7 +357,7 @@ def main():
             try:
                 raw = model.generate(prompt, max_tokens=4000)
             except RuntimeError as e:
-                return {"kind": k, "format": f, "ok": None, "error": str(e)[:200]}
+                return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": None, "error": str(e)[:200]}
             a, b = raw.find("{"), raw.rfind("}")
             try:
                 ans = json.loads(raw[a:b + 1])
@@ -366,13 +368,21 @@ def main():
             return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": ok, "raw": raw[:600]}
 
         jobs = [(k, n, s, d, f, r) for r in range(args.runs) for k, n, s, d in datasets for f in formats]
+        dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension}.json"
+        rows = [None] * len(jobs)
+        if args.resume and dest.exists():
+            old = json.loads(dest.read_text())["rows"]
+            if len(old) == len(jobs):  # meme ordre que les jobs
+                rows = [r if r.get("ok") is not None else None for r in old]
+        todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "4"))) as pool:
-            rows = list(pool.map(one, jobs))
+            for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):
+                rows[i] = r
         print(f"\n  Comprehension ({args.comprehension}) :")
         for f in formats:
             r = [x for x in rows if x["format"] == f and x["ok"] is not None]
             print(f"    {f:13} | {sum(sum(x['ok']) for x in r):>3}/{3 * len(r)} questions justes")
-        (REPO / "scripts" / f"nested_comprehension_{args.comprehension}.json").write_text(
+        dest.write_text(
             json.dumps({"rows": rows}, indent=2, ensure_ascii=False) + "\n")
 
 
