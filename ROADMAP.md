@@ -345,6 +345,16 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       montant absent, noté `-` en CSTL.
     - L'arbre est le plus court, mais un peu moins bien suivi. C'est à
       confirmer, sur une série courte et un seul modèle.
+  - **Arbre indenté** (`encode_tree_indented`) : les enfants sont écrits
+    sous leur parent, sans identifiant, et un champ facultatif n'est écrit
+    que s'il existe (`note=fragile`). 10 792 tokens, soit 39 % de moins que
+    le JSON et 26 % de moins que l'arbre par identifiants.
+    - Compréhension (Gemma 4 31B, mêmes 36 questions) : arbre indenté
+      **36/36**, JSON 35/36, TOON 35/36, arbre par identifiants 31/36.
+    - Un seul modèle et une passe : à confirmer sur d'autres modèles.
+    - Limites relevées : un texte sur plusieurs lignes est mal relu (à
+      refuser ou à écrire en bloc), les listes et objets dans une cellule
+      passent en JSON échappé, et la racine doit être `{nom: [objets]}`.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

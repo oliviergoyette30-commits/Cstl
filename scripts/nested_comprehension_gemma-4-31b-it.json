@@ -15,9 +15,16 @@
     },
     {
       "kind": "commandes",
+      "size": 8,
+      "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}\n```"
     },
     {
       "kind": "commandes",
@@ -502,9 +509,16 @@
     },
     {
       "kind": "contrats",
+      "size": 8,
+      "seed": 2,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}\n```"
     },
     {
       "kind": "contrats",
@@ -547,9 +561,16 @@
     },
     {
       "kind": "contrats",
+      "size": 24,
+      "seed": 1,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}\n```"
     },
     {
       "kind": "contrats",

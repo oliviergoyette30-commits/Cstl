@@ -60,6 +60,14 @@ COMPREHENSION (2026-11-22, Gemma 4 31B, 1 passe, 36 questions par format) :
   peu moins bien suivi par Gemma (89 % contre 97 %). Serie courte, un seul
   modele : a confirmer.
 
+COMPREHENSION, PASSE 2 (2026-11-22, Gemma 4 31B, memes 36 questions, avec
+l'arbre indente ; 3 jeux perdus sur des 503 reposes avec --resume) :
+  cstl_indent 36/36, json 35/36, toon 35/36, cstl_arbre 31/36
+- L'arbre indente est a la fois le plus court (10 792 tokens, 39 % de moins
+  que le JSON) et le seul sans erreur : sans identifiant a relier, et sans
+  « - » pour un champ absent (un champ facultatif n'est ecrit que s'il existe).
+- Un seul modele, une passe : a confirmer sur d'autres modeles.
+
 Usage :
   python3 scripts/nested_benchmark.py
   GEMINI_API_KEY=... python3 scripts/nested_benchmark.py --tokens
