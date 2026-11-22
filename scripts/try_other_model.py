@@ -16,7 +16,8 @@ Deux tests :
   lecture    le modele repond a 3 questions sur des donnees dans le format ;
              verifie : nombre de bonnes reponses
 
-Formats : cstl_indent (arbre indente), toon, json (reference).
+Formats : cstl_indent (arbre indente), cstl_indent_fin (comptes a la fin, @end),
+toon, json (reference).
 
 Exemples :
   python3 scripts/try_other_model.py prompt ecriture cstl_indent > prompt.txt
@@ -52,7 +53,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("action", choices=["prompt", "check"])
     ap.add_argument("test", choices=["ecriture", "lecture"])
-    ap.add_argument("format", choices=["cstl_indent", "toon", "json"])
+    ap.add_argument("format", choices=["cstl_indent", "cstl_indent_fin", "toon", "json"])
     ap.add_argument("answer_file", nargs="?", help="reponse du modele (check) ; - = entree standard")
     ap.add_argument("--kind", default="commandes", choices=nb.KINDS)
     ap.add_argument("--size", type=int, default=8)
@@ -61,8 +62,11 @@ def main():
     data = nb.gen(args.kind, args.size, args.seed)
 
     if args.action == "prompt":
-        print(nw.prompt(args.format, data, args.kind) if args.test == "ecriture"
-              else lecture_prompt(args.format, data, args.kind, args.seed))
+        # Dans une fenetre de discussion, un bloc de code garde les retours a
+        # la ligne et l'indentation au copier-coller ; le check enleve le bloc.
+        print(nw.prompt(args.format, data, args.kind).replace(
+                  "sans bloc de code.", "dans UN SEUL bloc de code (```), pour garder l'indentation.")
+              if args.test == "ecriture" else lecture_prompt(args.format, data, args.kind, args.seed))
         return
 
     if not args.answer_file:
@@ -93,7 +97,7 @@ def main():
     truth = nw.leaves(data)
     got = nw.leaves(back) if err is None else set()
     score = len(truth & got) / max(len(truth), len(got), 1)
-    if err and args.format == "cstl_indent":
+    if err and args.format.startswith("cstl_indent"):
         warn = []
         try:
             soft = nb.cstl_compact.decode_tree_indented(text, lenient=True, warnings=warn)
