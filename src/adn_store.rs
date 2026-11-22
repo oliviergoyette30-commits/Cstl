@@ -1589,6 +1589,37 @@ impl AdnStore {
     /// relation complete telle qu'attestee dans le payload signe d'origine --
     /// `all_relations()` reste volontairement inchangee (compat descendante,
     /// callers existants qui ne veulent que le triplet).
+    /// Relations d'un ARBRE (2026-11-22, mode arbre du CSTL compact) : celles
+    /// qui portent l'attribut `tree=<tree>`, du DERNIER message qui l'a envoye
+    /// (un arbre renvoye remplace le precedent), dans l'ordre d'envoi.
+    pub fn tree_relations(&self, tree: &str) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT hash, subject, predicate, object, modality, extra_attrs FROM adn_relations
+             WHERE extra_attrs LIKE ?1 ORDER BY id",
+        )?;
+        let pattern = format!("%\"tree\":{}%", serde_json::to_string(tree).unwrap_or_default());
+        let rows = stmt.query_map([pattern], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?, row.get::<_, Option<String>>(5)?))
+        })?;
+        let mut out: Vec<(String, HashMap<String, String>)> = Vec::new();
+        for r in rows {
+            let (hash, subject, predicate, object, modality, extra) = r?;
+            let extra: HashMap<String, String> = extra.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default();
+            if extra.get("tree").map(String::as_str) != Some(tree) {
+                continue;
+            }
+            let mut m = extra;
+            m.insert("subject".into(), subject);
+            m.insert("type".into(), predicate);
+            m.insert("object".into(), object);
+            if let Some(v) = modality { m.insert("modality".into(), v); }
+            out.push((hash, m));
+        }
+        let Some(last) = out.last().map(|(h, _)| h.clone()) else { return Ok(Vec::new()) };
+        Ok(out.into_iter().filter(|(h, _)| *h == last).map(|(_, m)| m).collect())
+    }
+
     pub fn all_relations_full(&self) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT subject, predicate, object, modality, sigma, tau, layer, weight, rel_id, coref_with, extra_attrs

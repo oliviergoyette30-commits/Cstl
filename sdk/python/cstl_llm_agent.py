@@ -563,6 +563,29 @@ class CstlAgent:
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
         return self.send_relations(receiver, cstl_compact.decode(body), purpose)
 
+    def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None) -> Tuple[str, CstlResponse]:
+        """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
+        `tree` : un dict {liste: [objets]}, ou un texte en CSTL compact mode
+        arbre (`cstl_compact.encode_tree`). Il est converti en relations
+        marquees tree=<tree_id> (`cstl_compact.tree_to_relations`), signees et
+        envoyees : le serveur les verifie (types declares par SCHEMA compris)
+        et les inscrit dans l'audit. Renvoie (tree_id, reponse). Relire avec
+        `fetch_tree(tree_id)`."""
+        import cstl_compact
+        if isinstance(tree, str):
+            tree = cstl_compact.decode_tree(tree)
+        tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
+        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id))
+
+    def fetch_tree(self, tree_id: str) -> dict:
+        """Relit un arbre envoye avec `send_tree` (sa derniere version), depuis
+        le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse."""
+        import cstl_compact
+        resp = self._send_signed("tree_query", "server", [], {"tree": tree_id, "request_id": uuid.uuid4().hex})
+        if resp.purpose != "tree":
+            raise RuntimeError(f"arbre refuse : {resp.fields.get('reason', resp.purpose)}")
+        return cstl_compact.relations_to_tree([r for r in resp.relations if r.get("block") == "RELATION"], tree_id)
+
     def policy(self) -> dict:
         """Politique EFFECTIVE de cet agent selon le serveur (2026-11-21) :
         {"required": [...], "forbidden": [...], "ignored": [...], "roles": [...]},

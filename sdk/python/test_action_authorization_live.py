@@ -381,6 +381,39 @@ def test_mcp_server_exposes_policy_and_authorization(authority_server, monkeypat
         proc.wait(timeout=10)
 
 
+def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un arbre (donnees imbriquees) est envoye en relations
+    signees, verifie (SCHEMA), inscrit dans l'audit, puis relu a l'identique ;
+    renvoye, il remplace la version precedente."""
+    import cstl_compact
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    kind = f"lines_{uuid.uuid4().hex[:6]}"
+    owner.send_relations("server", [{"type": "SCHEMA", "subject": kind, "object": "v1", "qty": "int", "price": "num"}])
+    tree = {"orders": [{"id": "o1", "client": "client_3", "note": None, "vip": True, kind: [
+                {"item": "gpu_rack", "qty": 2, "price": 714.5, "modality": "MUST_NOT",
+                 "options": [{"name": "warranty", "price": 9}]},
+                {"item": "lic", "qty": 1, "price": 20}]},
+               {"id": "o2", "client": "client_1", kind: [{"item": "router", "qty": 3, "price": 90}]}]}
+    tree_id, resp = bot.send_tree("server", tree)
+    assert not resp.is_error and resp.audit_seq is not None, resp.raw
+    assert bot.fetch_tree(tree_id) == tree
+    # Le meme arbre ecrit en CSTL compact mode arbre, sous un autre id.
+    tid2, _ = bot.send_tree("server", cstl_compact.encode_tree(tree))
+    assert bot.fetch_tree(tid2) == tree
+    # Le serveur verifie les types declares par SCHEMA.
+    bad = {"orders": [{"id": "o9", kind: [{"item": "x", "qty": "beaucoup", "price": 1}]}]}
+    _, rej = bot.send_tree("server", bad)
+    assert rej.purpose == "schema_rejected" and f"{kind}.qty" in rej.raw, rej.raw
+    # Renvoye avec le meme id, l'arbre remplace la version precedente.
+    tree["orders"][1]["client"] = "client_9"
+    bot.send_tree("server", tree, tree_id=tree_id)
+    assert bot.fetch_tree(tree_id)["orders"][1]["client"] == "client_9"
+    assert bot.fetch_tree("tree_inconnu") == {}
+    with pytest.raises(cstl_compact.CompactError):
+        bot.send_tree("server", {"orders": [{"id": "o1", "note": "avec [crochet]"}]})
+
+
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
     m, bot = agent(monkeypatch, tmp_path, 5555)
     owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)

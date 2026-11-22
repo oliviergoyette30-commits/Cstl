@@ -340,6 +340,11 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     17 % (14 524 tokens) et TOON de 31 %. Il est sans perte, vérifié par
     300 arbres aléatoires.
   - La compréhension reste à mesurer.
+  - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
+    en relations signées, vérifiées (`SCHEMA`) et auditées, et
+    `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).
+  - Limite : tout agent enregistré peut relire un arbre s'il connaît son
+    id.
 
 ## Déjà fait (PR #3 à #11)
 

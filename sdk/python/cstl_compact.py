@@ -803,3 +803,114 @@ def decode_tree(text):
         else:
             raise CompactError(f"ligne {n} : parent inconnu {parent!r}")
     return root
+
+
+# ------------------------------------------------- arbres <-> serveur CSTL
+# 2026-11-22 : pour qu'un arbre soit SIGNE, VERIFIE (SCHEMA) et AUDITE, il est
+# envoye en relations : chaque element devient
+#   RELATION [type=<nom de sa liste>, subject=<son id>, object=<id du parent ou ->, tree=<id de l'arbre>, ...]
+# Tout ce qu'il faut pour le reconstruire a l'identique voyage avec lui :
+#   tree_id=1        l'id est un vrai champ « id » (sinon <parent>.<position>) ;
+#   tree_types=...   types des champs qui ne sont pas des chaines
+#                    (qty:int,price:num,flag:bool,note:null) ;
+#   f_<nom>          un champ qui porte le nom d'un attribut reserve de CSTL
+#                    (type, subject, object, modality, id, sigma...) ou qui
+#                    commence par f_ ou tree.
+# Ce que le serveur ne pourrait pas rendre intact est REFUSE ici (jamais perdu
+# en silence) : nom de champ hors [A-Za-z0-9_.-], valeur avec « " », « [ », « ] »
+# ou un saut de ligne, valeur de plus de 300 caracteres, liste de valeurs
+# simples ou objet dans une cellule.
+
+_RESERVED_REL = {"type", "subject", "object", "modality", "id", "sigma", "tau", "layer", "weight", "coref_with"}
+_NAME_OK = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
+
+
+def _field_name(k):
+    if not _NAME_OK.match(k):
+        raise CompactError(f"nom de champ non transmissible au serveur : {k!r}")
+    return f"f_{k}" if k in _RESERVED_REL or k.startswith(("f_", "tree")) else k
+
+
+def _unfield(k):
+    return k[2:] if k.startswith("f_") else k
+
+
+def tree_to_relations(data, tree_id):
+    """Arbre {liste: [objets]} -> relations CSTL, toutes marquees tree=<tree_id>."""
+    if not _NAME_OK.match(str(tree_id)):
+        raise CompactError(f"id d'arbre invalide : {tree_id!r}")
+    if not isinstance(data, dict) or not all(isinstance(v, list) for v in data.values()):
+        raise CompactError("tree_to_relations attend {nom: [objets]} a la racine")
+    rels, seen = [], set()
+
+    def walk(key, objs, parent):
+        if not _NAME_OK.match(key):
+            raise CompactError(f"nom de liste non transmissible : {key!r}")
+        for i, o in enumerate(objs):
+            if not isinstance(o, dict):
+                raise CompactError(f"{key} : liste d'objets attendue")
+            own = isinstance(o.get("id"), str) and o["id"] != "" and "." not in o["id"]
+            oid = o["id"] if own else (f"{parent}.{i}" if parent != "-" else f"{key}.{i}")
+            if oid in seen:
+                raise CompactError(f"id en double dans l'arbre : {oid!r}")
+            seen.add(oid)
+            rel = {"type": key, "subject": oid, "object": parent, "tree": str(tree_id)}
+            if own:
+                rel["tree_id"] = "1"
+            types, kids = [], []
+            for k, v in o.items():
+                if own and k == "id":
+                    continue
+                if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                    kids.append((k, v))
+                    continue
+                if isinstance(v, (list, dict)):
+                    raise CompactError(f"{key}.{k} : liste ou objet dans une cellule, non transmissible au serveur")
+                name = _field_name(k)
+                if v is None:
+                    rel[name], t = "", "null"
+                elif v is True or v is False:
+                    rel[name], t = ("true" if v else "false"), "bool"
+                elif isinstance(v, int):
+                    rel[name], t = str(v), "int"
+                elif isinstance(v, float):
+                    rel[name], t = json.dumps(v), "num"
+                else:
+                    rel[name], t = str(v), None
+                    if any(c in rel[name] for c in '"[]\n\r') or len(rel[name]) > 300:
+                        raise CompactError(f"{key}.{k} : valeur non transmissible au serveur : {rel[name][:40]!r}")
+                if t:
+                    types.append(f"{name}:{t}")
+            if types:
+                rel["tree_types"] = " ".join(types)
+            rels.append(rel)
+            for k, v in kids:
+                walk(k, v, oid)
+
+    for key, objs in data.items():
+        walk(key, objs, "-")
+    return rels
+
+
+def relations_to_tree(rels, tree_id=None):
+    """Inverse de `tree_to_relations` (relations dans l'ordre d'envoi)."""
+    nodes, root = {}, {}
+    for r in rels:
+        if tree_id is not None and r.get("tree") != str(tree_id):
+            continue
+        types = dict(t.split(":", 1) for t in r.get("tree_types", "").split() if ":" in t)
+        o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
+        for k, v in r.items():
+            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "block"):
+                continue
+            t = types.get(k)
+            o[_unfield(k)] = (None if t == "null" else v == "true" if t == "bool" else int(v) if t == "int"
+                             else float(v) if t == "num" else v)
+        nodes[r["subject"]] = o
+        if r["object"] == "-":
+            root.setdefault(r["type"], []).append(o)
+        elif r["object"] in nodes:
+            nodes[r["object"]].setdefault(r["type"], []).append(o)
+        else:
+            raise CompactError(f"parent inconnu {r['object']!r} pour {r['subject']!r}")
+    return root

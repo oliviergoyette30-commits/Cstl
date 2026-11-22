@@ -362,3 +362,40 @@ def test_tree_random_round_trips():
         with_id = rnd.random() < 0.5
         data = {"root": [obj(0, with_id, i) for i in range(rnd.randint(1, 4))]}
         assert decode_tree(encode_tree(data)) == data
+
+
+# ---- arbres <-> relations pour le serveur (2026-11-22) ----
+from cstl_compact import relations_to_tree, tree_to_relations  # noqa: E402
+
+
+def test_tree_relations_round_trip_and_escaping():
+    data = {"contracts": [{"id": "c1", "party": "p", "sections": [
+        {"title": "pay", "clauses": [{"ref": "1.1", "modality": "MUST_NOT", "type": "x", "f_note": "y", "tree": 3,
+                                      "amount": 5.5, "ok": False, "none": None}]}]}]}
+    rels = tree_to_relations(data, "t1")
+    clause = rels[2]
+    assert clause["f_modality"] == "MUST_NOT" and "modality" not in clause and clause["f_type"] == "x"
+    assert clause["f_f_note"] == "y" and clause["f_tree"] == "3" and clause["tree"] == "t1"
+    assert relations_to_tree(rels, "t1") == data
+
+
+def test_tree_relations_refuse_what_the_server_would_lose():
+    for bad in ({"a": [{"x": "avec [crochet]"}]}, {"a": [{"x": 'guil"lemet'}]}, {"a": [{"x": "y" * 301}]},
+                {"a": [{"bad name": 1}]}, {"a": [{"x": ["l"]}]}, {"a": [{"id": "d"}, {"id": "d"}]}):
+        with pytest.raises(CompactError):
+            tree_to_relations(bad, "t1")
+
+
+def test_tree_relations_random_round_trips():
+    rnd = random.Random(53)
+
+    def obj(depth, i):
+        o = {"id": f"n{depth}_{i}_{rnd.randint(0, 10**6)}"} if rnd.random() < 0.4 else {}
+        for k in rnd.sample(["a", "b", "modality", "type", "f_x", "tree"], rnd.randint(1, 3)):
+            o[k] = rnd.choice([1, 2.5, "x", "two words", "-", "", None, True, "07", "a,b"])
+        if depth < 3 and rnd.random() < 0.6:
+            o[rnd.choice(["kids", "items"])] = [obj(depth + 1, j) for j in range(rnd.randint(1, 3))]
+        return o
+    for _ in range(300):
+        data = {"root": [obj(0, i) for i in range(rnd.randint(1, 4))]}
+        assert relations_to_tree(tree_to_relations(data, "t"), "t") == data

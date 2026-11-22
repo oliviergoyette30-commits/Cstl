@@ -613,6 +613,52 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // cite pas), interdictions, avec leurs raisons, et regles que le
                     // serveur IGNORE (auteur sans autorite). Lecture seule : rien
                     // n'est ajoute a la chaine d'audit.
+                    // STEP 2-tree (2026-11-22) : relire un ARBRE (mode arbre du CSTL
+                    // compact, envoye en relations portant tree=<id>). Signe, lecture
+                    // seule. Les relations sont rendues dans l'ordre d'envoi, avec
+                    // tous leurs attributs, pour que le SDK reconstruise l'arbre.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("tree_query") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let tree = payload.intent.get("tree").cloned().unwrap_or_default();
+                        let response = if !identity_proven {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=tree_denied, reason=signature_required]\n---END---\n".to_string()
+                        } else if !super::action_authorization::is_valid_action(&tree) {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=tree_denied, reason=invalid_tree_id]\n---END---\n".to_string()
+                        } else {
+                            let rows = ctx.adn_store.lock().await.tree_relations(&tree).unwrap_or_else(|e| {
+                                error!("[Handler] tree_relations failed: {}", e);
+                                Vec::new()
+                            });
+                            let mut out = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=tree, sender=server, receiver={}, tree={}, relations={}]\n",
+                                sender, tree, rows.len()
+                            );
+                            for r in &rows {
+                                let mut keys: Vec<&String> = r.keys().filter(|k| !matches!(k.as_str(), "type" | "subject" | "object")).collect();
+                                keys.sort();
+                                let mut line = format!("RELATION [type={}, subject={}, object={}",
+                                    wire_text(&r["type"]), wire_text(&r["subject"]), wire_text(&r["object"]));
+                                for k in keys {
+                                    if super::action_authorization::is_valid_action(k) {
+                                        line.push_str(&format!(", {k}={}", wire_text(&r[k])));
+                                    }
+                                }
+                                out.push_str(&line);
+                                out.push_str("]\n");
+                            }
+                            out.push_str("---END---\n");
+                            out
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     if payload.intent.get("purpose").map(String::as_str) == Some("policy_query") {
                         let sender = payload.intent.get("sender").cloned().unwrap_or_default();
                         let identity_proven = registered_pubkey_for_sender.is_some()
