@@ -531,6 +531,32 @@ class CstlAgent:
         resp = self._send_signed("action_request", "server", [], intent)
         return resp.fields.get("decision") == "allowed", resp
 
+    def policy_text(self, fmt: str = "phrases") -> str:
+        """Politique effective ecrite pour un MODELE (2026-11-22) :
+        `fmt` = "phrases" (`policy_to_text`), "compact" (`cstl_compact.policy_to_compact`)
+        ou "symboles" (CSTL sans mot-cle, `cstl_compact.policy_to_symbols`, le plus court)."""
+        p = self.policy()
+        if fmt == "phrases":
+            return policy_to_text(p)
+        import cstl_compact
+        if fmt == "compact":
+            return cstl_compact.policy_to_compact(p)
+        if fmt == "symboles":
+            return cstl_compact.policy_to_symbols(p)
+        raise ValueError(f"format inconnu : {fmt!r} (phrases, compact ou symboles)")
+
+    def send_compact(self, receiver: str, text: str, purpose: str = "inform") -> CstlResponse:
+        """Envoie des relations ecrites en CSTL COMPACT, avec ou sans mot-cle,
+        en lignes ou en tableaux (2026-11-22). Le texte est relu sans rien
+        deviner (`cstl_compact.decode` : une ligne illisible, un nombre de
+        lignes faux ou une valeur mal typee leve `cstl_compact.CompactError`),
+        puis les relations COMPLETES sont signees et envoyees comme avec
+        `send_relations` : le serveur verifie, decide et audite exactement
+        comme d'habitude. Pour un modele qui ecrit en compact."""
+        import cstl_compact
+        body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
+        return self.send_relations(receiver, cstl_compact.decode(body), purpose)
+
     def policy(self) -> dict:
         """Politique EFFECTIVE de cet agent selon le serveur (2026-11-21) :
         {"required": [...], "forbidden": [...], "ignored": [...], "roles": [...]},

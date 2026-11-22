@@ -294,3 +294,24 @@ def test_rule_conditions_are_typed():
     with pytest.raises(CompactError):
         encode([{"type": "PERFORM", "subject": "a", "object": "b", "modality": "MUST_NOT", "amount_above": "beaucoup"}])
     assert decode("agent_a ?refund <=50 priority=10 until:2026-12-31")[0]["priority"] == "10"
+
+
+# ---- vue de la politique sans mot-cle (2026-11-22) ----
+from cstl_compact import policy_to_symbols  # noqa: E402
+
+
+def test_policy_view_without_keywords():
+    p = {"default": "deny", "required": [{"action": "log_transaction", "reason": "tracabilite"}],
+         "permitted": [{"action": "refund_order", "amount_at_most": "100", "total_at_most": "1500", "spent_now": "200",
+                        "priority": "10"}],
+         "forbidden": [{"action": "liquidate", "if_fact": "incident_open", "if_fact_now": "unknown"},
+                       {"action": "share_record", "unless_fact": "consent", "unless_fact_now": "false", "via_role": "support"}],
+         "ignored": [{"action": "grant_admin", "author": "relay2"}]}
+    lines = policy_to_symbols(p).splitlines()
+    assert "Sans regle : interdit" in lines[0]
+    assert lines[1:5] == ['*log_transaction "tracabilite"',
+                          "?refund_order <=100 total<=1500 priority=10 spent=200",
+                          "!liquidate +incident_open etat=incident_open=inconnu",
+                          "!share_record -consent etat=consent=faux role:support"]
+    assert lines[5].startswith("# IGNORE") and "grant_admin" in lines[5]
+    assert "priority=10" in policy_to_compact(p)

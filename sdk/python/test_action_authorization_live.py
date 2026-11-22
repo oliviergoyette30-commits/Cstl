@@ -308,6 +308,32 @@ def test_schema_types_relations(authority_server, monkeypatch, tmp_path):
     assert bot.send_relations("server", [{"type": kind, "subject": "o2", "object": "c", "amount": "x"}]).purpose == "schema_rejected"
 
 
+def test_agents_can_write_and_read_policy_without_keywords(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : le responsable ECRIT sa politique en CSTL sans mot-cle
+    (`send_compact`) ; le SDK la reconstruit, la signe et l'envoie. L'agent la
+    LIT dans le meme format (`policy_text("symboles")`). Le serveur decide
+    comme d'habitude."""
+    import cstl_compact
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    fact = f"incident_{uuid.uuid4().hex[:6]}"
+    resp = owner.send_compact("server", f"""
+{bot.name} !liquidate +{fact} "pas pendant un incident"
+{bot.name} *log_transaction
+{bot.name} ?refund_order <=100
+""")
+    assert not resp.is_error, resp.raw
+    assert not bot.request_action("liquidate")[0], "fait inconnu : interdit"
+    assert bot.request_action("refund_order", 80)[0]
+    view = bot.policy_text("symboles")
+    assert "*log_transaction" in view and f"!liquidate +{fact} etat={fact}=inconnu" in view, view
+    assert "?refund_order <=100" in view, view
+    owner.send_compact("server", f"{fact}=0")
+    assert bot.request_action("liquidate")[0], "pas d'incident : permis"
+    with pytest.raises(cstl_compact.CompactError):
+        owner.send_compact("server", f"{bot.name} !refund_order >cent")
+
+
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
     m, bot = agent(monkeypatch, tmp_path, 5555)
     owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
