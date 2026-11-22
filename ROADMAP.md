@@ -339,7 +339,12 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Le nouveau mode arbre du CSTL compact (`encode_tree`) bat le JSON de
     17 % (14 524 tokens) et TOON de 31 %. Il est sans perte, vérifié par
     300 arbres aléatoires.
-  - La compréhension reste à mesurer.
+  - Compréhension, avec Gemma 4 31B sur une passe : JSON 32/33, TOON
+    36/36, CSTL sans mot-clé 34/36, CSTL en arbre 32/36.
+    - La plupart des erreurs portent sur une question : un filtre sur un
+      montant absent, noté `-` en CSTL.
+    - L'arbre est le plus court, mais un peu moins bien suivi. C'est à
+      confirmer, sur une série courte et un seul modèle.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

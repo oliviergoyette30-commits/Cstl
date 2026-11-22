@@ -48,8 +48,17 @@ RESULTAT (2026-11-22, 12 jeux, tokens comptes par le tokenizer Gemini) :
   JSON de 17 % et TOON de 31 %.
 - TOON fait 20 % de plus que le JSON sur ces donnees, comme sa propre
   documentation l'annonce pour les donnees imbriquees.
-- Allers-retours sans perte pour les 7 formats. Comprehension a mesurer
-  (`--comprehension`).
+- Allers-retours sans perte pour les 7 formats.
+
+COMPREHENSION (2026-11-22, Gemma 4 31B, 1 passe, 36 questions par format) :
+  json 32/33 (1 erreur d'API), toon 36/36, cstl_symboles 34/36, cstl_arbre 32/36
+- Les erreurs portent surtout sur une question : « contrats avec une clause
+  terminate dont amount_above est inferieur a 1000 ». Le modele compte aussi
+  les clauses SANS amount_above (marque « - » en CSTL). Le JSON y fait aussi
+  une erreur. Le mode arbre en fait une de plus : un comptage par departement.
+- Le mode arbre est donc le plus court (17 % de moins que le JSON) mais un
+  peu moins bien suivi par Gemma (89 % contre 97 %). Serie courte, un seul
+  modele : a confirmer.
 
 Usage :
   python3 scripts/nested_benchmark.py
