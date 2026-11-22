@@ -66,7 +66,7 @@ import format_comprehension_benchmark as fc  # noqa: E402
 import toon_lite  # noqa: E402
 import cstl_compact  # noqa: E402
 
-FORMATS = ("cstl", "json_compact", "cstl_court", "json_court", "toon", "cstl_tableau")
+FORMATS = ("cstl", "json_compact", "cstl_court", "json_court", "toon", "cstl_tableau", "cstl_symboles")
 
 NOTES = {
     "cstl_court": (
@@ -81,6 +81,11 @@ NOTES = {
         "- \"facts\" : {fait: true|false} (comme STATE). Un fait absent est faux.\n"
         "- \"rules\" : liste de [subject, modality, action, amount_above, if_fact, unless_fact] ; null quand la "
         "condition n'existe pas."),
+    "cstl_symboles": (
+        "Format CSTL compact sans mot-cle (une ligne par element) :\n"
+        "- « <agent> @<role> » : l'agent a ce role.\n"
+        "- « <fait>=1 » ou « <fait>=0 » : le fait est vrai ou faux. Un fait absent est faux.\n"
+        "- « <qui> *<action> » = obligation (MUST), « <qui> !<action> » = interdiction (MUST_NOT), « <qui> ?<action> » = permission (MAY). Conditions : >X (seulement au-dela du montant X), +F (seulement si le fait F est vrai), -F (sauf si le fait F est vrai)."),
     "cstl_tableau": (
         "Lecture du format CSTL compact en tableaux :\n"
         "- \"ROLES[N] agent role\" puis une ligne par role : l'agent a ce role (comme POSSESSES).\n"
@@ -97,6 +102,8 @@ NOTES = {
 
 
 def render(fmt, rels):
+    if fmt == "cstl_symboles":
+        return cstl_compact.encode_symbols(rels)
     if fmt == "cstl_tableau":
         return cstl_compact.encode(rels, table=True)
     if fmt == "toon":

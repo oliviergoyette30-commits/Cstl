@@ -77,7 +77,7 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import toon_lite  # noqa: E402
 import cstl_compact  # noqa: E402
 
-FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau")
+FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau", "cstl_symboles")
 TYPES = ("taches", "faits", "commandes", "evenements", "negociation")
 SIZES = (20, 60)
 SEEDS = (1, 2)
@@ -89,6 +89,9 @@ NOTES = {
              "champs ; null = champ absent."),
     "cstl": ("Format : CSTL. Une ligne RELATION [type=..., subject=..., object=..., cle=valeur, ...] par element."),
     "cstl_compact": ("Format : CSTL compact. Une ligne « REL <type> <subject> <object> cle=valeur ... » par element."),
+    "cstl_symboles": ("Format : CSTL compact sans mot-cle. « <TYPE>[N]: col1 col2 ... » puis une ligne par element : "
+                      "les 2 premieres valeurs sont subject et object, puis les colonnes annoncees dans l'ordre ; "
+                      "« - » = champ absent."),
     "cstl_tableau": ("Format : CSTL compact en tableau. « <TYPE>[N] subject object col1 col2 ... » puis une ligne par "
                      "element, valeurs dans l'ordre des colonnes ; « - » = champ absent."),
 }
@@ -234,6 +237,8 @@ def render(fmt, kind, recs, rtype, subj, obj):
     rels = to_relations(recs, rtype, subj, obj)
     if fmt == "cstl_tableau":
         return cstl_compact.encode(rels, table=True)
+    if fmt == "cstl_symboles":
+        return cstl_compact.encode_symbols(rels)
     return rt.render_relations(rels) if fmt == "cstl" else cstl_compact.encode(rels)
 
 

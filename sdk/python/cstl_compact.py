@@ -35,6 +35,8 @@ object » puis nomme les autres colonnes (2026-11-22) :
 Apres les 6 colonnes d'une regle viennent les autres conditions (prefixes
 ci-dessous) et la raison. Un nombre [N] faux est une erreur : c'est ce qui
 permet de reperer une ligne oubliee au lieu de l'accepter en silence.
+Les sections en tableau s'inspirent des tableaux de TOON (Token-Oriented Object
+Notation, github.com/toon-format/toon, licence MIT).
 Pourquoi : dans scripts/compact_writing_benchmark.py, Haiku oubliait des
 regles et confondait if: et unless: en mode ligne, alors qu'il ecrivait
 bien TOON, dont les colonnes sont nommees une fois dans l'en-tete.
@@ -160,6 +162,73 @@ def encode(relations, table=False):
     return "\n".join(lines)
 
 
+SYMBOLS = {"MUST": "*", "MUST_NOT": "!", "MAY": "?"}
+SYMBOL_MODALITY = {v: k for k, v in SYMBOLS.items()}
+HEADER_SYM = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]*)\[(\d+)\]:((?:\s+\S+)*)\s*$")
+PLAIN = re.compile(r"^[A-Za-z0-9_.:\-]+$")
+
+
+def _sym_line(r):
+    """Une relation de politique sans mot-cle, ou None si elle ne s'y prete pas."""
+    if _is_role(r) and PLAIN.match(r["subject"]) and PLAIN.match(r["object"][5:]):
+        return f"{r['subject']} @{r['object'][5:]}"
+    if _is_fact(r) and PLAIN.match(r["subject"]):
+        return f"{r['subject']}={'1' if r['object'] == 'true' else '0'}"
+    if _is_rule(r) and r["modality"] in SYMBOLS and PLAIN.match(r["subject"]) and PLAIN.match(r["object"]) \
+            and r["object"][:1] not in "*!?@" and "=" not in r["subject"]:
+        parts = [r["subject"], SYMBOLS[r["modality"]] + r["object"]]
+        if "amount_above" in r:
+            parts.append(">" + _token(r["amount_above"]))
+        for attr, sym in (("if_fact", "+"), ("unless_fact", "-")):
+            if attr in r:
+                if not PLAIN.match(r[attr]):
+                    return None
+                parts.append(sym + r[attr])
+        return " ".join(parts + _rule_extras(r, ("type", "subject", "object", "modality", "amount_above", "if_fact",
+                                                 "unless_fact")))
+    return None
+
+
+def encode_symbols(relations):
+    """CSTL compact SANS MOT-CLE (2026-11-22). Politiques, une ligne chacune :
+      agent_a @finance                         role
+      kyc_done=1  /  kyc_done=0                fait vrai / faux
+      agent_f !wipe_db >100 +audit_open -kyc   regle : * MUST, ! MUST_NOT, ? MAY ;
+                                               >X au-dela de X, +F si F, -F sauf si F
+    Autres relations, en tableau par type ; les 2 premieres valeurs d'une ligne
+    sont subject et object, puis les colonnes annoncees :
+      ORDER[2]: amount status
+        o1 client_3 450 paid
+        o2 client_1 80 -
+    Ce qui ne s'y prete pas (noms avec espaces, autres modalites...) reste en
+    CSTL compact ordinaire, que `decode` lit aussi."""
+    rels = [{k: str(v) for k, v in r.items()} for r in relations]
+    lines, groups = [], {}
+    for r in rels:
+        sym = _sym_line(r) if (_is_role(r) or _is_fact(r) or _is_rule(r)) else None
+        if sym is not None:
+            lines.append(sym)
+        elif not (_is_role(r) or _is_fact(r) or _is_rule(r)) and _generic_ok(r):
+            groups.setdefault(r["type"], []).append(r)
+        else:
+            lines.append(_line(r))
+    for t, rs in groups.items():
+        cols = []
+        for r in rs:
+            cols += [k for k in r if k not in ("type", "subject", "object") and k not in cols]
+        lines.append(f"{t}[{len(rs)}]:" + "".join(f" {c}" for c in cols))
+        lines += ["  " + " ".join([_cell(r["subject"]) if r["subject"] != "" else '""',
+                                   _cell(r["object"]) if r["object"] != "" else '""']
+                                  + [_cell(r.get(c)) if r.get(c) != "" else '""' for c in cols]) for r in rs]
+    return "\n".join(lines)
+
+
+def _generic_ok(r):
+    return (r.get("subject") is not None and r.get("object") is not None and GENERIC_TYPE.match(r.get("type", ""))
+            and r["type"] not in ("ROLES", "FACTS", "RULES")
+            and all(GENERIC_TYPE.match(k) for k in r if k not in ("type", "subject", "object")))
+
+
 def _split(line):
     """Mots d'une ligne : [(texte, entierement_entre_guillemets)]. Un mot peut
     contenir une partie entre guillemets (if:"a b") ; « # » hors guillemets
@@ -282,6 +351,12 @@ def decode_report(text):
             close()
             section = [m.group(1), int(m.group(2)) if m.group(2) else None, 0]
             continue
+        hs = HEADER_SYM.match(line.strip()) if not indented else None
+        if hs:
+            close()
+            cols = hs.group(3).split()
+            section = ["GENERIC", int(hs.group(2)), 0, cols, hs.group(1)]
+            continue
         g = GENERIC.match(line.strip()) if not indented else None
         if g:
             close()
@@ -291,7 +366,10 @@ def decode_report(text):
         close()
         section = None
         head = toks[0]
-        if head == "ROLE":
+        sym = _decode_symbol_line(toks, words, n, line)
+        if sym is not None:
+            out.append(sym)
+        elif head == "ROLE":
             if len(toks) != 3:
                 raise CompactError(f"ligne {n} : ROLE <agent> <role>")
             out.append({"type": "POSSESSES", "subject": toks[1], "object": f"role:{toks[2]}"})
@@ -316,6 +394,29 @@ def decode_report(text):
             out.append(_rule_from(toks[3:], words[3:], n, line, base))
     close()
     return out, problems
+
+
+def _decode_symbol_line(toks, words, n, line):
+    """Ligne sans mot-cle (`encode_symbols`), ou None si ce n'en est pas une."""
+    if len(toks) == 1 and not words[0][1]:
+        k, sep, v = toks[0].partition("=")
+        if sep and v in ("0", "1") and k:
+            return {"type": "STATE", "subject": k, "object": "true" if v == "1" else "false"}
+        return None
+    if len(toks) == 2 and toks[1].startswith("@") and len(toks[1]) > 1 and not words[1][1]:
+        return {"type": "POSSESSES", "subject": toks[0], "object": f"role:{toks[1][1:]}"}
+    if len(toks) >= 2 and toks[1][:1] in SYMBOL_MODALITY and len(toks[1]) > 1 and not words[1][1]:
+        r = {"type": "PERFORM", "subject": toks[0], "object": toks[1][1:], "modality": SYMBOL_MODALITY[toks[1][0]]}
+        rest, rest_words = list(toks[2:]), list(words[2:])
+        keep, keep_words = [], []
+        for t, w in zip(rest, rest_words):
+            if not w[1] and t[:1] in "+-" and len(t) > 1 and PLAIN.match(t[1:]):
+                r["if_fact" if t[0] == "+" else "unless_fact"] = t[1:]
+            else:
+                keep.append(t)
+                keep_words.append(w)
+        return _rule_from(keep, keep_words, n, line, r)
+    return None
 
 
 def decode(text):
@@ -362,6 +463,22 @@ GUIDE_TABLE = (
     "RULES[2] qui modalite action au_dela si sauf_si\n"
     "  agent_a MUST_NOT wipe_db 100 - audit_open\n"
     "  role:finance MUST log_transaction - - - \"tracabilite\""
+)
+
+
+GUIDE_SYMBOLS = (
+    "Format CSTL compact sans mot-cle (une ligne par element) :\n"
+    "- <agent> @<role> : l'agent a ce role.\n"
+    "- <fait>=1 ou <fait>=0 : le fait est vrai ou faux.\n"
+    "- <qui> *<action> : obligation (MUST) ; <qui> !<action> : interdiction (MUST_NOT) ; <qui> ?<action> : "
+    "permission (MAY). <qui> est un agent ou role:<nom>.\n"
+    "  Conditions apres l'action : >X (seulement au-dela du montant X), +F (seulement si le fait F est vrai), "
+    "-F (sauf si le fait F est vrai). Une raison facultative peut suivre, entre guillemets.\n"
+    "Exemple :\n"
+    "agent_a @finance\n"
+    "audit_open=1\n"
+    "agent_a !wipe_db >100 -audit_open\n"
+    "role:finance *log_transaction \"tracabilite\""
 )
 
 

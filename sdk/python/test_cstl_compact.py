@@ -198,3 +198,60 @@ def test_generic_random_round_trips():
                 r[k] = rnd.choice(["1", "", "-", "deux mots", 'q"uote', "x#y"])
             rels.append(r)
         assert decode(encode(rels, table=True)) == _grouped(rels)
+
+
+# ---- mode sans mot-cle (2026-11-22) ----
+from cstl_compact import encode_symbols  # noqa: E402
+
+
+def _key(r):
+    return sorted(r.items())
+
+
+def test_symbols_shape_and_round_trip():
+    rels = [{"type": "POSSESSES", "subject": "agent_a", "object": "role:finance"},
+            {"type": "STATE", "subject": "kyc_done", "object": "false"},
+            {"type": "PERFORM", "subject": "agent_f", "object": "wipe_db", "modality": "MUST_NOT", "amount_above": "100",
+             "unless_fact": "audit_open", "reason": "pas pendant un audit"},
+            {"type": "PERFORM", "subject": "role:ops", "object": "backup_db", "modality": "MUST", "if_fact": "night"},
+            {"type": "PERFORM", "subject": "agent_a", "object": "refund", "modality": "MAY", "amount_at_most": "50"},
+            {"type": "ORDER", "subject": "o1", "object": "client_3", "amount": "450", "status": "paid"},
+            {"type": "ORDER", "subject": "o2", "object": "client_1", "amount": "80"}]
+    text = encode_symbols(rels)
+    assert text.splitlines()[:5] == ["agent_a @finance", "kyc_done=0",
+                                     'agent_f !wipe_db >100 -audit_open "pas pendant un audit"',
+                                     "role:ops *backup_db +night", "agent_a ?refund <=50"]
+    assert text.splitlines()[5:] == ["ORDER[2]: amount status", "  o1 client_3 450 paid", "  o2 client_1 80 -"]
+    assert sorted(map(_key, decode(text))) == sorted(map(_key, rels))
+
+
+def test_symbols_fall_back_when_needed():
+    rels = [{"type": "PERFORM", "subject": "deux mots", "object": "x", "modality": "MUST"},
+            {"type": "PERFORM", "subject": "a", "object": "b", "modality": "FORBID"},
+            {"type": "STATE", "subject": "order_1", "object": "shipped"}]
+    assert sorted(map(_key, decode(encode_symbols(rels)))) == sorted(map(_key, rels))
+
+
+def test_symbols_random_round_trips():
+    rnd = random.Random(31)
+    for _ in range(400):
+        rels = []
+        for _ in range(rnd.randint(1, 10)):
+            k = rnd.random()
+            if k < 0.15:
+                rels.append({"type": "POSSESSES", "subject": rnd.choice(["a", "b c", "x.y"]), "object": "role:" + rnd.choice(["r", "-", "s t"])})
+            elif k < 0.3:
+                rels.append({"type": "STATE", "subject": rnd.choice(["f", "g h", "k=1"]), "object": rnd.choice(["true", "false"])})
+            elif k < 0.7:
+                r = {"type": "PERFORM", "subject": rnd.choice(["a", "role:x", "!a", "b c"]), "object": rnd.choice(["b", "*c", "d e"]),
+                     "modality": rnd.choice(["MUST", "MUST_NOT", "MAY", "REQUIRE"])}
+                for attr in rnd.sample(["amount_above", "amount_at_most", "if_fact", "unless_fact", "total_above", "reason"],
+                                       rnd.randint(0, 4)):
+                    r[attr] = rnd.choice(["10", "f", "deux mots", 'q"t', "-x", "+y"])
+                rels.append(r)
+            else:
+                r = {"type": rnd.choice(["ORDER", "EVENT"]), "subject": rnd.choice(["o1", "-", "", "a b"]), "object": rnd.choice(["c", "@d", "e=1"])}
+                for col in rnd.sample(["amount", "status", "odd key"], rnd.randint(0, 3)):
+                    r[col] = rnd.choice(["1", "", "-", "deux mots", "x#y"])
+                rels.append(r)
+        assert sorted(map(_key, decode(encode_symbols(rels)))) == sorted(map(_key, rels)), rels

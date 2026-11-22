@@ -253,6 +253,26 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   - Piste : une section en tableau générique dans le CSTL compact, pour
     les données régulières, qui n'écrirait les noms de champs qu'une fois.
 
+- **Sections en tableau génériques et mode sans mot-clé (`cstl_compact`)**
+  : tout est prêt, mais rien n'est encore mesuré avec un modèle, car la
+  limite de dépense de l'API est atteinte jusqu'au 1er décembre.
+  - Le tableau générique écrit `ORDER[N] subject object amount ...` puis une
+    ligne de valeurs par élément. Les sections s'inspirent de TOON.
+  - Le mode sans mot-clé (`encode_symbols`) n'a plus aucun mot-clé :
+    `agent_a @finance`, `kyc_done=1`, `agent_f !wipe_db >100 -audit_open`,
+    et pour les données `ORDER[N]: amount ...`.
+  - Taille hors ligne, en caractères :
+
+    | | CSTL compact (lignes) | tableau | sans mot-clé | TOON | JSON |
+    |---|---|---|---|---|---|
+    | politiques (12) | 19 923 | 22 091 | **15 647** | 25 229 | – |
+    | données (20 jeux) | 59 057 | 37 281 | **36 791** | 40 992 | 82 789 |
+
+  - Mesures à lancer :
+    - `format_short_benchmark.py --formats cstl_court,toon,cstl_symboles` ;
+    - `compact_writing_benchmark.py --formats compact,toon,compact_symboles` ;
+    - `data_types_benchmark.py --formats json,toon,cstl_tableau,cstl_symboles`.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté
