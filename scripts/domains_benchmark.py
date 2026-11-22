@@ -146,14 +146,24 @@ def questions(name, rels):
     roles = lambda a: {r["object"][5:] for r in rels if r["type"] == "POSSESSES" and r["subject"] == a}  # noqa: E731
     targets = lambda r, a: r["subject"] == a or (r["subject"].startswith("role:") and r["subject"][5:] in roles(a))  # noqa: E731
     rules = [r for r in rels if r["type"] == "PERFORM"]
-    qs = []
-    for r in rnd.sample([x for x in rules if x["modality"] == "MUST_NOT"], 3):
+    # 2026-11-22 : les 3 questions melangent « permis » et « interdit ». Avant,
+    # elles pouvaient toutes valoir false (vu avec ChatGPT, domaine medical) :
+    # un modele qui repond toujours « non » les avait toutes justes.
+    cands = []
+    for r in [x for x in rules if x["modality"] == "MUST_NOT"]:
         agent = r["subject"] if not r["subject"].startswith("role:") else next(
             (a for a in [f"agent_{c}" for c in "abcdef"] if r["subject"][5:] in roles(a)), "agent_a")
-        amount = int(float(r.get("amount_above", 300)) + rnd.choice([-1, 1, 50]))
-        ok = not any(x["modality"] == "MUST_NOT" and x["object"] == r["object"] and targets(x, agent) and holds(x, facts, amount)
-                     for x in rules)
-        qs.append((f"{agent} veut lancer {r['object']} pour {amount} : est-ce permis ? (true ou false)", ok))
+        for delta in (-1, 1, 50):
+            amount = int(float(r.get("amount_above", 300)) + delta)
+            ok = not any(x["modality"] == "MUST_NOT" and x["object"] == r["object"] and targets(x, agent)
+                         and holds(x, facts, amount) for x in rules)
+            cands.append((f"{agent} veut lancer {r['object']} pour {amount} : est-ce permis ? (true ou false)", ok))
+    rnd.shuffle(cands)
+    yes, no = [c for c in cands if c[1]], [c for c in cands if not c[1]]
+    picked = (yes[:1] + no[:1]) if yes and no else []
+    picked += [c for c in cands if c not in picked][:3 - len(picked)]
+    rnd.shuffle(picked)
+    qs = list(picked)
     agent = max([f"agent_{c}" for c in "abcdef"], key=lambda a: sum(x["modality"] == "MUST" and targets(x, a) for x in rules))
     must = sorted({x["object"] for x in rules if x["modality"] == "MUST" and targets(x, agent) and holds(x, facts, None)})
     qs.append((f"Quelles actions {agent} est-il OBLIGE de lancer ? (liste)", must))
