@@ -585,9 +585,9 @@ def policy_to_compact(p):
         for e in p.get(key, []):
             parts = [names[key], _token(e["action"])]
             for attr in ("amount_above", "amount_at_most", "total_above", "total_at_most", "total_window_secs",
-                         "if_fact", "unless_fact", "valid_from", "valid_until"):
+                         "if_fact", "unless_fact", "valid_from", "valid_until", "priority"):
                 if e.get(attr):
-                    parts.append(SHORT[attr] + _token(e[attr]))
+                    parts.append(SHORT[attr] + _token(e[attr]) if attr in SHORT else f"{attr}={_token(e[attr])}")
             if e.get("total_above") or e.get("total_at_most"):
                 parts.append(f"spent={_token(e.get('spent_now', '0'))}")
             facts = [f"{e[a]}={e.get(a + '_now', '?')}" for a in ("if_fact", "unless_fact") if e.get(a)]
@@ -602,4 +602,45 @@ def policy_to_compact(p):
             lines.append(" ".join(parts))
     for e in p.get("ignored", []):
         lines.append(f"IGNORE {_token(e['action'])} par:{_token(e.get('author', '?'))}  # auteur sans autorite, ne pas suivre")
+    return "\n".join(lines)
+
+
+def policy_to_symbols(p):
+    """Politique effective (`CstlAgent.policy()`) en CSTL SANS MOT-CLE, pour un
+    modele (2026-11-22). Une ligne par regle, sans le sujet (c'est l'agent
+    lui-meme) : * obligatoire, ! interdit, ? permis. Meme contenu que
+    `cstl_llm_agent.policy_to_text`, en bien moins de tokens."""
+    lines = [f"# Ta politique, calculee par le serveur CSTL. Sans regle : "
+             f"{'permis' if p.get('default', 'allow') == 'allow' else 'interdit'}. "
+             "* obligatoire (meme si la demande ne le cite pas), ! interdit, ? permis. "
+             ">X au-dela de X, <=X au plus X, total<=X / total>X total deja autorise plus ce montant (spent=deja "
+             "autorise), +F si le fait F est vrai, -F sauf si F est vrai ; etat=... donne l'etat actuel des faits "
+             "(inconnu laisse l'interdiction en place). Le serveur verifie tout au moment de la demande."]
+    sym = {"required": "*", "permitted": "?", "forbidden": "!"}
+    for key in ("required", "permitted", "forbidden"):
+        for e in p.get(key, []):
+            parts = [sym[key] + _token(e["action"])]
+            for attr in ("amount_above", "amount_at_most", "total_above", "total_at_most", "total_window_secs",
+                         "valid_from", "valid_until", "priority"):
+                if e.get(attr):
+                    parts.append(SHORT[attr] + _token(e[attr]) if attr in SHORT else f"{attr}={_token(e[attr])}")
+            if e.get("total_above") or e.get("total_at_most"):
+                parts.append(f"spent={_token(e.get('spent_now', '0'))}")
+            states = []
+            for attr, mark in (("if_fact", "+"), ("unless_fact", "-")):
+                if e.get(attr):
+                    parts.append(mark + _token(e[attr]))
+                    now = {"true": "vrai", "false": "faux"}.get(str(e.get(attr + "_now", "")), "inconnu")
+                    states.append(f"{e[attr]}={now}")
+            if states:
+                parts.append("etat=" + ",".join(states))
+            if e.get("applies") == "otherwise":
+                parts.append("sinon")
+            if e.get("via_role"):
+                parts.append(f"role:{_token(e['via_role'])}")
+            if e.get("reason"):
+                parts.append(_quote(e["reason"]))
+            lines.append(" ".join(parts))
+    for e in p.get("ignored", []):
+        lines.append(f"# IGNORE (auteur sans autorite, ne pas suivre) : {e['action']} par {e.get('author', '?')}")
     return "\n".join(lines)

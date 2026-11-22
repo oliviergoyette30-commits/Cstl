@@ -185,6 +185,17 @@ layer 9 will decide for you:
 Agents that read this view instead of raw messages scored 48/48 with
 both Haiku 5.5 and Opus 5.5 in `scripts/team_task_benchmark.py`.
 
+**Compact views for a model.** `agent.policy_text(fmt)` returns the same
+effective policy written for a model: `"phrases"` (sentences, the default),
+`"compact"` or `"symboles"` (compact CSTL without keywords, the shortest:
+`*log_transaction`, `!liquidate +incident_open etat=incident_open=inconnu`,
+`?refund_order <=100`). The other way round, `agent.send_compact(receiver,
+text)` takes relations a model wrote in compact CSTL (with or without
+keywords, lines or tables), rebuilds the full relations, signs and sends
+them. Nothing is guessed: an unreadable line, a wrong row count or a badly
+typed value raises `cstl_compact.CompactError`. Format and tests:
+`sdk/python/cstl_compact.py`, `sdk/python/test_cstl_compact.py`.
+
 **Conditions the server enforces.** A rule can carry extra attributes,
 which layer 9 checks itself (not just their text):
 
