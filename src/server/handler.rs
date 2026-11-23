@@ -230,6 +230,39 @@ async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::Ha
     relations.iter().find_map(|r| super::schema::violation(r, &schemas))
 }
 
+/// Arbre qui se reclame d'une source (tree_source=<agent>) sans engagement
+/// signe de cette source, ou dont l'empreinte differe de celle engagee
+/// (2026-11-23, voir tree_check.rs). L'engagement retenu est le plus recent
+/// de la source, et seulement si sa signature est celle de la cle
+/// enregistree de la source : un transmetteur ne peut pas s'engager a sa place.
+async fn tree_source_violation(ctx: &ServerContext, relations: &[std::collections::HashMap<String, String>]) -> Option<String> {
+    for (tree, source) in super::tree_check::claimed_sources(relations) {
+        let rows = {
+            let store = ctx.adn_store.lock().await;
+            store.tree_commits(&tree).unwrap_or_else(|e| {
+                error!("[Handler] tree_commits failed: {}", e);
+                Vec::new()
+            })
+        };
+        let reg = ctx.agent_registry.read().await;
+        let committed = rows.iter().rev().find(|row| {
+            row.author.as_deref() == Some(source.as_str())
+                && match &row.signer_key {
+                    Some(key) => reg.agents.iter().any(|a| a.name == source && a.public_key.as_ref() == Some(key)),
+                    None => false,
+                }
+        });
+        let Some(commit) = committed else {
+            return Some(format!("arbre {tree} : aucun engagement signe de la source {source}"));
+        };
+        let got = super::tree_check::canonical_hash(relations, &tree);
+        if got != commit.object {
+            return Some(format!("arbre {tree} : empreinte differente de celle engagee par la source {source}"));
+        }
+    }
+    None
+}
+
 /// Valeur recopiee dans une reponse wire : jamais de `"`, `[`, `]` ni de
 /// saut de ligne, et entre guillemets (elle peut contenir des virgules).
 fn wire_text(v: &str) -> String {
@@ -599,8 +632,14 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // relations d'un arbre (tree=<id>) annoncent leurs enfants
                     // (tree_n) ; un arbre auquel il manque une branche, un element
                     // sans parent ou en double est refuse en entier, avant d'etre
-                    // stocke (voir tree_check.rs).
-                    if let Some(detail) = super::tree_check::violation(&payload.relations) {
+                    // stocke (voir tree_check.rs). Un arbre qui se reclame d'une
+                    // source (tree_source) doit avoir l'empreinte que cette source a
+                    // engagee et signee (tree_commit).
+                    let tree_problem = match super::tree_check::violation(&payload.relations) {
+                        Some(d) => Some(d),
+                        None => tree_source_violation(&ctx, &payload.relations).await,
+                    };
+                    if let Some(detail) = tree_problem {
                         warn!("[Handler] Tree rejected for '{}': {}", sig_sender, detail);
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=tree_rejected, detail={}]\n---END---\n",

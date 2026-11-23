@@ -563,8 +563,20 @@ class CstlAgent:
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
         return self.send_relations(receiver, cstl_compact.decode(body), purpose)
 
+    def commit_tree(self, tree, tree_id: str) -> CstlResponse:
+        """La SOURCE s'engage sur un arbre (2026-11-23) : elle signe son
+        empreinte canonique (`cstl_compact.tree_hash`), inscrite dans l'audit
+        (RELATION [type=tree_commit, subject=<tree_id>, object=sha256:...]).
+        Ensuite, un arbre envoye par N'IMPORTE QUI avec source=<cet agent>
+        n'est accepte par le serveur que s'il a exactement cette empreinte :
+        un transmetteur ne peut ni omettre, ni modifier, ni ajouter."""
+        import cstl_compact
+        rels = cstl_compact.tree_to_relations(tree, tree_id, source=self.name)
+        digest = cstl_compact.tree_hash(rels, tree_id)
+        return self.send_relations("server", [{"type": "tree_commit", "subject": str(tree_id), "object": digest}])
+
     def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None,
-                  lenient: bool = False) -> Tuple[str, CstlResponse]:
+                  lenient: bool = False, source: Optional[str] = None) -> Tuple[str, CstlResponse]:
         """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
         `tree` : n'importe quel document JSON (objet, liste, valeur), ou un
         texte en CSTL compact mode arbre : arbre indente
@@ -577,13 +589,16 @@ class CstlAgent:
         lenient=True : un arbre indente ECRIT PAR UN MODELE est relu en mode
         tolerant (`[N]` faux, colonnes finales omises, autre indentation ; voir
         `cstl_compact.decode_tree_indented`). Rien n'est devine.
+        source=<agent> : l'arbre se reclame de cette source ; le serveur le
+        refuse (purpose=tree_rejected) si la source n'a pas engage exactement
+        cette empreinte avec `commit_tree`.
         Renvoie (tree_id, reponse). Relire avec `fetch_tree(tree_id)`."""
         import cstl_compact
         if isinstance(tree, str):
             tree = (cstl_compact.decode_tree_indented(tree, lenient=lenient) if tree.lstrip().startswith("@")
                     else cstl_compact.decode_tree(tree))
         tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
-        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id))
+        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id, source=source))
 
     def fetch_tree(self, tree_id: str):
         """Relit un arbre envoye avec `send_tree` (sa derniere version), depuis

@@ -1743,6 +1743,13 @@ impl AdnStore {
         self.authored_relations("modality IS NULL AND predicate = 'SCHEMA'", &[])
     }
 
+    /// Engagements d'une source sur un arbre (`RELATION [type=tree_commit,
+    /// subject=<id d'arbre>, object=sha256:...]`), avec leur auteur, dans
+    /// l'ordre (2026-11-23, voir server/tree_check.rs).
+    pub fn tree_commits(&self, tree: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
+        self.authored_relations("modality IS NULL AND predicate = 'tree_commit' AND subject = ?1", &[tree])
+    }
+
     fn authored_relations(&self, where_sql: &str, args: &[&str]) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         type Row = (String, String, String, String, Option<String>, Option<String>);
         let rows: Vec<Row> = {

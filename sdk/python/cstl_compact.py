@@ -871,7 +871,18 @@ def _from_wire(v, t):
     return None if t == "null" else v == "true" if t == "bool" else int(v) if t == "int" else float(v) if t == "num" else v
 
 
-def tree_to_relations(data, tree_id):
+def tree_hash(rels, tree_id):
+    """Empreinte canonique d'un arbre (2026-11-23), identique a celle du serveur
+    (`src/server/tree_check.rs::canonical_hash`) : relations tree=<tree_id>
+    dans l'ordre, `cle=valeur` triees par cle, separees par 0x1f, relations
+    separees par 0x1e ; SHA-256, prefixe sha256:."""
+    import hashlib
+    body = "\x1e".join("\x1f".join(f"{k}={r[k]}" for k in sorted(r) if k != "block")
+                       for r in rels if r.get("tree") == str(tree_id))
+    return "sha256:" + hashlib.sha256(body.encode()).hexdigest()
+
+
+def tree_to_relations(data, tree_id, source=None):
     """Document JSON -> relations CSTL, toutes marquees tree=<tree_id>. Les
     listes d'objets deviennent des relations (une par objet) ; le reste de la
     racine (champs simples, liste d'objets en racine, valeur seule) part dans
@@ -880,7 +891,11 @@ def tree_to_relations(data, tree_id):
     Comptes (2026-11-23) : chaque element qui a des enfants porte tree_n=<nombre
     d'enfants directs>, et tree_root porte tree_n=<nombre d'elements a la
     racine>. Le SERVEUR les verifie a la reception et refuse un arbre
-    incomplet ; `relations_to_tree` les reverifie a la relecture."""
+    incomplet ; `relations_to_tree` les reverifie a la relecture.
+
+    source=<agent> : l'arbre se reclame de cette source (tree_source sur
+    tree_root). Le serveur exige alors un engagement signe de la source
+    (tree_commit) dont l'empreinte (`tree_hash`) est celle de l'arbre recu."""
     if not _NAME_OK.match(str(tree_id)):
         raise CompactError(f"id d'arbre invalide : {tree_id!r}")
     rels, seen = [], set()
@@ -895,6 +910,10 @@ def tree_to_relations(data, tree_id):
     else:
         kind, extra, data = "value", {"v": data}, {}
     rel = {"type": "tree_root", "subject": "tree_root", "object": "-", "tree": str(tree_id), "tree_kind": kind}
+    if source is not None:
+        if not _NAME_OK.match(str(source)):
+            raise CompactError(f"nom de source invalide : {source!r}")
+        rel["tree_source"] = str(source)
     types = []
     for k, v in extra.items():
         name = _field_name(k)
@@ -953,7 +972,8 @@ def relations_to_tree(rels, tree_id=None):
         types = dict(t.split(":", 1) for t in r.get("tree_types", "").split() if ":" in t)
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
-            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "block"):
+            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "tree_source",
+                     "block"):
                 continue
             o[_unfield(k)] = _from_wire(v, types.get(k))
         if r.get("tree_kind"):

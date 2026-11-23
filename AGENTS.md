@@ -280,6 +280,30 @@ reader can later prove the tree is complete. Limit: the counts are the
 author's. They prove the tree matches what the author announced, not
 that the author tells the truth.
 
+**The source commits, someone else transmits.** To stop a transmitter
+from dropping, changing or adding anything, the agent that owns the data
+commits to it first: `source.commit_tree(data, tree_id)`. This signs the
+tree's canonical hash and records it in the audit
+(`RELATION [type=tree_commit, subject=<tree_id>, object=sha256:...]`).
+
+Any agent can then send the tree with `send_tree(..., tree_id=tree_id,
+source="<source>")`, in any form, including an indented tree written by a
+model. The server recomputes the hash of what it receives. It refuses the
+tree (`tree_rejected`) in three cases:
+- the source never committed;
+- the hash differs from the source's latest commit;
+- the commit is not signed with the source's registered key. A
+  transmitter cannot commit in the source's place.
+
+The hash is identical in Python (`cstl_compact.tree_hash`) and in Rust
+(`tree_check::canonical_hash`), and a test pins the same value on both
+sides. Live test: a transmitter that drops a line, changes a price or adds
+an order is refused, and so is one that commits to its own altered version.
+
+Limits: a tree sent without `source` is vouched for by its sender only.
+Nobody can prove that a source tells the truth about its own data; it can
+only be bound, by signature, to what it declared.
+
 Any registered agent can read a tree by its id. Live test:
 `test_tree_mode_goes_through_the_server`.
 

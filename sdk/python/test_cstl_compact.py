@@ -588,3 +588,15 @@ def test_tree_relations_counts_are_checked_on_read():
     for drop in (2, 4):          # une ligne, puis une commande entiere
         with pytest.raises(CompactError, match="arbre incomplet"):
             relations_to_tree(rels[:drop] + rels[drop + 1:], "t1")
+
+
+def test_tree_hash_is_the_servers():
+    """2026-11-23 : meme empreinte que src/server/tree_check.rs (test
+    canonical_hash_matches_the_python_sdk, valeur figee des deux cotes)."""
+    from cstl_compact import tree_hash
+    rels = tree_to_relations({"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o2"}]}, "t1")
+    assert tree_hash(rels, "t1") == "sha256:f3a92ea780204ab228c0c413ad11595615f81a7708a918a248711b000a157db5"
+    with_source = tree_to_relations({"orders": [{"id": "o1"}]}, "t1", source="billing")
+    assert with_source[0]["tree_source"] == "billing"
+    from cstl_compact import relations_to_tree
+    assert relations_to_tree(with_source, "t1") == {"orders": [{"id": "o1"}]}

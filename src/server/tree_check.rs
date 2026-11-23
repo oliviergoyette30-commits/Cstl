@@ -64,6 +64,43 @@ pub fn violation(relations: &[HashMap<String, String>]) -> Option<String> {
     None
 }
 
+/// Empreinte canonique d'un arbre : ses relations (tree=<id>) dans l'ordre
+/// d'envoi, chacune en `cle=valeur` triees par cle, separees par 0x1f ; les
+/// relations separees par 0x1e ; SHA-256 en hexadecimal, prefixe `sha256:`.
+/// Le SDK Python calcule la meme (`cstl_compact.tree_hash`).
+pub fn canonical_hash(relations: &[HashMap<String, String>], tree: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    let mut first = true;
+    for r in relations.iter().filter(|r| r.get("tree").map(String::as_str) == Some(tree)) {
+        if !first {
+            h.update([0x1e]);
+        }
+        first = false;
+        let mut keys: Vec<&String> = r.keys().filter(|k| k.as_str() != "block").collect();
+        keys.sort();
+        for (i, k) in keys.iter().enumerate() {
+            if i > 0 {
+                h.update([0x1f]);
+            }
+            h.update(k.as_bytes());
+            h.update(b"=");
+            h.update(r[*k].as_bytes());
+        }
+    }
+    format!("sha256:{}", hex::encode(h.finalize()))
+}
+
+/// Les arbres de ces relations qui se reclament d'une SOURCE
+/// (`tree_source=<agent>` sur leur relation tree_root) : (id, source).
+pub fn claimed_sources(relations: &[HashMap<String, String>]) -> Vec<(String, String)> {
+    relations
+        .iter()
+        .filter(|r| r.get("type").map(String::as_str) == Some("tree_root"))
+        .filter_map(|r| Some((r.get("tree")?.clone(), r.get("tree_source")?.clone())))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,6 +118,27 @@ mod tests {
             rel(&[("type", "orders"), ("subject", "o2"), ("object", "-"), ("tree", "t1")]),
         ]
     }
+
+    #[test]
+    fn canonical_hash_matches_the_python_sdk() {
+        // Valeur calculee par cstl_compact.tree_hash(tree_to_relations(
+        // {"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o2"}]}, "t1"), "t1")
+        // -- voir test_tree_hash_is_the_servers dans test_cstl_compact.py.
+        let mut t = tree();
+        t[2].insert("q".into(), "1".into());
+        t[2].insert("tree_types".into(), "q:int".into());
+        t[3].insert("q".into(), "2".into());
+        t[3].insert("tree_types".into(), "q:int".into());
+        t[0].insert("tree_kind".into(), "tables".into());
+        t[1].insert("tree_id".into(), "1".into());
+        t[4].insert("tree_id".into(), "1".into());
+        assert_eq!(canonical_hash(&t, "t1"), PYTHON_HASH);
+        // L'ordre des freres compte, une valeur changee aussi.
+        t.swap(2, 3);
+        assert_ne!(canonical_hash(&t, "t1"), PYTHON_HASH);
+    }
+
+    const PYTHON_HASH: &str = "sha256:f3a92ea780204ab228c0c413ad11595615f81a7708a918a248711b000a157db5";
 
     #[test]
     fn complete_tree_passes() {

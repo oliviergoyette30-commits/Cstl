@@ -387,6 +387,14 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - Les comptes sont signés et audités, puis revérifiés à la relecture.
     - Test réel : un client qui contourne le SDK est refusé.
     - Limite : les comptes sont ceux de l'auteur.
+  - **Empreinte signée par la source** (2026-11-23) : la source s'engage
+    (`commit_tree`, empreinte canonique SHA-256, signée et auditée).
+    - Un arbre envoyé avec `source=<agent>` n'est accepté que s'il a
+      exactement cette empreinte.
+    - Test réel : un transmetteur qui omet une ligne, change un prix, ajoute
+      une commande ou s'engage à la place de la source est refusé.
+    - L'empreinte est la même en Python et en Rust (valeur figée des deux
+      côtés).
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

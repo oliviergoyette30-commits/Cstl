@@ -435,6 +435,35 @@ def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_pa
     ok = bot.send_relations("server", full)
     assert not ok.is_error, ok.raw
     assert bot.fetch_tree(hole) == {"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}]}
+    # 2026-11-23 : EMPREINTE SIGNEE PAR LA SOURCE. La source (owner) s'engage ;
+    # un transmetteur (bot) qui se reclame d'elle doit envoyer exactement cet
+    # arbre : ni ligne omise, ni montant change, ni engagement a sa place.
+    src_tree = {"orders": [{"id": "o1", "lines": [{"item": "gpu", "price": 714}, {"item": "lic", "price": 20}]},
+                           {"id": "o2", "lines": [{"item": "router", "price": 90}]}]}
+    tid = f"t_src_{uuid.uuid4().hex[:8]}"
+    _, rej = bot.send_tree("server", src_tree, tree_id=tid, source=owner.name)
+    assert rej.purpose == "tree_rejected" and "aucun engagement" in rej.raw, rej.raw
+    assert not owner.commit_tree(src_tree, tid).is_error
+    import copy
+    missing = copy.deepcopy(src_tree)
+    del missing["orders"][0]["lines"][1]
+    changed = copy.deepcopy(src_tree)
+    changed["orders"][0]["lines"][0]["price"] = 1
+    added = copy.deepcopy(src_tree)
+    added["orders"].append({"id": "o3"})
+    for bad in (missing, changed, added):
+        _, rej = bot.send_tree("server", bad, tree_id=tid, source=owner.name)
+        assert rej.purpose == "tree_rejected" and "empreinte differente" in rej.raw, rej.raw
+    # Le transmetteur s'engage lui-meme sur l'arbre modifie : ca ne compte pas
+    # pour la source.
+    bot.commit_tree(changed, tid)
+    _, rej = bot.send_tree("server", changed, tree_id=tid, source=owner.name)
+    assert rej.purpose == "tree_rejected", rej.raw
+    # L'arbre exact, ecrit par un modele en arbre indente, passe.
+    _, ok = bot.send_tree("server", cstl_compact.encode_tree_indented(src_tree, counts="line"), tree_id=tid,
+                          source=owner.name)
+    assert not ok.is_error, ok.raw
+    assert bot.fetch_tree(tid) == src_tree
 
 
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
