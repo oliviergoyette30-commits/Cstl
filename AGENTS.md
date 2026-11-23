@@ -258,9 +258,25 @@ JSON, with the type `json`. `agent.fetch_tree(tree_id)` reads the document
 back, identical, through the signed `purpose=tree_query`. Sending again with
 the same id replaces it.
 
-Refused before sending:
-- a field name outside `[A-Za-z0-9_.-]`;
-- a value over 300 characters on the wire.
+A long value (a text, a large list) is split into chunks of 250
+characters: the first under its own name, the next ones under
+`tree_c<i>_<name>`, with its type noting the number of chunks
+(`body:str/12`). It is reassembled on reading. A message can hold up to
+1 MiB. A field name outside `[A-Za-z0-9_.-]` is refused before sending.
+
+**Unknown values (the "void that speaks").** An unknown value is distinct
+from `null` (known: no value) and from an absent field (not applicable).
+In JSON it is `{"$unknown": {}}`, or `{"$unknown": {"sigma": 0.3,
+"pending": "next_checkup"}}` with its uncertainty and its plan
+(`cstl_compact.unknown(sigma=0.3)`). The indented tree writes it `?` or
+`?{sigma:0.3,pending:next_checkup}`:
+
+```
+@patients[3]: id
+p1 renal=?{sigma:0.3,pending:next_checkup}
+p2 renal=null
+p3
+```
 
 **The server checks that a tree is complete.** Each element that has
 children carries `tree_n=<number of direct children>`, and a `tree_root`

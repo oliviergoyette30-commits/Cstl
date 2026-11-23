@@ -856,19 +856,65 @@ def _wire_value(where, v):
         return str(v), "int"
     if isinstance(v, float):
         return json.dumps(v), "num"
-    if isinstance(v, (list, dict)) or any(c in str(v) for c in '"[]\n\r'):
-        out, t = _b64(json.dumps(v, ensure_ascii=False, separators=(",", ":"))), "json"
-    else:
-        out, t = str(v), None
-    if len(out) > 300:
-        raise CompactError(f"{where} : valeur trop longue pour le serveur ({len(out)} > 300) : {str(v)[:40]!r}")
-    return out, t
+    if isinstance(v, (list, dict)) or any(c in str(v) for c in '"[]\n\r\\'):
+        return _b64(json.dumps(v, ensure_ascii=False, separators=(",", ":"))), "json"
+    return str(v), None
+
+
+# Une valeur longue est decoupee en morceaux de WIRE_CHUNK caracteres
+# (2026-11-23) : le premier sous son nom, les suivants sous tree_c<i>_<nom>,
+# et son type note le nombre de morceaux (nom:str/3, nom:json/3). Le serveur
+# rend chaque attribut jusqu'a 300 caracteres ; un document entier (1 Mio par
+# message) passe ainsi.
+WIRE_CHUNK = 250
+
+
+def _put_wire(rel, types, name, where, v):
+    out, t = _wire_value(where, v)
+    parts = [out[i:i + WIRE_CHUNK] for i in range(0, len(out), WIRE_CHUNK)] or [""]
+    rel[name] = parts[0]
+    for i, part in enumerate(parts[1:], 1):
+        rel[f"tree_c{i}_{name}"] = part
+    if len(parts) > 1:
+        t = f"{t or 'str'}/{len(parts)}"
+    if t:
+        types.append(f"{name}:{t}")
+
+
+def _put_types(rel, types):
+    """Liste des types d'une relation, decoupee comme une valeur longue :
+    tree_types, puis tree_t1, tree_t2... (un mot n'est jamais coupe)."""
+    chunks, cur = [], ""
+    for t in types:
+        if cur and len(cur) + 1 + len(t) > WIRE_CHUNK:
+            chunks.append(cur)
+            cur = t
+        else:
+            cur = f"{cur} {t}" if cur else t
+    if cur:
+        chunks.append(cur)
+    for i, c in enumerate(chunks):
+        rel["tree_types" if i == 0 else f"tree_t{i}"] = c
 
 
 def _from_wire(v, t):
     if t == "json":
         return json.loads(_unb64(v))
     return None if t == "null" else v == "true" if t == "bool" else int(v) if t == "int" else float(v) if t == "num" else v
+
+
+def _get_wire(rel, name, t):
+    """Inverse de `_put_wire` : recolle les morceaux (type nom:<t>/<n>)."""
+    v = rel[name]
+    if t and "/" in t:
+        t, n = t.split("/", 1)
+        try:
+            v += "".join(rel[f"tree_c{i}_{name}"] for i in range(1, int(n)))
+        except (KeyError, ValueError):
+            raise CompactError(f"valeur longue incomplete : {name} ({n} morceaux annonces)") from None
+        if t == "str":
+            t = None
+    return _from_wire(v, t)
 
 
 def tree_hash(rels, tree_id):
@@ -917,11 +963,9 @@ def tree_to_relations(data, tree_id, source=None):
     types = []
     for k, v in extra.items():
         name = _field_name(k)
-        rel[name], t = _wire_value(f"racine.{k}", v)
-        if t:
-            types.append(f"{name}:{t}")
+        _put_wire(rel, types, name, f"racine.{k}", v)
     if types:
-        rel["tree_types"] = " ".join(types)
+        _put_types(rel, types)
     rel["tree_n"] = str(sum(len(v) for v in data.values()))
     rels.append(rel)
 
@@ -947,11 +991,9 @@ def tree_to_relations(data, tree_id, source=None):
                     kids.append((k, v))
                     continue
                 name = _field_name(k)
-                rel[name], t = _wire_value(f"{key}.{k}", v)
-                if t:
-                    types.append(f"{name}:{t}")
+                _put_wire(rel, types, name, f"{key}.{k}", v)
             if types:
-                rel["tree_types"] = " ".join(types)
+                _put_types(rel, types)
             if kids:
                 rel["tree_n"] = str(sum(len(v) for _, v in kids))
             rels.append(rel)
@@ -969,13 +1011,14 @@ def relations_to_tree(rels, tree_id=None):
     for r in rels:
         if tree_id is not None and r.get("tree") != str(tree_id):
             continue
-        types = dict(t.split(":", 1) for t in r.get("tree_types", "").split() if ":" in t)
+        all_types = " ".join([r.get("tree_types", "")] + [r[f"tree_t{i}"] for i in range(1, 1000) if f"tree_t{i}" in r])
+        types = dict(t.split(":", 1) for t in all_types.split() if ":" in t)
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
             if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "tree_source",
-                     "block"):
+                     "block") or k.startswith(("tree_c", "tree_t")):
                 continue
-            o[_unfield(k)] = _from_wire(v, types.get(k))
+            o[_unfield(k)] = _get_wire(r, k, types.get(k))
         if r.get("tree_kind"):
             kind, extra = r["tree_kind"], o
             continue
@@ -1075,6 +1118,23 @@ _ITABLE_OK = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 _IBLOCK = re.compile(r"^\|(\d+)$")
 
 
+# Le VIDE QUI PARLE (2026-11-23) : une valeur INCONNUE, distincte de null
+# (connue : pas de valeur) et d'un champ absent (sans objet). En JSON :
+# {"$unknown": {}} ou {"$unknown": {"sigma": 0.3, ...}} (son incertitude, son
+# statut, son plan de resolution). Dans l'arbre indente : `?` ou
+# `?{sigma:0.3,pending:next_checkup}`, en cellule comme en ligne.
+UNKNOWN = "$unknown"
+
+
+def unknown(**details):
+    """Valeur inconnue, avec ses details eventuels : unknown(sigma=0.3)."""
+    return {UNKNOWN: dict(details)}
+
+
+def is_unknown(v):
+    return isinstance(v, dict) and len(v) == 1 and isinstance(v.get(UNKNOWN), dict)
+
+
 def _ikids(o):
     return [(k, v) for k, v in o.items()
             if _ITABLE_OK.match(k) and isinstance(v, list) and v and all(isinstance(x, dict) for x in v)]
@@ -1097,13 +1157,15 @@ def _inline(v):
     out = _iscalar_out(v)
     if out is not None:
         return out
+    if is_unknown(v):
+        return "?" + (_inline(v[UNKNOWN]) if v[UNKNOWN] else "")
     if isinstance(v, list):
         return "[" + ",".join(_inline(x) for x in v) + "]"
     if isinstance(v, dict):
         return "{" + ",".join((k if _IKEY_OK.match(k) else json.dumps(k, ensure_ascii=False)) + ":" + _inline(x)
                               for k, x in v.items()) + "}"
     s = str(v)
-    if (s == "" or s in ("null", "true", "false") or _NUMLIKE.match(s)
+    if (s == "" or s in ("null", "true", "false") or _NUMLIKE.match(s) or s[0] == "?"
             or re.search(r'[\s",\[\]{}:\\]', s)):
         return json.dumps(s, ensure_ascii=False)
     return s
@@ -1114,6 +1176,11 @@ def _parse_inline(s, i=0):
     if i >= len(s):
         raise CompactError(f"valeur en ligne incomplete : {s!r}")
     ch = s[i]
+    if ch == "?" and (i + 1 == len(s) or s[i + 1] in ",]}{"):
+        if i + 1 < len(s) and s[i + 1] == "{":
+            details, j = _parse_inline(s, i + 1)
+            return {UNKNOWN: details}, j
+        return {UNKNOWN: {}}, i + 1
     if ch == '"':
         j = i + 1
         while j < len(s) and s[j] != '"':
@@ -1184,7 +1251,7 @@ def _icell(v, blocks):
         blocks.append(part)
         return f"|{len(part)}"
     if (s in ("", "-", ".", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#=]', s)
-            or s[0] in "[{|@/"):
+            or s[0] in "[{|@/?"):
         return _quote(s)
     return s
 
@@ -1198,7 +1265,7 @@ def _icell_in(raw):
     m = _IBLOCK.match(raw)
     if m:
         return None, int(m.group(1))
-    if raw[0] in "[{":
+    if raw[0] in "[{" or raw == "?" or raw.startswith("?{"):
         val, j = _parse_inline(raw)
         if j != len(raw):
             raise CompactError(f"texte en trop apres la valeur en ligne : {raw!r}")

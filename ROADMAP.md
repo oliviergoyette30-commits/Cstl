@@ -395,6 +395,14 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       une commande ou s'engage à la place de la source est refusé.
     - L'empreinte est la même en Python et en Rust (valeur figée des deux
       côtés).
+  - **Valeurs longues** (2026-11-23) : découpées en morceaux de 250
+    caractères (`tree_c<i>_<nom>`, type `nom:str/N`), ainsi que la liste des
+    types. Test réel : un texte de 7 000 caractères et une liste de 500
+    nombres passent par le serveur et reviennent identiques.
+  - **Inconnu natif, le « vide qui parle »** (2026-11-23) : `?` ou
+    `?{sigma:0.3,...}` dans l'arbre indenté, `{"$unknown": {...}}` en JSON.
+    Il est distinct de `null` et d'un champ absent. Aller-retour sans perte
+    (30 000 documents aléatoires), jusqu'au serveur.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

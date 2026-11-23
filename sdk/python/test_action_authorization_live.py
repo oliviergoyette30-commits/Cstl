@@ -410,8 +410,14 @@ def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_pa
     bot.send_tree("server", tree, tree_id=tree_id)
     assert bot.fetch_tree(tree_id)["orders"][1]["client"] == "client_9"
     assert bot.fetch_tree("tree_inconnu") == {}
-    with pytest.raises(cstl_compact.CompactError):
-        bot.send_tree("server", {"orders": [{"id": "o1", "note": "x" * 301}]})
+    # 2026-11-23 : une valeur longue passe, decoupee en morceaux ; une valeur
+    # inconnue (le vide qui parle) aussi, distincte de null et d'un absent.
+    long_doc = {"docs": [{"id": "d1", "body": "".join(f"phrase {i} du contrat, " for i in range(300)),
+                          "renal": cstl_compact.unknown(sigma=0.3, pending="next_checkup"), "known": None},
+                         {"id": "d2", "rows": list(range(500))}]}
+    tid_long, resp_long = bot.send_tree("server", long_doc)
+    assert not resp_long.is_error, resp_long.raw
+    assert bot.fetch_tree(tid_long) == long_doc
     # 2026-11-22 : arbre indente, listes et objets en cellule, texte
     # multiligne, racine libre.
     doc = {"service": "billing", "tags": ["prod", "eu"], "orders": [

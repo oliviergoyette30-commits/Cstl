@@ -901,13 +901,45 @@ def _wire_value(where, v):
         return str(v), "int"
     if isinstance(v, float):
         return json.dumps(v), "num"
-    if isinstance(v, (list, dict)) or any(c in str(v) for c in '"[]\n\r'):
-        out, t = _b64(json.dumps(v, ensure_ascii=False, separators=(",", ":"))), "json"
-    else:
-        out, t = str(v), None
-    if len(out) > 300:
-        raise CompactError(f"{where} : valeur trop longue pour le serveur ({len(out)} > 300) : {str(v)[:40]!r}")
-    return out, t
+    if isinstance(v, (list, dict)) or any(c in str(v) for c in '"[]\n\r\\'):
+        return _b64(json.dumps(v, ensure_ascii=False, separators=(",", ":"))), "json"
+    return str(v), None
+
+
+# Une valeur longue est decoupee en morceaux de WIRE_CHUNK caracteres
+# (2026-11-23) : le premier sous son nom, les suivants sous tree_c<i>_<nom>,
+# et son type note le nombre de morceaux (nom:str/3, nom:json/3). Le serveur
+# rend chaque attribut jusqu'a 300 caracteres ; un document entier (1 Mio par
+# message) passe ainsi.
+WIRE_CHUNK = 250
+
+
+def _put_wire(rel, types, name, where, v):
+    out, t = _wire_value(where, v)
+    parts = [out[i:i + WIRE_CHUNK] for i in range(0, len(out), WIRE_CHUNK)] or [""]
+    rel[name] = parts[0]
+    for i, part in enumerate(parts[1:], 1):
+        rel[f"tree_c{i}_{name}"] = part
+    if len(parts) > 1:
+        t = f"{t or 'str'}/{len(parts)}"
+    if t:
+        types.append(f"{name}:{t}")
+
+
+def _put_types(rel, types):
+    """Liste des types d'une relation, decoupee comme une valeur longue :
+    tree_types, puis tree_t1, tree_t2... (un mot n'est jamais coupe)."""
+    chunks, cur = [], ""
+    for t in types:
+        if cur and len(cur) + 1 + len(t) > WIRE_CHUNK:
+            chunks.append(cur)
+            cur = t
+        else:
+            cur = f"{cur} {t}" if cur else t
+    if cur:
+        chunks.append(cur)
+    for i, c in enumerate(chunks):
+        rel["tree_types" if i == 0 else f"tree_t{i}"] = c
 
 
 def _from_wire(v, t):
@@ -916,11 +948,45 @@ def _from_wire(v, t):
     return None if t == "null" else v == "true" if t == "bool" else int(v) if t == "int" else float(v) if t == "num" else v
 
 
-def tree_to_relations(data, tree_id):
+def _get_wire(rel, name, t):
+    """Inverse de `_put_wire` : recolle les morceaux (type nom:<t>/<n>)."""
+    v = rel[name]
+    if t and "/" in t:
+        t, n = t.split("/", 1)
+        try:
+            v += "".join(rel[f"tree_c{i}_{name}"] for i in range(1, int(n)))
+        except (KeyError, ValueError):
+            raise CompactError(f"valeur longue incomplete : {name} ({n} morceaux annonces)") from None
+        if t == "str":
+            t = None
+    return _from_wire(v, t)
+
+
+def tree_hash(rels, tree_id):
+    """Empreinte canonique d'un arbre (2026-11-23), identique a celle du serveur
+    (`src/server/tree_check.rs::canonical_hash`) : relations tree=<tree_id>
+    dans l'ordre, `cle=valeur` triees par cle, separees par 0x1f, relations
+    separees par 0x1e ; SHA-256, prefixe sha256:."""
+    import hashlib
+    body = "\x1e".join("\x1f".join(f"{k}={r[k]}" for k in sorted(r) if k != "block")
+                       for r in rels if r.get("tree") == str(tree_id))
+    return "sha256:" + hashlib.sha256(body.encode()).hexdigest()
+
+
+def tree_to_relations(data, tree_id, source=None):
     """Document JSON -> relations CSTL, toutes marquees tree=<tree_id>. Les
     listes d'objets deviennent des relations (une par objet) ; le reste de la
     racine (champs simples, liste d'objets en racine, valeur seule) part dans
-    une relation « tree_root » (tree_kind=fields|list|value)."""
+    une relation « tree_root » (tree_kind=fields|list|value|tables).
+
+    Comptes (2026-11-23) : chaque element qui a des enfants porte tree_n=<nombre
+    d'enfants directs>, et tree_root porte tree_n=<nombre d'elements a la
+    racine>. Le SERVEUR les verifie a la reception et refuse un arbre
+    incomplet ; `relations_to_tree` les reverifie a la relecture.
+
+    source=<agent> : l'arbre se reclame de cette source (tree_source sur
+    tree_root). Le serveur exige alors un engagement signe de la source
+    (tree_commit) dont l'empreinte (`tree_hash`) est celle de l'arbre recu."""
     if not _NAME_OK.match(str(tree_id)):
         raise CompactError(f"id d'arbre invalide : {tree_id!r}")
     rels, seen = [], set()
@@ -931,20 +997,22 @@ def tree_to_relations(data, tree_id):
         extra = {k: v for k, v in data.items()
                  if not (_NAME_OK.match(k) and isinstance(v, list) and v and all(isinstance(x, dict) for x in v))}
         data = {k: v for k, v in data.items() if k not in extra}
-        kind = "fields" if extra else None
+        kind = "fields" if extra else "tables"
     else:
         kind, extra, data = "value", {"v": data}, {}
-    if kind:
-        rel = {"type": "tree_root", "subject": "tree_root", "object": "-", "tree": str(tree_id), "tree_kind": kind}
-        types = []
-        for k, v in extra.items():
-            name = _field_name(k)
-            rel[name], t = _wire_value(f"racine.{k}", v)
-            if t:
-                types.append(f"{name}:{t}")
-        if types:
-            rel["tree_types"] = " ".join(types)
-        rels.append(rel)
+    rel = {"type": "tree_root", "subject": "tree_root", "object": "-", "tree": str(tree_id), "tree_kind": kind}
+    if source is not None:
+        if not _NAME_OK.match(str(source)):
+            raise CompactError(f"nom de source invalide : {source!r}")
+        rel["tree_source"] = str(source)
+    types = []
+    for k, v in extra.items():
+        name = _field_name(k)
+        _put_wire(rel, types, name, f"racine.{k}", v)
+    if types:
+        _put_types(rel, types)
+    rel["tree_n"] = str(sum(len(v) for v in data.values()))
+    rels.append(rel)
 
     def walk(key, objs, parent):
         if not _NAME_OK.match(key):
@@ -968,11 +1036,11 @@ def tree_to_relations(data, tree_id):
                     kids.append((k, v))
                     continue
                 name = _field_name(k)
-                rel[name], t = _wire_value(f"{key}.{k}", v)
-                if t:
-                    types.append(f"{name}:{t}")
+                _put_wire(rel, types, name, f"{key}.{k}", v)
             if types:
-                rel["tree_types"] = " ".join(types)
+                _put_types(rel, types)
+            if kids:
+                rel["tree_n"] = str(sum(len(v) for _, v in kids))
             rels.append(rel)
             for k, v in kids:
                 walk(k, v, oid)
@@ -988,12 +1056,14 @@ def relations_to_tree(rels, tree_id=None):
     for r in rels:
         if tree_id is not None and r.get("tree") != str(tree_id):
             continue
-        types = dict(t.split(":", 1) for t in r.get("tree_types", "").split() if ":" in t)
+        all_types = " ".join([r.get("tree_types", "")] + [r[f"tree_t{i}"] for i in range(1, 1000) if f"tree_t{i}" in r])
+        types = dict(t.split(":", 1) for t in all_types.split() if ":" in t)
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
-            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "block"):
+            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "tree_source",
+                     "block") or k.startswith(("tree_c", "tree_t")):
                 continue
-            o[_unfield(k)] = _from_wire(v, types.get(k))
+            o[_unfield(k)] = _get_wire(r, k, types.get(k))
         if r.get("tree_kind"):
             kind, extra = r["tree_kind"], o
             continue
@@ -1004,6 +1074,17 @@ def relations_to_tree(rels, tree_id=None):
             nodes[r["object"]].setdefault(r["type"], []).append(o)
         else:
             raise CompactError(f"parent inconnu {r['object']!r} pour {r['subject']!r}")
+    # Comptes annonces (tree_n) : verifies aussi a la relecture.
+    kids = {}
+    for r in rels:
+        if (tree_id is None or r.get("tree") == str(tree_id)) and not r.get("tree_kind"):
+            kids[r["object"]] = kids.get(r["object"], 0) + 1
+    for r in rels:
+        if (tree_id is not None and r.get("tree") != str(tree_id)) or "tree_n" not in r:
+            continue
+        got = kids.get("-" if r.get("tree_kind") else r["subject"], 0)
+        if str(got) != str(r["tree_n"]):
+            raise CompactError(f"arbre incomplet : {r['subject']} annonce {r['tree_n']} enfant(s), {got} relu(s)")
     if kind == "value":
         return extra.get("v")
     if kind == "list":
@@ -1082,6 +1163,23 @@ _ITABLE_OK = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 _IBLOCK = re.compile(r"^\|(\d+)$")
 
 
+# Le VIDE QUI PARLE (2026-11-23) : une valeur INCONNUE, distincte de null
+# (connue : pas de valeur) et d'un champ absent (sans objet). En JSON :
+# {"$unknown": {}} ou {"$unknown": {"sigma": 0.3, ...}} (son incertitude, son
+# statut, son plan de resolution). Dans l'arbre indente : `?` ou
+# `?{sigma:0.3,pending:next_checkup}`, en cellule comme en ligne.
+UNKNOWN = "$unknown"
+
+
+def unknown(**details):
+    """Valeur inconnue, avec ses details eventuels : unknown(sigma=0.3)."""
+    return {UNKNOWN: dict(details)}
+
+
+def is_unknown(v):
+    return isinstance(v, dict) and len(v) == 1 and isinstance(v.get(UNKNOWN), dict)
+
+
 def _ikids(o):
     return [(k, v) for k, v in o.items()
             if _ITABLE_OK.match(k) and isinstance(v, list) and v and all(isinstance(x, dict) for x in v)]
@@ -1104,13 +1202,15 @@ def _inline(v):
     out = _iscalar_out(v)
     if out is not None:
         return out
+    if is_unknown(v):
+        return "?" + (_inline(v[UNKNOWN]) if v[UNKNOWN] else "")
     if isinstance(v, list):
         return "[" + ",".join(_inline(x) for x in v) + "]"
     if isinstance(v, dict):
         return "{" + ",".join((k if _IKEY_OK.match(k) else json.dumps(k, ensure_ascii=False)) + ":" + _inline(x)
                               for k, x in v.items()) + "}"
     s = str(v)
-    if (s == "" or s in ("null", "true", "false") or _NUMLIKE.match(s)
+    if (s == "" or s in ("null", "true", "false") or _NUMLIKE.match(s) or s[0] == "?"
             or re.search(r'[\s",\[\]{}:\\]', s)):
         return json.dumps(s, ensure_ascii=False)
     return s
@@ -1121,6 +1221,11 @@ def _parse_inline(s, i=0):
     if i >= len(s):
         raise CompactError(f"valeur en ligne incomplete : {s!r}")
     ch = s[i]
+    if ch == "?" and (i + 1 == len(s) or s[i + 1] in ",]}{"):
+        if i + 1 < len(s) and s[i + 1] == "{":
+            details, j = _parse_inline(s, i + 1)
+            return {UNKNOWN: details}, j
+        return {UNKNOWN: {}}, i + 1
     if ch == '"':
         j = i + 1
         while j < len(s) and s[j] != '"':
@@ -1191,7 +1296,7 @@ def _icell(v, blocks):
         blocks.append(part)
         return f"|{len(part)}"
     if (s in ("", "-", ".", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#=]', s)
-            or s[0] in "[{|@"):
+            or s[0] in "[{|@/?"):
         return _quote(s)
     return s
 
@@ -1205,7 +1310,7 @@ def _icell_in(raw):
     m = _IBLOCK.match(raw)
     if m:
         return None, int(m.group(1))
-    if raw[0] in "[{":
+    if raw[0] in "[{" or raw == "?" or raw.startswith("?{"):
         val, j = _parse_inline(raw)
         if j != len(raw):
             raise CompactError(f"texte en trop apres la valeur en ligne : {raw!r}")
@@ -1236,9 +1341,13 @@ def encode_tree_indented(data, counts="head"):
     counts="end"  : en-tetes sans nombre, et une derniere ligne
     `@end orders=8 lines=21` (2026-11-22). Pour qui ECRIT de gauche a droite
     (un modele), compter apres coup est plus sur qu'annoncer avant ; et
-    `@end` seul suffit deja a detecter un document coupe."""
-    if counts not in ("head", "end"):
-        raise CompactError(f"counts : head ou end, pas {counts!r}")
+    `@end` seul suffit deja a detecter un document coupe.
+    counts="line" : chaque element qui a des enfants finit sa ligne par
+    `/N`, le nombre de ses enfants directs (`ctr_1 party_9 /3`), et le
+    document finit par `@end`. Un modele compte bien 1 a 5 elements qu'il
+    vient d'ecrire, mal 129 ; et un compte local dit OU il manque une ligne."""
+    if counts not in ("head", "end", "line"):
+        raise CompactError(f"counts : head, end ou line, pas {counts!r}")
     head = []
     if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
         head, tables, fields = ["@@list"], {"_": data}, {}
@@ -1295,6 +1404,8 @@ def encode_tree_indented(data, counts="head"):
             cells = [_icell(o[c], blocks) for c in dense[key] or []]
             cells += [f"{_iname(k)}={_icell(v, blocks)}" for k, v in o.items()
                       if k not in (dense[key] or []) and (k, v) not in kids]
+            if counts == "line" and kids:
+                cells = (cells or ["."]) + [f"/{sum(len(v) for _, v in kids)}"]
             emit("  " * depth + tag, cells or ["."], blocks, depth)
             for k, v in kids:
                 rows(k, v, key, depth + 1)
@@ -1303,6 +1414,8 @@ def encode_tree_indented(data, counts="head"):
         rows(key, objs, None, 0)
     if counts == "end":
         lines.append("@end" + "".join(f" {k}={counts_of[k]}" for k in order))
+    elif counts == "line":
+        lines.append("@end")
     return "\n".join(lines)
 
 
@@ -1335,7 +1448,7 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         espaces), pourvu qu'elle soit coherente.
     Les avertissements sont ajoutes a la liste `warnings` si elle est donnee."""
     heads, kids_of, root_keys, root = {}, {}, [], {}
-    stack = []          # (profondeur, objet, nom de sa liste)
+    stack = []          # [profondeur, objet, nom de sa liste, enfants annonces (/N), enfants vus]
     seen, as_list, value = {}, False, None
     ended = False
     widths = [0]        # mode tolerant : largeur d'indentation de chaque niveau
@@ -1362,6 +1475,15 @@ def decode_tree_indented(text, lenient=False, warnings=None):
                     raise CompactError(f"ligne {i + 1} : ligne de bloc « | » attendue : {lines[i]!r}")
                 i += 1
             setter("\n".join(part))
+
+    def close(entry):
+        """Verifie le compte local `/N` d'un element dont on quitte les enfants."""
+        if entry[3] is not None and entry[3] != entry[4]:
+            msg = f"ligne {entry[5]} : /{entry[3]} annonce, {entry[4]} enfant(s) ecrit(s)"
+            if not lenient:
+                raise CompactError(msg)
+            if warnings is not None:
+                warnings.append(msg)
 
     def fill(obj, toks, cols, n):
         pending = []
@@ -1440,11 +1562,16 @@ def decode_tree_indented(text, lenient=False, warnings=None):
                 raise CompactError(f"ligne {n} : indentation incoherente")
             depth = len(widths) - 1
         while stack and stack[-1][0] >= depth:
-            stack.pop()
+            close(stack.pop())
         if depth and (not stack or stack[-1][0] != depth - 1):
             raise CompactError(f"ligne {n} : element sans parent (indentation)")
         cands = kids_of.get(stack[-1][2], []) if stack else root_keys
         toks = _raw_tokens(line.strip())
+        expected = None
+        if toks and re.fullmatch(r"/\d+", toks[-1]):
+            expected = int(toks.pop()[1:])
+            if not toks:
+                toks = ["."]
         if len(cands) > 1:
             if not toks or not toks[0].endswith(">") or toks[0][:-1] not in cands:
                 raise CompactError(f"ligne {n} : « nom> » attendu parmi {cands}")
@@ -1463,7 +1590,11 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         fill(obj, toks, cols[:npos], n)
         (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
         seen[key] = seen.get(key, 0) + 1
-        stack.append((depth, obj, key))
+        if stack:
+            stack[-1][4] += 1
+        stack.append([depth, obj, key, expected, 0, n])
+    while stack:
+        close(stack.pop())
     for key, h in heads.items():
         if h["n"] is not None and seen.get(key, 0) != h["n"]:
             msg = f"{key}[{h['n']}] annonce, {seen.get(key, 0)} element(s) ecrit(s)"

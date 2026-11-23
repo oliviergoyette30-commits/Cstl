@@ -382,8 +382,7 @@ def test_tree_relations_round_trip_and_escaping():
 
 
 def test_tree_relations_refuse_what_the_server_would_lose():
-    for bad in ({"a": [{"x": "y" * 301}]}, {"a": [{"bad name": 1}]}, {"a": [{"id": "d"}, {"id": "d"}]},
-                {"a": [{"x": list(range(200))}]}):
+    for bad in ({"a": [{"bad name": 1}]}, {"a": [{"id": "d"}, {"id": "d"}]}):
         with pytest.raises(CompactError):
             tree_to_relations(bad, "t1")
 
@@ -492,13 +491,14 @@ def test_indented_tree_blocks_are_checked():
 def test_indented_tree_any_json_random_round_trips():
     nasty = ["", " ", "a b", "-", ".", "null", "true", "1", "01", "1e5", "x>", "k=v", "|", "|2", "[a", "{", "a,b",
              "a:b", '"q"', "back\\slash", "#tag", "l1\nl2", "\n", "fin\n", "\r\n", "tab\tx", "é 漢", "\u2028",
-             "  lead", "trail  ", "~", "@x", "@@", "| x"]
+             "  lead", "trail  ", "~", "@x", "@@", "| x", "?", "?{", "?x", "$unknown"]
     keys = ["id", "name", "a b", "x=y", "", "list", "_", "tree", "lines", "opts", "é", '"', "k.1", "-"]
     for seed in range(3000):
         rnd = random.Random(seed)
 
         def scalar():
-            return rnd.choice([None, True, False, rnd.randint(-5, 99), rnd.random() * 100, rnd.choice(nasty)])
+            return rnd.choice([None, True, False, rnd.randint(-5, 99), rnd.random() * 100, rnd.choice(nasty),
+                               {"$unknown": {}}, {"$unknown": {"sigma": 0.3, "pending": rnd.choice(nasty)}}])
 
         def val(d):
             c = rnd.random()
@@ -600,3 +600,41 @@ def test_tree_hash_is_the_servers():
     assert with_source[0]["tree_source"] == "billing"
     from cstl_compact import relations_to_tree
     assert relations_to_tree(with_source, "t1") == {"orders": [{"id": "o1"}]}
+
+
+def test_tree_relations_split_long_values():
+    """2026-11-23 : une valeur longue (texte, liste) est decoupee en morceaux
+    de 250 caracteres au plus ; relue, elle est recollee a l'identique."""
+    from cstl_compact import relations_to_tree, WIRE_CHUNK
+    long_text = "".join(f"mot{i} " for i in range(400))            # ~2 900 caracteres
+    data = {"docs": [{"id": "d1", "body": long_text, "rows": list(range(300)),
+                      "note": "avec \\ et \"guillemets\"\n" * 40, "short": "ok"}]}
+    rels = tree_to_relations(data, "t1")
+    assert all(len(str(v)) <= WIRE_CHUNK for r in rels for v in r.values())
+    many = {"x": [{f"field_number_{i}": i for i in range(60)}]}        # liste de types longue
+    many_rels = tree_to_relations(many, "t2")
+    assert "tree_t1" in many_rels[1] and all(len(str(v)) <= WIRE_CHUNK for v in many_rels[1].values())
+    assert relations_to_tree(many_rels, "t2") == many
+    assert relations_to_tree(rels, "t1") == data
+    doc = next(r for r in rels if r["type"] == "docs")
+    del doc["tree_c2_body"]
+    with pytest.raises(CompactError, match="incomplete"):
+        relations_to_tree(rels, "t1")
+
+
+def test_indented_tree_unknown_value_speaks():
+    """2026-11-23 : le vide qui parle. Valeur inconnue (`?`, avec ses details
+    eventuels), distincte de null (connue, sans valeur) et d'un champ absent
+    (sans objet) ; aller-retour sans perte, en cellule comme en ligne, et
+    jusqu'au serveur (relations)."""
+    from cstl_compact import unknown, is_unknown, relations_to_tree
+    data = {"patients": [{"id": "p1", "renal": unknown(sigma=0.3, pending="next_checkup")},
+                         {"id": "p2", "renal": None}, {"id": "p3"},
+                         {"id": "p4", "renal": unknown(), "tags": [1, unknown(), "?", "?x"]}]}
+    text = encode_tree_indented(data)
+    assert text.splitlines() == ["@patients[4]: id", "p1 renal=?{sigma:0.3,pending:next_checkup}", "p2 renal=null",
+                                 "p3", 'p4 renal=? tags=[1,?,"?","?x"]']
+    back = decode_tree_indented(text)
+    assert back == data and is_unknown(back["patients"][0]["renal"]) and back["patients"][1]["renal"] is None
+    assert "renal" not in back["patients"][2]
+    assert relations_to_tree(tree_to_relations(data, "t1"), "t1") == data
