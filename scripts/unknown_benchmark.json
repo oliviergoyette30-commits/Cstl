@@ -4,5 +4,270 @@
     "json": 3697,
     "toon": 4928,
     "cstl_indent": 2390
-  }
+  },
+  "comprehension_gemma-4-31b-it": [
+    {
+      "size": 12,
+      "seed": 1,
+      "format": "json_naif",
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p3\", \"p7\", \"p8\", \"p10\"], \"r2\": [\"p2\", \"p3\", \"p11\"], \"r3\": [], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 1,
+      "format": "json",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 1,
+      "format": "toon",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}"
+    },
+    {
+      "size": 12,
+      "seed": 1,
+      "format": "cstl_indent",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}"
+    },
+    {
+      "size": 12,
+      "seed": 2,
+      "format": "json_naif",
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p4\", \"p5\", \"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 2,
+      "format": "json",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 2,
+      "format": "toon",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}"
+    },
+    {
+      "size": 12,
+      "seed": 2,
+      "format": "cstl_indent",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 3,
+      "format": "json_naif",
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p2\", \"p4\", \"p8\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p5\", \"p7\", \"p8\", \"p11\"], \"r3\": [], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 3,
+      "format": "json",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}\n```"
+    },
+    {
+      "size": 12,
+      "seed": 3,
+      "format": "toon",
+      "ok": null,
+      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+    },
+    {
+      "size": 12,
+      "seed": 3,
+      "format": "cstl_indent",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}"
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json_naif",
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p2\", \"p3\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p2\", \"p5\", \"p8\", \"p9\", \"p10\", \"p12\", \"p14\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\", \"p26\", \"p29\"], \"r3\": [], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}\n```"
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "json",
+      "ok": null,
+      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "toon",
+      "ok": null,
+      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_indent",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}\n```"
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json_naif",
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p3\", \"p21\", \"p22\", \"p24\", \"p27\", \"p28\"], \"r2\": [\"p0\", \"p1\", \"p5\", \"p10\", \"p11\", \"p12\", \"p13\", \"p15\", \"p16\", \"p20\", \"p21\", \"p22\", \"p23\", \"p25\", \"p27\", \"p29\"], \"r3\": [], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}\n```"
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "json",
+      "ok": null,
+      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "toon",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}"
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_indent",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}\n```"
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json_naif",
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p3\", \"p7\", \"p8\", \"p9\", \"p12\", \"p13\", \"p14\", \"p19\", \"p20\", \"p23\", \"p24\", \"p25\", \"p26\"], \"r2\": [\"p1\", \"p3\", \"p5\", \"p7\", \"p8\", \"p10\", \"p11\", \"p15\", \"p17\", \"p20\", \"p22\", \"p23\", \"p24\", \"p25\", \"p26\"], \"r3\": [], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}\n```"
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "json",
+      "ok": null,
+      "error": "Gemini 503 : b'{\\n  \"error\": {\\n    \"code\": 503,\\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\\n    \"status\": \"UN"
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "toon",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}\n```"
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_indent",
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}\n```"
+    }
+  ]
 }

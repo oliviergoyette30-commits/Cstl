@@ -136,6 +136,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tokens", action="store_true")
     ap.add_argument("--comprehension", metavar="MODELE")
+    ap.add_argument("--resume", action="store_true", help="ne repose que les jeux en erreur d'API")
     args = ap.parse_args()
     datasets = [(n, s, gen(n, s)) for n in SIZES for s in SEEDS]
     assert all(cstl_compact.decode_tree_indented(render("cstl_indent", d)) == d for _, _, d in datasets)
@@ -177,8 +178,12 @@ def main():
             return {"size": n, "seed": s, "format": f, "ok": ok, "raw": raw[:600]}
 
         jobs = [(n, s, d, f) for n, s, d in datasets for f in FORMATS]
+        old = out.get(f"comprehension_{args.comprehension}") if args.resume else None
+        rows = [r if r.get("ok") is not None else None for r in old] if old and len(old) == len(jobs) else [None] * len(jobs)
+        todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "3"))) as pool:
-            rows = list(pool.map(one, jobs))
+            for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):
+                rows[i] = r
         print(f"\n  Comprehension ({args.comprehension}) :")
         for f in FORMATS:
             r = [x for x in rows if x["format"] == f and x["ok"] is not None]
