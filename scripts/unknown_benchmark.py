@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+scripts/unknown_benchmark.py -- le « vide qui parle » mesure (2026-11-23).
+
+Pourquoi : le corollaire fondateur de CSTL dit que « l'information est et
+restera muette face a un vide relie qui parle ». L'arbre indente ecrit
+maintenant une valeur INCONNUE nativement (`?`, `?{sigma:0.3,pending:...}`),
+distincte de null (connue : pas de valeur) et d'un champ absent (sans objet).
+Ce banc mesure si un modele distingue ces quatre etats, et a quel cout en
+tokens, selon le format.
+
+Donnees : des dossiers de patients ; deux examens (renal, potassium), chacun
+dans un des quatre etats :
+  valeur        un nombre
+  null          connu, sans valeur (examen impossible)
+  inconnu       pas encore mesure, avec son incertitude (sigma) et parfois ce
+                qu'on attend (pending)
+  absent        sans objet (examen non prescrit)
+
+Formats :
+  json_naif     le JSON tel qu'on l'ecrit d'habitude : l'inconnu devient null
+                (le vide est muet : l'information est PERDUE, pas mal lue)
+  json          JSON avec la convention {"$unknown": {...}}
+  toon          TOON (toon_lite) avec la meme convention
+  cstl_indent   arbre indente : `?` natif
+
+Questions (memes pour tous) : patients a l'examen inconnu, patients a
+l'examen connu sans valeur, patients dont la mesure est attendue au prochain
+controle, patients a la valeur connue au-dessus d'un seuil.
+
+Usage :
+  GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --tokens
+  GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --comprehension gemma-4-31b-it
+"""
+import argparse
+import json
+import os
+import random
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "scripts"))
+sys.path.insert(0, str(REPO / "sdk" / "python"))
+import cstl_compact  # noqa: E402
+import nested_benchmark as nb  # noqa: E402
+import toon_lite  # noqa: E402
+
+FORMATS = ("json_naif", "json", "toon", "cstl_indent")
+SIZES = (12, 30)
+SEEDS = (1, 2, 3)
+EXAMS = ("renal", "potassium")
+
+SEMANTICS = ("Chaque patient a deux examens, renal et potassium. Un examen peut etre : une valeur (nombre) ; "
+             "null = connu mais sans valeur (examen impossible) ; inconnu = pas encore mesure, avec son "
+             "incertitude sigma et parfois ce qu'on attend (pending) ; absent du dossier = sans objet (examen "
+             "non prescrit).")
+NOTES = {
+    "json_naif": "Format : JSON. " + SEMANTICS + " Dans ce JSON, une valeur inconnue est ecrite null.",
+    "json": "Format : JSON. " + SEMANTICS + ' Une valeur inconnue s\'ecrit {"$unknown": {...details}}.',
+    "toon": ("Format : TOON. Indentation = imbrication ; « cle[N]{champs}: » puis une ligne par element ; « - » = "
+             "element de liste. " + SEMANTICS + ' Une valeur inconnue est un objet "$unknown" avec ses details.'),
+    "cstl_indent": (nb.NOTES["cstl_indent"] + " " + SEMANTICS + " Une valeur inconnue s'ecrit « ? », ou "
+                    "« ?{details} » avec ses details ; null s'ecrit null ; un examen absent n'est pas ecrit."),
+}
+
+
+def gen(n, seed):
+    rnd = random.Random(seed * 1009 + n)
+    patients = []
+    for i in range(n):
+        p = {"id": f"p{i}", "age": rnd.randint(20, 90), "ward": rnd.choice(["A", "B", "C"])}
+        for exam in EXAMS:
+            state = rnd.choices(["value", "null", "unknown", "absent"], [40, 20, 25, 15])[0]
+            if state == "value":
+                p[exam] = rnd.randint(30, 120) if exam == "renal" else round(rnd.uniform(3.0, 6.0), 1)
+            elif state == "null":
+                p[exam] = None
+            elif state == "unknown":
+                details = {"sigma": rnd.choice([0.1, 0.3, 0.5])}
+                if rnd.random() < 0.5:
+                    details["pending"] = rnd.choice(["next_checkup", "lab_result"])
+                p[exam] = cstl_compact.unknown(**details)
+        patients.append(p)
+    return {"patients": patients}
+
+
+def naive(v):
+    """Ce qu'un producteur JSON ecrit d'habitude : l'inconnu devient null."""
+    if cstl_compact.is_unknown(v):
+        return None
+    if isinstance(v, dict):
+        return {k: naive(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [naive(x) for x in v]
+    return v
+
+
+def render(fmt, data):
+    if fmt == "json_naif":
+        return json.dumps(naive(data), ensure_ascii=False, separators=(",", ":"))
+    if fmt == "json":
+        return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    if fmt == "toon":
+        return toon_lite.encode_nested(data)
+    return cstl_compact.encode_tree_indented(data)
+
+
+def ids(data, pred):
+    return sorted((p["id"] for p in data["patients"] if pred(p)), key=lambda x: int(x[1:]))
+
+
+def questions(data, seed):
+    rnd = random.Random(seed)
+    exam = rnd.choice(EXAMS)
+    other = EXAMS[1 - EXAMS.index(exam)]
+    unknown_ = lambda p, e: cstl_compact.is_unknown(p.get(e))  # noqa: E731
+    threshold = 60 if exam == "renal" else 4.5
+    return [
+        (f"Quels patients ont l'examen {exam} INCONNU (pas encore mesure) ? (liste d'id)",
+         ids(data, lambda p: unknown_(p, exam))),
+        (f"Quels patients ont l'examen {other} connu SANS valeur (null) ? (liste d'id)",
+         ids(data, lambda p: other in p and p[other] is None)),
+        ("Quels patients attendent une mesure au prochain controle (pending=next_checkup), pour l'un ou l'autre "
+         "examen ? (liste d'id)",
+         ids(data, lambda p: any(unknown_(p, e) and p[e]["$unknown"].get("pending") == "next_checkup"
+                                 for e in EXAMS))),
+        (f"Quels patients ont une valeur {exam} connue strictement superieure a {threshold} ? (liste d'id)",
+         ids(data, lambda p: isinstance(p.get(exam), (int, float)) and not isinstance(p.get(exam), bool)
+             and p[exam] > threshold)),
+    ]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tokens", action="store_true")
+    ap.add_argument("--comprehension", metavar="MODELE")
+    args = ap.parse_args()
+    datasets = [(n, s, gen(n, s)) for n in SIZES for s in SEEDS]
+    assert all(cstl_compact.decode_tree_indented(render("cstl_indent", d)) == d for _, _, d in datasets)
+    out_path = REPO / "scripts" / "unknown_benchmark.json"
+    out = json.loads(out_path.read_text()) if out_path.exists() else {}
+
+    if args.tokens:
+        import gemini_tokens
+        key = os.environ["GEMINI_API_KEY"]
+        tot = {f: sum(gemini_tokens.count("gemini-3.5-flash", key, render(f, d)) for _, _, d in datasets)
+               for f in FORMATS}
+        print("Tokens Gemini (6 jeux) :")
+        for f in sorted(FORMATS, key=tot.get):
+            print(f"  {f:12} {tot[f]:>6}  ({100 * (tot[f] - tot['json']) / tot['json']:+.0f} % par rapport au json)")
+        out["tokens"] = tot
+
+    if args.comprehension:
+        import team_task_benchmark as tb
+        model = tb.make_brain(args.comprehension)
+
+        def one(job):
+            n, s, d, f = job
+            qs = questions(d, s)
+            lines = "\n".join(f"{i + 1}. {q}" for i, (q, _) in enumerate(qs))
+            prompt = (f"Voici des donnees echangees entre agents.\n{NOTES[f]}\n\nDonnees :\n{render(f, d)}\n\n"
+                      f"Questions :\n{lines}\n\nReponds uniquement par {{\"r1\": ..., \"r2\": ..., \"r3\": ..., "
+                      "\"r4\": ...}}.")
+            try:
+                raw = model.generate(prompt, max_tokens=4000)
+            except RuntimeError as e:
+                return {"size": n, "seed": s, "format": f, "ok": None, "error": str(e)[:200]}
+            a, b = raw.find("{"), raw.rfind("}")
+            try:
+                ans = json.loads(raw[a:b + 1])
+            except ValueError:
+                ans = {}
+            ok = [nb.same(ans.get(f"r{i + 1}"), t) for i, (_, t) in enumerate(qs)]
+            print(f"    n={n:<3} s{s} {f:12} : {sum(ok)}/4  {['ok' if x else 'FAUX' for x in ok]}", flush=True)
+            return {"size": n, "seed": s, "format": f, "ok": ok, "raw": raw[:600]}
+
+        jobs = [(n, s, d, f) for n, s, d in datasets for f in FORMATS]
+        with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "3"))) as pool:
+            rows = list(pool.map(one, jobs))
+        print(f"\n  Comprehension ({args.comprehension}) :")
+        for f in FORMATS:
+            r = [x for x in rows if x["format"] == f and x["ok"] is not None]
+            per_q = [sum(x["ok"][i] for x in r) for i in range(4)]
+            print(f"    {f:12} | {sum(per_q):>2}/{4 * len(r)} | par question : inconnu {per_q[0]}/{len(r)}, "
+                  f"null {per_q[1]}/{len(r)}, pending {per_q[2]}/{len(r)}, seuil {per_q[3]}/{len(r)}")
+        out[f"comprehension_{args.comprehension}"] = rows
+    out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    print(f"\nResultats bruts : {out_path.relative_to(REPO)}")
+
+
+if __name__ == "__main__":
+    main()
