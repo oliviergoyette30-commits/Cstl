@@ -403,6 +403,13 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     `?{sigma:0.3,...}` dans l'arbre indenté, `{"$unknown": {...}}` en JSON.
     Il est distinct de `null` et d'un champ absent. Aller-retour sans perte
     (30 000 documents aléatoires), jusqu'au serveur.
+    - Mesuré (`scripts/unknown_benchmark.py`, Gemma 4 31B, 24 questions) :
+      arbre indenté 24/24 avec 2 390 tokens. JSON avec `$unknown` 24/24
+      (3 697 tokens), TOON 24/24 (4 928 tokens).
+    - Le JSON naïf, où l'inconnu devient `null`, fait 8/24 : 1/6, 0/6 et 1/6
+      sur les questions de vide. L'information n'existe plus.
+    - L'arbre indenté est le seul format complet et plus court que le JSON
+      naïf (2 972 tokens).
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

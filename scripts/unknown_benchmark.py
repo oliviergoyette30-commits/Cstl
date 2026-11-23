@@ -28,6 +28,20 @@ Questions (memes pour tous) : patients a l'examen inconnu, patients a
 l'examen connu sans valeur, patients dont la mesure est attendue au prochain
 controle, patients a la valeur connue au-dessus d'un seuil.
 
+RESULTATS (2026-11-23, Gemma 4 31B, 6 jeux, 24 questions par format ;
+tokens Gemini) :
+  format        tokens   justes   inconnu  null  pending  seuil
+  cstl_indent    2 390   24/24     6/6     6/6    6/6     6/6
+  json_naif      2 972    8/24     1/6     0/6    1/6     6/6
+  json           3 697   24/24     6/6     6/6    6/6     6/6
+  toon           4 928   24/24     6/6     6/6    6/6     6/6
+- Le JSON naif rate les questions sur le vide : l'information n'existe plus
+  (tout est null), le modele n'y peut rien. Le corollaire, mesure.
+- Des que l'inconnu est ecrit, Gemma ne se trompe dans aucun format ; l'arbre
+  indente est le seul a etre complet ET plus court que le JSON naif qui perd
+  l'information (-20 %), et 35 % plus court que le JSON complet.
+- 5 jeux json/toon perdus sur des erreurs d'API, reposes avec --resume.
+
 Usage :
   GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --tokens
   GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --comprehension gemma-4-31b-it
