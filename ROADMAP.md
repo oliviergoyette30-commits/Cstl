@@ -364,6 +364,16 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       quel document JSON. Une liste, un objet ou un texte multiligne part en
       JSON base64url (type `json`). Seules limites : 300 caractères par
       valeur et noms de champ `[A-Za-z0-9_.-]`.
+  - **Écriture par un modèle** (`scripts/nested_writing_benchmark.py`,
+    Gemma 4 31B, 12 jeux) :
+    - JSON 10/10 identiques, TOON 8/10 (98 % des valeurs), arbre indenté
+      9/12 en strict et **12/12 en mode tolérant**.
+    - Tous les échecs de l'arbre indenté viennent d'un compte `[N]` faux sur
+      les gros jeux. Le contenu, lui, est juste à 100 %.
+    - Mettre le compte à la fin (`@end`) n'aide pas : 8/12 en strict, 12/12
+      en tolérant. Le modèle compte aussi mal ce qu'il vient d'écrire.
+    - Conclusion : un texte écrit par un modèle se relit avec
+      `lenient=True`.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

@@ -21,6 +21,21 @@ Protocole, identique pour chaque format :
 Jeux : les 12 jeux imbriques de `nested_benchmark.py` (commandes, organisation,
 contrats ; 8 et 24 elements ; 2 graines).
 
+RESULTATS (2026-11-22, Gemma 4 31B, 12 jeux) :
+  passe 1 (nested_writing_gemma-4-31b-it_passe1.json) :
+    json 10/10 identiques, toon 8/10 (98,0 % des valeurs), arbre indente 9/12
+    (2 erreurs d'API pour json et toon)
+  passe 2 (..._passe2.json), arbre indente seulement :
+    comptes en tete  : 9/12 identiques en strict, 12/12 en mode tolerant
+    comptes a la fin : 8/12 identiques en strict, 12/12 en mode tolerant
+- TOUS les echecs de l'arbre indente sont des comptes faux sur les gros jeux
+  (lines[52] pour 48, clauses[122] pour 129...) : le contenu est juste a
+  100 %. TOON, lui, est toujours relu mais fait de vraies erreurs de valeurs.
+- Compter A LA FIN n'aide pas : le modele se trompe autant en comptant ce
+  qu'il vient d'ecrire. Les modeles ne savent pas compter de longues listes.
+- Conclusion : un texte ecrit par un modele se relit en mode tolerant
+  (`lenient=True`) ; les comptes restent utiles entre machines.
+
 Usage :
   GEMINI_API_KEY=... python3 scripts/nested_writing_benchmark.py gemma-4-31b-it
   ... --formats json,toon,cstl_indent --runs 1 [--resume]
