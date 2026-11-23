@@ -9,6 +9,23 @@ Lit les resultats deja enregistres (aucun appel de modele) :
   vide qui parle scripts/unknown_benchmark.json               (24 questions par format)
 Les jeux en erreur d'API sont exclus du denominateur (x/y).
 
+RESULTAT (2026-11-23, 10 modeles, 5 fournisseurs ; Gemma 4 31B : ecriture
+lue dans nested_writing_gemma-4-31b-it_passe1/passe3.json) :
+  totaux               json            toon            arbre indente
+  lecture (360)        315             319             312
+  ecriture (strict)    110/118 (93 %)  102/116 (88 %)  107/120 (89 %)  (arbre : avec /N)
+  vide qui parle (240) 215             212             214             (json naif : 68)
+- Modeles forts (GPT-5 mini, Claude Haiku et Sonnet 5.5, DeepSeek V4.1,
+  Qwen 3.8, Gemma 4 26B et 31B) : arbre indente a egalite avec le JSON, a une
+  question pres, en lecture comme en ecriture ; avec 35 a 39 % de tokens en
+  moins.
+- Modeles plus faibles (Gemini 3.5 Flash-Lite, Llama 4 Maverick, Mistral
+  Medium 3.5) : erreurs dans tous les formats ; l'arbre indente y est un peu
+  derriere le JSON en lecture et en ecriture, devant sur le vide qui parle
+  pour Flash-Lite et Llama.
+- Le JSON naif (inconnu -> null) echoue sur le vide chez TOUS les modeles.
+- Cout OpenRouter : 5,37 $.
+
 Usage : python3 scripts/multi_model_summary.py
 """
 import json

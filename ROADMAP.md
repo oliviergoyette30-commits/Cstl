@@ -416,6 +416,18 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       TOON 4 928, XML 5 809, JSON indenté 7 604.
     - Ce qui compte est que le vide soit écrit, pas le format choisi. Entre
       formats complets, la différence est le coût.
+  - **10 modèles, 5 fournisseurs** (2026-11-23, `scripts/multi_model_summary.py`).
+    Modèles : GPT-5 mini, Claude Haiku et Sonnet 5.5, DeepSeek V4.1,
+    Qwen 3.8, Llama 4 Maverick, Mistral Medium 3.5, Gemma 4 26B et 31B,
+    Gemini 3.5 Flash-Lite.
+    - Totaux JSON / TOON / arbre indenté : lecture 315 / 319 / 312 sur 360 ;
+      écriture stricte 93 % / 88 % / 89 % ; vide qui parle 215 / 212 / 214
+      sur 240 (JSON naïf : 68).
+    - Pour les modèles forts, l'arbre indenté est à égalité avec le JSON, à
+      une question près. Les modèles faibles font des erreurs partout, et un
+      peu plus sur l'arbre indenté en lecture et en écriture.
+    - Le JSON naïf échoue sur le vide chez tous les modèles.
+    - Coût OpenRouter : 5,37 $.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).
