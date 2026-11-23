@@ -1,0 +1,328 @@
+{
+  "rows": [
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": null,
+      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+    }
+  ]
+}
