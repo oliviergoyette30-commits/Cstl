@@ -322,6 +322,23 @@ NOTES = {
 }
 
 
+def extract_answer(raw):
+    """La DERNIERE reponse {"r1": ...} du texte (2026-11-23). Certains modeles
+    (Llama 4) recopient d'abord les donnees en JSON puis raisonnent avant de
+    repondre : prendre du premier « { » au dernier « } » melangeait donnees et
+    reponse. Renvoie (reponse, trouvee)."""
+    dec, best, i = json.JSONDecoder(), None, raw.find("{")
+    while i != -1:
+        try:
+            obj, _ = dec.raw_decode(raw, i)
+            if isinstance(obj, dict) and "r1" in obj:
+                best = obj
+        except ValueError:
+            pass
+        i = raw.find("{", i + 1)
+    return (best, True) if best is not None else ({}, False)
+
+
 def same(answer, truth):
     if isinstance(truth, list):
         return isinstance(answer, list) and sorted(str(x).strip() for x in answer) == sorted(str(x) for x in truth)
@@ -381,14 +398,10 @@ def main():
                 raw = model.generate(prompt, max_tokens=4000)
             except RuntimeError as e:
                 return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": None, "error": str(e)[:200]}
-            a, b = raw.find("{"), raw.rfind("}")
-            try:
-                ans = json.loads(raw[a:b + 1])
-            except ValueError:
-                ans = {}
+            ans, found = extract_answer(raw)
             ok = [same(ans.get(f"r{i + 1}"), t) for i, (_, t) in enumerate(qs)]
             print(f"    {k:13} n={n:<3} s{s} {f:13} : {sum(ok)}/3", flush=True)
-            return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": ok, "raw": raw[:600]}
+            return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": ok, "parsed": found, "raw": raw[-3000:]}
 
         jobs = [(k, n, s, d, f, r) for r in range(args.runs) for k, n, s, d in datasets for f in formats]
         dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension.replace('/', '__')}.json"
@@ -396,7 +409,8 @@ def main():
         if args.resume and dest.exists():
             old = json.loads(dest.read_text())["rows"]
             if len(old) == len(jobs):  # meme ordre que les jobs
-                rows = [r if r.get("ok") is not None else None for r in old]
+                rows = [r if r.get("ok") is not None and r.get("parsed", extract_answer(r.get("raw", ""))[1])
+                        else None for r in old]
         todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "4"))) as pool:
             for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):

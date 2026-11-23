@@ -665,379 +665,703 @@
       "size": 12,
       "seed": 1,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p3\", \"p7\", \"p8\", \"p10\"], \"r2\": [\"p2\"], \"r3\": [], \"r4\": [\"p0\", \"p4\", \"p6\", \"p9\", \"p11\"]}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\"],\n  \"r2\": [\"p3\", \"p8\", \"p10\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\", \"p11\"],\n  \"r2\": [\"p3\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\", \"p11\"],\n  \"r2\": [\"p3\", \"p10\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\"],\n  \"r2\": [\"p3\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\", \"p11\"],\n  \"r2\": [\"p3\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\", \"p11\"],\n  \"r2\": [\"p3\", \"p8\", \"p10\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p7\"],\n  \"r2\": [\"p3\", \"p8\", \"p10\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\", \"p7\", \"p11\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [\"p1\", \"p2\", \"p11\"],\n  \"r4\": [\"p0\", \"p4\", \"p6\", \"p9\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\"r1\": [], \"r2\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p2\", \"p5\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p3\", \"p5\", \"p6\", \"p10\"]}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\", \"p5\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p1\", \"p2\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\", \"p5\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p2\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p1\", \"p2\", \"p5\"],\n  \"r2\": [\"p8\", \"p10\"],\n  \"r3\": [],\n  \"r4\": [\"p0\", \"p1\", \"p2\", \"p3\", \"p5\", \"p6\", \"p7\", \"p10\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\"r1\": [\"p2\", \"p4\", \"p8\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p5\", \"p7\", \"p8\", \"p11\"], \"r3\": [], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\", \"p11\"]}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"],\n  \"r2\": [\"p1\", \"p4\", \"p8\"],\n  \"r3\": [\"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\", \"p8\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"],\n  \"r2\": [\"p1\", \"p4\", \"p8\"],\n  \"r3\": [\"p4\", \"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\", \"p8\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p5\", \"p9\", \"p10\", \"p11\"],\n  \"r2\": [\"p1\", \"p4\", \"p8\"],\n  \"r3\": [\"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p4\", \"p5\", \"p6\", \"p8\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"],\n  \"r2\": [\"p1\", \"p4\", \"p8\"],\n  \"r3\": [\"p4\", \"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\", \"p8\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"],\n  \"r2\": [\"p1\", \"p8\"],\n  \"r3\": [\"p4\", \"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"],\n  \"r2\": [\"p1\", \"p4\", \"p8\"],\n  \"r3\": [\"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p4\", \"p5\", \"p6\", \"p11\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p5\", \"p9\", \"p10\", \"p11\"],\n  \"r2\": [\"p1\", \"p8\"],\n  \"r3\": [\"p4\", \"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"],\n  \"r2\": [\"p1\", \"p4\", \"p8\"],\n  \"r3\": [\"p7\", \"p10\"],\n  \"r4\": [\"p1\", \"p3\", \"p6\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p2\", \"p3\", \"p5\", \"p6\", \"p8\", \"p9\", \"p10\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"],\n  \"r2\": [\"p7\", \"p8\", \"p9\", \"p10\", \"p12\", \"p13\", \"p14\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\", \"p26\", \"p28\", \"p29\"],\n  \"r3\": [],\n  \"r4\": [\"p4\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p27\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p4\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p8\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p4\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p20\", \"p21\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p1\", \"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p4\", \"p11\", \"p17\", \"p19\", \"p20\", \"p24\", \"p25\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p8\", \"p9\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p1\", \"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p8\", \"p9\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p4\", \"p8\", \"p11\", \"p12\", \"p16\", \"p17\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p5\", \"p6\", \"p8\", \"p9\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p19\", \"p20\", \"p21\", \"p22\"],\n  \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"],\n  \"r3\": [\"p12\", \"p18\", \"p22\"],\n  \"r4\": [\"p1\", \"p4\", \"p8\", \"p11\", \"p12\", \"p13\", \"p16\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p27\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p21\", \"p22\", \"p24\", \"p27\", \"p28\"],\n  \"r2\": [\"p0\", \"p1\", \"p3\", \"p5\", \"p10\", \"p11\", \"p12\", \"p13\", \"p15\", \"p16\", \"p20\", \"p21\", \"p22\", \"p23\", \"p24\", \"p25\", \"p27\", \"p28\", \"p29\"],\n  \"r3\": [],\n  \"r4\": [\"p2\", \"p4\", \"p6\", \"p11\", \"p12\", \"p14\", \"p18\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"],\n  \"r2\": [\"p0\", \"p13\", \"p15\", \"p16\", \"p21\", \"p22\", \"p28\"],\n  \"r3\": [\"p21\", \"p27\"],\n  \"r4\": [\"p2\", \"p4\", \"p6\", \"p11\", \"p12\", \"p14\", \"p18\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"],\n  \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\", \"p28\"],\n  \"r3\": [\"p21\", \"p22\", \"p27\"],\n  \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p12\", \"p14\", \"p18\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p10\", \"p11\", \"p12\", \"p21\", \"p22\", \"p23\", \"p24\", \"p25\", \"p27\", \"p29\"],\n  \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\", \"p28\"],\n  \"r3\": [\"p21\", \"p22\", \"p27\"],\n  \"r4\": [\"p2\", \"p4\", \"p5\", \"p6\", \"p10\", \"p14\", \"p18\", \"p23\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"],\n  \"r2\": [\"p13\", \"p15\", \"p16\", \"p28\"],\n  \"r3\": [\"p21\", \"p22\", \"p27\"],\n  \"r4\": [\"p2\", \"p4\", \"p6\", \"p11\", \"p12\", \"p14\", \"p18\", \"p23\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"],\n  \"r2\": [\"p0\", \"p13\", \"p15\", \"p16\", \"p21\", \"p22\", \"p28\"],\n  \"r3\": [\"p21\", \"p22\", \"p27\"],\n  \"r4\": [\"p2\", \"p4\", \"p6\", \"p10\", \"p12\", \"p14\", \"p18\", \"p23\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p10\", \"p11\", \"p12\", \"p21\", \"p22\", \"p23\", \"p24\", \"p25\", \"p27\", \"p29\"],\n  \"r2\": [\"p0\", \"p13\", \"p15\", \"p16\", \"p21\", \"p22\", \"p28\"],\n  \"r3\": [\"p21\", \"p22\", \"p27\"],\n  \"r4\": [\"p2\", \"p3\", \"p6\", \"p11\", \"p13\", \"p14\", \"p18\", \"p19\", \"p23\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"],\n  \"r2\": [\"p13\", \"p15\", \"p16\", \"p28\"],\n  \"r3\": [\"p21\", \"p27\"],\n  \"r4\": [\"p2\", \"p4\", \"p6\", \"p10\", \"p12\", \"p14\", \"p18\", \"p19\", \"p23\", \"p25\", \"p26\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p10\", \"p12\", \"p21\", \"p22\", \"p23\", \"p24\", \"p25\", \"p27\", \"p29\"],\n  \"r2\": [\"p0\", \"p13\", \"p15\", \"p16\", \"p28\"],\n  \"r3\": [\"p10\", \"p20\", \"p21\", \"p22\", \"p23\", \"p27\", \"p29\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p10\", \"p11\", \"p12\", \"p14\", \"p18\", \"p19\", \"p23\", \"p25\", \"p26\", \"p27\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p3\", \"p7\", \"p8\", \"p9\", \"p10\", \"p11\", \"p12\", \"p13\", \"p14\", \"p15\", \"p20\", \"p23\", \"p24\", \"p25\", \"p26\", \"p27\"],\n  \"r2\": [\"p1\", \"p3\", \"p5\", \"p7\", \"p8\", \"p10\", \"p11\", \"p15\", \"p20\", \"p22\", \"p23\", \"p24\", \"p25\", \"p26\"],\n  \"r3\": [],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p21\", \"p22\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\"],\n  \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p6\", \"p12\", \"p18\", \"p19\", \"p21\", \"p22\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\", \"p26\"],\n  \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p6\", \"p12\", \"p14\", \"p18\", \"p19\", \"p22\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p1\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\"],\n  \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p20\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p6\", \"p12\", \"p14\", \"p18\", \"p19\", \"p22\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\"],\n  \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p9\", \"p10\", \"p12\", \"p14\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p6\", \"p18\", \"p21\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\"],\n  \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p6\", \"p18\", \"p21\", \"p22\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 4842. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\", \"p26\"],\n  \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p6\", \"p18\", \"p21\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"],\n  \"r2\": [\"p5\", \"p8\", \"p11\", \"p15\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p20\", \"p23\", \"p26\"],\n  \"r4\": [\"p0\", \"p1\", \"p2\", \"p4\", \"p6\", \"p9\", \"p12\", \"p14\", \"p18\", \"p19\", \"p22\", \"p23\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 5326. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": [\"p0\", \"p1\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p20\", \"p23\"],\n  \"r2\": [\"p5\", \"p8\", \"p11\", \"p13\", \"p17\", \"p22\", \"p24\", \"p25\"],\n  \"r3\": [\"p10\", \"p12\", \"p20\", \"p23\"],\n  \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p13\", \"p17\", \"p18\", \"p21\", \"p22\", \"p23\", \"p28\", \"p29\"]\n}\n```",
+      "parsed": true
     }
   ],
   "comprehension_anthropic/claude-sonnet-5.5": [
@@ -1045,379 +1369,578 @@
       "size": 12,
       "seed": 1,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\",\"p3\",\"p7\",\"p8\",\"p10\"], \"r2\": [], \"r3\": [], \"r4\": [\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Analyse des données :\n\n1. Renal inconnu : p1 (unknown), p7 (unknown). Les autres : p0 61, p2 absent, p3 null, p4 88, p5 49, p6 95, p8 null, p9 38, p10 null, p11 81. Donc p1, p7.\n\n2. Potassium null : p3 uniquement (p8 4.2, p10 3.6).\n\n3. Pending next_checkup : p1 (renal), p2 (potassium), p11 (potassium).\n\n4. Renal > 60 : p0 (61), p4 (88), p6 (95), p11 (81).\n\n{\"r1\": [\"p1\",\"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\",\"p2\",\"p11\"], \"r4\": [\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Analyse des données :\n\n1. Renal inconnu : p1 et p7.\n2. Potassium null : p3 seul (p8 a 4.2, p10 a 3.6).\n3. pending=next_checkup : p1 (renal), p2 (potassium), p11 (potassium). p7 n'a pas de pending.\n4. Renal connu > 60 : p0 (61), p4 (88), p6 (95), p11 (81). p5 = 49 et p9 = 38 sont exclus ; p3, p8 et p10 sont null.\n\n{\"r1\": [\"p1\",\"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\",\"p2\",\"p11\"], \"r4\": [\"p0\",\"p4\",\"p6\",\"p11\"]}}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "cstl_indent",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données :\n\n- p0 : renal=61\n- p1 : renal inconnu (pending next_checkup), potassium=4.4\n- p2 : potassium inconnu (pending next_checkup), pas de renal\n- p3 : renal null, potassium null\n- p4 : renal=88\n- p5 : renal=49\n- p6 : renal=95, potassium=5.5\n- p7 : renal inconnu (sans pending)\n- p8 : renal null, potassium=4.2\n- p9 : renal=38, potassium=5.7\n- p10 : renal null, potassium=3.6\n- p11 : renal=81, potassium inconnu (pending next_checkup)\n\nRéponses :\n\n1. Renal inconnu : p1, p7.\n2. Potassium null : p3.\n3. Pending next_checkup : p1, p2, p11.\n4. Renal > 60 : p0 (61), p4, p6, p11.\n\n{\"r1\": [",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 1,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n- Rénal inconnu : p1 et p7 (objets $unknown).\n- Potassium null : p3 uniquement (p8 et p10 ont un rénal null, pas un potassium null).\n- Pending next_checkup : p1 (rénal), p2 (potassium), p11 (potassium). p7 est inconnu mais sans pending.\n- Rénal connu strictement supérieur à 60 : p0 (61), p4 (88), p6 (95), p11 (81). p5 (49) et p9 (38) sont en dessous, et les null sont exclus.\n\n{\"r1\": [\"p1\",\"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\",\"p2\",\"p11\"], \"r4\": [\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n- Renal inconnu : p1 et p7.\n- Potassium null : p3 uniquement (p10 a un potassium de 3.6).\n- Pending next_checkup : p1 (renal), p2 (potassium) et p11 (potassium).\n- Renal connu strictement supérieur à 60 : p0 (61), p4 (88), p6 (95), p11 (81). p5 (49) et p9 (38) sont en dessous, et les valeurs null ou inconnues sont exclues.\n\n{\"r1\": [\"p1\",\"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\",\"p2\",\"p11\"], \"r4\": [\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n1. Examen renal inconnu : p1 et p7.\n2. Potassium null : p3 seul. p8 et p10 ont un renal null, mais leur potassium a une valeur.\n3. pending=next_checkup : p1 (renal), p2 (potassium) et p11 (potassium). p7 est inconnu mais sans pending.\n4. Renal connu strictement supérieur à 60 : p0 (61), p4 (88), p6 (95) et p11 (81). p5 (49) et p9 (38) sont en dessous.\n\n{\"r1\": [\"p1\",\"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\",\"p2\",\"p11\"], \"r4\": [\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "csv",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des lignes :\n\n- p0 : renal 61, potassium absent.\n- p1 : renal ?, pending next_checkup ; potassium 4.4.\n- p2 : renal absent ; potassium ?, pending next_checkup.\n- p3 : renal null ; potassium null.\n- p4 : renal 88 ; potassium absent.\n- p5 : renal 49 ; potassium absent.\n- p6 : renal 95 ; potassium 5.5.\n- p7 : renal ? (sigma 0.5, pas de pending) ; potassium absent.\n- p8 : renal null ; potassium 4.2.\n- p9 : renal 38 ; potassium 5.7.\n- p10 : renal null ; potassium 3.6.\n- p11 : renal 81 ; potassium ?, pending next_checkup.\n\n1. Renal inconnu : p1, p7.\n2. Potassium null : p3.\n3. Pending next_ch",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 1,
       "format": "cstl_arbre",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des lignes (« - » = champ absent, donc sans objet) :\n\n- p0 : renal 61, potassium absent.\n- p1 : renal inconnu (pending next_checkup), potassium 4.4.\n- p2 : renal absent, potassium inconnu (pending next_checkup).\n- p3 : renal null, potassium null.\n- p4 : renal 88, potassium absent.\n- p5 : renal 49, potassium absent.\n- p6 : renal 95, potassium 5.5.\n- p7 : renal inconnu (sans pending), potassium absent.\n- p8 : renal null, potassium 4.2.\n- p9 : renal 38, potassium 5.7.\n- p10 : renal null, potassium 3.6.\n- p11 : renal 81, potassium inconnu (pending next_checkup).\n\nRéponses :\n1. Renal inconn",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\",\"p2\"], \"r2\": [], \"r3\": [], \"r4\": [\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "raw": "Je lis les données patient par patient.\n\n1. Renal inconnu : p1 (sigma 0.5) et p2 (sigma 0.1, pending lab_result). Les autres patients ont une valeur, ou n'ont pas d'examen renal dans le dossier (p4, p8, p9, p10 a une valeur de 88, p11 est absent).\n   Résultat : p1, p2.\n\n2. Potassium null : p8 et p10.\n\n3. Pending = next_checkup : aucun patient. Les seuls pending sont lab_result (p2 et p5).\n   Résultat : liste vide.\n\n4. Renal connu strictement supérieur à 60 :\n   - p0 : 94, oui\n   - p3 : 59, non\n   - p5 : 105, oui\n   - p6 : 99, oui\n   - p7 : 52, non\n   - p10 : 88, oui\n\n{\"r1\": [\"p1\",\"p2\"], \"r2\": ",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 2,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n- Renal inconnu : p1 et p2.\n- Potassium null : p8 et p10.\n- pending=next_checkup : aucun patient. Les seuls pending présents sont lab_result (p2 et p5).\n- Renal > 60 : p0 (94), p5 (105), p6 (99), p10 (88). p3 (59) et p7 (52) sont en dessous.\n\n{\"r1\": [\"p1\",\"p2\"], \"r2\": [\"p8\",\"p10\"], \"r3\": [], \"r4\": [\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n- Renal inconnu : p1 (sigma 0.5) et p2 (sigma 0.1, pending lab_result).\n- Potassium null : p8 et p10.\n- pending=next_checkup : aucun patient. Les seuls pending présents valent lab_result.\n- Renal connu strictement supérieur à 60 : p0 (94), p5 (105), p6 (99), p10 (88). Les autres sont p3 (59) et p7 (52), tous deux sous 60.\n\n{\"r1\": [\"p1\",\"p2\"], \"r2\": [\"p8\",\"p10\"], \"r3\": [], \"r4\": [\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n- Renal inconnu : p1 (sigma 0.5) et p2 (pending lab_result).\n- Potassium null : p8 et p10.\n- Pending next_checkup : aucun patient. Les seuls pending présents sont lab_result (p2 et p5).\n- Renal connu strictement supérieur à 60 : p0 (94), p5 (105), p6 (99), p10 (88). Les autres sont exclus : p3 (59) et p7 (52) sont inférieurs ou égaux à 60, p1 et p2 sont inconnus, et p4, p8, p9, p11 n'ont pas d'examen renal.\n\n{\"r1\": [\"p1\",\"p2\"], \"r2\": [\"p8\",\"p10\"], \"r3\": [], \"r4\": [\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n1. Renal inconnu : p1 et p2 (objets $unknown).\n2. Potassium null : p8 et p10.\n3. Aucun patient n'a pending=next_checkup. p2 et p5 attendent lab_result, ce qui ne correspond pas.\n4. Renal strictement supérieur à 60 : p0 (94), p5 (105), p6 (99), p10 (88). p3 (59) et p7 (52) sont en dessous du seuil.\n\n{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n1. Renal inconnu : p1 et p2 (unknown=\"true\").\n2. Potassium null : p8 et p10.\n3. Aucun élément n'a pending=\"next_checkup\" (seulement lab_result pour p2 et p5), donc la liste est vide.\n4. Renal connu strictement supérieur à 60 : p0 (94), p5 (105), p6 (99), p10 (88). p3 (59) et p7 (52) sont en dessous de 60.\n\n{\"r1\": [\"p1\",\"p2\"], \"r2\": [\"p8\",\"p10\"], \"r3\": [], \"r4\": [\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n- Renal inconnu (\"?\") : p1 et p2.\n- Potassium null : p8 et p10.\n- pending=next_checkup : aucun patient (les seules valeurs pending sont lab_result, pour p2 et p5).\n- Renal > 60 : p0 (94), p5 (105), p6 (99), p10 (88). p3 (59) et p7 (52) sont en dessous du seuil.\n\n{\"r1\": [\"p1\",\"p2\"], \"r2\": [\"p8\",\"p10\"], \"r3\": [], \"r4\": [\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "cstl_arbre",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données :\n\n- p0 : renal 94, potassium 5.1\n- p1 : renal inconnu, potassium absent\n- p2 : renal inconnu (pending lab_result), potassium 5.9\n- p3 : renal 59, potassium 3.3\n- p4 : renal absent, potassium inconnu\n- p5 : renal 105, potassium inconnu (pending lab_result)\n- p6 : renal 99, potassium 3.7\n- p7 : renal 52, potassium 3.7\n- p8 : renal absent, potassium null\n- p9 : renal absent, potassium absent\n- p10 : renal 88, potassium null\n- p11 : renal absent, potassium absent\n\nRéponses :\n\n1. Renal inconnu : p1, p2.\n2. Potassium null : p8, p10.\n3. Aucun pending n'est next_checkup (seulement",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\",\"p4\",\"p8\",\"p9\",\"p10\"], \"r2\": [], \"r3\": [], \"r4\": [\"p1\",\"p3\",\"p5\",\"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Analyse des données :\n\n- p0 : pas de renal (absent), potassium 4,6.\n- p1 : renal 95, potassium null.\n- p2 : renal inconnu, potassium 6,0.\n- p3 : renal 101, potassium 4,4.\n- p4 : renal inconnu (pending lab_result), potassium null.\n- p5 : renal 91, potassium inconnu.\n- p6 : renal 72, potassium absent.\n- p7 : renal absent, potassium inconnu (pending next_checkup).\n- p8 : renal null, potassium null.\n- p9 : renal inconnu (lab_result), potassium absent.\n- p10 : renal inconnu (next_checkup), potassium absent.\n- p11 : renal 37, potassium inconnu.\n\n1. Renal inconnu : p2, p4, p9, p10.\n2. Potassium null ",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "toon",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données :\n\n- p0 : renal absent, potassium 4.6\n- p1 : renal 95, potassium null\n- p2 : renal inconnu, potassium 6\n- p3 : renal 101, potassium 4.4\n- p4 : renal inconnu (pending lab_result), potassium null\n- p5 : renal 91, potassium inconnu\n- p6 : renal 72, potassium absent\n- p7 : renal absent, potassium inconnu (pending next_checkup)\n- p8 : renal null, potassium null\n- p9 : renal inconnu (pending lab_result), potassium absent\n- p10 : renal inconnu (pending next_checkup), potassium absent\n- p11 : renal 37, potassium inconnu\n\nRéponses :\n\n1. Renal inconnu : p2, p4, p9, p10.\n2. Potassium ",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "cstl_indent",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données, patient par patient :\n\n- p0 : potassium=4.6, pas de renal.\n- p1 : renal=95, potassium=null.\n- p2 : renal inconnu, potassium=6.0.\n- p3 : renal=101, potassium=4.4.\n- p4 : renal inconnu (pending lab_result), potassium=null.\n- p5 : renal=91, potassium inconnu.\n- p6 : renal=72.\n- p7 : potassium inconnu (pending next_checkup).\n- p8 : renal=null, potassium=null.\n- p9 : renal inconnu (pending lab_result).\n- p10 : renal inconnu (pending next_checkup).\n- p11 : renal=37, potassium inconnu.\n\n1. Renal inconnu : p2, p4, p9, p10.\n2. Potassium null : p1, p4, p8.\n3. Pending next_checkup : ",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json_indente",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données patient par patient :\n\n- p0 : pas de renal (absent), potassium 4.6\n- p1 : renal 95, potassium null\n- p2 : renal inconnu, potassium 6.0\n- p3 : renal 101, potassium 4.4\n- p4 : renal inconnu (pending lab_result), potassium null\n- p5 : renal 91, potassium inconnu\n- p6 : renal 72, pas de potassium\n- p7 : potassium inconnu (pending next_checkup)\n- p8 : renal null, potassium null\n- p9 : renal inconnu (pending lab_result)\n- p10 : renal inconnu (pending next_checkup)\n- p11 : renal 37, potassium inconnu\n\n1. Renal inconnu : p2, p4, p9, p10.\n2. Potassium null : p1, p4, p8.\n3. Pending n",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "yaml",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des dossiers :\n\n- p0 : pas d'examen renal (absent), potassium 4.6.\n- p1 : renal 95, potassium null.\n- p2 : renal inconnu, potassium 6.0.\n- p3 : renal 101, potassium 4.4.\n- p4 : renal inconnu (pending lab_result), potassium null.\n- p5 : renal 91, potassium inconnu.\n- p6 : renal 72, potassium absent.\n- p7 : renal absent, potassium inconnu (pending next_checkup).\n- p8 : renal null, potassium null.\n- p9 : renal inconnu (pending lab_result), potassium absent.\n- p10 : renal inconnu (pending next_checkup), potassium absent.\n- p11 : renal 37, potassium inconnu.\n\nRéponses :\n\n1. Renal inconnu : ",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n1. Examen renal inconnu (unknown=\"true\") : p2, p4, p9, p10.\n2. Potassium null : p1, p4, p8.\n3. pending=\"next_checkup\" : p7 (potassium) et p10 (renal).\n4. Renal connu strictement supérieur à 60 : p1 (95), p3 (101), p5 (91), p6 (72). p11 vaut 37, donc exclu.\n\n{\"r1\": [\"p2\",\"p4\",\"p9\",\"p10\"], \"r2\": [\"p1\",\"p4\",\"p8\"], \"r3\": [\"p7\",\"p10\"], \"r4\": [\"p1\",\"p3\",\"p5\",\"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "csv",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des lignes :\n\n- p0 : renal vide (absent), potassium 4.6\n- p1 : renal 95, potassium null\n- p2 : renal ?, potassium 6.0\n- p3 : renal 101, potassium 4.4\n- p4 : renal ?, potassium null\n- p5 : renal 91, potassium ?\n- p6 : renal 72, potassium vide\n- p7 : renal vide, potassium ? (next_checkup)\n- p8 : renal null, potassium null\n- p9 : renal ?, potassium vide\n- p10 : renal ? (next_checkup), potassium vide\n- p11 : renal 37, potassium ?\n\n1. Renal inconnu : p2, p4, p9, p10.\n2. Potassium null : p1, p4, p8.\n3. next_checkup : p7 (potassium), p10 (renal).\n4. Renal > 60 : p1 (95), p3 (101), p5 (91), p6",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 12,
       "seed": 3,
       "format": "cstl_arbre",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des lignes (colonnes : age, ward, potassium, renal ; « - » = champ absent) :\n\n- p0 : renal absent.\n- p1 : potassium null, renal 95.\n- p2 : renal inconnu.\n- p3 : renal 101.\n- p4 : potassium null, renal inconnu (pending lab_result).\n- p5 : potassium inconnu, renal 91.\n- p6 : potassium absent, renal 72.\n- p7 : potassium inconnu (pending next_checkup), renal absent.\n- p8 : potassium null, renal null.\n- p9 : renal inconnu (pending lab_result).\n- p10 : renal inconnu (pending next_checkup).\n- p11 : potassium inconnu, renal 37.\n\n1. Renal inconnu : p2, p4, p9, p10.\n2. Potassium null : p1, p4, p",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\",\"p2\",\"p3\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [], \"r3\": [], \"r4\": [\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",\"p28\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Analyse patient par patient :\n\nQ1 (renal inconnu) : p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nQ2 (potassium null) : p10, p14, p26, p29. Les patients p2 et p3 ont un renal null, pas un potassium null, donc ils ne comptent pas.\n\nQ3 (pending = next_checkup) : p12 (potassium), p18 (renal), p22 (renal et potassium).\n\nQ4 (renal connu > 60) :\n- p4 : 120, oui\n- p8 : 76, oui\n- p11 : 63, oui\n- p17 : 107, oui\n- p19 : 96, oui\n- p20 : 90, oui\n- p21 : 75, oui\n- p24 : 120, oui\n- p25 : 99, oui\n- p26 : 65, oui\n- p28 : 64, oui\n- p29 : 98, oui\n\nSont exclus : p1 (36), p9 (57), p14 (48), p27 (34).\n\n{\"r1\": [\"p0\",\"",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : renal inconnu : p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nQ2 : potassium null : p10, p14, p26, p29.\n\nQ3 : pending next_checkup : p12 (potassium), p18 (renal), p22 (renal et potassium).\n\nQ4 : renal > 60 : p4 (120), p8 (76), p11 (63), p17 (107), p19 (96), p20 (90), p21 (75), p24 (120), p25 (99), p26 (65), p28 (64), p29 (98). Sont exclus : p1 (36), p9 (57), p14 (48), p27 (34).\n\n{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\",\"p14\",\"p26\",\"p29\"], \"r3\": [\"p12\",\"p18\",\"p22\"], \"r4\": [\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",\"p28\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "cstl_indent",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données, patient par patient.\n\nQ1 (renal inconnu) : p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nQ2 (potassium null) : p10, p14, p26, p29.\n\nQ3 (pending=next_checkup) : p12 (potassium), p18 (renal), p22 (renal et potassium).\n\nQ4 (renal connu > 60) :\n- p4 120\n- p8 76\n- p11 63\n- p17 107\n- p19 96\n- p20 90\n- p21 75\n- p24 120\n- p25 99\n- p26 65\n- p28 64\n- p29 98\n\nÉcartés : p1 36, p9 57, p14 48, p27 34. Les valeurs null (p2, p3) sont aussi exclues.\n\n{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\",\"p14\",\"p26\",\"p29\"], \"r3\": [\"p12\",\"p18\",\"p22\"], \"r4\": [\"p4\",\"p8\",\"p11\",",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json_indente",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Q1 : renal inconnu : p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nQ2 : potassium null : p10, p14, p26, p29.\n\nQ3 : pending next_checkup : p12 (potassium), p18 (renal), p22 (renal et potassium).\n\nQ4 : renal > 60 : p4 (120), p8 (76), p11 (63), p17 (107), p19 (96), p20 (90), p21 (75), p24 (120), p25 (99), p26 (65), p28 (64), p29 (98). p1 (36), p9 (57), p14 (48) et p27 (34) sont en dessous de 60. p2 et p3 sont null.\n\n{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\",\"p14\",\"p26\",\"p29\"], \"r3\": [\"p12\",\"p18\",\"p22\"], \"r4\": [\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 1,
       "format": "yaml",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Q1 (renal inconnu) : p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nQ2 (potassium null) : p10, p14, p26, p29.\n\nQ3 (pending = next_checkup) : p12 (potassium), p18 (renal), p22 (renal et potassium).\n\nQ4 (renal connu > 60) : p4 (120), p9 (57, non), p11 (63), p17 (107), p19 (96), p20 (90), p21 (75), p24 (120), p25 (99), p26 (65), p28 (64), p29 (98), p8 (76). Sont exclus p1 (36), p14 (48), p27 (34), p9 (57).\n\nListe : p4, p8, p11, p17, p19, p20, p21, p24, p25, p26, p28, p29.\n\n{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\",\"p14\",\"p26\",\"p29\"], \"r3\": [\"p12\",\"p18\",\"p22\"], \"r4\": [\"",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 1,
       "format": "xml",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "raw": "Q1 : les patients dont l'examen renal est inconnu (unknown=\"true\") sont p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nQ2 : les patients dont le potassium est null sont p10, p14, p26, p29.\n\nQ3 : les patients avec pending=\"next_checkup\" sont p12 (potassium), p18 (renal) et p22 (renal et potassium).\n\nQ4 : les valeurs renales connues strictement supérieures à 60 sont :\n- p4 : 120\n- p8 : 76\n- p11 : 63\n- p17 : 107\n- p19 : 96\n- p20 : 90\n- p21 : 75\n- p24 : 120\n- p25 : 99\n- p26 : 65\n- p28 : 64\n- p29 : 98\n\nSont exclus : p1 (36), p9 (57), p14 (48), p27 (34).\n\n{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 1,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\",\"p14\",\"p26\",\"p29\"], \"r3\": [\"p12\",\"p18\",\"p22\"], \"r4\": [\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",\"p28\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "cstl_arbre",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données ligne par ligne.\n\nRenal inconnu : p0, p5, p6, p12, p13, p15, p16, p18, p22.\n\nPotassium null : p10, p14, p26, p29. (p2 : potassium inconnu ; p3 : renal null, potassium 4.3.)\n\nPending next_checkup : p12 (potassium), p18 (renal), p22 (renal et potassium).\n\nRenal > 60 :\n- p4 120 : oui\n- p8 76 : oui\n- p9 57 : non\n- p11 63 : oui\n- p17 107 : oui\n- p19 96 : oui\n- p20 90 : oui\n- p21 75 : oui\n- p24 120 : oui\n- p25 99 : oui\n- p26 65 : oui\n- p27 34 : non\n- p28 64 : oui\n- p29 98 : oui\n- p1 36 : non\n- p14 48 : non\n\n{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\"",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\",\"p3\",\"p21\",\"p22\",\"p24\",\"p27\",\"p28\"], \"r2\": [], \"r3\": [], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Renal inconnu : p3, p21, p22, p24, p27.\n\nPotassium null : p13, p15, p16, p21, p22.\n\nPending next_checkup : p21 (renal), p27 (potassium).\n\nRenal > 60 : p2 (119), p6 (94), p10 (76), p11 (66), p14 (65), p18 (77), p25 (65), p26 (62). p4 vaut 60, donc exclu strictement.\n\n{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "cstl_indent",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données patient par patient.\n\nQ1 : renal inconnu (« ? ») : p3, p21, p22, p24, p27.\n\nQ2 : potassium null : p13, p15, p16, p21, p22.\n\nQ3 : pending=next_checkup : p21 (renal), p27 (potassium).\n\nQ4 : renal numérique > 60 :\n- p2 119, oui\n- p4 60, non (pas strictement supérieur)\n- p6 94, oui\n- p10 76, oui\n- p11 66, oui\n- p14 65, oui\n- p18 77, oui\n- p25 65, oui\n- p26 62, oui\n- p1 30, p5 56, p8 31, p9 36, p12 58, p13 40, p15 45, p19 47, p23 35, p29 55 : non\n- p0, p28 null : non\n\n{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Lecture des données :\n\n1. Renal inconnu ($unknown) : p3, p21, p22, p24, p27.\n2. Potassium null : p13, p15, p16, p21, p22.\n3. Pending next_checkup : p21 (renal) et p27 (potassium).\n4. Renal > 60 (valeur numérique) : p2 (119), p6 (94), p10 (76), p11 (66), p14 (65), p18 (77), p25 (65), p26 (62). p4 vaut 60, il est donc exclu (pas strictement supérieur).\n\n{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : renal inconnu : p3, p21, p22, p24, p27.\n\nQ2 : potassium null : p13, p15, p16, p21, p22.\n\nQ3 : pending next_checkup : p21 (renal), p27 (potassium).\n\nQ4 : renal > 60 :\n- p2 (119), p4 (60, non), p6 (94), p10 (76), p11 (66), p14 (65), p18 (77), p25 (65), p26 (62).\n- p1 : 30, non ; p5 : 56, non ; p12 : 58, non ; p29 : 55, non.\n\nListe : p2, p6, p10, p11, p14, p18, p25, p26.\n\n{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1: renal unknown : p3, p21, p22, p24, p27.\n\nQ2: potassium null : p13, p15, p16, p21, p22.\n\nQ3: pending=next_checkup : p21 (renal), p27 (potassium).\n\nQ4: renal > 60 : p2 (119), p6 (94), p11 (66), p14 (65), p18 (77), p10 (76), p25 (65), p26 (62). p4 = 60 non, donc exclu.\n\nVérification pour les autres : p1 30, p5 56, p8 31, p9 36, p12 58, p13 40, p15 45, p19 47, p23 35, p29 55, p0 null.\n\n{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3918. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"], \"r2\": [\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"], \"r3\": [\"p21\",\"p27\"], \"r4\": [\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "cstl_arbre",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données, patient par patient.\n\nRenal inconnu : p3, p21, p22, p24, p27.\n\nPotassium null : p0 n'a pas de null (son potassium est inconnu). Les null sont p13, p15, p16, p21, p22. p28 a renal null et potassium absent, donc il n'est pas concerné.\n\nPending next_checkup : p21 (renal) et p27 (potassium).\n\nRenal connu > 60 :\n- p2 : 119, oui\n- p4 : 60, non (pas strictement supérieur)\n- p6 : 94, oui\n- p10 : 76, oui\n- p11 : 66, oui\n- p14 : 65, oui\n- p18 : 77, oui\n- p25 : 65, oui\n- p26 : 62, oui\n- p1 : 30, non\n- p5 : 56, non\n- p12 : 58, non\n- p29 : 55, non\n\n{\"r1\": [\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"]",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\",\"p3\",\"p7\",\"p8\",\"p9\",\"p12\",\"p13\",\"p14\",\"p19\",\"p20\",\"p23\",\"p24\",\"p25\",\"p26\"], \"r2\": [], \"r3\": [], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données patient par patient.\n\nQ1 (renal inconnu) : p0, p3, p7, p9, p12, p14, p19, p23.\n\nQ2 (potassium null) : p3, p5, p8, p11, p15, p17, p22, p24, p25. p13 n'a pas de potassium (absent), p20 est inconnu et p26 est inconnu, donc ils sont exclus.\n\nQ3 (pending = next_checkup) : p10 (potassium), p20 (potassium), p23 (renal).\n\nQ4 (renal connu > 60) :\n- p1 : 90\n- p2 : 86\n- p4 : 95\n- p5 : 75\n- p6 : 74\n- p18 : 104\n- p22 : 92\n- p29 : 113\n- p17 : 35, exclu\n- p21 : 58, exclu\n- p28 : 38, exclu\n\n{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 3,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Renal inconnu : p0, p3, p7, p9, p12, p14, p19, p23.\n\nPotassium null : p3, p5, p8, p11, p15, p17, p22, p24, p25.\n\nPending next_checkup : p10 (potassium), p20 (potassium), p23 (renal).\n\nRenal > 60 : p1 (90), p2 (86), p4 (95), p5 (75), p6 (74), p18 (104), p22 (92), p29 (113). p21 (58), p17 (35) et p28 (38) sont exclus.\n\n{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "cstl_indent",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Analyse par patient :\n\n- p0 : renal inconnu ; potassium 5.0\n- p1 : renal 90 ; potassium inconnu\n- p2 : renal 86\n- p3 : renal inconnu ; potassium null\n- p4 : renal 95\n- p5 : renal 75 ; potassium null\n- p6 : renal 74\n- p7 : renal inconnu ; potassium inconnu\n- p8 : renal null ; potassium null\n- p9 : renal inconnu\n- p10 : renal absent ; potassium inconnu (pending next_checkup)\n- p11 : potassium null\n- p12 : renal inconnu (pending lab_result)\n- p13 : renal null\n- p14 : renal inconnu\n- p15 : potassium null\n- p16 : rien\n- p17 : renal 35 ; potassium null\n- p18 : renal 104\n- p19 : renal inconnu\n- p20 :",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json_indente",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Q1 : renal inconnu : p0, p3, p7, p9, p12, p14, p19, p23.\n\nQ2 : potassium null : p3, p5, p8, p11, p15, p17, p22, p24, p25.\nVérification : p3 oui, p5 oui, p8 oui, p11 oui, p15 oui, p17 oui, p22 oui, p24 oui, p25 oui. p13 : potassium absent. p21 : absent. p27 : absent. p10 : potassium inconnu.\n\nQ3 : pending next_checkup : p10 (potassium), p20 (potassium), p23 (renal).\n\nQ4 : renal > 60 :\n- p1 90\n- p2 86\n- p4 95\n- p5 75\n- p6 74\n- p18 104\n- p22 92\n- p29 113\n- p21 58 : non\n- p17 35 : non\n- p28 38 : non\n\n{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 3,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : renal inconnu ($unknown) : p0, p3, p7, p9, p12, p14, p19, p23.\n\nQ2 : potassium null : p3, p5, p8, p11, p15, p17, p22, p24, p25.\n\nQ3 : pending next_checkup : p10 (potassium), p20 (potassium), p23 (renal).\n\nQ4 : renal > 60 :\n- p1 90, p2 86, p4 95, p5 75, p6 74, p18 104, p22 92, p29 113.\n- p17 35, p21 58, p28 38 : exclus.\n\n{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "xml",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Q1 : renal inconnu (unknown=\"true\") : p0, p3, p7, p9, p12, p14, p19, p23.\n\nQ2 : potassium null : p3, p5, p8, p11, p15, p17, p22, p24, p25.\n\nQ3 : pending next_checkup : p10 (potassium), p20 (potassium), p23 (renal).\n\nQ4 : renal > 60 : p1 (90), p2 (86), p4 (95), p18 (104), p22 (92), p29 (113). Les autres valeurs sont p5 75, p6 74, ce qui est aussi supérieur à 60. p17 35 non, p21 58 non, p28 38 non.\n\nListe Q4 : p1, p2, p4, p5, p6, p18, p22, p29.\n\n{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\"",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "size": 30,
       "seed": 3,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "cstl_arbre",
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16000 tokens, but can only afford 3995. To increase, visit https://openrouter.ai/wo"
+      "raw": "Lecture des données, patient par patient.\n\nQ1 (renal inconnu) : p0, p3, p7, p9, p12, p14, p19, p23.\n\nQ2 (potassium null) : p3, p5, p8, p11, p15, p17, p22, p24, p25.\n\nQ3 (pending next_checkup) : p10 (potassium), p20 (potassium), p23 (renal).\n\nQ4 (renal connu > 60) : p1 (90), p2 (86), p4 (95), p5 (75), p6 (74), p18 (104), p22 (92), p29 (113). Les valeurs p17 (35), p21 (58) et p28 (38) sont inférieures à 60.\n\n{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"",
+      "error": "reponse non retrouvee (relancer)"
     }
   ],
   "comprehension_openai/gpt-5-mini": [
@@ -2185,169 +2708,313 @@
       "size": 12,
       "seed": 1,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p3\", \"p7\", \"p8\", \"p10\"], \"r2\": [], \"r3\": [], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}\n```\n\nNote : dans ce JSON, `null` désigne une valeur inconnue. Un examen « connu sans valeur » ne peut donc pas être représenté, ce qui rend r2 vide par construction. Aucun champ sigma ou pending n'étant présent, r3 est vide faute de données.",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 1,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p7\"], \"r2\": [\"p3\"], \"r3\": [\"p1\", \"p2\", \"p11\"], \"r4\": [\"p0\", \"p4\", \"p6\", \"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p1\", \"p2\"], \"r2\": [], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}\n```",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 2,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p1\", \"p2\"], \"r2\": [\"p8\", \"p10\"], \"r3\": [], \"r4\": [\"p0\", \"p5\", \"p6\", \"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p8\", \"p9\", \"p10\"], \"r2\": [], \"r3\": [], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2359,210 +3026,385 @@
         true,
         true
       ],
-      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}"
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
       "seed": 3,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p2\", \"p4\", \"p9\", \"p10\"], \"r2\": [\"p1\", \"p4\", \"p8\"], \"r3\": [\"p7\", \"p10\"], \"r4\": [\"p1\", \"p3\", \"p5\", \"p6\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": null, \"r2\": null, \"r3\": null, \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"], \"note\": \"r1, r2 et r3 sont indeterminables avec ces donnees : dans le JSON, une valeur inconnue et une valeur null (connue sans mesure possible) sont toutes deux ecrites null, et les champs sigma et pending sont absents. r4 est fiable, car seules des valeurs numeriques y sont comparees a 60.\"}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"], \"r2\": [\"p10\",\"p14\",\"p26\",\"p29\"], \"r3\": [\"p12\",\"p18\",\"p22\"], \"r4\": [\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",\"p28\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 1,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p5\", \"p6\", \"p12\", \"p13\", \"p15\", \"p16\", \"p18\", \"p22\"], \"r2\": [\"p10\", \"p14\", \"p26\", \"p29\"], \"r3\": [\"p12\", \"p18\", \"p22\"], \"r4\": [\"p4\", \"p8\", \"p11\", \"p17\", \"p19\", \"p20\", \"p21\", \"p24\", \"p25\", \"p26\", \"p28\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p3\", \"p21\", \"p22\", \"p24\", \"p27\", \"p28\"], \"r2\": \"indeterminable : dans ce JSON, null signifie inconnu, donc le cas 'connu sans valeur' ne peut pas etre distingue\", \"r3\": \"indeterminable : aucun champ pending=next_checkup ni sigma n'est present dans les donnees\", \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 2,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p3\", \"p21\", \"p22\", \"p24\", \"p27\"], \"r2\": [\"p13\", \"p15\", \"p16\", \"p21\", \"p22\"], \"r3\": [\"p21\", \"p27\"], \"r4\": [\"p2\", \"p6\", \"p10\", \"p11\", \"p14\", \"p18\", \"p25\", \"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json_naif",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": [\"p0\", \"p3\", \"p7\", \"p8\", \"p9\", \"p12\", \"p13\", \"p14\", \"p19\", \"p20\", \"p23\", \"p24\", \"p25\", \"p26\"], \"r2\": [], \"r3\": [], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}\n```",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "toon",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "cstl_indent",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "json_indente",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "yaml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "xml",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "csv",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
       "seed": 3,
       "format": "cstl_arbre",
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": [\"p0\", \"p3\", \"p7\", \"p9\", \"p12\", \"p14\", \"p19\", \"p23\"], \"r2\": [\"p3\", \"p5\", \"p8\", \"p11\", \"p15\", \"p17\", \"p22\", \"p24\", \"p25\"], \"r3\": [\"p10\", \"p20\", \"p23\"], \"r4\": [\"p1\", \"p2\", \"p4\", \"p5\", \"p6\", \"p18\", \"p22\", \"p29\"]}",
+      "parsed": true
     }
   ],
   "comprehension_deepseek/deepseek-v4.1-flash": [
@@ -2576,7 +3418,8 @@
         false,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p3\",\"p7\",\"p8\",\"p10\"],\"r2\":[],\"r3\":[],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p3\",\"p7\",\"p8\",\"p10\"],\"r2\":[],\"r3\":[],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2588,7 +3431,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p7\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p7\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2607,7 +3451,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p7\",\"p11\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p7\",\"p11\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2619,7 +3464,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p7\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p7\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2638,7 +3484,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p7\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p7\"],\"r2\":[\"p3\"],\"r3\":[\"p1\",\"p2\",\"p11\"],\"r4\":[\"p0\",\"p4\",\"p6\",\"p11\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2685,7 +3532,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p2\"],\"r2\":[\"p8\",\"p10\"],\"r3\":[],\"r4\":[\"p0\",\"p5\",\"p6\",\"p10\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p2\"],\"r2\":[\"p8\",\"p10\"],\"r3\":[],\"r4\":[\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2704,7 +3552,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p2\"],\"r2\":[\"p8\",\"p10\"],\"r3\":[],\"r4\":[\"p0\",\"p5\",\"p6\",\"p10\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p2\"],\"r2\":[\"p8\",\"p10\"],\"r3\":[],\"r4\":[\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2730,7 +3579,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p1\",\"p2\"],\"r2\":[\"p8\",\"p10\"],\"r3\":[],\"r4\":[\"p0\",\"p5\",\"p6\",\"p10\"]}"
+      "raw": "{\"r1\":[\"p1\",\"p2\"],\"r2\":[\"p8\",\"p10\"],\"r3\":[],\"r4\":[\"p0\",\"p5\",\"p6\",\"p10\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2770,7 +3620,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p2\",\"p4\",\"p9\",\"p10\"],\"r2\":[\"p1\",\"p4\",\"p8\"],\"r3\":[\"p7\",\"p10\"],\"r4\":[\"p1\",\"p3\",\"p5\",\"p6\"]}"
+      "raw": "{\"r1\":[\"p2\",\"p4\",\"p9\",\"p10\"],\"r2\":[\"p1\",\"p4\",\"p8\"],\"r3\":[\"p7\",\"p10\"],\"r4\":[\"p1\",\"p3\",\"p5\",\"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2789,7 +3640,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p2\",\"p4\",\"p9\",\"p10\"],\"r2\":[\"p1\",\"p4\",\"p8\"],\"r3\":[\"p7\",\"p10\"],\"r4\":[\"p1\",\"p3\",\"p5\",\"p6\"]}"
+      "raw": "{\"r1\":[\"p2\",\"p4\",\"p9\",\"p10\"],\"r2\":[\"p1\",\"p4\",\"p8\"],\"r3\":[\"p7\",\"p10\"],\"r4\":[\"p1\",\"p3\",\"p5\",\"p6\"]}",
+      "parsed": true
     },
     {
       "size": 12,
@@ -2822,7 +3674,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"],\"r2\":[\"p10\",\"p14\",\"p26\",\"p29\"],\"r3\":[\"p12\",\"p18\",\"p22\"],\"r4\":[\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",\"p28\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p5\",\"p6\",\"p12\",\"p13\",\"p15\",\"p16\",\"p18\",\"p22\"],\"r2\":[\"p10\",\"p14\",\"p26\",\"p29\"],\"r3\":[\"p12\",\"p18\",\"p22\"],\"r4\":[\"p4\",\"p8\",\"p11\",\"p17\",\"p19\",\"p20\",\"p21\",\"p24\",\"p25\",\"p26\",\"p28\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -2911,7 +3764,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"],\"r2\":[\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"],\"r3\":[\"p21\",\"p27\"],\"r4\":[\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}"
+      "raw": "{\"r1\":[\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"],\"r2\":[\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"],\"r3\":[\"p21\",\"p27\"],\"r4\":[\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -2944,7 +3798,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"],\"r2\":[\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"],\"r3\":[\"p21\",\"p27\"],\"r4\":[\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}"
+      "raw": "{\"r1\":[\"p3\",\"p21\",\"p22\",\"p24\",\"p27\"],\"r2\":[\"p13\",\"p15\",\"p16\",\"p21\",\"p22\"],\"r3\":[\"p21\",\"p27\"],\"r4\":[\"p2\",\"p6\",\"p10\",\"p11\",\"p14\",\"p18\",\"p25\",\"p26\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -2956,7 +3811,8 @@
         false,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p8\",\"p9\",\"p12\",\"p13\",\"p14\",\"p19\",\"p20\",\"p23\",\"p24\",\"p25\",\"p26\"],\"r2\":[\"p1\",\"p3\",\"p5\",\"p7\",\"p8\",\"p10\",\"p11\",\"p15\",\"p17\",\"p20\",\"p22\",\"p23\",\"p24\",\"p25\",\"p26\"],\"r3\":[],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p8\",\"p9\",\"p12\",\"p13\",\"p14\",\"p19\",\"p20\",\"p23\",\"p24\",\"p25\",\"p26\"],\"r2\":[\"p1\",\"p3\",\"p5\",\"p7\",\"p8\",\"p10\",\"p11\",\"p15\",\"p17\",\"p20\",\"p22\",\"p23\",\"p24\",\"p25\",\"p26\"],\"r3\":[],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -2968,7 +3824,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -2987,7 +3844,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -2999,7 +3857,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -3011,7 +3870,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -3023,7 +3883,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\": [\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"], \"r2\": [\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"], \"r3\": [\"p10\",\"p20\",\"p23\"], \"r4\": [\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -3035,7 +3896,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     },
     {
       "size": 30,
@@ -3047,7 +3909,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}"
+      "raw": "{\"r1\":[\"p0\",\"p3\",\"p7\",\"p9\",\"p12\",\"p14\",\"p19\",\"p23\"],\"r2\":[\"p3\",\"p5\",\"p8\",\"p11\",\"p15\",\"p17\",\"p22\",\"p24\",\"p25\"],\"r3\":[\"p10\",\"p20\",\"p23\"],\"r4\":[\"p1\",\"p2\",\"p4\",\"p5\",\"p6\",\"p18\",\"p22\",\"p29\"]}",
+      "parsed": true
     }
   ],
   "comprehension_qwen/qwen3.8-flash": [

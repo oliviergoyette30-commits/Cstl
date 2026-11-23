@@ -6,228 +6,253 @@
       "seed": 1,
       "format": "json",
       "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données JSON fournies et calculer les réponses.\n\n### Données JSON\n\n```json\n{\n  \"orders\": [\n    {\n      \"id\": \"o0\",\n      \"client\": \"client_5\",\n      \"date\": \"2026-11-25\",\n      \"lines\": [\n        { \"item\": \"gpu_rack\", \"qty\": 5, \"price\": 714 },\n        { \"item\": \"license_pack\", \"qty\": 3, \"price\": 713, \"options\": [{ \"name\": \"install\", \"price\": 39 }] },\n        { \"item\": \"support_plan\", \"qty\": 3, \"price\": 822 },\n        { \"item\": \"license_pack\", \"qty\": 5, \"price\": 747 }\n      ]\n    },\n    {\n      \"id\": \"o1\",\n      \"client\": \"client_3\",\n      \"",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données fournies.\n\n### Question 1 : Valeur totale de la commande o2\n\nLa commande o2 a deux lignes :\n- `support_plan,2,546`\n- `license_pack,4,169`\n\nPour la première ligne, la valeur est `2 * 546 = 1092`.\nPour la deuxième ligne, il n'y a pas d'options, donc la valeur est `4 * 169 = 676`.\nLa valeur totale est donc `1092 + 676 = 1768`.\n\n### Question 2 : Combien de lignes ont une option nommée warranty ?\n\nEn parcourant les données :\n- La ligne avec `item: router` dans la commande o1 a une option `warranty`.\n- La ligne avec `item: license_pack` (",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous répondrons aux questions une par une.\n\n### Données parsées\n\n```python\norders = {\n    \"o0\": {\"client\": \"client_5\", \"date\": \"2026-11-25\", \"lines\": [\n        {\"item\": \"gpu_rack\", \"qty\": 5, \"price\": 714, \"options\": []},\n        {\"item\": \"license_pack\", \"qty\": 3, \"price\": 713, \"options\": [{\"name\": \"install\", \"price\": 39}]},\n        {\"item\": \"support_plan\", \"qty\": 3, \"price\": 822, \"options\": []},\n        {\"item\": \"license_pack\", \"qty\": 5, \"price\": 747, \"options\": []}\n    ]}",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre les questions posées, nous allons analyser les données fournies et effectuer les calculs nécessaires.\n\n### Données fournies\n\n```json\n{\n  \"orders\": [\n    {\n      \"id\": \"o0\",\n      \"client\": \"client_2\",\n      \"date\": \"2026-11-09\",\n      \"note\": \"fragile\",\n      \"lines\": [\n        {\n          \"item\": \"gpu_rack\",\n          \"qty\": 3,\n          \"price\": 507,\n          \"options\": [\n            { \"name\": \"express\", \"price\": 46 },\n            { \"name\": \"install\", \"price\": 22 }\n          ]\n        },\n        {\n          \"item\": \"storage_tb\",\n          \"qty\": 2,\n          \"price\": 534,\n    ",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données fournies.\n\n### Données\n\nLes données sont au format TOON et décrivent des commandes avec leurs détails.\n\n### Question 1 : Valeur totale de la commande o0\n\nPour calculer la valeur totale de la commande `o0`, nous devons additionner pour chaque ligne la quantité (`qty`) multipliée par la somme du prix (`price`) et des prix de toutes les options.\n\n- Pour la première ligne (`gpu_rack`) : \n  - `qty` = 3, `price` = 507\n  - Options : `express` (46), `install` (22)\n  - Total pour cette ligne = 3 * (507 + 46 + 22) = 3 * 575 = 1725\n- Pour la d",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre les questions posées, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous répondrons aux questions une par une.\n\n### Étape 1 : Parser les données\n\nLes données sont déjà fournies dans un format structuré. Nous allons les représenter sous forme de structures de données pour faciliter les calculs.\n\n```python\norders = {\n    \"o0\": {\"client\": \"client_2\", \"date\": \"2026-11-09\", \"note\": \"fragile\", \"lines\": [\n        {\"item\": \"gpu_rack\", \"qty\": 3, \"price\": 507, \"options\": [\n            {\"name\": \"express\", \"price\": 46},\n            {\"name\": \"in",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données fournies et effectuer les calculs nécessaires.\n\n### Question 1 : Valeur totale de la commande o0\n\nPour calculer la valeur totale de la commande \"o0\", nous devons itérer sur toutes les lignes de cette commande, calculer pour chaque ligne la quantité multipliée par le prix de l'article plus les prix de toutes les options, et ensuite sommer ces valeurs.\n\n```python\nimport json\n\ndonnees = json.loads(\"\"\"{\"orders\":[{\"id\":\"o0\",\"client\":\"client_1\",\"date\":\"2026-11-13\",\"note\":\"urgent\",\"lines\":[{\"item\":\"storage_tb\",\"qty\":5,\"price\":226},{\"item\":",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données fournies.\n\n### Question 1 : Valeur totale de la commande o0\n\nPour calculer la valeur totale de la commande `o0`, nous devons additionner pour chaque ligne de la commande la quantité (`qty`) multipliée par la somme du prix (`price`) et des prix de toutes les options de la ligne.\n\nLa commande `o0` a les lignes suivantes :\n- `item: storage_tb`, `qty: 5`, `price: 226`, pas d'options.\n- `item: gpu_rack`, `qty: 3`, `price: 405`, options : `express,58` et `install,10`.\n- `item: storage_tb`, `qty: 4`, `price: 298`, options : `warranty,29` e",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous répondrons aux questions une par une.\n\n### Étape 1 : Parser les données\n\nLes données sont déjà fournies dans un format structuré. Nous allons les représenter sous forme de structures de données pour faciliter l'accès.\n\n```python\nimport re\n\ndata = {\n    \"orders\": [],\n    \"lines\": [],\n    \"options\": []\n}\n\ncurrent_order = None\ncurrent_line = None\n\nfor line in données.split('\\n'):\n    if line.startswith('@'):\n        # Ligne de définition de liste\n        match = re.match",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données fournies et effectuer les calculs nécessaires.\n\n### Question 1 : Valeur totale de la commande o9\n\nPour calculer la valeur totale de la commande `o9`, nous devons trouver la somme de `qty` x (`price` + prix de toutes les options) pour chaque ligne de cette commande.\n\nD'abord, localisons la commande `o9` dans les données :\n```json\n{\"id\":\"o9\",\"client\":\"client_3\",\"date\":\"2026-11-09\",\"lines\":[{\"item\":\"gpu_rack\",\"qty\":2,\"price\":29},{\"item\":\"gpu_rack\",\"qty\":2,\"price\":117,\"options\":[{\"name\":\"warranty\",\"price\":36},{\"name\":\"install\",\"price\":1",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons analyser les données fournies.\n\n### Question 1 : Valeur totale de la commande o9\n\nLa commande `o9` a deux lignes :\n1. `item: gpu_rack`, `qty: 2`, `price: 29` sans options.\n2. `item: gpu_rack`, `qty: 2`, `price: 117` avec deux options : `warranty,36` et `install,14`.\n\nCalcul de la valeur totale :\n- Pour la première ligne : `2 * (29 + 0) = 2 * 29 = 58`\n- Pour la deuxième ligne : `2 * (117 + 36 + 14) = 2 * (117 + 50) = 2 * 167 = 334`\n- Valeur totale : `58 + 334 = 392`\n\n### Question 2 : Combien de lignes ont une option nommée warranty ?\n\nEn parcourant les d",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour résoudre ces questions, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous répondrons aux questions une par une.\n\n### Étape 1 : Parser les données\n\nLes données sont déjà fournies dans un format structuré. Nous allons les représenter sous forme de structures de données pour faciliter l'accès.\n\n```python\ndonnees = {\n    \"orders\": [\n        {\"id\": \"o0\", \"client\": \"client_2\", \"date\": \"2026-11-16\", \"note\": \"urgent\", \"lines\": [...]},\n        {\"id\": \"o1\", \"client\": \"client_5\", \"date\": \"2026-11-14\", \"lines\": [...]},\n        # ...\n    ]\n}\n```\n\nCepend",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies en JSON.\n\n### Données JSON\n\n```json\n{\n  \"departments\": [\n    {\n      \"id\": \"dept_0\",\n      \"name\": \"legal_0\",\n      \"budget\": 30000,\n      \"teams\": [\n        {\n          \"id\": \"team_0_0\",\n          \"lead\": \"agent_19\",\n          \"members\": [\n            { \"agent\": \"agent_14\", \"role\": \"analyst\", \"clearance\": \"high\", \"since\": \"2023-04-01\" },\n            { \"agent\": \"agent_35\", \"role\": \"operator\", \"clearance\": \"low\" },\n            { \"agent\": \"agent_14\", \"role\": \"operator\", \"clearance\": \"medium\" },\n            { \"agent\": \"",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, analysons les données fournies.\n\n### Données fournies\n\n```plaintext\ndepartments[2]:\n  - id: dept_0\n    name: legal_0\n    budget: 30000\n    teams[2]:\n      - id: team_0_0\n        lead: agent_19\n        members[5]:\n          - agent: agent_14\n            role: analyst\n            clearance: high\n            since: 2023-04-01\n          - agent: agent_35\n            role: operator\n            clearance: low\n          - agent: agent_14\n            role: operator\n            clearance: medium\n          - agent: agent_8\n            role: reviewer\n            cleara",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous allons analyser ces données pour répondre aux questions.\n\n### Étape 1 : Parser les données\n\nLes données fournies sont :\n\n```\n@departments[2]: id name budget\n@teams[4]^departments: id lead\n@members[10]^teams: id role clearance\ndept_0 legal_0 30000\n  team_0_0 agent_19\n    agent_14 analyst high since=2023-04-01\n    agent_35 operator low\n    agent_14 operator medium\n    agent_8 reviewer medium since=2026-08-01\n    agent_3 operator low\n  team_0_1 agent_6\n    agent_1",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies en JSON.\n\n### Données JSON\n\n```json\n{\n  \"departments\": [\n    {\n      \"id\": \"dept_0\",\n      \"name\": \"ops_0\",\n      \"budget\": 497000,\n      \"teams\": [\n        {\n          \"id\": \"team_0_0\",\n          \"lead\": \"agent_4\",\n          \"members\": [\n            { \"agent\": \"agent_21\", \"role\": \"reviewer\", \"clearance\": \"high\" },\n            { \"agent\": \"agent_27\", \"role\": \"analyst\", \"clearance\": \"low\" },\n            { \"agent\": \"agent_22\", \"role\": \"reviewer\", \"clearance\": \"high\", \"since\": \"2025-05-01\" },\n            { \"agent\": \"agen",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### Données fournies\n\n```plaintext\ndepartments[2]:\n  - id: dept_0\n    name: ops_0\n    budget: 497000\n    teams[3]:\n      - id: team_0_0\n        lead: agent_4\n        members[4]:\n          - agent: agent_21\n            role: reviewer\n            clearance: high\n          - agent: agent_27\n            role: analyst\n            clearance: low\n          - agent: agent_22\n            role: reviewer\n            clearance: high\n            since: 2025-05-01\n          - agent: agent_27\n            role: reviewer\n          ",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous allons analyser ces données pour répondre aux questions.\n\n### Étape 1 : Parser les données\n\nLes données fournies sont :\n\n```\n@departments[2]: id name budget\n@teams[4]^departments: id lead\n@members[15]^teams: id role clearance\ndept_0 ops_0 497000\n  team_0_0 agent_4\n    agent_21 reviewer high\n    agent_27 analyst low\n    agent_22 reviewer high since=2025-05-01\n    agent_27 reviewer high\n  team_0_1 agent_11\n    agent_3 operator high\n    agent_30 operator medium\n  ",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies en JSON.\n\n### Étape 1 : Comprendre les données\nLes données sont structurées de la manière suivante :\n- Un objet JSON contenant une liste de départements (`departments`).\n- Chaque département a un `id`, un `name`, un `budget`, et une liste d'équipes (`teams`).\n- Chaque équipe a un `id`, un `lead`, et une liste de membres (`members`).\n- Chaque membre a un `agent`, un `role`, une `clearance`, et éventuellement une date `since`.\n\n### Étape 2 : Répondre à la question 1\nPour savoir combien de membres ont la clearance `high",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Combien de membres ont la clearance high dans le departement dept_4 ?\n\nTout d'abord, nous identifions les informations relatives au département `dept_4`. Dans les données fournies, `dept_4` correspond à `support_4` avec un budget de 35000. Il contient deux équipes : `team_4_0` et `team_4_1`.\n\n- `team_4_0` a pour lead `agent_35` et comprend deux membres : \n  - `agent_5` avec une clearance `high`\n  - `agent_14` avec une clearance `low`\n  \n- `team_4_1` a pour lead `agent_9` et comprend un membre :\n  - `agent_18",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons d'abord parser les données fournies au format CSTL compact en arbre indente, puis nous utiliserons ces données pour répondre aux questions.\n\n### Étape 1 : Parser les données\n\nLes données fournies sont au format CSTL compact en arbre indente. Nous allons les représenter sous forme de structures de données pour faciliter l'accès et le traitement.\n\n```python\ndonnees = {\n    \"departments\": [\n        {\"id\": \"dept_0\", \"name\": \"legal_0\", \"budget\": 27000, \"teams\": [\n            {\"id\": \"team_0_0\", \"lead\": \"agent_32\", \"members\": [\n                {\"agent\":",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### Question 1 : Combien de membres ont la clearance high dans le departement dept_4 ?\n\nPour répondre à cette question, nous devons d'abord identifier les données relatives au département `dept_4`, puis compter les membres avec une clearance `high` dans ce département.\n\n```json\n{\n  \"id\": \"dept_4\",\n  \"name\": \"rnd_4\",\n  \"budget\": 295000,\n  \"teams\": [\n    {\n      \"id\": \"team_4_0\",\n      \"lead\": \"agent_35\",\n      \"members\": [...]\n    },\n    {\n      \"id\": \"team_4_1\",\n      \"lead\": \"agent_32\",\n      \"members\": [...]\n    ",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Combien de membres ont la clearance high dans le departement dept_4 ?\n\nPour répondre à cette question, nous devons examiner les membres de toutes les équipes du département `dept_4`.\n\n- `dept_4` a trois équipes : `team_4_0`, `team_4_1`, et `team_4_2`.\n- Dans `team_4_0`, aucun membre n'a une clearance `high`.\n- Dans `team_4_1`, aucun membre n'a une clearance `high`.\n- Dans `team_4_2`, le seul membre a une clearance `medium`, pas `high`.\n\nAinsi, le nombre de membres avec une clearance `high` dans `dept_4` est ",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": null,
+      "raw": "Pour répondre aux questions posées, nous allons d'abord parser les données fournies au format CSTL compact en arbre indenté, puis nous allons traiter ces données pour répondre aux questions.\n\n### Étape 1 : Parser les données\n\nLes données sont déjà fournies dans un format structuré. Nous allons les représenter sous forme de dictionnaires Python pour faciliter leur traitement.\n\n```python\ndonnees = {\n    \"departments\": [\n        {\"id\": \"dept_0\", \"name\": \"finance_0\", \"budget\": 224000, \"teams\": []},\n        {\"id\": \"dept_1\", \"name\": \"rnd_1\", \"budget\": 239000, \"teams\": []},\n        {\"id\": \"dept_2\", \"",
+      "error": "reponse non retrouvee (relancer)"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
       "ok": [
         false,
         false,
-        false
+        true
       ],
-      "raw": "Pour résoudre ces questions, nous allons analyser les données JSON fournies et calculer les réponses.\n\n### Données JSON\n\n```json\n{\n  \"orders\": [\n    {\n      \"id\": \"o0\",\n      \"client\": \"client_5\",\n      \"date\": \"2026-11-25\",\n      \"lines\": [\n        { \"item\": \"gpu_rack\", \"qty\": 5, \"price\": 714 },\n        { \"item\": \"license_pack\", \"qty\": 3, \"price\": 713, \"options\": [{ \"name\": \"install\", \"price\": 39 }] },\n        { \"item\": \"support_plan\", \"qty\": 3, \"price\": 822 },\n        { \"item\": \"license_pack\", \"qty\": 5, \"price\": 747 }\n      ]\n    },\n    {\n      \"id\": \"o1\",\n      \"client\": \"client_3\",\n      \""
-    },
-    {
-      "kind": "commandes",
-      "size": 8,
-      "seed": 1,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 8,
-      "seed": 1,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 8,
-      "seed": 2,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 8,
-      "seed": 2,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 8,
-      "seed": 2,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 24,
-      "seed": 1,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 24,
-      "seed": 1,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 24,
-      "seed": 1,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 24,
-      "seed": 2,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 24,
-      "seed": 2,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "commandes",
-      "size": 24,
-      "seed": 2,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 8,
-      "seed": 1,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 8,
-      "seed": 1,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 8,
-      "seed": 1,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 8,
-      "seed": 2,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 8,
-      "seed": 2,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 8,
-      "seed": 2,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 24,
-      "seed": 1,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 24,
-      "seed": 1,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 24,
-      "seed": 1,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 24,
-      "seed": 2,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 24,
-      "seed": 2,
-      "format": "toon",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "organisation",
-      "size": 24,
-      "seed": 2,
-      "format": "cstl_indent",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
-    },
-    {
-      "kind": "contrats",
-      "size": 8,
-      "seed": 1,
-      "format": "json",
-      "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "{\"r1\": 4, \"r2\": [\"ctr_1\", \"ctr_6\"], \"r3\": \"privacy_0\"}",
+      "parsed": true
     },
     {
       "kind": "contrats",
@@ -236,7 +261,8 @@
       "format": "toon",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Combien de clauses MUST_NOT le contrat ctr_2 contient-il, toutes sections confondues ?\n\nLe contrat `ctr_2` a les sections suivantes :\n- `termination_0` avec 2 clauses : \n  - `2.0.0` : `MUST`, `pay`\n  - `2.0.1` : `MAY`, `terminate`\n- `payment_1` avec 2 clauses :\n  - `2.1.0` : `MUST_NOT`, `pay`\n  - `2.1.1` : `MUST`, `notify`\n\nIl y a donc 1 clause `MUST_NOT` dans le contrat `ctr_2`.\n\n### 2. Quels contrats ont une clause d'action terminate avec un amount_above inférieur à 1000 ? (liste d'id)\n\nAnalysons les claus",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -245,7 +271,8 @@
       "format": "cstl_indent",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### Données fournies\n\nLes données sont au format CSTL compact en arbre indente. Nous avons trois types de listes : `@contracts`, `@sections`, et `@clauses`. Les `@sections` sont des enfants de `@contracts`, et les `@clauses` sont des enfants de `@sections`.\n\n### Analyse des données\n\n#### @contracts\n- `ctr_0` : `party_6`\n- `ctr_1` : `party_4`\n- `ctr_2` : `party_6`\n- `ctr_3` : `party_4`\n- `ctr_4` : `party_5`\n- `ctr_5` : `party_1`\n- `ctr_6` : `party_3`\n- `ctr_7` : `party_9`\n\n#### Sections et Clauses pour chaque contra",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -254,7 +281,8 @@
       "format": "json",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies en JSON.\n\n### Étape 1 : Comprendre les données\nLes données sont un objet JSON qui contient une liste de contrats (`contracts`). Chaque contrat a un `id`, une `party`, et une liste de `sections`. Chaque section a un `title` et une liste de `clauses`. Chaque clause a une `ref`, une `modality`, une `action`, et éventuellement un `amount_above`.\n\n### Étape 2 : Répondre à la question 1\nPour savoir combien de clauses `MUST_NOT` le contrat `ctr_2` contient, il faut parcourir toutes les sections de `ctr_2` et compter les cla",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -263,7 +291,8 @@
       "format": "toon",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Combien de clauses MUST_NOT le contrat ctr_2 contient-il, toutes sections confondues ?\n\nLe contrat `ctr_2` est associé à `party_2`. Ses sections sont `audit_0` et `payment_1`.\n\n- La section `audit_0` contient 2 clauses :\n  - La première a `modality` = `MUST_NOT` et `action` = `pay`.\n  - La seconde a `modality` = `MUST_NOT` et `action` = `disclose`.\n- La section `payment_1` contient 1 clause avec `modality` = `MUST_NOT` et `action` = `disclose`.\n\nDonc, `ctr_2` contient 3 clauses `MUST_NOT` au total.\n\n### 2. Q",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -272,7 +301,8 @@
       "format": "cstl_indent",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Compter les clauses MUST_NOT dans le contrat ctr_2\n\nLe contrat `ctr_2` a deux sections : `audit_0` et `payment_1`. \n\n- Dans `audit_0`, il y a deux clauses : `2.0.0 MUST_NOT pay` et `2.0.1 MUST_NOT disclose amount_above=1000`, donc 2 clauses MUST_NOT.\n- Dans `payment_1`, il y a une clause : `2.1.0 MUST_NOT disclose amount_above=1000`, donc 1 clause MUST_NOT.\n\nAu total, `ctr_2` contient 3 clauses MUST_NOT.\n\n### 2. Identifier les contrats avec une clause d'action terminate et amount_above < 1000\n\nNous allons pa",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -281,7 +311,8 @@
       "format": "json",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies en JSON.\n\n### Question 1 : Combien de clauses MUST_NOT le contrat ctr_18 contient-il, toutes sections confondues ?\n\nPour répondre à cette question, nous devons trouver le contrat `ctr_18` dans les données et compter le nombre de clauses avec la modalité `MUST_NOT`.\n\n```json\n{\n  \"id\": \"ctr_18\",\n  \"party\": \"party_9\",\n  \"sections\": [\n    {\n      \"title\": \"termination_0\",\n      \"clauses\": [\n        {\n          \"ref\": \"18.0.0\",\n          \"modality\": \"MAY\",\n          \"action\": \"notify\"\n        }\n      ]\n    },\n    {\n      ",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -290,7 +321,8 @@
       "format": "toon",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Combien de clauses MUST_NOT le contrat ctr_18 contient-il, toutes sections confondues ?\n\nLe contrat `ctr_18` a les sections suivantes :\n- `termination_0` avec 1 clause, aucune n'est `MUST_NOT`.\n- `payment_1` avec 1 clause, aucune n'est `MUST_NOT`.\n- `payment_2` avec 2 clauses, dont 1 est `MUST_NOT`.\n\nDonc, `ctr_18` contient 1 clause `MUST_NOT` au total.\n\n### 2. Quels contrats ont une clause d'action terminate avec un amount_above inférieur à 1000 ? (liste d'id)\n\nAnalysons les contrats :\n- `ctr_1` a une claus",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -299,7 +331,8 @@
       "format": "cstl_indent",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Compter les clauses MUST_NOT dans le contrat ctr_18\n\nTout d'abord, localisons le contrat `ctr_18` dans les données :\n```\nctr_18 party_9\n  termination_0\n    18.0.0 MAY notify\n  payment_1\n    18.1.0 MAY notify amount_above=100\n  payment_2\n    18.2.0 MAY pay amount_above=100\n    18.2.1 MUST_NOT terminate amount_above=1000\n```\n\nIl y a une clause `MUST_NOT` dans `payment_2` : `18.2.1 MUST_NOT terminate amount_above=1000`. \n\nDonc, `ctr_18` contient 1 clause `MUST_NOT`.\n\n### 2. Liste des contrats avec une clause d'",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -307,8 +340,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": 4, \"r2\": [\"ctr_2\", \"ctr_4\", \"ctr_12\", \"ctr_18\", \"ctr_20\"], \"r3\": \"termination_1\"}",
+      "parsed": true
     },
     {
       "kind": "contrats",
@@ -317,7 +355,8 @@
       "format": "toon",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Combien de clauses MUST_NOT le contrat ctr_6 contient-il, toutes sections confondues ?\n\nPour répondre à cette question, nous devons examiner les clauses du contrat `ctr_6`. Le contrat `ctr_6` a deux sections : `audit_0` et `audit_1`.\n\n- La section `audit_0` contient 3 clauses :\n  - La première a `modality` = `MUST`, \n  - La deuxième a `modality` = `MAY`, \n  - La troisième a `modality` = `MUST_NOT`.\n  \n  Donc, il y a 1 clause `MUST_NOT` dans cette section.\n\n- La section `audit_1` contient 1 clause avec `modal",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "contrats",
@@ -326,7 +365,8 @@
       "format": "cstl_indent",
       "run": 0,
       "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "raw": "Pour répondre aux questions posées, nous allons analyser les données fournies.\n\n### 1. Compter les clauses MUST_NOT dans le contrat ctr_6\n\nTout d’abord, localisons le contrat `ctr_6` dans les données :\n```\nctr_6 party_4\n  audit_0\n    6.0.0 MUST terminate\n    6.0.1 MAY audit amount_above=1000\n    6.0.2 MUST_NOT renew amount_above=1000\n  audit_1\n    6.1.0 MUST notify\n```\n\nDans `ctr_6`, il y a deux sections : `audit_0` et `audit_1`. Dans `audit_0`, il y a une clause `MUST_NOT` (`6.0.2 MUST_NOT renew amount_above=1000`). Dans `audit_1`, il n'y a pas de clause `MUST_NOT`. Donc, le nombre total de c",
+      "error": "reponse non retrouvee (relancer)"
     }
   ]
 }

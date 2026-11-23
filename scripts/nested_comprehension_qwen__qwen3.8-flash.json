@@ -15,12 +15,9 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": [
-        false,
-        false,
-        false
-      ],
-      "raw": "## Réponse\n\nEn parcourant l'ensemble des données (toutes commandes confondues), il y a **1 seule ligne** dont le champ `price` est égal à **822** :\n\n| Commande | Client | Date | Index de ligne | price |\n|----------|--------|------|:-:|:-:|\n| **o0** | client_5 | 2026-11-25 | 2 | **822** |\n\n### Détail de cette ligne (o0, ligne 2) :\n```yaml\n- 2:\n    price: 822\n    options:\n      - 0:\n          qty: 3\n          price: 822   ← (ce 822 est au niveau *option*, pas *ligne*)\n      - 1:\n          qty: 5\n          price: 714\n```\n\n### Remarque sur les autres occurrences de 822 :\n- **o0, ligne 2 → option 0"
+      "ok": null,
+      "raw": "## Réponse\n\nEn parcourant l'ensemble des données (toutes commandes confondues), il y a **1 seule ligne** dont le champ `price` est égal à **822** :\n\n| Commande | Client | Date | Index de ligne | price |\n|----------|--------|------|:-:|:-:|\n| **o0** | client_5 | 2026-11-25 | 2 | **822** |\n\n### Détail de cette ligne (o0, ligne 2) :\n```yaml\n- 2:\n    price: 822\n    options:\n      - 0:\n          qty: 3\n          price: 822   ← (ce 822 est au niveau *option*, pas *ligne*)\n      - 1:\n          qty: 5\n          price: 714\n```\n\n### Remarque sur les autres occurrences de 822 :\n- **o0, ligne 2 → option 0",
+      "error": "reponse non retrouvee (relancer)"
     },
     {
       "kind": "commandes",
@@ -33,7 +30,8 @@
         true,
         true
       ],
-      "raw": "{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+      "raw": "{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}",
+      "parsed": true
     },
     {
       "kind": "commandes",
