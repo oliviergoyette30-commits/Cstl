@@ -35,6 +35,14 @@ RESULTATS (2026-11-22, Gemma 4 31B, 12 jeux) :
   qu'il vient d'ecrire. Les modeles ne savent pas compter de longues listes.
 - Conclusion : un texte ecrit par un modele se relit en mode tolerant
   (`lenient=True`) ; les comptes restent utiles entre machines.
+  passe 3 (..._passe3.json, 2026-11-23), compte LOCAL en fin de ligne
+  (`/N` = enfants directs, `counts="line"`) :
+    12/12 identiques EN MODE STRICT (tous les comptes justes), 100 % des
+    valeurs.
+- Le modele compte bien 1 a 5 enfants qu'il vient d'ecrire, mal 129
+  elements d'une liste globale. Le compte local garde la verification
+  stricte (et dit ou il manque une ligne) sans dependre du mode tolerant.
+  Cout : +6 % de tokens (11 457 contre 10 792), -35 % face au JSON.
 
 Usage :
   GEMINI_API_KEY=... python3 scripts/nested_writing_benchmark.py gemma-4-31b-it

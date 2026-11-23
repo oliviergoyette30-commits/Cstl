@@ -239,6 +239,14 @@ guessed:
 A model that wrote `@orders[8]: id client date note` and `@options[7]`
 (instead of 10) is read back identical this way.
 
+Models count long lists badly. Gemma 4 31B got a `[N]` wrong in 3 of 12
+large documents, and a count placed at the end (`@end lines=21`) did no
+better. Small local counts work: with `encode_tree_indented(data,
+counts="line")`, each element that has children ends its line with `/N`,
+its number of direct children (`ctr_1 party_9 /3`), and the document ends
+with `@end`. Gemma wrote 12/12 documents identical in **strict** mode this
+way. A wrong `/N` names the faulty line. Cost: +6 % tokens.
+
 Round trips are lossless: tested on 30,000 random JSON documents with trap
 values. In a comprehension test on Gemma 4 31B (36 questions), the indented
 tree scored 36/36, against 35/36 for JSON, and used 39 % fewer tokens.

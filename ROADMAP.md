@@ -372,8 +372,13 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       les gros jeux. Le contenu, lui, est juste à 100 %.
     - Mettre le compte à la fin (`@end`) n'aide pas : 8/12 en strict, 12/12
       en tolérant. Le modèle compte aussi mal ce qu'il vient d'écrire.
-    - Conclusion : un texte écrit par un modèle se relit avec
-      `lenient=True`.
+    - Avec un compte **local** en fin de ligne (`/N`, le nombre d'enfants
+      directs, `counts="line"`) : **12/12 identiques en mode strict**, tous
+      les comptes justes. Un modèle compte bien de petits nombres qu'il vient
+      d'écrire. Coût : +6 % de tokens (11 457), soit −35 % face au JSON.
+    - Conclusion : pour un texte écrit par un modèle, le compte local garde
+      la vérification stricte et indique la ligne fautive. Le mode tolérant
+      (`lenient=True`) reste le filet de sécurité.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).
