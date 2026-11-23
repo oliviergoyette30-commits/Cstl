@@ -455,6 +455,12 @@ class CstlAgent:
             self.llm = AnthropicAgentBrain.from_env()
             if not self.llm:
                 raise ImportError("Anthropic unavailable: pip3 install anthropic && export ANTHROPIC_API_KEY")
+        elif provider_name == "none":
+            # Sans modele (2026-11-22) : pour un usage purement programmatique,
+            # par exemple le serveur MCP (cstl_mcp_server.py), ou le modele est
+            # cote client MCP. Les methodes qui demandent un modele (tell...)
+            # ne sont alors pas utilisables.
+            self.llm = None
         elif provider_name == "gemini":
             self.llm = GeminiAgentBrain.from_env()
             if not self.llm:
@@ -556,6 +562,52 @@ class CstlAgent:
         import cstl_compact
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
         return self.send_relations(receiver, cstl_compact.decode(body), purpose)
+
+    def commit_tree(self, tree, tree_id: str) -> CstlResponse:
+        """La SOURCE s'engage sur un arbre (2026-11-23) : elle signe son
+        empreinte canonique (`cstl_compact.tree_hash`), inscrite dans l'audit
+        (RELATION [type=tree_commit, subject=<tree_id>, object=sha256:...]).
+        Ensuite, un arbre envoye par N'IMPORTE QUI avec source=<cet agent>
+        n'est accepte par le serveur que s'il a exactement cette empreinte :
+        un transmetteur ne peut ni omettre, ni modifier, ni ajouter."""
+        import cstl_compact
+        rels = cstl_compact.tree_to_relations(tree, tree_id, source=self.name)
+        digest = cstl_compact.tree_hash(rels, tree_id)
+        return self.send_relations("server", [{"type": "tree_commit", "subject": str(tree_id), "object": digest}])
+
+    def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None,
+                  lenient: bool = False, source: Optional[str] = None) -> Tuple[str, CstlResponse]:
+        """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
+        `tree` : n'importe quel document JSON (objet, liste, valeur), ou un
+        texte en CSTL compact mode arbre : arbre indente
+        (`cstl_compact.encode_tree_indented`, commence par « @ ») ou arbre par
+        identifiants (`cstl_compact.encode_tree`). Il est converti en
+        relations marquees tree=<tree_id> (`cstl_compact.tree_to_relations`),
+        signees et envoyees : le serveur les verifie (types declares par
+        SCHEMA compris) et les inscrit dans l'audit. Une liste, un objet ou un
+        texte multiligne dans une cellule part en JSON base64url (type json).
+        lenient=True : un arbre indente ECRIT PAR UN MODELE est relu en mode
+        tolerant (`[N]` faux, colonnes finales omises, autre indentation ; voir
+        `cstl_compact.decode_tree_indented`). Rien n'est devine.
+        source=<agent> : l'arbre se reclame de cette source ; le serveur le
+        refuse (purpose=tree_rejected) si la source n'a pas engage exactement
+        cette empreinte avec `commit_tree`.
+        Renvoie (tree_id, reponse). Relire avec `fetch_tree(tree_id)`."""
+        import cstl_compact
+        if isinstance(tree, str):
+            tree = (cstl_compact.decode_tree_indented(tree, lenient=lenient) if tree.lstrip().startswith("@")
+                    else cstl_compact.decode_tree(tree))
+        tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
+        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id, source=source))
+
+    def fetch_tree(self, tree_id: str):
+        """Relit un arbre envoye avec `send_tree` (sa derniere version), depuis
+        le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse."""
+        import cstl_compact
+        resp = self._send_signed("tree_query", "server", [], {"tree": tree_id, "request_id": uuid.uuid4().hex})
+        if resp.purpose != "tree":
+            raise RuntimeError(f"arbre refuse : {resp.fields.get('reason', resp.purpose)}")
+        return cstl_compact.relations_to_tree([r for r in resp.relations if r.get("block") == "RELATION"], tree_id)
 
     def policy(self) -> dict:
         """Politique EFFECTIVE de cet agent selon le serveur (2026-11-21) :

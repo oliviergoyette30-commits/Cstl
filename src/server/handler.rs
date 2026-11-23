@@ -230,6 +230,39 @@ async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::Ha
     relations.iter().find_map(|r| super::schema::violation(r, &schemas))
 }
 
+/// Arbre qui se reclame d'une source (tree_source=<agent>) sans engagement
+/// signe de cette source, ou dont l'empreinte differe de celle engagee
+/// (2026-11-23, voir tree_check.rs). L'engagement retenu est le plus recent
+/// de la source, et seulement si sa signature est celle de la cle
+/// enregistree de la source : un transmetteur ne peut pas s'engager a sa place.
+async fn tree_source_violation(ctx: &ServerContext, relations: &[std::collections::HashMap<String, String>]) -> Option<String> {
+    for (tree, source) in super::tree_check::claimed_sources(relations) {
+        let rows = {
+            let store = ctx.adn_store.lock().await;
+            store.tree_commits(&tree).unwrap_or_else(|e| {
+                error!("[Handler] tree_commits failed: {}", e);
+                Vec::new()
+            })
+        };
+        let reg = ctx.agent_registry.read().await;
+        let committed = rows.iter().rev().find(|row| {
+            row.author.as_deref() == Some(source.as_str())
+                && match &row.signer_key {
+                    Some(key) => reg.agents.iter().any(|a| a.name == source && a.public_key.as_ref() == Some(key)),
+                    None => false,
+                }
+        });
+        let Some(commit) = committed else {
+            return Some(format!("arbre {tree} : aucun engagement signe de la source {source}"));
+        };
+        let got = super::tree_check::canonical_hash(relations, &tree);
+        if got != commit.object {
+            return Some(format!("arbre {tree} : empreinte differente de celle engagee par la source {source}"));
+        }
+    }
+    None
+}
+
 /// Valeur recopiee dans une reponse wire : jamais de `"`, `[`, `]` ni de
 /// saut de ligne, et entre guillemets (elle peut contenir des virgules).
 fn wire_text(v: &str) -> String {
@@ -595,6 +628,27 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         }
                     }
 
+                    // STEP 2-tree-check (2026-11-23) : COMPLETUDE DES ARBRES. Les
+                    // relations d'un arbre (tree=<id>) annoncent leurs enfants
+                    // (tree_n) ; un arbre auquel il manque une branche, un element
+                    // sans parent ou en double est refuse en entier, avant d'etre
+                    // stocke (voir tree_check.rs). Un arbre qui se reclame d'une
+                    // source (tree_source) doit avoir l'empreinte que cette source a
+                    // engagee et signee (tree_commit).
+                    let tree_problem = match super::tree_check::violation(&payload.relations) {
+                        Some(d) => Some(d),
+                        None => tree_source_violation(&ctx, &payload.relations).await,
+                    };
+                    if let Some(detail) = tree_problem {
+                        warn!("[Handler] Tree rejected for '{}': {}", sig_sender, detail);
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=tree_rejected, detail={}]\n---END---\n",
+                            wire_text(&detail)
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
                     // — purpose=council_decision est traite a part: ce n'est pas un
                     // nouveau fait a verifier/stocker, c'est une action sur une entree
@@ -613,6 +667,52 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // cite pas), interdictions, avec leurs raisons, et regles que le
                     // serveur IGNORE (auteur sans autorite). Lecture seule : rien
                     // n'est ajoute a la chaine d'audit.
+                    // STEP 2-tree (2026-11-22) : relire un ARBRE (mode arbre du CSTL
+                    // compact, envoye en relations portant tree=<id>). Signe, lecture
+                    // seule. Les relations sont rendues dans l'ordre d'envoi, avec
+                    // tous leurs attributs, pour que le SDK reconstruise l'arbre.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("tree_query") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let tree = payload.intent.get("tree").cloned().unwrap_or_default();
+                        let response = if !identity_proven {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=tree_denied, reason=signature_required]\n---END---\n".to_string()
+                        } else if !super::action_authorization::is_valid_action(&tree) {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=tree_denied, reason=invalid_tree_id]\n---END---\n".to_string()
+                        } else {
+                            let rows = ctx.adn_store.lock().await.tree_relations(&tree).unwrap_or_else(|e| {
+                                error!("[Handler] tree_relations failed: {}", e);
+                                Vec::new()
+                            });
+                            let mut out = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=tree, sender=server, receiver={}, tree={}, relations={}]\n",
+                                sender, tree, rows.len()
+                            );
+                            for r in &rows {
+                                let mut keys: Vec<&String> = r.keys().filter(|k| !matches!(k.as_str(), "type" | "subject" | "object")).collect();
+                                keys.sort();
+                                let mut line = format!("RELATION [type={}, subject={}, object={}",
+                                    wire_text(&r["type"]), wire_text(&r["subject"]), wire_text(&r["object"]));
+                                for k in keys {
+                                    if super::action_authorization::is_valid_action(k) {
+                                        line.push_str(&format!(", {k}={}", wire_text(&r[k])));
+                                    }
+                                }
+                                out.push_str(&line);
+                                out.push_str("]\n");
+                            }
+                            out.push_str("---END---\n");
+                            out
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     if payload.intent.get("purpose").map(String::as_str) == Some("policy_query") {
                         let sender = payload.intent.get("sender").cloned().unwrap_or_default();
                         let identity_proven = registered_pubkey_for_sender.is_some()

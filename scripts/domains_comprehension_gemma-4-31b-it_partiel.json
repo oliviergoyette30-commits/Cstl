@@ -1,0 +1,303 @@
+{
+ "model": "gemma-4-31b-it",
+ "note": "partiel : 50 cas sur 72 avant une coupure reseau ; questions melangeant permis et interdit",
+ "rows": [
+  {
+   "domain": "diplomatique",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "diplomatique",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "diplomatique",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "diplomatique",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "juridique",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "juridique",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "juridique",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "médical",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "juridique",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "médical",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "médical",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "médical",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "corporate",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "corporate",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "corporate",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "corporate",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "archéologique",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "archéologique",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "archéologique",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "archéologique",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "astronomique",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "astronomique",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "astronomique",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "astronomique",
+   "format": "toon",
+   "error": true
+  },
+  {
+   "domain": "financier",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "financier",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "financier",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "cyber_securite",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "financier",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "cyber_securite",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "cyber_securite",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "reglementaire",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "cyber_securite",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "reglementaire",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "reglementaire",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "reglementaire",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "supply_chain",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "supply_chain",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "supply_chain",
+   "format": "json",
+   "error": true
+  },
+  {
+   "domain": "supply_chain",
+   "format": "cstl_symboles",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "rh",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "rh",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "rh",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "recherche",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "recherche",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "rh",
+   "format": "cstl_symboles",
+   "error": true
+  },
+  {
+   "domain": "marketing",
+   "format": "json",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "recherche",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "marketing",
+   "format": "cstl_compact",
+   "ok": 6,
+   "of": 6
+  },
+  {
+   "domain": "marketing",
+   "format": "toon",
+   "ok": 6,
+   "of": 6
+  }
+ ]
+}

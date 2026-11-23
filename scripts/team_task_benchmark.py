@@ -318,6 +318,15 @@ class GeminiBrain(agent_mod.LLMProvider):
                     delay = min(delay * 2, 120)
                     continue
                 raise RuntimeError(f"Gemini {e.code} : {e.read()[:300]!r}") from e
+            except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
+                # Coupure reseau (2026-11-22 : « Connection reset by peer » a
+                # fait tomber tout un banc d'essai) : on reessaie, puis on le
+                # signale comme une erreur d'API, que le banc exclut du score.
+                if attempt < 7:
+                    time.sleep(delay)
+                    delay = min(delay * 2, 120)
+                    continue
+                raise RuntimeError(f"Gemini : reseau ({e})") from e
         raise RuntimeError("Gemini : trop d'echecs")
 
 

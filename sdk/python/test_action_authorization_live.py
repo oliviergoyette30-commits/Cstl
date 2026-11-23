@@ -334,6 +334,144 @@ def test_agents_can_write_and_read_policy_without_keywords(authority_server, mon
         owner.send_compact("server", f"{bot.name} !refund_order >cent")
 
 
+def test_mcp_server_exposes_policy_and_authorization(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un agent qui parle MCP utilise CSTL sans l'apprendre. Le
+    serveur MCP (stdio, JSON-RPC) lit la politique, demande l'autorisation et
+    envoie des relations ; c'est le vrai serveur CSTL qui decide."""
+    import json as _json
+    import subprocess
+    m, owner = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    bot_name = f"mcp_{uuid.uuid4().hex[:8]}"
+    env = {**os.environ, "HOME": str(tmp_path), "CSTL_AGENT": bot_name, "CSTL_PORT": "5555"}
+    proc = subprocess.Popen([sys.executable, str(Path(__file__).parent / "cstl_mcp_server.py")], env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def rpc(i, method, params=None):
+        proc.stdin.write(_json.dumps({"jsonrpc": "2.0", "id": i, "method": method, "params": params or {}}) + "\n")
+        proc.stdin.flush()
+        return _json.loads(proc.stdout.readline())
+
+    def tool(i, name, **args):
+        r = rpc(i, "tools/call", {"name": name, "arguments": args})["result"]
+        return r["isError"], r["content"][0]["text"]
+
+    try:
+        assert rpc(1, "initialize", {"protocolVersion": "2025-06-18"})["result"]["serverInfo"]["name"] == "cstl"
+        proc.stdin.write(_json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        names = {t["name"] for t in rpc(2, "tools/list")["result"]["tools"]}
+        assert {"cstl_policy", "cstl_authorize", "cstl_send_compact"} <= names
+        err, guide = tool(3, "cstl_compact_guide")
+        assert not err and "!<action>" in guide
+        err, _ = tool(4, "cstl_policy")            # enregistre l'agent
+        assert not err
+        owner.send_compact("server", f"{bot_name} !wipe_db\n{bot_name} ?refund_order <=100")
+        err, text = tool(5, "cstl_policy", format="symboles")
+        assert not err and "!wipe_db" in text and "?refund_order <=100" in text, text
+        err, text = tool(6, "cstl_authorize", action="wipe_db")
+        assert not err and _json.loads(text)["allowed"] is False, text
+        err, text = tool(7, "cstl_authorize", action="refund_order", amount=80)
+        decision = _json.loads(text)
+        assert decision["allowed"] is True and decision["token"]["authorization"], text
+        err, text = tool(8, "cstl_send_compact", text=f"{bot_name} !refund_order >cent")
+        assert err and "CompactError" in text, text
+        assert rpc(9, "nope")["error"]["code"] == -32601
+    finally:
+        proc.stdin.close()
+        proc.wait(timeout=10)
+
+
+def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_path):
+    """2026-11-22 : un arbre (donnees imbriquees) est envoye en relations
+    signees, verifie (SCHEMA), inscrit dans l'audit, puis relu a l'identique ;
+    renvoye, il remplace la version precedente."""
+    import cstl_compact
+    m, bot = agent(monkeypatch, tmp_path, 5555)
+    owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)
+    kind = f"lines_{uuid.uuid4().hex[:6]}"
+    owner.send_relations("server", [{"type": "SCHEMA", "subject": kind, "object": "v1", "qty": "int", "price": "num"}])
+    tree = {"orders": [{"id": "o1", "client": "client_3", "note": None, "vip": True, kind: [
+                {"item": "gpu_rack", "qty": 2, "price": 714.5, "modality": "MUST_NOT",
+                 "options": [{"name": "warranty", "price": 9}]},
+                {"item": "lic", "qty": 1, "price": 20}]},
+               {"id": "o2", "client": "client_1", kind: [{"item": "router", "qty": 3, "price": 90}]}]}
+    tree_id, resp = bot.send_tree("server", tree)
+    assert not resp.is_error and resp.audit_seq is not None, resp.raw
+    assert bot.fetch_tree(tree_id) == tree
+    # Le meme arbre ecrit en CSTL compact mode arbre, sous un autre id.
+    tid2, _ = bot.send_tree("server", cstl_compact.encode_tree(tree))
+    assert bot.fetch_tree(tid2) == tree
+    # Le serveur verifie les types declares par SCHEMA.
+    bad = {"orders": [{"id": "o9", kind: [{"item": "x", "qty": "beaucoup", "price": 1}]}]}
+    _, rej = bot.send_tree("server", bad)
+    assert rej.purpose == "schema_rejected" and f"{kind}.qty" in rej.raw, rej.raw
+    # Renvoye avec le meme id, l'arbre remplace la version precedente.
+    tree["orders"][1]["client"] = "client_9"
+    bot.send_tree("server", tree, tree_id=tree_id)
+    assert bot.fetch_tree(tree_id)["orders"][1]["client"] == "client_9"
+    assert bot.fetch_tree("tree_inconnu") == {}
+    # 2026-11-23 : une valeur longue passe, decoupee en morceaux ; une valeur
+    # inconnue (le vide qui parle) aussi, distincte de null et d'un absent.
+    long_doc = {"docs": [{"id": "d1", "body": "".join(f"phrase {i} du contrat, " for i in range(300)),
+                          "renal": cstl_compact.unknown(sigma=0.3, pending="next_checkup"), "known": None},
+                         {"id": "d2", "rows": list(range(500))}]}
+    tid_long, resp_long = bot.send_tree("server", long_doc)
+    assert not resp_long.is_error, resp_long.raw
+    assert bot.fetch_tree(tid_long) == long_doc
+    # 2026-11-22 : arbre indente, listes et objets en cellule, texte
+    # multiligne, racine libre.
+    doc = {"service": "billing", "tags": ["prod", "eu"], "orders": [
+        {"id": "o7", "note": "avec [crochet] et \"guillemets\"\nsur deux lignes", "geo": {"lat": 45.5},
+         kind: [{"item": "x", "qty": 1, "price": 2.5, "dims": [[1, 2], [3, 4]]}]}]}
+    tid3, resp3 = bot.send_tree("server", cstl_compact.encode_tree_indented(doc))
+    assert not resp3.is_error, resp3.raw
+    assert bot.fetch_tree(tid3) == doc
+    for other in ([{"a": 1}, {"a": 2}], [1, "deux", None], 42):
+        tid4, _ = bot.send_tree("server", other)
+        assert bot.fetch_tree(tid4) == other
+    # 2026-11-23 : le SERVEUR verifie la completude (tree_n). Un client qui
+    # contourne le SDK et envoie un arbre auquel il manque une ligne, ou un
+    # element sans parent, est refuse ; rien n'est stocke.
+    hole = f"t_hole_{uuid.uuid4().hex[:8]}"
+    full = cstl_compact.tree_to_relations({"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}]}, hole)
+    for broken, why in ((full[:3], "o1 annonce 2"), (full[:1] + full[2:], "parent o1 absent")):
+        rej = bot.send_relations("server", broken)
+        assert rej.purpose == "tree_rejected" and why in rej.raw, rej.raw
+    assert bot.fetch_tree(hole) == {}
+    ok = bot.send_relations("server", full)
+    assert not ok.is_error, ok.raw
+    assert bot.fetch_tree(hole) == {"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}]}
+    # 2026-11-23 : EMPREINTE SIGNEE PAR LA SOURCE. La source (owner) s'engage ;
+    # un transmetteur (bot) qui se reclame d'elle doit envoyer exactement cet
+    # arbre : ni ligne omise, ni montant change, ni engagement a sa place.
+    src_tree = {"orders": [{"id": "o1", "lines": [{"item": "gpu", "price": 714}, {"item": "lic", "price": 20}]},
+                           {"id": "o2", "lines": [{"item": "router", "price": 90}]}]}
+    tid = f"t_src_{uuid.uuid4().hex[:8]}"
+    _, rej = bot.send_tree("server", src_tree, tree_id=tid, source=owner.name)
+    assert rej.purpose == "tree_rejected" and "aucun engagement" in rej.raw, rej.raw
+    assert not owner.commit_tree(src_tree, tid).is_error
+    import copy
+    missing = copy.deepcopy(src_tree)
+    del missing["orders"][0]["lines"][1]
+    changed = copy.deepcopy(src_tree)
+    changed["orders"][0]["lines"][0]["price"] = 1
+    added = copy.deepcopy(src_tree)
+    added["orders"].append({"id": "o3"})
+    for bad in (missing, changed, added):
+        _, rej = bot.send_tree("server", bad, tree_id=tid, source=owner.name)
+        assert rej.purpose == "tree_rejected" and "empreinte differente" in rej.raw, rej.raw
+    # Le transmetteur s'engage lui-meme sur l'arbre modifie : ca ne compte pas
+    # pour la source.
+    bot.commit_tree(changed, tid)
+    _, rej = bot.send_tree("server", changed, tree_id=tid, source=owner.name)
+    assert rej.purpose == "tree_rejected", rej.raw
+    # L'arbre exact, ecrit par un modele en arbre indente, passe.
+    _, ok = bot.send_tree("server", cstl_compact.encode_tree_indented(src_tree, counts="line"), tree_id=tid,
+                          source=owner.name)
+    assert not ok.is_error, ok.raw
+    assert bot.fetch_tree(tid) == src_tree
+
+
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):
     m, bot = agent(monkeypatch, tmp_path, 5555)
     owner = named_agent(m, f"owner_{uuid.uuid4().hex[:8]}", 5555)

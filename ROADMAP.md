@@ -315,6 +315,121 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     comme au décodage. Les conditions des règles sont typées aussi :
     montants, dates, durée et priorité.
 
+- **`scripts/gemini_tokens.py` : les tokens comptés par le tokenizer de
+  Gemini (2026-11-22).** C'est un deuxième tokenizer, après celui de Claude.
+  - Le CSTL sans mot-clé est le plus court partout : 5 540 tokens sur les
+    politiques, 20 743 sur les données, 20 284 sur les domaines.
+  - TOON fait 9 788, 24 817 et 27 399 tokens. Le CSTL sans mot-clé fait
+    donc 43 %, 16 % et 26 % de moins.
+  - Le JSON compact fait 15 064, 32 358 et 30 968 tokens.
+
+- **Point 1, premier pas : serveur MCP (`sdk/python/cstl_mcp_server.py`,
+  2026-11-22).** N'importe quel agent qui parle MCP lit sa politique,
+  demande une autorisation et reçoit un jeton signé, ou envoie des
+  relations, sans apprendre CSTL. Le serveur passe par stdio en JSON-RPC,
+  sans dépendance. Il est testé de bout en bout contre le vrai serveur.
+  Reste à faire : A2A, et l'entrée JSON directe sur le serveur.
+
+- **`scripts/nested_benchmark.py` : données imbriquées (2026-11-22).** Trois
+  jeux : commandes → lignes → options, départements → équipes → membres,
+  contrats → sections → clauses. Les tokens sont comptés avec Gemini.
+  - Aplatir l'arbre en relations CSTL coûte plus que le JSON : 21 637 tokens
+    contre 17 577 au mieux. C'est le point faible attendu, et il est
+    confirmé.
+  - Le nouveau mode arbre du CSTL compact (`encode_tree`) bat le JSON de
+    17 % (14 524 tokens) et TOON de 31 %. Il est sans perte, vérifié par
+    300 arbres aléatoires.
+  - Compréhension, avec Gemma 4 31B sur une passe : JSON 32/33, TOON
+    36/36, CSTL sans mot-clé 34/36, CSTL en arbre 32/36.
+    - La plupart des erreurs portent sur une question : un filtre sur un
+      montant absent, noté `-` en CSTL.
+    - L'arbre est le plus court, mais un peu moins bien suivi. C'est à
+      confirmer, sur une série courte et un seul modèle.
+  - **Arbre indenté** (`encode_tree_indented`) : les enfants sont écrits
+    sous leur parent, sans identifiant, et un champ facultatif n'est écrit
+    que s'il existe (`note=fragile`). 10 792 tokens, soit 39 % de moins que
+    le JSON et 26 % de moins que l'arbre par identifiants.
+    - Compréhension (Gemma 4 31B, mêmes 36 questions) : arbre indenté
+      **36/36**, JSON 35/36, TOON 35/36, arbre par identifiants 31/36.
+    - Un seul modèle et une passe : à confirmer sur d'autres modèles.
+    - Les trois limites relevées ensuite sont levées (2026-11-22) :
+      - un texte multiligne s'écrit en bloc (`|N`, puis N lignes `| `) ;
+      - les listes et objets s'écrivent en ligne (`tags=[a,b]`,
+        `geo={lat:1}`) ;
+      - la racine est libre (`@@ champs`, `@@list`, `@@= valeur`).
+    - Allers-retours sans perte sur 30 000 documents JSON aléatoires,
+      valeurs pièges comprises. Sur les 12 jeux du banc d'essai, la sortie
+      est identique au token près.
+    - Branché au serveur : `send_tree` accepte l'arbre indenté et n'importe
+      quel document JSON. Une liste, un objet ou un texte multiligne part en
+      JSON base64url (type `json`). Seules limites : 300 caractères par
+      valeur et noms de champ `[A-Za-z0-9_.-]`.
+  - **Écriture par un modèle** (`scripts/nested_writing_benchmark.py`,
+    Gemma 4 31B, 12 jeux) :
+    - JSON 10/10 identiques, TOON 8/10 (98 % des valeurs), arbre indenté
+      9/12 en strict et **12/12 en mode tolérant**.
+    - Tous les échecs de l'arbre indenté viennent d'un compte `[N]` faux sur
+      les gros jeux. Le contenu, lui, est juste à 100 %.
+    - Mettre le compte à la fin (`@end`) n'aide pas : 8/12 en strict, 12/12
+      en tolérant. Le modèle compte aussi mal ce qu'il vient d'écrire.
+    - Avec un compte **local** en fin de ligne (`/N`, le nombre d'enfants
+      directs, `counts="line"`) : **12/12 identiques en mode strict**, tous
+      les comptes justes. Un modèle compte bien de petits nombres qu'il vient
+      d'écrire. Coût : +6 % de tokens (11 457), soit −35 % face au JSON.
+    - Conclusion : pour un texte écrit par un modèle, le compte local garde
+      la vérification stricte et indique la ligne fautive. Le mode tolérant
+      (`lenient=True`) reste le filet de sécurité.
+  - **Complétude vérifiée par le serveur** (2026-11-23) : chaque élément
+    qui a des enfants porte `tree_n`, et `tree_root` porte le nombre
+    d'éléments à la racine.
+    - À la réception, le serveur refuse un arbre dont il manque une branche,
+      ou qui a un élément sans parent ou en double (`purpose=tree_rejected`).
+    - Les comptes sont signés et audités, puis revérifiés à la relecture.
+    - Test réel : un client qui contourne le SDK est refusé.
+    - Limite : les comptes sont ceux de l'auteur.
+  - **Empreinte signée par la source** (2026-11-23) : la source s'engage
+    (`commit_tree`, empreinte canonique SHA-256, signée et auditée).
+    - Un arbre envoyé avec `source=<agent>` n'est accepté que s'il a
+      exactement cette empreinte.
+    - Test réel : un transmetteur qui omet une ligne, change un prix, ajoute
+      une commande ou s'engage à la place de la source est refusé.
+    - L'empreinte est la même en Python et en Rust (valeur figée des deux
+      côtés).
+  - **Valeurs longues** (2026-11-23) : découpées en morceaux de 250
+    caractères (`tree_c<i>_<nom>`, type `nom:str/N`), ainsi que la liste des
+    types. Test réel : un texte de 7 000 caractères et une liste de 500
+    nombres passent par le serveur et reviennent identiques.
+  - **Inconnu natif, le « vide qui parle »** (2026-11-23) : `?` ou
+    `?{sigma:0.3,...}` dans l'arbre indenté, `{"$unknown": {...}}` en JSON.
+    Il est distinct de `null` et d'un champ absent. Aller-retour sans perte
+    (30 000 documents aléatoires), jusqu'au serveur.
+    - Mesuré (`scripts/unknown_benchmark.py`, Gemma 4 31B, 24 questions) :
+      arbre indenté 24/24 avec 2 390 tokens. JSON avec `$unknown` 24/24
+      (3 697 tokens), TOON 24/24 (4 928 tokens).
+    - Le JSON naïf, où l'inconnu devient `null`, fait 8/24 : 1/6, 0/6 et 1/6
+      sur les questions de vide. L'information n'existe plus.
+    - L'arbre indenté est le seul format complet et plus court que le JSON
+      naïf (2 972 tokens).
+    - Étendu à tous les formats courants, 24/24 partout sauf le JSON naïf :
+      CSV 2 293 tokens (données plates, son terrain idéal), arbre indenté
+      2 390, arbre par identifiants 2 665, JSON compact 3 697, YAML 4 802,
+      TOON 4 928, XML 5 809, JSON indenté 7 604.
+    - Ce qui compte est que le vide soit écrit, pas le format choisi. Entre
+      formats complets, la différence est le coût.
+  - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
+    en relations signées, vérifiées (`SCHEMA`) et auditées, et
+    `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).
+  - Limite : tout agent enregistré peut relire un arbre s'il connaît son
+    id.
+
+- **Compréhension des 18 domaines sur Gemma 4 31B (2026-11-22, partiel).**
+  Le modèle ouvert de Google a été testé avec les questions qui mélangent
+  « permis » et « interdit ».
+  - 47 cas notés, tous parfaits : JSON 72/72, TOON 72/72, CSTL compact
+    78/78 et CSTL sans mot-clé 60/60.
+  - Une coupure réseau a interrompu le test, et 3 cas ont échoué côté API.
+  - Résultats : `scripts/domains_comprehension_gemma-4-31b-it_partiel.json`.
+
 ## Déjà fait (PR #3 à #11)
 
 - **Couche 9, autorisation avant action :** jetons signés, garde côté

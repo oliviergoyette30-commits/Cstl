@@ -315,3 +315,326 @@ def test_policy_view_without_keywords():
                           "!share_record -consent etat=consent=faux role:support"]
     assert lines[5].startswith("# IGNORE") and "grant_admin" in lines[5]
     assert "priority=10" in policy_to_compact(p)
+
+
+# ---- arbres (donnees imbriquees, 2026-11-22) ----
+from cstl_compact import decode_tree, encode_tree  # noqa: E402
+
+
+def test_tree_round_trip_and_shape():
+    data = {"orders": [{"id": "o0", "client": "c5", "lines": [
+                {"item": "gpu", "qty": 5, "price": 714.5, "options": [{"name": "warranty", "price": 9}]},
+                {"item": "lic", "qty": 1, "price": 20}]},
+               {"id": "o1", "client": "c3", "note": "two words", "lines": [{"item": "gpu", "qty": 2, "price": 1}]}]}
+    text = encode_tree(data)
+    assert text.splitlines()[0] == "orders[2]#: client note"
+    assert "lines[3]^: item qty price" in text and "options[1]^: name price" in text
+    assert "  o0.0 warranty 9" in text, text
+    assert decode_tree(text) == data
+
+
+def test_tree_keeps_types_and_odd_values():
+    data = {"x": [{"id": "a", "s": "05", "n": 5, "f": 1.5, "b": True, "z": None, "d": "-", "e": "", "w": "two words",
+                   "tags": ["p", "q"], "meta": {"k": 1}, "tilde": "x~"}]}
+    assert decode_tree(encode_tree(data)) == data
+
+
+def test_tree_errors_are_not_guessed():
+    with pytest.raises(CompactError, match=r"lines\[2\] annonce"):
+        decode_tree("orders[1]#: c\n  o0 x\nlines[2]^: item\n  o0 gpu")
+    with pytest.raises(CompactError, match="parent inconnu"):
+        decode_tree("lines[1]^: item\n  o9 gpu")
+    with pytest.raises(CompactError, match="attend 2 valeurs"):
+        decode_tree("orders[1]#: c\n  o0")
+
+
+def test_tree_random_round_trips():
+    rnd = random.Random(41)
+
+    def obj(depth, with_id, i):
+        o = {"id": f"n{depth}_{i}_{rnd.randint(0, 9999)}"} if with_id else {}
+        for k in rnd.sample(["a", "b", "c", "d"], rnd.randint(1, 3)):
+            o[k] = rnd.choice([1, 2.5, "x", "two words", "-", "", None, True, "07", ["l"], {"m": 1}])
+        if depth < 3 and rnd.random() < 0.6:
+            o["kids"] = [obj(depth + 1, rnd.random() < 0.3, j) for j in range(rnd.randint(1, 3))]
+        return o
+    for _ in range(300):
+        with_id = rnd.random() < 0.5
+        data = {"root": [obj(0, with_id, i) for i in range(rnd.randint(1, 4))]}
+        assert decode_tree(encode_tree(data)) == data
+
+
+# ---- arbres <-> relations pour le serveur (2026-11-22) ----
+from cstl_compact import relations_to_tree, tree_to_relations  # noqa: E402
+
+
+def test_tree_relations_round_trip_and_escaping():
+    data = {"contracts": [{"id": "c1", "party": "p", "sections": [
+        {"title": "pay", "clauses": [{"ref": "1.1", "modality": "MUST_NOT", "type": "x", "f_note": "y", "tree": 3,
+                                      "amount": 5.5, "ok": False, "none": None}]}]}]}
+    rels = tree_to_relations(data, "t1")
+    assert rels[0]["type"] == "tree_root" and rels[0]["tree_kind"] == "tables" and rels[0]["tree_n"] == "1"
+    assert rels[1]["tree_n"] == "1" and rels[2]["tree_n"] == "1" and "tree_n" not in rels[3]
+    clause = rels[3]
+    assert clause["f_modality"] == "MUST_NOT" and "modality" not in clause and clause["f_type"] == "x"
+    assert clause["f_f_note"] == "y" and clause["f_tree"] == "3" and clause["tree"] == "t1"
+    assert relations_to_tree(rels, "t1") == data
+
+
+def test_tree_relations_refuse_what_the_server_would_lose():
+    for bad in ({"a": [{"bad name": 1}]}, {"a": [{"id": "d"}, {"id": "d"}]}):
+        with pytest.raises(CompactError):
+            tree_to_relations(bad, "t1")
+
+
+def test_tree_relations_carry_lists_text_and_any_root():
+    """2026-11-22 : listes, objets et textes multilignes passent en JSON
+    base64url (type json) ; la racine peut etre libre."""
+    from cstl_compact import relations_to_tree
+    for data in ({"a": [{"x": "avec [crochet]", "q": 'guil"lemet', "t": "l1\nl2", "tags": ["p", "q"],
+                         "geo": {"lat": 1.5}, "m": [[1, 2], [3, 4]]}]},
+                 {"service": "billing", "tags": ["eu"], "tickets": [{"id": "t1", "n": 2}]},
+                 [{"a": 1}, {"a": 2, "kids": [{"b": True}]}], 42, "texte", [1, "deux", None], {}):
+        rels = tree_to_relations(data, "t1")
+        assert all(not any(c in str(v) for c in '"[]\n') for r in rels for v in r.values())
+        assert relations_to_tree(rels, "t1") == data
+
+
+def test_tree_relations_random_round_trips():
+    rnd = random.Random(53)
+
+    def obj(depth, i):
+        o = {"id": f"n{depth}_{i}_{rnd.randint(0, 10**6)}"} if rnd.random() < 0.4 else {}
+        for k in rnd.sample(["a", "b", "modality", "type", "f_x", "tree"], rnd.randint(1, 3)):
+            o[k] = rnd.choice([1, 2.5, "x", "two words", "-", "", None, True, "07", "a,b"])
+        if depth < 3 and rnd.random() < 0.6:
+            o[rnd.choice(["kids", "items"])] = [obj(depth + 1, j) for j in range(rnd.randint(1, 3))]
+        return o
+    for _ in range(300):
+        data = {"root": [obj(0, i) for i in range(rnd.randint(1, 4))]}
+        assert relations_to_tree(tree_to_relations(data, "t"), "t") == data
+
+
+# ---- arbres indentes (v2, 2026-11-22) ----
+from cstl_compact import decode_tree_indented, encode_tree_indented  # noqa: E402
+
+
+def test_indented_tree_shape_and_round_trip():
+    data = {"orders": [{"id": "o0", "client": "c5", "lines": [{"item": "gpu", "qty": 5, "options": [{"name": "w", "price": 9}]},
+                                                              {"item": "lic", "qty": 1}]},
+                       {"id": "o1", "client": "c3", "note": "two words", "lines": [{"item": "r", "qty": 3}]}]}
+    text = encode_tree_indented(data)
+    assert text.splitlines()[:3] == ["@orders[2]: id client", "@lines[3]^orders: item qty", "@options[1]^lines: name price"]
+    assert '  o1 c3 note="two words"'.strip() in text and "\n    w 9" in text, text
+    assert decode_tree_indented(text) == data
+
+
+def test_indented_tree_tags_when_a_parent_has_several_lists():
+    data = {"a": [{"x": 1, "b": [{"y": 2}], "c": [{"z": 3}]}], "d": [{}]}
+    text = encode_tree_indented(data)
+    assert "a> 1" in text and "  b> 2" in text and "  c> 3" in text and "d> ." in text, text
+    assert decode_tree_indented(text) == data
+
+
+def test_indented_tree_errors_are_not_guessed():
+    with pytest.raises(CompactError, match=r"lines\[2\] annonce, 1"):
+        decode_tree_indented("@orders[1]: id\n@lines[2]^orders: item\no0\n  gpu")
+    with pytest.raises(CompactError, match="sans parent"):
+        decode_tree_indented("@orders[1]: id\n@lines[1]^orders: item\n    gpu\no0")
+    with pytest.raises(CompactError, match="attend 2 valeurs"):
+        decode_tree_indented("@orders[1]: id client\no0")
+
+
+def test_indented_tree_random_round_trips():
+    rnd = random.Random(61)
+
+    def obj(depth):
+        o = {}
+        for k in rnd.sample(["a", "b", "c", "id"], rnd.randint(0, 3)):
+            o[k] = rnd.choice([1, 2.5, "x", "two words", "-", "", None, True, "07", "k=v", "x>", ".", ["l"], {"m": 1}])
+        if depth < 3 and rnd.random() < 0.6:
+            for key in rnd.sample(["kids", "items"], rnd.randint(1, 2)):
+                o[key] = [obj(depth + 1) for _ in range(rnd.randint(1, 3))]
+        return o
+    for _ in range(300):
+        data = {"root": [obj(0) for _ in range(rnd.randint(1, 4))]}
+        assert decode_tree_indented(encode_tree_indented(data)) == data
+
+
+def test_indented_tree_inline_lists_blocks_and_free_root():
+    """2026-11-22 : listes et objets en ligne, texte multiligne en bloc « | »,
+    racine libre (champs, liste, valeur seule)."""
+    data = {"service": "billing", "tags": ["prod", "eu"],
+            "tickets": [{"id": "t1", "geo": {"lat": 45.5, "lon": -73.6}, "desc": "Bloque.\nRelance demain.",
+                         "m": [[1, 2], [3, 4]]}, {"id": "t2", "desc": "ok"}]}
+    text = encode_tree_indented(data)
+    assert text.splitlines() == [
+        "@@ service=billing tags=[prod,eu]", "@tickets[2]: id desc",
+        "t1 |2 geo={lat:45.5,lon:-73.6} m=[[1,2],[3,4]]", "  | Bloque.", "  | Relance demain.", "t2 ok"]
+    assert decode_tree_indented(text) == data
+    assert encode_tree_indented([1, "deux", None]) == "@@= [1,deux,null]"
+    assert encode_tree_indented([{"a": 1}, {"a": 2}]).splitlines()[0] == "@@list"
+    for d in ({}, [], 7, "x y", None, [{"a": 1}], {"orders": [{"lines": [{"x": 1}]}], "lines": [{"x": 2}]},
+              {"a b": 1, '"': "@x", "k": "|2", "e": "", "n": "\n"}):
+        assert decode_tree_indented(encode_tree_indented(d)) == d
+
+
+def test_indented_tree_blocks_are_checked():
+    with pytest.raises(CompactError):
+        decode_tree_indented("@t[1]: d\n|2\n  | une seule ligne")
+    with pytest.raises(CompactError):
+        decode_tree_indented("@t[1]: d\n|1\n  pas un bloc")
+    with pytest.raises(CompactError):
+        decode_tree_indented("@t[1]: d\n[a,b")
+
+
+def test_indented_tree_any_json_random_round_trips():
+    nasty = ["", " ", "a b", "-", ".", "null", "true", "1", "01", "1e5", "x>", "k=v", "|", "|2", "[a", "{", "a,b",
+             "a:b", '"q"', "back\\slash", "#tag", "l1\nl2", "\n", "fin\n", "\r\n", "tab\tx", "é 漢", "\u2028",
+             "  lead", "trail  ", "~", "@x", "@@", "| x", "?", "?{", "?x", "$unknown"]
+    keys = ["id", "name", "a b", "x=y", "", "list", "_", "tree", "lines", "opts", "é", '"', "k.1", "-"]
+    for seed in range(3000):
+        rnd = random.Random(seed)
+
+        def scalar():
+            return rnd.choice([None, True, False, rnd.randint(-5, 99), rnd.random() * 100, rnd.choice(nasty),
+                               {"$unknown": {}}, {"$unknown": {"sigma": 0.3, "pending": rnd.choice(nasty)}}])
+
+        def val(d):
+            c = rnd.random()
+            if d > 3 or c < 0.5:
+                return scalar()
+            if c < 0.7:
+                return [val(d + 1) for _ in range(rnd.randint(0, 3))]
+            if c < 0.85:
+                return {rnd.choice(keys): val(d + 1) for _ in range(rnd.randint(0, 3))}
+            return [obj(d + 1) for _ in range(rnd.randint(1, 3))]
+
+        def obj(d):
+            return {rnd.choice(keys): val(d) for _ in range(rnd.randint(0, 4))}
+
+        data = rnd.choice([lambda: obj(0), lambda: [obj(0) for _ in range(2)], lambda: val(0)])()
+        assert decode_tree_indented(encode_tree_indented(data)) == data, (seed, data)
+        assert decode_tree_indented(encode_tree_indented(data), lenient=True) == data, (seed, data)
+        assert decode_tree_indented(encode_tree_indented(data, counts="end")) == data, (seed, data)
+        assert decode_tree_indented(encode_tree_indented(data, counts="line")) == data, (seed, data)
+
+
+def test_indented_tree_lenient_mode_for_model_written_text():
+    """2026-11-22 : un modele avait ecrit `@orders[8]: id client date note`
+    (note n'existe que sur une commande) et `@options[7]` (il y en avait 10).
+    Le mode tolerant relit ce texte sans rien deviner ; le mode strict le
+    refuse toujours."""
+    text = ("@orders[2]: id client note\n@lines[9]^orders: item qty\n"
+            "o0 c5\n    gpu 5\n    lic 3\no1 c3 note=fragile\n\trouter 1")
+    with pytest.raises(CompactError):
+        decode_tree_indented(text)
+    warn = []
+    got = decode_tree_indented(text, lenient=True, warnings=warn)
+    assert got == {"orders": [{"id": "o0", "client": "c5", "lines": [{"item": "gpu", "qty": 5}, {"item": "lic", "qty": 3}]},
+                              {"id": "o1", "client": "c3", "note": "fragile", "lines": [{"item": "router", "qty": 1}]}]}
+    assert warn == ["lines[9] annonce, 3 element(s) ecrit(s)"]
+    # [N] facultatif, dans les deux modes.
+    assert decode_tree_indented("@t: a\n1\n2") == {"t": [{"a": 1}, {"a": 2}]}
+    # Une indentation incoherente reste refusee.
+    with pytest.raises(CompactError):
+        decode_tree_indented("@o: a\n@l^o: b\nx\n    y\n  z", lenient=True)
+
+
+def test_indented_tree_counts_at_the_end():
+    """2026-11-22 : les nombres d'elements peuvent venir APRES l'arbre
+    (`@end orders=2 lines=3`) : qui ecrit de gauche a droite compte ce qu'il
+    vient d'ecrire au lieu de l'annoncer. `@end` seul detecte deja une coupure."""
+    data = {"orders": [{"id": "o0", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o1", "lines": [{"q": 3}]}]}
+    text = encode_tree_indented(data, counts="end")
+    assert text.splitlines() == ["@orders: id", "@lines^orders: q", "o0", "  1", "  2", "o1", "  3",
+                                 "@end orders=2 lines=3"]
+    assert decode_tree_indented(text) == data
+    assert decode_tree_indented(text.replace("@end orders=2 lines=3", "@end")) == data
+    for bad in (text.replace("lines=3", "lines=4"), text + "\no2", text.replace("@end", "@end x=1"),
+                text.replace("lines=3", "lines=trois")):
+        with pytest.raises(CompactError):
+            decode_tree_indented(bad)
+    warn = []
+    assert decode_tree_indented(text.replace("lines=3", "lines=4"), lenient=True, warnings=warn) == data
+    assert warn == ["lines[4] annonce, 3 element(s) ecrit(s)"]
+
+
+def test_indented_tree_counts_at_the_end_of_each_line():
+    """2026-11-23 : `/N` en fin de ligne = nombre d'enfants directs. Un modele
+    compte bien 1 a 5 elements qu'il vient d'ecrire ; et le compte local dit
+    OU il manque une ligne."""
+    data = {"c": [{"id": "c1", "s": [{"t": "a", "k": [{"r": 1}, {"r": 2}]}, {"t": "b", "k": [{"r": 3}]}]},
+                  {"id": "c2"}], "v": "/3"}
+    text = encode_tree_indented(data, counts="line")
+    assert text.splitlines() == ['@@ v="/3"', "@c: id", "@s^c: t", "@k^s: r",
+                                 "c1 /2", "  a /2", "    1", "    2", "  b /1", "    3", "c2", "@end"]
+    assert decode_tree_indented(text) == data
+    bad = text.replace("a /2", "a /3")
+    with pytest.raises(CompactError, match="ligne 6"):
+        decode_tree_indented(bad)
+    warn = []
+    assert decode_tree_indented(bad, lenient=True, warnings=warn) == data
+    assert warn == ["ligne 6 : /3 annonce, 2 enfant(s) ecrit(s)"]
+
+
+def test_tree_relations_counts_are_checked_on_read():
+    """2026-11-23 : tree_n (enfants annonces) est reverifie a la relecture :
+    un arbre auquel il manque une branche est refuse, pas rendu incomplet."""
+    from cstl_compact import relations_to_tree
+    data = {"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o2"}]}
+    rels = tree_to_relations(data, "t1")
+    assert relations_to_tree(rels, "t1") == data
+    for drop in (2, 4):          # une ligne, puis une commande entiere
+        with pytest.raises(CompactError, match="arbre incomplet"):
+            relations_to_tree(rels[:drop] + rels[drop + 1:], "t1")
+
+
+def test_tree_hash_is_the_servers():
+    """2026-11-23 : meme empreinte que src/server/tree_check.rs (test
+    canonical_hash_matches_the_python_sdk, valeur figee des deux cotes)."""
+    from cstl_compact import tree_hash
+    rels = tree_to_relations({"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o2"}]}, "t1")
+    assert tree_hash(rels, "t1") == "sha256:f3a92ea780204ab228c0c413ad11595615f81a7708a918a248711b000a157db5"
+    with_source = tree_to_relations({"orders": [{"id": "o1"}]}, "t1", source="billing")
+    assert with_source[0]["tree_source"] == "billing"
+    from cstl_compact import relations_to_tree
+    assert relations_to_tree(with_source, "t1") == {"orders": [{"id": "o1"}]}
+
+
+def test_tree_relations_split_long_values():
+    """2026-11-23 : une valeur longue (texte, liste) est decoupee en morceaux
+    de 250 caracteres au plus ; relue, elle est recollee a l'identique."""
+    from cstl_compact import relations_to_tree, WIRE_CHUNK
+    long_text = "".join(f"mot{i} " for i in range(400))            # ~2 900 caracteres
+    data = {"docs": [{"id": "d1", "body": long_text, "rows": list(range(300)),
+                      "note": "avec \\ et \"guillemets\"\n" * 40, "short": "ok"}]}
+    rels = tree_to_relations(data, "t1")
+    assert all(len(str(v)) <= WIRE_CHUNK for r in rels for v in r.values())
+    many = {"x": [{f"field_number_{i}": i for i in range(60)}]}        # liste de types longue
+    many_rels = tree_to_relations(many, "t2")
+    assert "tree_t1" in many_rels[1] and all(len(str(v)) <= WIRE_CHUNK for v in many_rels[1].values())
+    assert relations_to_tree(many_rels, "t2") == many
+    assert relations_to_tree(rels, "t1") == data
+    doc = next(r for r in rels if r["type"] == "docs")
+    del doc["tree_c2_body"]
+    with pytest.raises(CompactError, match="incomplete"):
+        relations_to_tree(rels, "t1")
+
+
+def test_indented_tree_unknown_value_speaks():
+    """2026-11-23 : le vide qui parle. Valeur inconnue (`?`, avec ses details
+    eventuels), distincte de null (connue, sans valeur) et d'un champ absent
+    (sans objet) ; aller-retour sans perte, en cellule comme en ligne, et
+    jusqu'au serveur (relations)."""
+    from cstl_compact import unknown, is_unknown, relations_to_tree
+    data = {"patients": [{"id": "p1", "renal": unknown(sigma=0.3, pending="next_checkup")},
+                         {"id": "p2", "renal": None}, {"id": "p3"},
+                         {"id": "p4", "renal": unknown(), "tags": [1, unknown(), "?", "?x"]}]}
+    text = encode_tree_indented(data)
+    assert text.splitlines() == ["@patients[4]: id", "p1 renal=?{sigma:0.3,pending:next_checkup}", "p2 renal=null",
+                                 "p3", 'p4 renal=? tags=[1,?,"?","?x"]']
+    back = decode_tree_indented(text)
+    assert back == data and is_unknown(back["patients"][0]["renal"]) and back["patients"][1]["renal"] is None
+    assert "renal" not in back["patients"][2]
+    assert relations_to_tree(tree_to_relations(data, "t1"), "t1") == data

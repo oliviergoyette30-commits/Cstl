@@ -1,0 +1,28 @@
+{
+  "model": "gemini-3.5-flash",
+  "politiques": {
+    "cstl": 16828,
+    "json_compact": 15064,
+    "cstl_court": 6269,
+    "json_court": 9236,
+    "toon": 9788,
+    "cstl_tableau": 7575,
+    "cstl_symboles": 5540
+  },
+  "donnees": {
+    "json": 32358,
+    "toon": 24817,
+    "cstl": 38169,
+    "cstl_compact": 26052,
+    "cstl_tableau": 20813,
+    "cstl_symboles": 20743
+  },
+  "domaines": {
+    "json": 30968,
+    "toon": 27399,
+    "cstl": 37127,
+    "cstl_compact": 21479,
+    "cstl_tableau": 22210,
+    "cstl_symboles": 20284
+  }
+}

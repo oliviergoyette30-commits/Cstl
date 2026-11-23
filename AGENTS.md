@@ -196,6 +196,151 @@ them. Nothing is guessed: an unreadable line, a wrong row count or a badly
 typed value raises `cstl_compact.CompactError`. Format and tests:
 `sdk/python/cstl_compact.py`, `sdk/python/test_cstl_compact.py`.
 
+**Nested data (trees).** `agent.send_tree(receiver, tree)` sends any JSON
+document: an object, a list or a single value, nested to any depth. It also
+takes the same document written in compact CSTL tree mode.
+
+The recommended text form is the **indented tree**
+(`cstl_compact.encode_tree_indented`). The id-based form
+(`cstl_compact.encode_tree`) is also accepted.
+
+```
+@@ service=billing tags=[prod,eu]
+@orders[2]: id client
+@lines[3]^orders: item qty
+o1 client_3 note=fragile
+  gpu_rack 2 dims=[[1,2],[3,4]]
+  lic 1
+o2 client_1 desc=|2
+  | first line
+  | second line
+  router 3
+```
+
+How to read it:
+- `@name[N]^parent: cols` declares each list once: `N` elements, which are
+  children of `parent`, with these columns.
+- Children are written under their parent, indented 2 spaces per level.
+- A field that only some elements have is written `name=value`, and only
+  when it is present.
+- Lists and objects are written inline (`[a,b]`, `{lat:1}`).
+- A multiline text is written `|N`, then `N` lines that start with `| `.
+- `@@ ...` holds the plain fields of the root. `@@list` marks a root that is
+  a list of objects. `@@= value` marks any other root.
+
+`[N]` is optional; when present, it is checked. For a tree written by a
+model, use `decode_tree_indented(text, lenient=True)` or
+`send_tree(..., lenient=True)`. This relaxes three rules, so nothing is
+guessed:
+- a wrong `[N]` is only a warning;
+- a row may omit its last columns (those fields are absent);
+- any consistent indentation is accepted.
+
+A model that wrote `@orders[8]: id client date note` and `@options[7]`
+(instead of 10) is read back identical this way.
+
+Models count long lists badly. Gemma 4 31B got a `[N]` wrong in 3 of 12
+large documents, and a count placed at the end (`@end lines=21`) did no
+better. Small local counts work: with `encode_tree_indented(data,
+counts="line")`, each element that has children ends its line with `/N`,
+its number of direct children (`ctr_1 party_9 /3`), and the document ends
+with `@end`. Gemma wrote 12/12 documents identical in **strict** mode this
+way. A wrong `/N` names the faulty line. Cost: +6 % tokens.
+
+Round trips are lossless: tested on 30,000 random JSON documents with trap
+values. In a comprehension test on Gemma 4 31B (36 questions), the indented
+tree scored 36/36, against 35/36 for JSON, and used 39 % fewer tokens.
+
+Each element becomes a relation marked `tree=<id>`, so the server signs,
+checks (`SCHEMA` types) and audits it like any other. A list, an object or a
+text the wire cannot carry (`"`, `[`, `]`, a newline) is sent as base64url
+JSON, with the type `json`. `agent.fetch_tree(tree_id)` reads the document
+back, identical, through the signed `purpose=tree_query`. Sending again with
+the same id replaces it.
+
+A long value (a text, a large list) is split into chunks of 250
+characters: the first under its own name, the next ones under
+`tree_c<i>_<name>`, with its type noting the number of chunks
+(`body:str/12`). It is reassembled on reading. A message can hold up to
+1 MiB. A field name outside `[A-Za-z0-9_.-]` is refused before sending.
+
+**Unknown values (the "void that speaks").** An unknown value is distinct
+from `null` (known: no value) and from an absent field (not applicable).
+In JSON it is `{"$unknown": {}}`, or `{"$unknown": {"sigma": 0.3,
+"pending": "next_checkup"}}` with its uncertainty and its plan
+(`cstl_compact.unknown(sigma=0.3)`). The indented tree writes it `?` or
+`?{sigma:0.3,pending:next_checkup}`:
+
+```
+@patients[3]: id
+p1 renal=?{sigma:0.3,pending:next_checkup}
+p2 renal=null
+p3
+```
+
+**The server checks that a tree is complete.** Each element that has
+children carries `tree_n=<number of direct children>`, and a `tree_root`
+relation carries the number of root elements. On arrival, the server
+counts them itself (`src/server/tree_check.rs`). It refuses the whole
+message, before storing anything, with `INTENT_PAYLOAD
+[purpose=tree_rejected, detail=...]`, in three cases:
+- a branch is missing;
+- an element has no parent;
+- an element appears twice.
+
+The counts are then signed and audited with the rest, and `fetch_tree`
+checks them again on reading.
+
+So a client that bypasses the SDK cannot leave a hole unnoticed, and a
+reader can later prove the tree is complete. Limit: the counts are the
+author's. They prove the tree matches what the author announced, not
+that the author tells the truth.
+
+**The source commits, someone else transmits.** To stop a transmitter
+from dropping, changing or adding anything, the agent that owns the data
+commits to it first: `source.commit_tree(data, tree_id)`. This signs the
+tree's canonical hash and records it in the audit
+(`RELATION [type=tree_commit, subject=<tree_id>, object=sha256:...]`).
+
+Any agent can then send the tree with `send_tree(..., tree_id=tree_id,
+source="<source>")`, in any form, including an indented tree written by a
+model. The server recomputes the hash of what it receives. It refuses the
+tree (`tree_rejected`) in three cases:
+- the source never committed;
+- the hash differs from the source's latest commit;
+- the commit is not signed with the source's registered key. A
+  transmitter cannot commit in the source's place.
+
+The hash is identical in Python (`cstl_compact.tree_hash`) and in Rust
+(`tree_check::canonical_hash`), and a test pins the same value on both
+sides. Live test: a transmitter that drops a line, changes a price or adds
+an order is refused, and so is one that commits to its own altered version.
+
+Limits: a tree sent without `source` is vouched for by its sender only.
+Nobody can prove that a source tells the truth about its own data; it can
+only be bound, by signature, to what it declared.
+
+Any registered agent can read a tree by its id. Live test:
+`test_tree_mode_goes_through_the_server`.
+
+**From any MCP client.** `sdk/python/cstl_mcp_server.py` is an MCP server
+(stdio, JSON-RPC, no dependency beyond the SDK). An agent that speaks MCP
+(Claude Desktop, Claude Code, other clients) uses CSTL through tools,
+without learning the format: `cstl_policy` (its effective policy),
+`cstl_authorize` (ask before acting; returns the decision and the signed
+token), `cstl_send_compact`, `cstl_send_relations` and
+`cstl_compact_guide`. Set `CSTL_AGENT` (the agent's name; its key is
+created in `~/.cstl/`), and `CSTL_HOST` / `CSTL_PORT`. Client config:
+
+```json
+{"mcpServers": {"cstl": {"command": "python3",
+  "args": ["/path/to/Cstl/sdk/python/cstl_mcp_server.py"],
+  "env": {"CSTL_AGENT": "agent_support", "CSTL_PORT": "5050"}}}}
+```
+
+Live test: `test_mcp_server_exposes_policy_and_authorization` in
+`sdk/python/test_action_authorization_live.py`.
+
 **Conditions the server enforces.** A rule can carry extra attributes,
 which layer 9 checks itself (not just their text):
 
