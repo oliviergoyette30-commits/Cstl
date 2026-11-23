@@ -53,10 +53,12 @@ sys.path.insert(0, str(REPO / "scripts"))
 import nested_benchmark as nb  # noqa: E402
 
 LENIENT = {"cstl_indent": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True),
-           "cstl_indent_fin": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True)}
+           "cstl_indent_fin": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True),
+           "cstl_indent_ligne": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True)}
 DECODE = {"json": json.loads, "toon": nb.toon_lite.decode_nested,
           "cstl_arbre": nb.cstl_compact.decode_tree, "cstl_indent": nb.cstl_compact.decode_tree_indented,
-          "cstl_indent_fin": nb.cstl_compact.decode_tree_indented}
+          "cstl_indent_fin": nb.cstl_compact.decode_tree_indented,
+          "cstl_indent_ligne": nb.cstl_compact.decode_tree_indented}
 
 
 def leaves(v, path=""):

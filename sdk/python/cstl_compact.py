@@ -1146,7 +1146,7 @@ def _icell(v, blocks):
         blocks.append(part)
         return f"|{len(part)}"
     if (s in ("", "-", ".", "null", "true", "false") or _NUMLIKE.match(s) or re.search(r'[\s"#=]', s)
-            or s[0] in "[{|@"):
+            or s[0] in "[{|@/"):
         return _quote(s)
     return s
 
@@ -1191,9 +1191,13 @@ def encode_tree_indented(data, counts="head"):
     counts="end"  : en-tetes sans nombre, et une derniere ligne
     `@end orders=8 lines=21` (2026-11-22). Pour qui ECRIT de gauche a droite
     (un modele), compter apres coup est plus sur qu'annoncer avant ; et
-    `@end` seul suffit deja a detecter un document coupe."""
-    if counts not in ("head", "end"):
-        raise CompactError(f"counts : head ou end, pas {counts!r}")
+    `@end` seul suffit deja a detecter un document coupe.
+    counts="line" : chaque element qui a des enfants finit sa ligne par
+    `/N`, le nombre de ses enfants directs (`ctr_1 party_9 /3`), et le
+    document finit par `@end`. Un modele compte bien 1 a 5 elements qu'il
+    vient d'ecrire, mal 129 ; et un compte local dit OU il manque une ligne."""
+    if counts not in ("head", "end", "line"):
+        raise CompactError(f"counts : head, end ou line, pas {counts!r}")
     head = []
     if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
         head, tables, fields = ["@@list"], {"_": data}, {}
@@ -1250,6 +1254,8 @@ def encode_tree_indented(data, counts="head"):
             cells = [_icell(o[c], blocks) for c in dense[key] or []]
             cells += [f"{_iname(k)}={_icell(v, blocks)}" for k, v in o.items()
                       if k not in (dense[key] or []) and (k, v) not in kids]
+            if counts == "line" and kids:
+                cells = (cells or ["."]) + [f"/{sum(len(v) for _, v in kids)}"]
             emit("  " * depth + tag, cells or ["."], blocks, depth)
             for k, v in kids:
                 rows(k, v, key, depth + 1)
@@ -1258,6 +1264,8 @@ def encode_tree_indented(data, counts="head"):
         rows(key, objs, None, 0)
     if counts == "end":
         lines.append("@end" + "".join(f" {k}={counts_of[k]}" for k in order))
+    elif counts == "line":
+        lines.append("@end")
     return "\n".join(lines)
 
 
@@ -1290,7 +1298,7 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         espaces), pourvu qu'elle soit coherente.
     Les avertissements sont ajoutes a la liste `warnings` si elle est donnee."""
     heads, kids_of, root_keys, root = {}, {}, [], {}
-    stack = []          # (profondeur, objet, nom de sa liste)
+    stack = []          # [profondeur, objet, nom de sa liste, enfants annonces (/N), enfants vus]
     seen, as_list, value = {}, False, None
     ended = False
     widths = [0]        # mode tolerant : largeur d'indentation de chaque niveau
@@ -1317,6 +1325,15 @@ def decode_tree_indented(text, lenient=False, warnings=None):
                     raise CompactError(f"ligne {i + 1} : ligne de bloc « | » attendue : {lines[i]!r}")
                 i += 1
             setter("\n".join(part))
+
+    def close(entry):
+        """Verifie le compte local `/N` d'un element dont on quitte les enfants."""
+        if entry[3] is not None and entry[3] != entry[4]:
+            msg = f"ligne {entry[5]} : /{entry[3]} annonce, {entry[4]} enfant(s) ecrit(s)"
+            if not lenient:
+                raise CompactError(msg)
+            if warnings is not None:
+                warnings.append(msg)
 
     def fill(obj, toks, cols, n):
         pending = []
@@ -1395,11 +1412,16 @@ def decode_tree_indented(text, lenient=False, warnings=None):
                 raise CompactError(f"ligne {n} : indentation incoherente")
             depth = len(widths) - 1
         while stack and stack[-1][0] >= depth:
-            stack.pop()
+            close(stack.pop())
         if depth and (not stack or stack[-1][0] != depth - 1):
             raise CompactError(f"ligne {n} : element sans parent (indentation)")
         cands = kids_of.get(stack[-1][2], []) if stack else root_keys
         toks = _raw_tokens(line.strip())
+        expected = None
+        if toks and re.fullmatch(r"/\d+", toks[-1]):
+            expected = int(toks.pop()[1:])
+            if not toks:
+                toks = ["."]
         if len(cands) > 1:
             if not toks or not toks[0].endswith(">") or toks[0][:-1] not in cands:
                 raise CompactError(f"ligne {n} : « nom> » attendu parmi {cands}")
@@ -1418,7 +1440,11 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         fill(obj, toks, cols[:npos], n)
         (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
         seen[key] = seen.get(key, 0) + 1
-        stack.append((depth, obj, key))
+        if stack:
+            stack[-1][4] += 1
+        stack.append([depth, obj, key, expected, 0, n])
+    while stack:
+        close(stack.pop())
     for key, h in heads.items():
         if h["n"] is not None and seen.get(key, 0) != h["n"]:
             msg = f"{key}[{h['n']}] annonce, {seen.get(key, 0)} element(s) ecrit(s)"

@@ -515,6 +515,7 @@ def test_indented_tree_any_json_random_round_trips():
         assert decode_tree_indented(encode_tree_indented(data)) == data, (seed, data)
         assert decode_tree_indented(encode_tree_indented(data), lenient=True) == data, (seed, data)
         assert decode_tree_indented(encode_tree_indented(data, counts="end")) == data, (seed, data)
+        assert decode_tree_indented(encode_tree_indented(data, counts="line")) == data, (seed, data)
 
 
 def test_indented_tree_lenient_mode_for_model_written_text():
@@ -555,3 +556,21 @@ def test_indented_tree_counts_at_the_end():
     warn = []
     assert decode_tree_indented(text.replace("lines=3", "lines=4"), lenient=True, warnings=warn) == data
     assert warn == ["lines[4] annonce, 3 element(s) ecrit(s)"]
+
+
+def test_indented_tree_counts_at_the_end_of_each_line():
+    """2026-11-23 : `/N` en fin de ligne = nombre d'enfants directs. Un modele
+    compte bien 1 a 5 elements qu'il vient d'ecrire ; et le compte local dit
+    OU il manque une ligne."""
+    data = {"c": [{"id": "c1", "s": [{"t": "a", "k": [{"r": 1}, {"r": 2}]}, {"t": "b", "k": [{"r": 3}]}]},
+                  {"id": "c2"}], "v": "/3"}
+    text = encode_tree_indented(data, counts="line")
+    assert text.splitlines() == ['@@ v="/3"', "@c: id", "@s^c: t", "@k^s: r",
+                                 "c1 /2", "  a /2", "    1", "    2", "  b /1", "    3", "c2", "@end"]
+    assert decode_tree_indented(text) == data
+    bad = text.replace("a /2", "a /3")
+    with pytest.raises(CompactError, match="ligne 6"):
+        decode_tree_indented(bad)
+    warn = []
+    assert decode_tree_indented(bad, lenient=True, warnings=warn) == data
+    assert warn == ["ligne 6 : /3 annonce, 2 enfant(s) ecrit(s)"]
