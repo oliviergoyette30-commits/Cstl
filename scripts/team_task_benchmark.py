@@ -330,9 +330,65 @@ class GeminiBrain(agent_mod.LLMProvider):
         raise RuntimeError("Gemini : trop d'echecs")
 
 
+class OpenRouterBrain(agent_mod.LLMProvider):
+    """N'importe quel modele d'OpenRouter (openrouter.ai, API compatible OpenAI) :
+    `--model openai/gpt-5-mini`, `anthropic/claude-haiku-5.5`,
+    `meta-llama/llama-4-maverick`... (2026-11-23). Cle : OPENROUTER_API_KEY ;
+    dans l'environnement cloud, le proxy l'ajoute lui-meme (valeur
+    `proxy-injected` par defaut). Memes reprises que GeminiBrain ; une erreur
+    persistante leve RuntimeError, que les bancs excluent du score."""
+
+    URL = "https://openrouter.ai/api/v1/chat/completions"
+
+    def __init__(self, model):
+        self.key = os.environ.get("OPENROUTER_API_KEY", "proxy-injected")
+        self.model = model
+
+    def generate(self, prompt, max_tokens=500):
+        import time
+        import urllib.error
+        import urllib.request
+        body = json.dumps({"model": self.model, "max_tokens": 16000, "temperature": 0,
+                           "messages": [{"role": "user", "content": prompt}]}).encode()
+        delay = 10
+        for attempt in range(8):
+            req = urllib.request.Request(self.URL, data=body, headers={
+                "Content-Type": "application/json", "Authorization": f"Bearer {self.key}",
+                "X-Title": "CSTL benchmarks"})
+            try:
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    d = json.load(r)
+                if d.get("error"):
+                    raise RuntimeError(f"OpenRouter : {str(d['error'])[:300]}")
+                return ((d.get("choices") or [{}])[0].get("message") or {}).get("content", "").strip()
+            except urllib.error.HTTPError as e:
+                if e.code in (408, 429, 500, 502, 503, 504) and attempt < 7:
+                    time.sleep(delay)
+                    delay = min(delay * 2, 120)
+                    continue
+                raise RuntimeError(f"OpenRouter {e.code} : {e.read()[:300]!r}") from e
+            except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
+                if attempt < 7:
+                    time.sleep(delay)
+                    delay = min(delay * 2, 120)
+                    continue
+                raise RuntimeError(f"OpenRouter : reseau ({e})") from e
+        raise RuntimeError("OpenRouter : trop d'echecs")
+
+
 def make_brain(model):
-    """ClaudeBrain ou GeminiBrain selon le nom du modele."""
-    return GeminiBrain(model) if model.startswith(("gemini", "gemma")) else ClaudeBrain(model)
+    """GeminiBrain (gemini-*, gemma-*), OpenRouterBrain (fournisseur/modele) ou
+    ClaudeBrain, selon le nom du modele."""
+    if model.startswith(("gemini", "gemma")):
+        return GeminiBrain(model)
+    if "/" in model:
+        return OpenRouterBrain(model)
+    return ClaudeBrain(model)
+
+
+def model_slug(model):
+    """Nom de modele utilisable dans un nom de fichier (openai/gpt-5 -> openai__gpt-5)."""
+    return model.replace("/", "__")
 
 
 def brain(name, answers_path=None, model=None):

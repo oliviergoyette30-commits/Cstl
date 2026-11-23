@@ -391,7 +391,7 @@ def main():
             return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": ok, "raw": raw[:600]}
 
         jobs = [(k, n, s, d, f, r) for r in range(args.runs) for k, n, s, d in datasets for f in formats]
-        dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension}.json"
+        dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension.replace('/', '__')}.json"
         rows = [None] * len(jobs)
         if args.resume and dest.exists():
             old = json.loads(dest.read_text())["rows"]

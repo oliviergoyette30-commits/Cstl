@@ -133,7 +133,7 @@ def main():
         return {**base, "ok": True, "parsed": err is None, "exact": exact, "exact_lenient": soft, "leaf_score": round(score, 4),
                 "error_decode": err, "chars_out": len(text), "raw": text}
 
-    dest = REPO / "scripts" / f"nested_writing_{args.model}.json"
+    dest = REPO / "scripts" / f"nested_writing_{args.model.replace('/', '__')}.json"
     rows = [None] * len(jobs)
     if args.resume and dest.exists():
         old = json.loads(dest.read_text())["rows"]
