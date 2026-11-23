@@ -348,7 +348,7 @@ class OpenRouterBrain(agent_mod.LLMProvider):
         import time
         import urllib.error
         import urllib.request
-        body = json.dumps({"model": self.model, "max_tokens": 16000, "temperature": 0,
+        body = json.dumps({"model": self.model, "max_tokens": 8000, "temperature": 0,
                            "messages": [{"role": "user", "content": prompt}]}).encode()
         delay = 10
         for attempt in range(8):
