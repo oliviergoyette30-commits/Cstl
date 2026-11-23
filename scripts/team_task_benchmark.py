@@ -362,7 +362,7 @@ class OpenRouterBrain(agent_mod.LLMProvider):
                     raise RuntimeError(f"OpenRouter : {str(d['error'])[:300]}")
                 return ((d.get("choices") or [{}])[0].get("message") or {}).get("content", "").strip()
             except urllib.error.HTTPError as e:
-                if e.code in (408, 429, 500, 502, 503, 504) and attempt < 7:
+                if e.code in (402, 408, 429, 500, 502, 503, 504) and attempt < 7:  # 402 : credit reserve par les requetes en vol
                     time.sleep(delay)
                     delay = min(delay * 2, 120)
                     continue

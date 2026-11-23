@@ -202,9 +202,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "raw": "Lecture des données :\n\n- dept_0 (budget 30000) : team_0_0 (lead agent_19) a 5 membres, team_0_1 (lead agent_6) en a 1.\n- dept_1 (budget 367000) : team_1_0 (lead agent_30) a 3 membres, team_1_1 (lead agent_21) en a 1.\n\n1. Dans dept_1, seul agent_28 (team_1_0) a la clearance high, donc 1.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21.\n3. Une équipe de plus de 3 membres existe seulement dans dept_0 (5 membres), mais son budget de 30000 n'est pas supérieur à 200000. dept_1 a un budget suffisant mais aucune équipe de plus de 3 membres (3 au maximum). La liste est donc vide.\n\n{\"r1\": ",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n- dept_0 (budget 30000) : team_0_0 (lead agent_19) compte 5 membres, team_0_1 (lead agent_6) en compte 1.\n- dept_1 (budget 367000) : team_1_0 (lead agent_30) compte 3 membres, team_1_1 (lead agent_21) en compte 1.\n\n1. Dans dept_1, seul agent_28 (team_1_0) a la clearance high. Réponse : 1.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21. Réponse : [\"agent_21\"].\n3. dept_0 a une équipe de plus de 3 membres, mais son budget est de 30000, donc inférieur à 200000. dept_1 a un budget supérieur à 200000, mais aucune équipe de plus de 3 membres (maximum 3). Réponse : [].\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
     },
     {
       "kind": "organisation",
@@ -212,9 +216,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 entrées de membres. Deux d'entre elles ont la clearance high (agent_30, deux fois). Les deux entrées d'agent_30 sont des lignes distinctes, donc on compte des membres-entrées : 2. Si l'on comptait des agents distincts, on obtiendrait 1. La question demande « combien de membres », et les doublons sont des entrées séparées, donc je retiens 2.\n\nQ2 : agent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. team_0_0 a 4 membres, soit plus de 3, donc dept_0 est retenu. dept_1 a un budge",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres : agent_30 (high), agent_31 (medium), agent_30 (high) et agent_33 (low). Il y a donc 2 entrées avec la clearance high. Ce sont deux entrées pour le même agent, mais la question porte sur les « membres » ; je compte les entrées, soit 2.\n\nQ2 : agent_37 est membre de team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Ses équipes team_0_0 (4 membres) et team_0_2 (5 membres) ont plus de 3 membres. dept_1 a un budget de 76000, inférieur à 200000, donc il est exclu. La réponse est [\"dept_0\"].\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
     },
     {
       "kind": "organisation",
@@ -222,9 +230,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte deux membres avec la clearance high : agent_30 (première occurrence) et agent_30 (seconde occurrence). Ce sont deux entrées de membres, donc le décompte est 2. Si l'on comptait les agents distincts, ce serait 1. La question demande « combien de membres », ce qui se compte par entrée : 2.\n\nQ2 : agent_37 est membre de team_0_2, dont le lead est agent_35. Réponse : [\"agent_35\"].\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000, et team_0_0 compte 4 membres, donc plus de 3. dept_1 a un budget de 76000, qui n'est pas supérieur à 200000. Réponse : [\"d",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres. Ceux avec clearance high sont agent_30 (analyst, high) et agent_30 (analyst, high), soit 2 entrées. Les deux lignes étant des entrées de membres distinctes, le total est de 2. Si l'on comptait les agents distincts, on obtiendrait 1, mais la question porte sur les « membres », donc on compte les entrées : 2.\n\nQ2 : agent_37 est membre de team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Il a team_0_0 avec 4 membres (plus de 3), donc il satisfait les deux conditions. dept_1 a un budget de 76000, il ne qualifie pas.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
     },
     {
       "kind": "organisation",
@@ -232,9 +244,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "raw": "Lecture des données :\n\ndept_0 (budget 497000) :\n- team_0_0 (lead agent_4) : 4 membres (agent_21 high, agent_27 low, agent_22 high, agent_27 high)\n- team_0_1 (lead agent_11) : 2 membres\n- team_0_2 (lead agent_35) : 5 membres (agent_34, agent_37, agent_22, agent_7, agent_22)\n\ndept_1 (budget 76000) :\n- team_1_0 (lead agent_20) : 4 membres (agent_30 high, agent_31 medium, agent_30 high, agent_33 low)\n\nTotal : 4 + 2 + 5 + 4 = 15, ce qui correspond à la déclaration.\n\n1. Dans dept_1, les membres avec clearance high sont les deux lignes agent_30, soit 2.\n2. agent_37 apparaît uniquement dans team_0_2, ",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\ndept_1 contient une seule équipe, team_1_0, avec 4 membres : agent_30 (high), agent_31 (medium), agent_30 (high), agent_33 (low). Il y a donc 2 membres high.\n\nagent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35.\n\nPour la question 3 :\n- dept_0 a un budget de 497000, supérieur à 200000. Ses équipes comptent 4 membres (team_0_0), 2 (team_0_1) et 5 (team_0_2). Il a donc au moins une équipe de plus de 3 membres, et il est retenu.\n- dept_1 a un budget de 76000, inférieur à 200000. Il est exclu, même si team_1_0 a 4 membres.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
     },
     {
       "kind": "organisation",
@@ -270,9 +286,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans dept_4, les membres sont agent_5 (high), agent_14 (low) et agent_18 (medium). Un seul a la clearance high, donc r1 = 1.\n\nQ2 : agent_25 est membre de team_2_1 (lead agent_16). Il n'apparaît pas dans team_3_0, dont il est lead mais pas membre, car les membres de cette équipe sont agent_21, agent_10, agent_32 et agent_39. La liste est donc [\"agent_16\"].\n\nQ3 : budgets supérieurs à 200000 : dept_2 (330000) et dept_5 (371000).\n- dept_2 a team_2_1 avec 5 membres, soit plus de 3. Il convient.\n- dept_5 a team_5_0 avec 1 membre. Il ne convient pas.\n\nDonc [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont agent_5 (high), agent_14 (low) et agent_18 (medium). Un seul a la clearance high, donc r1 = 1.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est aussi membre de team_3_0. Le lead de cette équipe est agent_25 (c'est lui-même le lead, mais pas un membre listé). Les membres de team_3_0 sont agent_21, agent_10, agent_32 et agent_39, donc agent_25 n'y figure pas. Seule team_2_1 compte, d'où r2 = [\"agent_16\"].\n\nQ3 : les départements avec un budget supérieur à 200000 sont dept_2 (330000) et dept_5 (371000). Pour les équipes de plus de 3 membres, team_2_1 en a 5, donc dept_2 convient. dept_5 n'a qu'une équipe avec 1 membre. team_3_0 a 4 membres, mais dept_3 a un budget de 29000. Donc r3 = [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
     },
     {
       "kind": "organisation",
@@ -280,9 +300,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans dept_4, aucun membre n'a la clearance high.\n- team_4_0 : medium, low, medium.\n- team_4_1 : medium, medium, medium, medium.\n- team_4_2 : medium.\nRéponse : 0.\n\nQ2 : agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Réponse : [\"agent_38\",\"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000. Il faut une équipe de plus de 3 membres, soit au moins 4.\n- dept_0 : team_0_0 a 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 a 4 membres, donc oui.\n- dept_4 : team_4_1 a 4 membres",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, aucun membre n'a la clearance high.\n- team_4_0 : medium, low, medium.\n- team_4_1 : medium, medium, medium, medium.\n- team_4_2 : medium.\nLe total est donc 0.\n\nQ2 : agent_17 est membre de deux équipes.\n- team_0_1, dont le lead est agent_38.\n- team_0_2, dont le lead est agent_21.\nLes leads sont donc [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les départements ont un budget supérieur à 200000. Il faut donc chercher une équipe de plus de 3 membres, soit au moins 4.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : 1 et 2 membres, donc non.\n- dept_2 : 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\nLes départements retenus sont dept_0, dept_3, dept_4 et dept_5.\n\n{\"r1\": 0, \"r2\": [\"agent_38\",\"agent_21\"], \"r3\": [\"dept_0\",\"dept_3\",\"dept_4\",\"dept_5\"]}"
     },
     {
       "kind": "organisation",
@@ -290,9 +314,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "raw": "Q1: dept_4 members : team_4_0 (medium, low, medium), team_4_1 (medium, medium, medium, medium), team_4_2 (medium). Aucun high → 0.\n\nQ2: agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Résultat : [agent_38, agent_21].\n\nQ3: tous les budgets sont supérieurs à 200000. Équipes de plus de 3 membres (au moins 4) :\n- dept_0 : team_0_0 (4), team_0_1 (5) → oui.\n- dept_1 : 1 et 2 → non.\n- dept_2 : 3 et 2 → non.\n- dept_3 : team_3_0 (4) → oui.\n- dept_4 : team_4_1 (4) → oui.\n- dept_5 : team_5_0 (5) → oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont les suivants.\n- team_4_0 : agent_32 (medium), agent_40 (low), agent_33 (medium).\n- team_4_1 : agent_10 (medium), agent_3 (medium), agent_1 (medium), agent_19 (medium).\n- team_4_2 : agent_7 (medium).\n\nAucun n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). Les leads sont donc agent_38 et agent_21.\n\nQ3 : tous les budgets dépassent 200000. Il faut au moins une équipe de plus de 3 membres, c'est-à-dire 4 ou plus.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
     },
     {
       "kind": "organisation",
@@ -300,9 +328,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans dept_4, les membres sont :\n- team_4_0 : agent_32 (medium), agent_40 (low), agent_33 (medium)\n- team_4_1 : agent_10 (medium), agent_3 (medium), agent_1 (medium), agent_19 (medium)\n- team_4_2 : agent_7 (medium)\n\nAucun n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). Donc r2 = [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000 (224000, 239000, 267000, 311000, 295000, 289000). Il reste à compter les membres par équipe, en cherchant plus de 3 membres, soit au moins 4 :\n- dept_0 : team_0_0 en a 4, don",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dept_4 compte 3 équipes (team_4_0, team_4_1, team_4_2). Leurs membres ont les clearances suivantes :\n- team_4_0 : medium, low, medium.\n- team_4_1 : medium, medium, medium, medium.\n- team_4_2 : medium.\nAucun membre n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Donc r2 = [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets sont supérieurs à 200000. Il faut compter les membres par équipe :\n- dept_0 : team_0_0 en a 4, donc dept_0 est retenu.\n- dept_1 : 1 et 2 membres, non retenu.\n- dept_2 : 3 et 2 membres, non retenu.\n- dept_3 : team_3_0 en a 4, donc dept_3 est retenu.\n- dept_4 : team_4_0 en a 3, team_4_1 en a 4, donc dept_4 est retenu.\n- dept_5 : team_5_0 en a 5, donc dept_5 est retenu.\n\nr3 = [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"].\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
     },
     {
       "kind": "contrats",
@@ -310,9 +342,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans ctr_2, la seule clause MUST_NOT est 2.1.0, donc 1.\n\nQ2 : on cherche les clauses terminate qui ont un amount_above inférieur à 1000.\n- ctr_1 : la clause 1.1.0 est terminate avec 500, ce qui convient.\n- ctr_6 : la clause 6.0.2 est terminate avec 1000, ce qui n'est pas inférieur à 1000. La clause 6.1.1 est terminate sans amount_above, donc elle ne compte pas.\n- ctr_2 : la clause 2.0.1 est terminate sans amount_above, donc elle ne compte pas.\n- ctr_7 : la clause 7.0.2 est terminate sans amount_above, donc elle ne compte pas.\n\nSeul ctr_1 répond au critère.\n\nQ3 : la clause 7.0.2 se trouve ",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : on cherche les clauses terminate qui ont un amount_above inférieur à 1000.\n- ctr_1, clause 1.1.0 : terminate avec amount_above 500, donc retenu.\n- ctr_6, clause 6.0.2 : terminate avec amount_above 1000, ce qui n'est pas inférieur à 1000, donc exclu.\n- ctr_2, clause 2.0.1 : terminate sans amount_above, donc exclu.\n- ctr_6, clause 6.1.1 : terminate sans amount_above, donc exclu.\n- ctr_7, clause 7.0.2 : terminate sans amount_above, donc exclu.\n\nSeul ctr_1 est retenu.\n\nQ3 : la clause 7.0.2 se trouve dans la section « privacy_0 ».\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
     },
     {
       "kind": "contrats",
@@ -320,9 +356,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : dans ctr_2, la seule clause MUST_NOT est 2.1.0, donc 1.\n\nQ2 : on cherche les clauses d'action terminate dont amount_above est inférieur à 1000.\n- ctr_1, clause 1.1.0 : terminate, amount_above 500, donc retenu.\n- ctr_6, clause 6.0.2 : terminate, amount_above 1000, pas inférieur à 1000, donc exclu.\n- ctr_6, clause 6.1.1 : terminate sans amount_above, donc exclu.\n- ctr_0 : aucune clause terminate.\n- ctr_2, clause 2.0.1 : terminate sans amount_above, donc exclu.\n- ctr_7, clause 7.0.2 : terminate sans amount_above, donc exclu.\n\nSeul ctr_1 est retenu.\n\nQ3 : la clause 7.0.2 est dans la section p",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : les clauses d'action terminate avec un amount_above sont :\n- 1.1.0 (ctr_1) : 500, inférieur à 1000, donc retenue.\n- 6.0.2 (ctr_6) : 1000, pas inférieur à 1000, donc exclue.\n- Les autres clauses terminate n'ont pas d'amount_above : 2.0.1, 6.1.1 et 7.0.2.\n\nSeul ctr_1 est donc retenu.\n\nQ3 : la clause 7.0.2 se trouve dans la section privacy_0.\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
     },
     {
       "kind": "contrats",
@@ -372,9 +412,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : il faut chercher les clauses d'action terminate avec un amount_above inférieur à 1000.\n- 0.1.1 : terminate, amount_above=5000, ne convient pas.\n- 4.0.1 : terminate, amount_above=1000, pas inférieur à 1000 (égal), ne convient pas.\n- 7.1.1 : terminate, amount_above=1000, ne convient pas.\n- 4.0.0 : terminate sans amount_above, ne convient pas.\n- 6.1.2 et 6.2.2 : terminate sans amount_above, ne conviennent pas.\n\nAucun contrat ne répond au critère, la liste est vide.\n\nQ3 : la clause 6.0.0 se trouve dans la s",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : il faut chercher les clauses d'action terminate avec un amount_above strictement inférieur à 1000.\n- 0.1.1 : terminate, amount_above=5000, donc non.\n- 4.0.1 : terminate, amount_above=1000, ce n'est pas inférieur à 1000, donc non.\n- 7.1.1 : terminate, amount_above=1000, donc non.\n- Les autres clauses terminate (4.0.0, 6.1.2, 6.2.2) n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 est dans la section payment_0 de ctr_6, dont le title est « payment ». Le nom de la section est « payment_0 », mais le champ title vaut probablement « payment_0 », puisque la colonne est title et que la valeur affichée est « payment_0 ». Je retiens donc « payment_0 ».\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
     },
     {
       "kind": "contrats",

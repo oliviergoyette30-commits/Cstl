@@ -6,8 +6,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":1768,\"r2\":4,\"r3\":[\"o0\",\"o6\"]}"
     },
     {
       "kind": "commandes",
@@ -15,9 +20,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "raw": "## Réponse\n\nEn parcourant l'ensemble des données (toutes commandes confondues), il y a **1 seule ligne** dont le champ `price` est égal à **822** :\n\n| Commande | Client | Date | Index de ligne | price |\n|----------|--------|------|:-:|:-:|\n| **o0** | client_5 | 2026-11-25 | 2 | **822** |\n\n### Détail de cette ligne (o0, ligne 2) :\n```yaml\n- 2:\n    price: 822\n    options:\n      - 0:\n          qty: 3\n          price: 822   ← (ce 822 est au niveau *option*, pas *ligne*)\n      - 1:\n          qty: 5\n          price: 714\n```\n\n### Remarque sur les autres occurrences de 822 :\n- **o0, ligne 2 → option 0",
-      "error": "reponse non retrouvee (relancer)"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
     },
     {
       "kind": "commandes",
@@ -39,8 +48,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]}"
     },
     {
       "kind": "commandes",
@@ -48,8 +62,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]}"
     },
     {
       "kind": "commandes",
@@ -57,8 +76,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]}"
     },
     {
       "kind": "commandes",
@@ -66,8 +90,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":4254,\"r2\":11,\"r3\":[\"o0\",\"o7\"]}"
     },
     {
       "kind": "commandes",
@@ -75,8 +104,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
     },
     {
       "kind": "commandes",
@@ -84,8 +118,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":4254,\"r2\":11,\"r3\":[\"o0\",\"o7\"]}"
     },
     {
       "kind": "commandes",
@@ -93,8 +132,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
     },
     {
       "kind": "commandes",
@@ -102,8 +146,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
     },
     {
       "kind": "commandes",
@@ -111,8 +160,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":392,\"r2\":10,\"r3\":[\"o2\",\"o11\",\"o12\"]}"
     },
     {
       "kind": "organisation",
@@ -120,8 +174,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":1,\"r2\":[\"agent_21\"],\"r3\":[]}"
     },
     {
       "kind": "organisation",
@@ -129,8 +188,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":1,\"r2\":[\"agent_21\"],\"r3\":[]}"
     },
     {
       "kind": "organisation",
@@ -138,8 +202,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":1,\"r2\":[\"agent_21\"],\"r3\":[]}"
     },
     {
       "kind": "organisation",
@@ -147,8 +216,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
     },
     {
       "kind": "organisation",
@@ -156,8 +230,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":2,\"r2\":[\"agent_35\"],\"r3\":[\"dept_0\"]}"
     },
     {
       "kind": "organisation",
@@ -165,8 +244,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
     },
     {
       "kind": "organisation",
@@ -174,8 +258,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
     },
     {
       "kind": "organisation",
@@ -183,8 +272,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
     },
     {
       "kind": "organisation",
@@ -192,8 +286,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
     },
     {
       "kind": "organisation",
@@ -201,8 +300,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
     },
     {
       "kind": "organisation",
@@ -210,8 +314,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":0,\"r2\":[\"agent_38\",\"agent_21\"],\"r3\":[\"dept_0\",\"dept_3\",\"dept_4\",\"dept_5\"]}"
     },
     {
       "kind": "organisation",
@@ -219,8 +328,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
     },
     {
       "kind": "contrats",
@@ -228,8 +342,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
     },
     {
       "kind": "contrats",
@@ -237,8 +356,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
     },
     {
       "kind": "contrats",
@@ -246,8 +370,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
     },
     {
       "kind": "contrats",
@@ -255,8 +384,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
     },
     {
       "kind": "contrats",
@@ -264,8 +398,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
     },
     {
       "kind": "contrats",
@@ -273,8 +412,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
     },
     {
       "kind": "contrats",
@@ -282,8 +426,13 @@
       "seed": 1,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":1,\"r2\":[\"ctr_0\",\"ctr_1\",\"ctr_7\",\"ctr_15\",\"ctr_17\",\"ctr_22\"],\"r3\":\"liability_1\"}"
     },
     {
       "kind": "contrats",
@@ -291,8 +440,13 @@
       "seed": 1,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"contract_1\", \"contract_2\", \"contract_3\", \"contract_4\", \"contract_5\", \"contract_6\", \"contract_7\", \"contract_8\", \"contract_9\", \"contract_10\", \"contract_11\", \"contract_12\", \"contract_13\", \"contract_14\", \"contract_15\", \"contract_16\", \"contract_17\", \"contract_18\", \"contract_19\", \"contract_20\", \"contract_21\", \"contract_22\", \"contract_23\", \"contract_24\"], \"r3\": \"null\"}"
     },
     {
       "kind": "contrats",
@@ -300,8 +454,13 @@
       "seed": 1,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
     },
     {
       "kind": "contrats",
@@ -309,8 +468,13 @@
       "seed": 2,
       "format": "json",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
     },
     {
       "kind": "contrats",
@@ -318,8 +482,13 @@
       "seed": 2,
       "format": "toon",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
     },
     {
       "kind": "contrats",
@@ -327,8 +496,13 @@
       "seed": 2,
       "format": "cstl_indent",
       "run": 0,
-      "ok": null,
-      "error": "OpenRouter 402 : b'{\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"meta"
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\":1,\"r2\":[\"ctr_0\",\"ctr_2\",\"ctr_12\",\"ctr_20\",\"ctr_22\"],\"r3\":\"termination_1\"}"
     }
   ]
 }
