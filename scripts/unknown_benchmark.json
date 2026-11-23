@@ -3,7 +3,12 @@
     "json_naif": 2972,
     "json": 3697,
     "toon": 4928,
-    "cstl_indent": 2390
+    "cstl_indent": 2390,
+    "json_indente": 7604,
+    "yaml": 4802,
+    "xml": 5809,
+    "csv": 2293,
+    "cstl_arbre": 2665
   },
   "comprehension_gemma-4-31b-it": [
     {

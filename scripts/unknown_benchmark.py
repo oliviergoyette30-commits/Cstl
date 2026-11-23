@@ -44,7 +44,9 @@ tokens Gemini) :
 
 Usage :
   GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --tokens
-  GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --comprehension gemma-4-31b-it
+  GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --comprehension gemma-4-31b-it [--resume]
+  (--resume garde les reponses deja obtenues : ajouter un format ne repose
+  que ses questions)
 """
 import argparse
 import json
@@ -61,7 +63,7 @@ import cstl_compact  # noqa: E402
 import nested_benchmark as nb  # noqa: E402
 import toon_lite  # noqa: E402
 
-FORMATS = ("json_naif", "json", "toon", "cstl_indent")
+FORMATS = ("json_naif", "json", "toon", "cstl_indent", "json_indente", "yaml", "xml", "csv", "cstl_arbre")
 SIZES = (12, 30)
 SEEDS = (1, 2, 3)
 EXAMS = ("renal", "potassium")
@@ -75,6 +77,16 @@ NOTES = {
     "json": "Format : JSON. " + SEMANTICS + ' Une valeur inconnue s\'ecrit {"$unknown": {...details}}.',
     "toon": ("Format : TOON. Indentation = imbrication ; « cle[N]{champs}: » puis une ligne par element ; « - » = "
              "element de liste. " + SEMANTICS + ' Une valeur inconnue est un objet "$unknown" avec ses details.'),
+    "json_indente": "Format : JSON indente. " + SEMANTICS + ' Une valeur inconnue s\'ecrit {"$unknown": {...details}}.',
+    "yaml": "Format : YAML. " + SEMANTICS + " Une valeur inconnue est un objet $unknown avec ses details.",
+    "xml": ("Format : XML. " + SEMANTICS + " Un examen est un element : sa valeur en texte ; null s'ecrit "
+            "null=\"true\" ; une valeur inconnue s'ecrit unknown=\"true\" avec ses details en attributs ; un "
+            "examen absent n'a pas d'element."),
+    "csv": ("Format : CSV, une ligne par patient. " + SEMANTICS + " Colonne d'examen : un nombre ; « null » = "
+            "connu sans valeur ; « ? » = inconnu, avec ses details dans les colonnes <examen>_sigma et "
+            "<examen>_pending ; cellule vide = examen absent."),
+    "cstl_arbre": (nb.NOTES["cstl_arbre"] + " " + SEMANTICS + ' Une valeur inconnue est une cellule JSON '
+                   '"{\"$unknown\": {...}}"~ ; null s\'ecrit null.'),
     "cstl_indent": (nb.NOTES["cstl_indent"] + " " + SEMANTICS + " Une valeur inconnue s'ecrit « ? », ou "
                     "« ?{details} » avec ses details ; null s'ecrit null ; un examen absent n'est pas ecrit."),
 }
@@ -111,7 +123,60 @@ def naive(v):
     return v
 
 
+def to_xml(data):
+    import xml.etree.ElementTree as ET
+    root = ET.Element("patients")
+    for p in data["patients"]:
+        e = ET.SubElement(root, "patient", {k: str(p[k]) for k in ("id", "age", "ward")})
+        for exam in EXAMS:
+            if exam not in p:
+                continue
+            v = p[exam]
+            if v is None:
+                ET.SubElement(e, exam, {"null": "true"})
+            elif cstl_compact.is_unknown(v):
+                ET.SubElement(e, exam, {"unknown": "true", **{k: str(x) for k, x in v["$unknown"].items()}})
+            else:
+                ET.SubElement(e, exam).text = str(v)
+    ET.indent(root)
+    return ET.tostring(root, encoding="unicode")
+
+
+def to_csv(data):
+    import csv
+    import io
+    cols = ["id", "age", "ward"] + [c for e in EXAMS for c in (e, f"{e}_sigma", f"{e}_pending")]
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(cols)
+    for p in data["patients"]:
+        row = {"id": p["id"], "age": p["age"], "ward": p["ward"]}
+        for exam in EXAMS:
+            v = p.get(exam, "")
+            if v is None:
+                row[exam] = "null"
+            elif cstl_compact.is_unknown(v):
+                row[exam] = "?"
+                row[f"{exam}_sigma"] = v["$unknown"].get("sigma", "")
+                row[f"{exam}_pending"] = v["$unknown"].get("pending", "")
+            else:
+                row[exam] = v
+        w.writerow([row.get(c, "") for c in cols])
+    return buf.getvalue()
+
+
 def render(fmt, data):
+    if fmt == "json_indente":
+        return json.dumps(data, ensure_ascii=False, indent=2)
+    if fmt == "yaml":
+        import yaml
+        return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+    if fmt == "xml":
+        return to_xml(data)
+    if fmt == "csv":
+        return to_csv(data)
+    if fmt == "cstl_arbre":
+        return cstl_compact.encode_tree(data)
     if fmt == "json_naif":
         return json.dumps(naive(data), ensure_ascii=False, separators=(",", ":"))
     if fmt == "json":
@@ -193,7 +258,8 @@ def main():
 
         jobs = [(n, s, d, f) for n, s, d in datasets for f in FORMATS]
         old = out.get(f"comprehension_{args.comprehension}") if args.resume else None
-        rows = [r if r.get("ok") is not None else None for r in old] if old and len(old) == len(jobs) else [None] * len(jobs)
+        done = {(r["size"], r["seed"], r["format"]): r for r in old or [] if r.get("ok") is not None}
+        rows = [done.get((n, s, f)) for n, s, _, f in jobs]
         todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "3"))) as pool:
             for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):
