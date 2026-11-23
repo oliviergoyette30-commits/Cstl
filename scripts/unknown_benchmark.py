@@ -280,7 +280,16 @@ def main():
             print(f"    {f:12} | {sum(per_q):>2}/{4 * len(r)} | par question : inconnu {per_q[0]}/{len(r)}, "
                   f"null {per_q[1]}/{len(r)}, pending {per_q[2]}/{len(r)}, seuil {per_q[3]}/{len(r)}")
         out[f"comprehension_{args.comprehension}"] = rows
-    out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    # Plusieurs modeles peuvent tourner en parallele : relire le fichier sous
+    # verrou et n'y remplacer que les cles de cette execution.
+    import fcntl
+    with open(out_path.with_suffix(".lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = json.loads(out_path.read_text()) if out_path.exists() else {}
+        mine = {k: v for k, v in out.items() if k == "tokens" and args.tokens
+                or k == f"comprehension_{args.comprehension}"}
+        current.update(mine)
+        out_path.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")
     print(f"\nResultats bruts : {out_path.relative_to(REPO)}")
 
 
