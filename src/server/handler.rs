@@ -684,7 +684,8 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
                              INTENT_PAYLOAD [purpose=tree_denied, reason=invalid_tree_id]\n---END---\n".to_string()
                         } else {
-                            let rows = ctx.adn_store.lock().await.tree_relations(&tree).unwrap_or_else(|e| {
+                            let source = payload.intent.get("source").filter(|v| !v.is_empty()).cloned();
+                            let rows = ctx.adn_store.lock().await.tree_relations_from(&tree, source.as_deref()).unwrap_or_else(|e| {
                                 error!("[Handler] tree_relations failed: {}", e);
                                 Vec::new()
                             });
@@ -1691,6 +1692,14 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     let relations_to_verify: Vec<(usize, String, String, String)> = payload.relations.iter()
                         .enumerate()
                         .filter_map(|(idx, relation)| {
+                            // Elements d'arbre (tree=<id>) et engagements tree_commit
+                            // (2026-11-23) : des identifiants LOCAUX (c1, c1.0,
+                            // commandes_nov), sans sens dans une base de connaissances
+                            // publique. Les envoyer a Wikidata ne verifiait rien et
+                            // coutait une requete sortante par ligne de l'arbre.
+                            if relation.contains_key("tree") || relation.get("type").map(String::as_str) == Some("tree_commit") {
+                                return None;
+                            }
                             let subject = relation.get("subject").cloned()?;
                             let predicate = relation.get("type").cloned()?;
                             let object = relation.get("object").cloned()?;

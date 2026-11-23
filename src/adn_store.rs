@@ -1490,6 +1490,18 @@ impl AdnStore {
     /// 2026-09-04) -- NULL sinon (l'immense majorite des relations
     /// factuelles), colonne ajoutee par la migration idempotente dans open().
     pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
+        // REJEU (2026-11-23) : un message deja stocke (meme hash canonique) qu'on
+        // renvoie ne doit PAS reinscrire ses relations. Sinon elles deviennent
+        // les plus recentes : rejouer un ancien engagement tree_commit signe
+        // rendait de nouveau valide l'ancien arbre (verifie en direct), et
+        // rejouer une ancienne regle signee d'un auteur de politique (un MAY
+        // leve depuis par un MUST_NOT) l'aurait remise en vigueur. La date
+        // d'une relation est celle du PREMIER envoi de son message.
+        let already: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM adn_relations WHERE hash = ?1)", params![hash], |r| r.get(0))?;
+        if already {
+            return Ok(());
+        }
         // Les cles fixes du theoreme k=9 (spec §13: sigma/tau/layer/weight/id/
         // coref_with, symboles compacts σ/τ/δ/ω/ι acceptes en entree par le
         // parser mais toujours normalises sous leur nom long dans le HashMap --
@@ -1593,6 +1605,15 @@ impl AdnStore {
     /// qui portent l'attribut `tree=<tree>`, du DERNIER message qui l'a envoye
     /// (un arbre renvoye remplace le precedent), dans l'ordre d'envoi.
     pub fn tree_relations(&self, tree: &str) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        self.tree_relations_from(tree, None)
+    }
+
+    /// Comme `tree_relations`, mais avec `source` : seulement la derniere
+    /// version qui se reclame de cette source (tree_source sur tree_root), donc
+    /// acceptee contre son engagement signe (2026-11-23). Deux sources -- ou un
+    /// tiers sans source -- peuvent employer le meme nom d'arbre sans se
+    /// masquer l'une l'autre.
+    pub fn tree_relations_from(&self, tree: &str, source: Option<&str>) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT hash, subject, predicate, object, modality, extra_attrs FROM adn_relations
              WHERE extra_attrs LIKE ?1 ORDER BY id",
@@ -1616,7 +1637,14 @@ impl AdnStore {
             if let Some(v) = modality { m.insert("modality".into(), v); }
             out.push((hash, m));
         }
-        let Some(last) = out.last().map(|(h, _)| h.clone()) else { return Ok(Vec::new()) };
+        let last = match source {
+            None => out.last().map(|(h, _)| h.clone()),
+            Some(src) => out.iter().rev().find(|(_, m)| {
+                m.get("type").map(String::as_str) == Some("tree_root")
+                    && m.get("tree_source").map(String::as_str) == Some(src)
+            }).map(|(h, _)| h.clone()),
+        };
+        let Some(last) = last else { return Ok(Vec::new()) };
         Ok(out.into_iter().filter(|(h, _)| *h == last).map(|(_, m)| m).collect())
     }
 
@@ -3087,6 +3115,29 @@ mod tests {
 
     /// Fix 2026-10-29 (faille de continuite d'identite, audit du 15
     /// octobre): round-trip simple save_agent/load_agents, upsert inclus.
+    #[test]
+    fn replayed_message_does_not_restore_its_relations_as_latest() {
+        // 2026-11-23 : rejouer un ancien message signe (meme hash) ne doit pas
+        // reinscrire ses relations, sinon un ancien engagement tree_commit (ou
+        // une ancienne regle de politique) redevient le plus recent.
+        let store = AdnStore::open(":memory:").unwrap();
+        let rel = |obj: &str| -> HashMap<String, String> {
+            [("type", "tree_commit"), ("subject", "t"), ("object", obj)].iter()
+                .map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        };
+        for h in ["h_old", "h_new"] {
+            store.put(h, "payload", None, None, 0.5, None, None, None).unwrap();
+        }
+        store.put_relations("h_old", &[rel("sha256:old")]).unwrap();
+        store.put_relations("h_new", &[rel("sha256:new")]).unwrap();
+        store.put_relations("h_old", &[rel("sha256:old")]).unwrap(); // rejeu
+        let n: i64 = store.conn.query_row("SELECT COUNT(*) FROM adn_relations WHERE hash = 'h_old'", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1);
+        let last: String = store.conn.query_row(
+            "SELECT object FROM adn_relations WHERE subject = 't' ORDER BY id DESC LIMIT 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(last, "sha256:new");
+    }
+
     #[test]
     fn test_save_agent_load_agents_roundtrip_and_upsert() {
         let store = AdnStore::open(":memory:").unwrap();

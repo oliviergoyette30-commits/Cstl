@@ -78,22 +78,22 @@ def main():
         text = cstl_compact.encode_tree_indented(DOC, counts="line")
 
         o = capture(boutique, "1. La source (boutique) s'engage : empreinte signee du document")
-        boutique.commit_tree(DOC, "commandes_nov")
+        sel, _ = boutique.commit_tree(DOC, "commandes_nov")
         boutique.client.send_raw = o
 
         o = capture(assistant, "2. L'assistant envoie le document, ecrit en arbre indente, au nom de la source")
-        assistant.send_tree("server", text, tree_id="commandes_nov", source="boutique")
+        assistant.send_tree("server", text, tree_id="commandes_nov", source="boutique", nonce=sel)
         assistant.client.send_raw = o
 
         fake = copy.deepcopy(DOC)
         fake["commandes"][1]["lignes"][0]["prix"] = 22
         o = capture(fraudeur, "3. Un fraudeur change le prix de l'ecran (220 -> 22) et l'envoie au nom de la source")
         fraudeur.send_tree("server", cstl_compact.encode_tree_indented(fake, counts="line"),
-                           tree_id="commandes_nov", source="boutique")
+                           tree_id="commandes_nov", source="boutique", nonce=sel)
         fraudeur.client.send_raw = o
 
         o = capture(assistant, "4. L'assistant relit le document depuis le serveur")
-        back = assistant.fetch_tree("commandes_nov")
+        back = assistant.fetch_tree("commandes_nov", source="boutique")
         assistant.client.send_raw = o
 
         (out / "1_payload.txt").write_text(
@@ -103,7 +103,8 @@ def main():
             "B. Le message CSTL reellement transmis au serveur (etape 2) : chaque element\n"
             "   devient une RELATION marquee tree=commandes_nov, avec tree_n (nombre\n"
             "   d'enfants), tree_types (types des valeurs) et, sur tree_root,\n"
-            "   tree_source=boutique. L'ensemble est signe par la cle Ed25519 de\n"
+            "   tree_source=boutique et tree_nonce (le sel de l'engagement, recu de la\n"
+            "   boutique avec les donnees). L'ensemble est signe par la cle Ed25519 de\n"
             "   l'assistant (signature=...). La valeur inconnue (paiement) part en JSON\n"
             "   base64url, de type json : relue, elle redevient ?{raison:...}.\n\n"
             + log[1][1] + "\n", encoding="utf-8")
@@ -115,7 +116,9 @@ def main():
                  "les agents enregistres (handler.rs, STEP 5) ; l'expediteur est dans",
                  "GOVERNANCE [sender=...].", ""]
         notes = {
-            0: ["Le serveur verifie la signature de la boutique, puis inscrit l'engagement",
+            0: ["La boutique calcule l'empreinte du document AVEC un sel aleatoire de 128 bits",
+                "(sans lui, l'empreinte d'un petit document se devine), puis l'envoie signee.",
+                "Le serveur verifie la signature de la boutique, puis inscrit l'engagement",
                 "(RELATION type=tree_commit, object=sha256:...) dans la chaine d'audit signee."],
             1: ["Le serveur verifie, dans l'ordre :",
                 "  - la signature de l'assistant (cle enregistree) ;",
@@ -124,6 +127,7 @@ def main():
                 "  - l'empreinte : il recalcule le SHA-256 canonique de l'arbre recu et le",
                 "    compare a celui que la boutique a signe : identiques ;",
                 "  - les types declares (SCHEMA), la coherence, la deontique ;",
+                "  - aucune requete Wikidata : les noeuds d'arbre sont des identifiants locaux ;",
                 "puis il stocke l'arbre et l'inscrit dans l'audit (AUDIT [hash, seq])."],
             2: ["Le prix change modifie l'empreinte : elle ne correspond plus a celle que la",
                 "boutique a signee. Le message entier est REFUSE (purpose=tree_rejected),",

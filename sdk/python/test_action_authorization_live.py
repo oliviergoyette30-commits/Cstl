@@ -449,7 +449,11 @@ def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_pa
     tid = f"t_src_{uuid.uuid4().hex[:8]}"
     _, rej = bot.send_tree("server", src_tree, tree_id=tid, source=owner.name)
     assert rej.purpose == "tree_rejected" and "aucun engagement" in rej.raw, rej.raw
-    assert not owner.commit_tree(src_tree, tid).is_error
+    salt, commit = owner.commit_tree(src_tree, tid)
+    assert not commit.is_error, commit.raw
+    # Sans le sel, meme l'arbre exact ne correspond pas a l'empreinte engagee.
+    _, rej = bot.send_tree("server", src_tree, tree_id=tid, source=owner.name)
+    assert rej.purpose == "tree_rejected" and "empreinte differente" in rej.raw, rej.raw
     import copy
     missing = copy.deepcopy(src_tree)
     del missing["orders"][0]["lines"][1]
@@ -458,18 +462,36 @@ def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_pa
     added = copy.deepcopy(src_tree)
     added["orders"].append({"id": "o3"})
     for bad in (missing, changed, added):
-        _, rej = bot.send_tree("server", bad, tree_id=tid, source=owner.name)
+        _, rej = bot.send_tree("server", bad, tree_id=tid, source=owner.name, nonce=salt)
         assert rej.purpose == "tree_rejected" and "empreinte differente" in rej.raw, rej.raw
     # Le transmetteur s'engage lui-meme sur l'arbre modifie : ca ne compte pas
     # pour la source.
-    bot.commit_tree(changed, tid)
-    _, rej = bot.send_tree("server", changed, tree_id=tid, source=owner.name)
+    bot_salt, _ = bot.commit_tree(changed, tid)
+    _, rej = bot.send_tree("server", changed, tree_id=tid, source=owner.name, nonce=bot_salt)
     assert rej.purpose == "tree_rejected", rej.raw
     # L'arbre exact, ecrit par un modele en arbre indente, passe.
     _, ok = bot.send_tree("server", cstl_compact.encode_tree_indented(src_tree, counts="line"), tree_id=tid,
-                          source=owner.name)
+                          source=owner.name, nonce=salt)
     assert not ok.is_error, ok.raw
+    assert "VERIFICATION" not in ok.raw, ok.raw      # aucune requete Wikidata sur les noeuds d'arbre
     assert bot.fetch_tree(tid) == src_tree
+    # REJEU : la source s'engage sur une nouvelle version ; rejouer son ancien
+    # engagement signe ne rend pas l'ancien arbre de nouveau valide.
+    captured = []
+    real_send = owner.client.send_raw
+    owner.client.send_raw = lambda pl: (captured.append(pl), real_send(pl))[1]
+    owner.commit_tree(src_tree, tid + "_v")
+    old_commit = captured[-1]
+    owner.client.send_raw = real_send
+    salt2, _ = owner.commit_tree(changed, tid + "_v")
+    bot.client.send_raw(old_commit)
+    _, rej = bot.send_tree("server", changed, tree_id=tid + "_v", source=owner.name, nonce=salt2)
+    assert not rej.is_error, rej.raw              # la version courante passe toujours
+    # NOMS EN COLLISION : un tiers ecrit un arbre du meme nom, sans source ;
+    # relu avec source=, c'est la version engagee par la source qui revient.
+    bot.send_tree("server", {"x": [{"id": "pirate"}]}, tree_id=tid)
+    assert bot.fetch_tree(tid) == {"x": [{"id": "pirate"}]}
+    assert bot.fetch_tree(tid, source=owner.name) == src_tree
 
 
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):

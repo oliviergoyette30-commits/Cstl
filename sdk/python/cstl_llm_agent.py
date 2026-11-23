@@ -563,20 +563,27 @@ class CstlAgent:
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
         return self.send_relations(receiver, cstl_compact.decode(body), purpose)
 
-    def commit_tree(self, tree, tree_id: str) -> CstlResponse:
+    def commit_tree(self, tree, tree_id: str) -> Tuple[str, CstlResponse]:
         """La SOURCE s'engage sur un arbre (2026-11-23) : elle signe son
         empreinte canonique (`cstl_compact.tree_hash`), inscrite dans l'audit
         (RELATION [type=tree_commit, subject=<tree_id>, object=sha256:...]).
-        Ensuite, un arbre envoye par N'IMPORTE QUI avec source=<cet agent>
-        n'est accepte par le serveur que s'il a exactement cette empreinte :
-        un transmetteur ne peut ni omettre, ni modifier, ni ajouter."""
+        Ensuite, un arbre envoye par N'IMPORTE QUI avec source=<cet agent> et
+        le meme sel n'est accepte par le serveur que s'il a exactement cette
+        empreinte : un transmetteur ne peut ni omettre, ni modifier, ni ajouter.
+
+        L'empreinte couvre un SEL aleatoire de 128 bits (tree_nonce) : sans lui,
+        l'empreinte d'un petit document se devine en essayant les contenus
+        plausibles. Renvoie (sel, reponse) ; donner le sel au transmetteur avec
+        les donnees : `send_tree(..., source=<source>, nonce=sel)`."""
+        import secrets
         import cstl_compact
-        rels = cstl_compact.tree_to_relations(tree, tree_id, source=self.name)
+        nonce = secrets.token_hex(16)
+        rels = cstl_compact.tree_to_relations(tree, tree_id, source=self.name, nonce=nonce)
         digest = cstl_compact.tree_hash(rels, tree_id)
-        return self.send_relations("server", [{"type": "tree_commit", "subject": str(tree_id), "object": digest}])
+        return nonce, self.send_relations("server", [{"type": "tree_commit", "subject": str(tree_id), "object": digest}])
 
     def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None,
-                  lenient: bool = False, source: Optional[str] = None) -> Tuple[str, CstlResponse]:
+                  lenient: bool = False, source: Optional[str] = None, nonce: Optional[str] = None) -> Tuple[str, CstlResponse]:
         """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
         `tree` : n'importe quel document JSON (objet, liste, valeur), ou un
         texte en CSTL compact mode arbre : arbre indente
@@ -591,20 +598,28 @@ class CstlAgent:
         `cstl_compact.decode_tree_indented`). Rien n'est devine.
         source=<agent> : l'arbre se reclame de cette source ; le serveur le
         refuse (purpose=tree_rejected) si la source n'a pas engage exactement
-        cette empreinte avec `commit_tree`.
+        cette empreinte avec `commit_tree` ; nonce = le sel que `commit_tree`
+        a renvoye a la source.
         Renvoie (tree_id, reponse). Relire avec `fetch_tree(tree_id)`."""
         import cstl_compact
         if isinstance(tree, str):
             tree = (cstl_compact.decode_tree_indented(tree, lenient=lenient) if tree.lstrip().startswith("@")
                     else cstl_compact.decode_tree(tree))
         tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
-        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id, source=source))
+        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id, source=source,
+                                                                                     nonce=nonce))
 
-    def fetch_tree(self, tree_id: str):
+    def fetch_tree(self, tree_id: str, source: Optional[str] = None):
         """Relit un arbre envoye avec `send_tree` (sa derniere version), depuis
-        le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse."""
+        le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse.
+        source=<agent> : seulement la derniere version qui se reclame de cette
+        source, donc conforme a son engagement signe ; un autre arbre du meme
+        nom, envoye par un tiers, est ignore (2026-11-23)."""
         import cstl_compact
-        resp = self._send_signed("tree_query", "server", [], {"tree": tree_id, "request_id": uuid.uuid4().hex})
+        intent = {"tree": tree_id, "request_id": uuid.uuid4().hex}
+        if source:
+            intent["source"] = source
+        resp = self._send_signed("tree_query", "server", [], intent)
         if resp.purpose != "tree":
             raise RuntimeError(f"arbre refuse : {resp.fields.get('reason', resp.purpose)}")
         return cstl_compact.relations_to_tree([r for r in resp.relations if r.get("block") == "RELATION"], tree_id)

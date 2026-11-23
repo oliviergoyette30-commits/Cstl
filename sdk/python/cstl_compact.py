@@ -928,7 +928,7 @@ def tree_hash(rels, tree_id):
     return "sha256:" + hashlib.sha256(body.encode()).hexdigest()
 
 
-def tree_to_relations(data, tree_id, source=None):
+def tree_to_relations(data, tree_id, source=None, nonce=None):
     """Document JSON -> relations CSTL, toutes marquees tree=<tree_id>. Les
     listes d'objets deviennent des relations (une par objet) ; le reste de la
     racine (champs simples, liste d'objets en racine, valeur seule) part dans
@@ -960,6 +960,12 @@ def tree_to_relations(data, tree_id, source=None):
         if not _NAME_OK.match(str(source)):
             raise CompactError(f"nom de source invalide : {source!r}")
         rel["tree_source"] = str(source)
+    if nonce is not None:
+        # Sel de l'engagement (2026-11-23) : sans lui, l'empreinte d'un petit
+        # document se devine en essayant les contenus plausibles.
+        if not re.fullmatch(r"[0-9a-f]{32,128}", str(nonce)):
+            raise CompactError("nonce : 32 a 128 chiffres hexadecimaux")
+        rel["tree_nonce"] = str(nonce)
     types = []
     for k, v in extra.items():
         name = _field_name(k)
@@ -1016,7 +1022,7 @@ def relations_to_tree(rels, tree_id=None):
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
             if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "tree_source",
-                     "block") or k.startswith(("tree_c", "tree_t")):
+                     "tree_nonce", "block") or k.startswith(("tree_c", "tree_t")):
                 continue
             o[_unfield(k)] = _get_wire(r, k, types.get(k))
         if r.get("tree_kind"):

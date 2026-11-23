@@ -316,6 +316,24 @@ The hash is identical in Python (`cstl_compact.tree_hash`) and in Rust
 sides. Live test: a transmitter that drops a line, changes a price or adds
 an order is refused, and so is one that commits to its own altered version.
 
+Hardening (2026-11-23), after a review of this mechanism:
+- **Salt.** `commit_tree` returns `(salt, response)`. The hash covers a
+  random 128-bit `tree_nonce`, so the hash of a small document cannot be
+  guessed by trying plausible contents. The source gives the salt to the
+  transmitter with the data: `send_tree(..., source=..., nonce=salt)`.
+- **Replay.** A replayed message (same canonical hash) no longer stores its
+  relations again. Before this fix, replaying an old signed `tree_commit`
+  made the old tree valid again. This was confirmed live. A replayed policy
+  rule would also have come back into force.
+- **Name collisions.** `fetch_tree(tree_id, source=...)` returns only the
+  latest version that claims that source, and was therefore checked against
+  its commitment. A third party using the same tree name cannot shadow it.
+- **No knowledge-base lookups on tree nodes.** Tree elements (`tree=`) and
+  `tree_commit` are local identifiers. They are no longer sent to
+  Wikidata, which used to cost one outgoing request per line.
+- A model may omit the `/N` counts. The SDK computes `tree_n` from the
+  structure itself, and the model's `/N` is only a check.
+
 Limits: a tree sent without `source` is vouched for by its sender only.
 Nobody can prove that a source tells the truth about its own data; it can
 only be bound, by signature, to what it declared.
