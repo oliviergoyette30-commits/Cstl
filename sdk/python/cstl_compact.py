@@ -875,7 +875,12 @@ def tree_to_relations(data, tree_id):
     """Document JSON -> relations CSTL, toutes marquees tree=<tree_id>. Les
     listes d'objets deviennent des relations (une par objet) ; le reste de la
     racine (champs simples, liste d'objets en racine, valeur seule) part dans
-    une relation « tree_root » (tree_kind=fields|list|value)."""
+    une relation « tree_root » (tree_kind=fields|list|value|tables).
+
+    Comptes (2026-11-23) : chaque element qui a des enfants porte tree_n=<nombre
+    d'enfants directs>, et tree_root porte tree_n=<nombre d'elements a la
+    racine>. Le SERVEUR les verifie a la reception et refuse un arbre
+    incomplet ; `relations_to_tree` les reverifie a la relecture."""
     if not _NAME_OK.match(str(tree_id)):
         raise CompactError(f"id d'arbre invalide : {tree_id!r}")
     rels, seen = [], set()
@@ -886,20 +891,20 @@ def tree_to_relations(data, tree_id):
         extra = {k: v for k, v in data.items()
                  if not (_NAME_OK.match(k) and isinstance(v, list) and v and all(isinstance(x, dict) for x in v))}
         data = {k: v for k, v in data.items() if k not in extra}
-        kind = "fields" if extra else None
+        kind = "fields" if extra else "tables"
     else:
         kind, extra, data = "value", {"v": data}, {}
-    if kind:
-        rel = {"type": "tree_root", "subject": "tree_root", "object": "-", "tree": str(tree_id), "tree_kind": kind}
-        types = []
-        for k, v in extra.items():
-            name = _field_name(k)
-            rel[name], t = _wire_value(f"racine.{k}", v)
-            if t:
-                types.append(f"{name}:{t}")
-        if types:
-            rel["tree_types"] = " ".join(types)
-        rels.append(rel)
+    rel = {"type": "tree_root", "subject": "tree_root", "object": "-", "tree": str(tree_id), "tree_kind": kind}
+    types = []
+    for k, v in extra.items():
+        name = _field_name(k)
+        rel[name], t = _wire_value(f"racine.{k}", v)
+        if t:
+            types.append(f"{name}:{t}")
+    if types:
+        rel["tree_types"] = " ".join(types)
+    rel["tree_n"] = str(sum(len(v) for v in data.values()))
+    rels.append(rel)
 
     def walk(key, objs, parent):
         if not _NAME_OK.match(key):
@@ -928,6 +933,8 @@ def tree_to_relations(data, tree_id):
                     types.append(f"{name}:{t}")
             if types:
                 rel["tree_types"] = " ".join(types)
+            if kids:
+                rel["tree_n"] = str(sum(len(v) for _, v in kids))
             rels.append(rel)
             for k, v in kids:
                 walk(k, v, oid)
@@ -946,7 +953,7 @@ def relations_to_tree(rels, tree_id=None):
         types = dict(t.split(":", 1) for t in r.get("tree_types", "").split() if ":" in t)
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
-            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "block"):
+            if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "block"):
                 continue
             o[_unfield(k)] = _from_wire(v, types.get(k))
         if r.get("tree_kind"):
@@ -959,6 +966,17 @@ def relations_to_tree(rels, tree_id=None):
             nodes[r["object"]].setdefault(r["type"], []).append(o)
         else:
             raise CompactError(f"parent inconnu {r['object']!r} pour {r['subject']!r}")
+    # Comptes annonces (tree_n) : verifies aussi a la relecture.
+    kids = {}
+    for r in rels:
+        if (tree_id is None or r.get("tree") == str(tree_id)) and not r.get("tree_kind"):
+            kids[r["object"]] = kids.get(r["object"], 0) + 1
+    for r in rels:
+        if (tree_id is not None and r.get("tree") != str(tree_id)) or "tree_n" not in r:
+            continue
+        got = kids.get("-" if r.get("tree_kind") else r["subject"], 0)
+        if str(got) != str(r["tree_n"]):
+            raise CompactError(f"arbre incomplet : {r['subject']} annonce {r['tree_n']} enfant(s), {got} relu(s)")
     if kind == "value":
         return extra.get("v")
     if kind == "list":

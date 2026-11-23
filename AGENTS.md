@@ -262,6 +262,24 @@ Refused before sending:
 - a field name outside `[A-Za-z0-9_.-]`;
 - a value over 300 characters on the wire.
 
+**The server checks that a tree is complete.** Each element that has
+children carries `tree_n=<number of direct children>`, and a `tree_root`
+relation carries the number of root elements. On arrival, the server
+counts them itself (`src/server/tree_check.rs`). It refuses the whole
+message, before storing anything, with `INTENT_PAYLOAD
+[purpose=tree_rejected, detail=...]`, in three cases:
+- a branch is missing;
+- an element has no parent;
+- an element appears twice.
+
+The counts are then signed and audited with the rest, and `fetch_tree`
+checks them again on reading.
+
+So a client that bypasses the SDK cannot leave a hole unnoticed, and a
+reader can later prove the tree is complete. Limit: the counts are the
+author's. They prove the tree matches what the author announced, not
+that the author tells the truth.
+
 Any registered agent can read a tree by its id. Live test:
 `test_tree_mode_goes_through_the_server`.
 

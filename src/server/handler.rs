@@ -595,6 +595,21 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         }
                     }
 
+                    // STEP 2-tree-check (2026-11-23) : COMPLETUDE DES ARBRES. Les
+                    // relations d'un arbre (tree=<id>) annoncent leurs enfants
+                    // (tree_n) ; un arbre auquel il manque une branche, un element
+                    // sans parent ou en double est refuse en entier, avant d'etre
+                    // stocke (voir tree_check.rs).
+                    if let Some(detail) = super::tree_check::violation(&payload.relations) {
+                        warn!("[Handler] Tree rejected for '{}': {}", sig_sender, detail);
+                        let response = format!(
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=tree_rejected, detail={}]\n---END---\n",
+                            wire_text(&detail)
+                        );
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
                     // — purpose=council_decision est traite a part: ce n'est pas un
                     // nouveau fait a verifier/stocker, c'est une action sur une entree

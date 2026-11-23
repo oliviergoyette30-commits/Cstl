@@ -423,6 +423,18 @@ def test_tree_mode_goes_through_the_server(authority_server, monkeypatch, tmp_pa
     for other in ([{"a": 1}, {"a": 2}], [1, "deux", None], 42):
         tid4, _ = bot.send_tree("server", other)
         assert bot.fetch_tree(tid4) == other
+    # 2026-11-23 : le SERVEUR verifie la completude (tree_n). Un client qui
+    # contourne le SDK et envoie un arbre auquel il manque une ligne, ou un
+    # element sans parent, est refuse ; rien n'est stocke.
+    hole = f"t_hole_{uuid.uuid4().hex[:8]}"
+    full = cstl_compact.tree_to_relations({"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}]}, hole)
+    for broken, why in ((full[:3], "o1 annonce 2"), (full[:1] + full[2:], "parent o1 absent")):
+        rej = bot.send_relations("server", broken)
+        assert rej.purpose == "tree_rejected" and why in rej.raw, rej.raw
+    assert bot.fetch_tree(hole) == {}
+    ok = bot.send_relations("server", full)
+    assert not ok.is_error, ok.raw
+    assert bot.fetch_tree(hole) == {"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}]}
 
 
 def test_role_rule_and_validity_period(authority_server, monkeypatch, tmp_path):

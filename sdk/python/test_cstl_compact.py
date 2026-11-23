@@ -373,7 +373,9 @@ def test_tree_relations_round_trip_and_escaping():
         {"title": "pay", "clauses": [{"ref": "1.1", "modality": "MUST_NOT", "type": "x", "f_note": "y", "tree": 3,
                                       "amount": 5.5, "ok": False, "none": None}]}]}]}
     rels = tree_to_relations(data, "t1")
-    clause = rels[2]
+    assert rels[0]["type"] == "tree_root" and rels[0]["tree_kind"] == "tables" and rels[0]["tree_n"] == "1"
+    assert rels[1]["tree_n"] == "1" and rels[2]["tree_n"] == "1" and "tree_n" not in rels[3]
+    clause = rels[3]
     assert clause["f_modality"] == "MUST_NOT" and "modality" not in clause and clause["f_type"] == "x"
     assert clause["f_f_note"] == "y" and clause["f_tree"] == "3" and clause["tree"] == "t1"
     assert relations_to_tree(rels, "t1") == data
@@ -574,3 +576,15 @@ def test_indented_tree_counts_at_the_end_of_each_line():
     warn = []
     assert decode_tree_indented(bad, lenient=True, warnings=warn) == data
     assert warn == ["ligne 6 : /3 annonce, 2 enfant(s) ecrit(s)"]
+
+
+def test_tree_relations_counts_are_checked_on_read():
+    """2026-11-23 : tree_n (enfants annonces) est reverifie a la relecture :
+    un arbre auquel il manque une branche est refuse, pas rendu incomplet."""
+    from cstl_compact import relations_to_tree
+    data = {"orders": [{"id": "o1", "lines": [{"q": 1}, {"q": 2}]}, {"id": "o2"}]}
+    rels = tree_to_relations(data, "t1")
+    assert relations_to_tree(rels, "t1") == data
+    for drop in (2, 4):          # une ligne, puis une commande entiere
+        with pytest.raises(CompactError, match="arbre incomplet"):
+            relations_to_tree(rels[:drop] + rels[drop + 1:], "t1")

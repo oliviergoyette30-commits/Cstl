@@ -379,6 +379,14 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - Conclusion : pour un texte écrit par un modèle, le compte local garde
       la vérification stricte et indique la ligne fautive. Le mode tolérant
       (`lenient=True`) reste le filet de sécurité.
+  - **Complétude vérifiée par le serveur** (2026-11-23) : chaque élément
+    qui a des enfants porte `tree_n`, et `tree_root` porte le nombre
+    d'éléments à la racine.
+    - À la réception, le serveur refuse un arbre dont il manque une branche,
+      ou qui a un élément sans parent ou en double (`purpose=tree_rejected`).
+    - Les comptes sont signés et audités, puis revérifiés à la relecture.
+    - Test réel : un client qui contourne le SDK est refusé.
+    - Limite : les comptes sont ceux de l'auteur.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).
