@@ -360,7 +360,16 @@ class OpenRouterBrain(agent_mod.LLMProvider):
                     d = json.load(r)
                 if d.get("error"):
                     raise RuntimeError(f"OpenRouter : {str(d['error'])[:300]}")
-                return ((d.get("choices") or [{}])[0].get("message") or {}).get("content", "").strip()
+                content = ((d.get("choices") or [{}])[0].get("message") or {}).get("content")
+                if not content:
+                    # Reponse vide (DeepSeek, 2026-11-23 : content=null) : reessayer,
+                    # puis la compter comme erreur d'API, pas comme une reponse fausse.
+                    if attempt < 7:
+                        time.sleep(delay)
+                        delay = min(delay * 2, 120)
+                        continue
+                    raise RuntimeError(f"OpenRouter : reponse vide ({str(d)[:200]})")
+                return content.strip()
             except urllib.error.HTTPError as e:
                 if e.code in (402, 408, 429, 500, 502, 503, 504) and attempt < 7:  # 402 : credit reserve par les requetes en vol
                     time.sleep(delay)
