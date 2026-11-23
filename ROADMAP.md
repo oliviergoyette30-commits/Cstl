@@ -410,6 +410,12 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       sur les questions de vide. L'information n'existe plus.
     - L'arbre indenté est le seul format complet et plus court que le JSON
       naïf (2 972 tokens).
+    - Étendu à tous les formats courants, 24/24 partout sauf le JSON naïf :
+      CSV 2 293 tokens (données plates, son terrain idéal), arbre indenté
+      2 390, arbre par identifiants 2 665, JSON compact 3 697, YAML 4 802,
+      TOON 4 928, XML 5 809, JSON indenté 7 604.
+    - Ce qui compte est que le vide soit écrit, pas le format choisi. Entre
+      formats complets, la différence est le coût.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

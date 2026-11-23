@@ -28,19 +28,28 @@ Questions (memes pour tous) : patients a l'examen inconnu, patients a
 l'examen connu sans valeur, patients dont la mesure est attendue au prochain
 controle, patients a la valeur connue au-dessus d'un seuil.
 
-RESULTATS (2026-11-23, Gemma 4 31B, 6 jeux, 24 questions par format ;
-tokens Gemini) :
-  format        tokens   justes   inconnu  null  pending  seuil
-  cstl_indent    2 390   24/24     6/6     6/6    6/6     6/6
-  json_naif      2 972    8/24     1/6     0/6    1/6     6/6
-  json           3 697   24/24     6/6     6/6    6/6     6/6
-  toon           4 928   24/24     6/6     6/6    6/6     6/6
+RESULTATS (2026-11-23, Gemma 4 31B, 6 jeux, 24 questions par format, tous
+complets ; tokens Gemini) :
+  format         tokens   justes
+  csv             2 293   24/24   (donnees plates : son terrain ideal)
+  cstl_indent     2 390   24/24
+  cstl_arbre      2 665   24/24
+  json_naif       2 972    8/24   (inconnu 1/6, null 0/6, pending 1/6, seuil 6/6)
+  json (compact)  3 697   24/24
+  yaml            4 802   24/24
+  toon            4 928   24/24
+  xml             5 809   24/24
+  json_indente    7 604   24/24
 - Le JSON naif rate les questions sur le vide : l'information n'existe plus
   (tout est null), le modele n'y peut rien. Le corollaire, mesure.
-- Des que l'inconnu est ecrit, Gemma ne se trompe dans aucun format ; l'arbre
-  indente est le seul a etre complet ET plus court que le JSON naif qui perd
-  l'information (-20 %), et 35 % plus court que le JSON complet.
-- 5 jeux json/toon perdus sur des erreurs d'API, reposes avec --resume.
+- Des que l'inconnu est ECRIT, Gemma ne se trompe dans aucun format : ce qui
+  compte est que le vide parle, pas le format. La difference est le cout :
+  de 2 293 a 7 604 tokens pour la meme information.
+- CSV gagne de peu parce que ces dossiers sont plats ; il ne sait ni
+  imbriquer ni porter des details variables (colonnes _sigma/_pending
+  inventees). L'arbre indente est le plus court des formats generaux, et le
+  seul complet ET plus court que le JSON naif qui perd l'information.
+- Jeux perdus sur des erreurs d'API reposes avec --resume (0 manquant).
 
 Usage :
   GEMINI_API_KEY=... python3 scripts/unknown_benchmark.py --tokens
