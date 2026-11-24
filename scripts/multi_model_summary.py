@@ -116,6 +116,49 @@ def collect():
     return data
 
 
+FORMATS4 = ("json", "toon", "cstl_indent", "cstl_indent_ligne")
+
+
+def real_summary(real):
+    res = {"lecture": {}, "ecriture": {}, "tokens": real.get("tokens_par_fournisseur", {})}
+    for key, rows in real.items():
+        if key.startswith("comprehension_"):
+            m = key[len("comprehension_"):]
+            res["lecture"][m] = {f: score(rows, f) for f in FORMATS4 if score(rows, f)[1]}
+        elif key.startswith("writing_"):
+            m = key[len("writing_"):]
+            d = {}
+            for f in ("json", "toon", "cstl_indent_ligne"):
+                r = [x for x in rows if x and x["format"] == f and x.get("ok") is not None]
+                if r:
+                    d[f] = (sum(x["exact"] for x in r), sum(x["exact_lenient"] for x in r), len(r))
+            res["ecriture"][m] = d
+    return res
+
+
+def passes_summary():
+    import statistics
+    out = {}
+    for p in sorted(S.glob("nested_comprehension_*.json")):
+        rows = json.loads(p.read_text())["rows"]
+        runs = {r.get("run", 0) for r in rows if r.get("ok") is not None}
+        if len(runs) < 3:
+            continue
+        m = p.name[len("nested_comprehension_"):-5].replace("__", "/")
+        d = {}
+        for f in FORMATS4:
+            per = []
+            for run in sorted(runs):
+                r = [x for x in rows if x["format"] == f and x.get("run", 0) == run and x.get("ok") is not None]
+                if len(r) == 12:
+                    per.append(sum(sum(x["ok"]) for x in r))
+            if len(per) >= 2:
+                d[f] = (statistics.mean(per), statistics.stdev(per), len(per))
+        if d:
+            out[m] = d
+    return out
+
+
 def export(md_path):
     data = collect()
     tokens = json.loads((S / "nested_benchmark_tokens.json").read_text())
@@ -193,6 +236,62 @@ def export(md_path):
     w("| Ecriture tolerante | - | - | - | " + pct(tot.get(("identiques_tolerant", "cstl_indent_ligne"))) + " |")
     w("| Vide qui parle | " + " | ".join(pct(tot.get(("vide_qui_parle", f))) for f in ("json", "toon", "cstl_indent")) + " | - |")
     w(f"\nJSON naif sur le vide qui parle : {pct(tot.get(('vide_qui_parle', 'json_naif')))}.\n")
+    # ---------------- donnees reelles, tokenizers, passes (2026-11-24)
+    real_path = S / "real_data_results.json"
+    if real_path.exists():
+        real = json.loads(real_path.read_text())
+        out["reel"] = real_summary(real)
+        Path(md_path).with_suffix(".json").write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+        rs = out["reel"]
+        w("## 4. Donnees reelles hors distribution (PyPI, npm, crates.io, Wikidata)\n")
+        w("12 reponses d'API publiques (`scripts/real_data/`, `scripts/real_data_build.py`), questions generees par "
+          "programme (`scripts/real_data_benchmark.py`), 3 passes en lecture. TOON n'est mesure que sur les 10 "
+          "documents que `toon_lite` relit a l'identique.\n")
+        w("| Modele | JSON | TOON | Arbre indente | Arbre indente + /N |\n|---|---|---|---|---|")
+        for m, d in rs["lecture"].items():
+            w(f"| {m} | " + " | ".join(f"{d[f][0]}/{d[f][1]}" if f in d else "-" for f in FORMATS4) + " |")
+        w("\n**Ecriture** (documents identiques, strict / tolerant) :\n")
+        w("| Modele | JSON | TOON | Arbre indente + /N |\n|---|---|---|---|")
+        for m, d in rs["ecriture"].items():
+            w(f"| {m} | " + " | ".join(f"{d[f][0]}/{d[f][2]} / {d[f][1]}/{d[f][2]}" if f in d else "-"
+                                       for f in ("json", "toon", "cstl_indent_ligne")) + " |")
+        if rs.get("tokens"):
+            w("\n**Tokens d'entree comptes par chaque fournisseur** (usage.prompt_tokens, sur les memes documents ; "
+              "« commun » = les documents que TOON relit) :\n")
+            w("| Tokenizer | Reel : JSON | Reel : arbre indente | Ecart | Synthetique : JSON | Synthetique : arbre "
+              "indente | Ecart |\n|---|---|---|---|---|---|---|")
+            for m, t in rs["tokens"].items():
+                w(f"| {m} | {t['reel_json']} | {t['reel_cstl_indent']} | "
+                  f"{100 * (t['reel_cstl_indent'] - t['reel_json']) / t['reel_json']:+.0f} % | "
+                  f"{t['synthetique_json']} | {t['synthetique_cstl_indent']} | "
+                  f"{100 * (t['synthetique_cstl_indent'] - t['synthetique_json']) / t['synthetique_json']:+.0f} % |")
+        w("")
+    if rs_passes := passes_summary():
+        out["passes"] = rs_passes
+        Path(md_path).with_suffix(".json").write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+        w("## 5. Stabilite : 3 passes sur la lecture des donnees imbriquees\n")
+        w("Moyenne et ecart-type du score par passe (sur 36), modele par modele.\n")
+        w("| Modele | JSON | TOON | Arbre indente | Arbre indente + /N |\n|---|---|---|---|---|")
+        for m, d in rs_passes.items():
+            w(f"| {m} | " + " | ".join(f"{d[f][0]:.1f} ± {d[f][1]:.1f}" if f in d else "-" for f in FORMATS4) + " |")
+        w("")
+    w("## Reproduire\n")
+    w("| Element | Ou |\n|---|---|")
+    w("| Grammaire du format | `docs/CSTL_ARBRE_INDENTE_SPEC.md` |")
+    w("| Encodeur et decodeur de reference | `sdk/python/cstl_compact.py` (`encode_tree_indented`, "
+      "`decode_tree_indented`) ; tests : `sdk/python/test_cstl_compact.py` |")
+    w("| Jeux imbriques (12) et questions | `scripts/nested_benchmark.py` : `gen()`, `questions()` (graines fixes) |")
+    w("| Consignes exactes, notation | meme fichier : `NOTES`, invite dans `main()`, `same()`, `extract_answer()` |")
+    w("| Ecriture | `scripts/nested_writing_benchmark.py` : `prompt()`, decodeurs, `leaves()` |")
+    w("| Vide qui parle | `scripts/unknown_benchmark.py` : `gen()`, `questions()`, `NOTES` |")
+    w("| Donnees reelles | `scripts/real_data/*.json`, `scripts/real_data_build.py`, `scripts/real_data_benchmark.py` |")
+    w("| Reponses brutes de chaque modele | `scripts/nested_*_<modele>.json`, `scripts/unknown_benchmark.json`, "
+      "`scripts/real_data_results.json` |")
+    w("| Parametres | OpenRouter : `temperature=0`, `max_tokens=8000` ; Gemini : parametres par defaut, "
+      "`maxOutputTokens=16000` (`scripts/team_task_benchmark.py`) |")
+    w("| Versions des modeles | celles servies par OpenRouter et l'API Gemini aux dates indiquees (2026-11-22 a "
+      "2026-11-24), sous les noms du tableau |")
+    w("")
     w("## Participer : ajouter un modele\n")
     w("**Avec une cle d'API** (Gemini : `gemini-*`, `gemma-*` ; OpenRouter : `fournisseur/modele`, par ex. "
       "`openai/gpt-5-mini`) :\n")

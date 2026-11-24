@@ -29,16 +29,20 @@
     "anthropic/claude-haiku-5.5": {
       "lecture": {
         "json": {
-          "justes": 36,
-          "total": 36
+          "justes": 106,
+          "total": 108
         },
         "toon": {
-          "justes": 35,
-          "total": 36
+          "justes": 105,
+          "total": 108
         },
         "cstl_indent": {
-          "justes": 35,
-          "total": 36
+          "justes": 106,
+          "total": 108
+        },
+        "cstl_indent_ligne": {
+          "justes": 106,
+          "total": 108
         }
       },
       "ecriture": {
@@ -80,16 +84,20 @@
     "anthropic/claude-sonnet-5.5": {
       "lecture": {
         "json": {
-          "justes": 35,
-          "total": 36
+          "justes": 106,
+          "total": 108
         },
         "toon": {
-          "justes": 36,
-          "total": 36
+          "justes": 108,
+          "total": 108
         },
         "cstl_indent": {
-          "justes": 36,
-          "total": 36
+          "justes": 107,
+          "total": 108
+        },
+        "cstl_indent_ligne": {
+          "justes": 105,
+          "total": 108
         }
       },
       "ecriture": {
@@ -339,20 +347,20 @@
     "meta-llama/llama-4-maverick": {
       "lecture": {
         "json": {
-          "justes": 25,
-          "total": 36
+          "justes": 74,
+          "total": 108
         },
         "toon": {
-          "justes": 30,
-          "total": 36
+          "justes": 89,
+          "total": 108
         },
         "cstl_indent": {
-          "justes": 25,
-          "total": 36
+          "justes": 77,
+          "total": 108
         },
         "cstl_indent_ligne": {
-          "justes": 32,
-          "total": 36
+          "justes": 89,
+          "total": 108
         }
       },
       "ecriture": {
@@ -394,20 +402,20 @@
     "mistralai/mistral-medium-3-5": {
       "lecture": {
         "json": {
-          "justes": 18,
-          "total": 36
+          "justes": 51,
+          "total": 108
         },
         "toon": {
-          "justes": 19,
-          "total": 36
+          "justes": 57,
+          "total": 108
         },
         "cstl_indent": {
-          "justes": 19,
-          "total": 36
+          "justes": 58,
+          "total": 108
         },
         "cstl_indent_ligne": {
-          "justes": 17,
-          "total": 36
+          "justes": 51,
+          "total": 108
         }
       },
       "ecriture": {
@@ -449,20 +457,20 @@
     "openai/gpt-5-mini": {
       "lecture": {
         "json": {
-          "justes": 36,
-          "total": 36
+          "justes": 108,
+          "total": 108
         },
         "toon": {
-          "justes": 35,
-          "total": 36
+          "justes": 106,
+          "total": 108
         },
         "cstl_indent": {
-          "justes": 36,
-          "total": 36
+          "justes": 107,
+          "total": 108
         },
         "cstl_indent_ligne": {
-          "justes": 35,
-          "total": 36
+          "justes": 107,
+          "total": 108
         }
       },
       "ecriture": {
@@ -551,6 +559,469 @@
           "total": 24
         }
       }
+    }
+  },
+  "reel": {
+    "lecture": {
+      "anthropic/claude-haiku-5.5": {
+        "json": [
+          75,
+          75
+        ],
+        "toon": [
+          59,
+          60
+        ],
+        "cstl_indent": [
+          75,
+          75
+        ],
+        "cstl_indent_ligne": [
+          75,
+          75
+        ]
+      },
+      "deepseek/deepseek-v4.1-flash": {
+        "json": [
+          75,
+          75
+        ],
+        "toon": [
+          60,
+          60
+        ],
+        "cstl_indent": [
+          75,
+          75
+        ],
+        "cstl_indent_ligne": [
+          75,
+          75
+        ]
+      },
+      "openai/gpt-5-mini": {
+        "json": [
+          75,
+          75
+        ],
+        "toon": [
+          60,
+          60
+        ],
+        "cstl_indent": [
+          74,
+          75
+        ],
+        "cstl_indent_ligne": [
+          73,
+          75
+        ]
+      },
+      "qwen/qwen3.8-flash": {
+        "json": [
+          75,
+          75
+        ],
+        "toon": [
+          60,
+          60
+        ],
+        "cstl_indent": [
+          75,
+          75
+        ],
+        "cstl_indent_ligne": [
+          73,
+          75
+        ]
+      },
+      "anthropic/claude-sonnet-5.5": {
+        "json": [
+          75,
+          75
+        ],
+        "toon": [
+          60,
+          60
+        ],
+        "cstl_indent": [
+          75,
+          75
+        ],
+        "cstl_indent_ligne": [
+          75,
+          75
+        ]
+      },
+      "meta-llama/llama-4-maverick": {
+        "json": [
+          69,
+          75
+        ],
+        "toon": [
+          57,
+          60
+        ],
+        "cstl_indent": [
+          72,
+          75
+        ],
+        "cstl_indent_ligne": [
+          71,
+          75
+        ]
+      },
+      "mistralai/mistral-medium-3-5": {
+        "json": [
+          75,
+          75
+        ],
+        "toon": [
+          60,
+          60
+        ],
+        "cstl_indent": [
+          75,
+          75
+        ],
+        "cstl_indent_ligne": [
+          75,
+          75
+        ]
+      }
+    },
+    "ecriture": {
+      "anthropic/claude-haiku-5.5": {
+        "json": [
+          12,
+          12,
+          12
+        ],
+        "toon": [
+          7,
+          7,
+          10
+        ],
+        "cstl_indent_ligne": [
+          10,
+          10,
+          12
+        ]
+      },
+      "anthropic/claude-sonnet-5.5": {
+        "json": [
+          12,
+          12,
+          12
+        ],
+        "toon": [
+          9,
+          9,
+          10
+        ],
+        "cstl_indent_ligne": [
+          10,
+          10,
+          12
+        ]
+      },
+      "meta-llama/llama-4-maverick": {
+        "json": [
+          10,
+          10,
+          12
+        ],
+        "toon": [
+          4,
+          4,
+          10
+        ],
+        "cstl_indent_ligne": [
+          3,
+          3,
+          12
+        ]
+      },
+      "openai/gpt-5-mini": {
+        "json": [
+          12,
+          12,
+          12
+        ],
+        "toon": [
+          6,
+          6,
+          10
+        ],
+        "cstl_indent_ligne": [
+          5,
+          5,
+          12
+        ]
+      },
+      "mistralai/mistral-medium-3-5": {
+        "json": [
+          8,
+          8,
+          12
+        ],
+        "toon": [
+          3,
+          3,
+          10
+        ],
+        "cstl_indent_ligne": [
+          7,
+          7,
+          12
+        ]
+      }
+    },
+    "tokens": {
+      "openai/gpt-5-mini": {
+        "reel_json": 10354,
+        "reel_json_docs": 12,
+        "reel_toon": 7166,
+        "reel_toon_docs": 10,
+        "reel_cstl_indent": 9141,
+        "reel_cstl_indent_docs": 12,
+        "reel_cstl_indent_ligne": 9126,
+        "reel_cstl_indent_ligne_docs": 12,
+        "reel_json_commun": 6703,
+        "reel_cstl_indent_commun": 6001,
+        "synthetique_json": 16873,
+        "synthetique_json_docs": 12,
+        "synthetique_toon": 19059,
+        "synthetique_toon_docs": 12,
+        "synthetique_cstl_indent": 9545,
+        "synthetique_cstl_indent_docs": 12,
+        "synthetique_cstl_indent_ligne": 10225,
+        "synthetique_cstl_indent_ligne_docs": 12,
+        "synthetique_json_commun": 16873,
+        "synthetique_cstl_indent_commun": 9545
+      },
+      "anthropic/claude-haiku-5.5": {
+        "reel_json": 15557,
+        "reel_json_docs": 12,
+        "reel_toon": 9637,
+        "reel_toon_docs": 10,
+        "reel_cstl_indent": 13470,
+        "reel_cstl_indent_docs": 12,
+        "reel_cstl_indent_ligne": 13458,
+        "reel_cstl_indent_ligne_docs": 12,
+        "reel_json_commun": 9882,
+        "reel_cstl_indent_commun": 8594,
+        "synthetique_json": 24775,
+        "synthetique_json_docs": 12,
+        "synthetique_toon": 23588,
+        "synthetique_toon_docs": 12,
+        "synthetique_cstl_indent": 12620,
+        "synthetique_cstl_indent_docs": 12,
+        "synthetique_cstl_indent_ligne": 13620,
+        "synthetique_cstl_indent_ligne_docs": 12,
+        "synthetique_json_commun": 24775,
+        "synthetique_cstl_indent_commun": 12620
+      },
+      "meta-llama/llama-4-maverick": {
+        "reel_json": 9973,
+        "reel_json_docs": 12,
+        "reel_toon": 7107,
+        "reel_toon_docs": 10,
+        "reel_cstl_indent": 9027,
+        "reel_cstl_indent_docs": 12,
+        "reel_cstl_indent_ligne": 9014,
+        "reel_cstl_indent_ligne_docs": 12,
+        "reel_json_commun": 6544,
+        "reel_cstl_indent_commun": 5922,
+        "synthetique_json": 16444,
+        "synthetique_json_docs": 12,
+        "synthetique_toon": 19097,
+        "synthetique_toon_docs": 12,
+        "synthetique_cstl_indent": 9553,
+        "synthetique_cstl_indent_docs": 12,
+        "synthetique_cstl_indent_ligne": 10233,
+        "synthetique_cstl_indent_ligne_docs": 12,
+        "synthetique_json_commun": 16444,
+        "synthetique_cstl_indent_commun": 9553
+      },
+      "deepseek/deepseek-v4.1-flash": {
+        "reel_json": 11128,
+        "reel_json_docs": 12,
+        "reel_toon": 7446,
+        "reel_toon_docs": 10,
+        "reel_cstl_indent": 9815,
+        "reel_cstl_indent_docs": 12,
+        "reel_cstl_indent_ligne": 9799,
+        "reel_cstl_indent_ligne_docs": 12,
+        "reel_json_commun": 7097,
+        "reel_cstl_indent_commun": 6441,
+        "synthetique_json": 17780,
+        "synthetique_json_docs": 12,
+        "synthetique_toon": 19362,
+        "synthetique_toon_docs": 12,
+        "synthetique_cstl_indent": 9474,
+        "synthetique_cstl_indent_docs": 12,
+        "synthetique_cstl_indent_ligne": 10130,
+        "synthetique_cstl_indent_ligne_docs": 12,
+        "synthetique_json_commun": 17780,
+        "synthetique_cstl_indent_commun": 9474
+      },
+      "qwen/qwen3.8-flash": {
+        "reel_json": 11485,
+        "reel_json_docs": 12,
+        "reel_toon": 8406,
+        "reel_toon_docs": 10,
+        "reel_cstl_indent": 10568,
+        "reel_cstl_indent_docs": 12,
+        "reel_cstl_indent_ligne": 10560,
+        "reel_cstl_indent_ligne_docs": 12,
+        "reel_json_commun": 7689,
+        "reel_cstl_indent_commun": 7109,
+        "synthetique_json": 17744,
+        "synthetique_json_docs": 12,
+        "synthetique_toon": 20715,
+        "synthetique_toon_docs": 12,
+        "synthetique_cstl_indent": 10774,
+        "synthetique_cstl_indent_docs": 12,
+        "synthetique_cstl_indent_ligne": 11427,
+        "synthetique_cstl_indent_ligne_docs": 12,
+        "synthetique_json_commun": 17744,
+        "synthetique_cstl_indent_commun": 10774
+      },
+      "mistralai/mistral-medium-3-5": {
+        "reel_json": 12728,
+        "reel_json_docs": 12,
+        "reel_toon": 8571,
+        "reel_toon_docs": 10,
+        "reel_cstl_indent": 11261,
+        "reel_cstl_indent_docs": 12,
+        "reel_cstl_indent_ligne": 11245,
+        "reel_cstl_indent_ligne_docs": 12,
+        "reel_json_commun": 8278,
+        "reel_cstl_indent_commun": 7476,
+        "synthetique_json": 19115,
+        "synthetique_json_docs": 12,
+        "synthetique_toon": 20721,
+        "synthetique_toon_docs": 12,
+        "synthetique_cstl_indent": 11197,
+        "synthetique_cstl_indent_docs": 12,
+        "synthetique_cstl_indent_ligne": 11850,
+        "synthetique_cstl_indent_ligne_docs": 12,
+        "synthetique_json_commun": 19115,
+        "synthetique_cstl_indent_commun": 11197
+      }
+    }
+  },
+  "passes": {
+    "anthropic/claude-haiku-5.5": {
+      "json": [
+        35.333333333333336,
+        0.5773502691896257,
+        3
+      ],
+      "toon": [
+        35,
+        0.0,
+        3
+      ],
+      "cstl_indent": [
+        35.333333333333336,
+        0.5773502691896257,
+        3
+      ],
+      "cstl_indent_ligne": [
+        35.333333333333336,
+        0.5773502691896257,
+        3
+      ]
+    },
+    "anthropic/claude-sonnet-5.5": {
+      "json": [
+        35.333333333333336,
+        0.5773502691896257,
+        3
+      ],
+      "toon": [
+        36,
+        0.0,
+        3
+      ],
+      "cstl_indent": [
+        35.666666666666664,
+        0.5773502691896257,
+        3
+      ],
+      "cstl_indent_ligne": [
+        35,
+        0.0,
+        3
+      ]
+    },
+    "meta-llama/llama-4-maverick": {
+      "json": [
+        24.666666666666668,
+        0.5773502691896257,
+        3
+      ],
+      "toon": [
+        29.666666666666668,
+        0.5773502691896257,
+        3
+      ],
+      "cstl_indent": [
+        25.666666666666668,
+        1.1547005383792515,
+        3
+      ],
+      "cstl_indent_ligne": [
+        29.666666666666668,
+        2.516611478423583,
+        3
+      ]
+    },
+    "mistralai/mistral-medium-3-5": {
+      "json": [
+        17,
+        1.0,
+        3
+      ],
+      "toon": [
+        19,
+        0.0,
+        3
+      ],
+      "cstl_indent": [
+        19.333333333333332,
+        0.5773502691896257,
+        3
+      ],
+      "cstl_indent_ligne": [
+        17,
+        0.0,
+        3
+      ]
+    },
+    "openai/gpt-5-mini": {
+      "json": [
+        36,
+        0.0,
+        3
+      ],
+      "toon": [
+        35.333333333333336,
+        0.5773502691896257,
+        3
+      ],
+      "cstl_indent": [
+        35.666666666666664,
+        0.5773502691896257,
+        3
+      ],
+      "cstl_indent_ligne": [
+        35.666666666666664,
+        0.5773502691896257,
+        3
+      ]
     }
   }
 }
