@@ -1603,49 +1603,122 @@ def decode_tree_indented(text, lenient=False, warnings=None):
 
 
 # ------------------------------------------------- CSTL polymorphe (2026-11-24)
-# Mesures sur 10 modeles et 6 tokenizers (docs/BENCHMARK_CSTL.md) : l'arbre
-# indente coute 39 a 49 % de tokens de moins que le JSON sur des donnees
-# TABULAIRES IMBRIQUEES, mais seulement 8 a 13 % sur des donnees reelles riches
-# en objets, ou il est aussi plus difficile a ecrire pour un modele. CSTL
-# choisit donc sa forme selon les donnees : l'arbre indente quand il fait
-# vraiment gagner, le JSON sinon. Le lecteur n'a rien a savoir : un arbre
-# indente commence toujours par « @ », un JSON jamais.
+# CSTL a plusieurs formes, chacune bonne pour un type de donnees :
+#   complet    RELATION [type=..., ...]          le format filaire du serveur
+#   lignes     REL / ROLE / FACT, une par ligne   relations, avec mots-cles
+#   tableau    ROLES[N] / FACTS[N] / RULES[N]     relations regulieres
+#   symboles   bot !refund >100, @role, fait=1    politiques : le plus court
+#   arbre      @liste^parent: colonnes, indente   documents imbriques
+#   arbre_n    le meme, avec /N en fin de ligne   documents lus par un modele
+#   arbre_ids  liste[N]#^: avec ids de parents    documents (ancienne forme)
+# Le CSTL polymorphe essaie TOUTES les formes capables de representer les
+# donnees, garde celles qui se relisent a l'identique, et prend la moins
+# chere en tokens. Le texte commence par « #cstl <forme> » : le lecteur sait
+# quelle forme lire, sans rien deviner.
 
 _TOKEN_RE = re.compile(r" ?[A-Za-z]+| ?\d{1,3}|[^\sA-Za-z\d]+|\s+")
+
+FORMS_RELATIONS = ("complet", "lignes", "tableau", "symboles")
+FORMS_DOCUMENT = ("arbre", "arbre_n", "arbre_ids")
 
 
 def estimate_tokens(text):
     """Estimation des tokens d'un texte, proche des tokenizers BPE : mots,
     nombres par groupes de 3 chiffres, ponctuation par suites, espaces par
     suites. Sur les bancs d'essai, elle donne -46 % / -6 % la ou les 6
-    tokenizers mesures donnent -39 a -49 % / -8 a -13 %."""
+    tokenizers mesures donnent -39 a -49 % / -8 a -13 % (arbre contre JSON)."""
     return len(_TOKEN_RE.findall(text))
 
 
-def choose_format(data, min_gain=0.15, counts="line"):
-    """Choisit la forme CSTL d'un document JSON. Renvoie (forme, texte, gain) :
-    forme = "arbre" (arbre indente) si son estimation de tokens est au moins
-    `min_gain` plus petite que celle du JSON compact, sinon "json" ; gain = la
-    fraction de tokens economisee par l'arbre (negative s'il coute plus)."""
-    as_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    as_tree = encode_tree_indented(data, counts=counts)
-    j, t = estimate_tokens(as_json), estimate_tokens(as_tree)
-    gain = (j - t) / j if j else 0.0
-    return ("arbre", as_tree, gain) if gain >= min_gain else ("json", as_json, gain)
+def _is_relations(data):
+    return (isinstance(data, list) and data and all(
+        isinstance(r, dict) and all(isinstance(r.get(k), str) for k in ("type", "subject", "object"))
+        and all(isinstance(v, str) for v in r.values()) for r in data))
 
 
-def encode_auto(data, min_gain=0.15, counts="line"):
-    """Le texte CSTL le plus avantageux pour ces donnees (voir choose_format)."""
-    return choose_format(data, min_gain, counts)[1]
+def _encode_full(rels):
+    import cstl_client
+    return "".join(cstl_client._format_kv_block("RELATION", r) for r in rels).rstrip("\n")
+
+
+def _decode_full(text):
+    import cstl_client
+    return [{k: v for k, v in r.items() if k != "block"} for r in cstl_client.parse_response(text).relations]
+
+
+_ENCODERS = {
+    "complet": _encode_full,
+    "lignes": lambda r: encode(r),
+    "tableau": lambda r: encode(r, table=True),
+    "symboles": encode_symbols,
+    "arbre": lambda d: encode_tree_indented(d),
+    "arbre_n": lambda d: encode_tree_indented(d, counts="line"),
+    "arbre_ids": encode_tree,
+}
+_DECODERS = {
+    "complet": _decode_full,
+    "lignes": decode, "tableau": decode, "symboles": decode,
+    "arbre": decode_tree_indented, "arbre_n": decode_tree_indented,
+    "arbre_ids": decode_tree,
+}
+
+
+def candidates(data, forms=None):
+    """{forme: texte} pour chaque forme CSTL qui represente ces donnees SANS
+    PERTE (verifie : la forme relue redonne exactement les donnees, ordre
+    compris -- l'ordre des regles compte pour la couche 9)."""
+    pool = forms or (FORMS_RELATIONS + FORMS_DOCUMENT if _is_relations(data) else FORMS_DOCUMENT)
+    out = {}
+    for f in pool:
+        try:
+            text = _ENCODERS[f](data)
+            if _DECODERS[f](text) == data:
+                out[f] = text
+        except Exception:  # noqa: BLE001 -- une forme qui ne sait pas representer ces donnees est ecartee
+            continue
+    return out
+
+
+def choose_format(data, for_model=False, forms=None):
+    """La forme CSTL la moins chere pour ces donnees. Renvoie (forme, texte,
+    {forme: tokens estimes}). for_model=True : un modele lira le texte ; pour
+    un document, la forme arbre_n (comptes /N, qui aident les modeles plus
+    faibles a compter) remplace arbre."""
+    if forms is None and not _is_relations(data):
+        # Pour un modele, seulement l'arbre avec /N : l'arbre par ids, parfois
+        # plus court, est moins bien compris (Gemma : 31/36 contre 36/36).
+        forms = ("arbre_n",) if for_model else ("arbre", "arbre_ids")
+    cands = candidates(data, forms)
+    if not cands:
+        raise CompactError("aucune forme CSTL ne represente ces donnees sans perte")
+    costs = {f: estimate_tokens(t) for f, t in cands.items()}
+    best = min(costs, key=lambda f: (costs[f], list(_ENCODERS).index(f)))
+    return best, cands[best], costs
+
+
+def encode_auto(data, for_model=False, forms=None):
+    """CSTL polymorphe : la forme la plus avantageuse pour ces donnees,
+    precedee de « #cstl <forme> »."""
+    form, text, _ = choose_format(data, for_model, forms)
+    return f"#cstl {form}\n{text}"
 
 
 def decode_auto(text, lenient=False, warnings=None):
-    """Relit un texte ecrit par encode_auto, ou par un modele : arbre indente
-    s'il commence par « @ », JSON sinon."""
+    """Relit un texte ecrit par encode_auto (« #cstl <forme> » en tete). Sans
+    cette ligne : arbre indente s'il commence par « @ », format complet s'il
+    contient « RELATION [ »."""
     body = text.strip()
-    if body.startswith("@"):
+    m = re.match(r"#cstl (\w+)\n?", body)
+    if m:
+        form, body = m.group(1), body[m.end():]
+    elif body.startswith("@"):
+        form = "arbre"
+    elif "RELATION [" in body:
+        form = "complet"
+    else:
+        raise CompactError("forme CSTL inconnue : il manque « #cstl <forme> »")
+    if form not in _DECODERS:
+        raise CompactError(f"forme CSTL inconnue : {form!r}")
+    if form.startswith("arbre") and form != "arbre_ids":
         return decode_tree_indented(body, lenient=lenient, warnings=warnings)
-    try:
-        return json.loads(body)
-    except ValueError as e:
-        raise CompactError(f"ni arbre indente (« @ ») ni JSON lisible : {e}") from None
+    return _DECODERS[form](body)

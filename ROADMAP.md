@@ -441,11 +441,20 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - Permettre le JSON pur dans les valeurs en ligne n'aide pas (GPT-5 mini
       6/12, Llama 3/12). Les modèles inventent de la syntaxe à partir d'un
       seul exemple : `^@@`, colonnes séparées par des virgules, `nom:valeur`.
-    - Conclusion : sur des données irrégulières, un modèle doit écrire du
-      JSON. `cstl_compact.choose_format` / `encode_auto` choisissent
-      l'arbre indenté seulement quand il fait gagner au moins 15 % de tokens
-      (estimés) : l'arbre pour les 12 jeux tabulaires, JSON pour 11 des 12
-      réponses d'API.
+    - Conclusion : sur des données irrégulières, l'écriture par un modèle
+      reste le point faible.
+  - **CSTL polymorphe** (2026-11-24) : `cstl_compact.encode_auto(data)`
+    choisit la forme de CSTL selon les données.
+    - Relations : `complet`, `lignes`, `tableau` ou `symboles`.
+    - Documents : `arbre`, `arbre_n` (avec `/N`, imposé si un modèle lit)
+      ou `arbre_ids`.
+    - Chaque forme candidate est vérifiée sans perte, ordre des règles
+      compris, et la moins chère en tokens estimés l'emporte.
+    - Le texte commence par `#cstl <forme>` ; `decode_auto` le relit.
+    - Choix observés : politiques de 30 à 60 règles → `symboles` (2,5 fois
+      moins cher que `complet`) ; 10 règles → `lignes` ; documents → `arbre`.
+    - Vérifié sur 3 000 documents et 2 000 listes de relations aléatoires
+      sans perte.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

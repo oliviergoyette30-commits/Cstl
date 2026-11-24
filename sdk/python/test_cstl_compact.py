@@ -663,15 +663,24 @@ def test_inline_values_accept_plain_json_with_spaces():
         decode_tree_indented("@t: v\n[hello world]")
 
 
-def test_polymorphic_cstl_picks_the_cheaper_form():
-    """2026-11-24 : arbre indente pour des donnees tabulaires imbriquees, JSON
-    pour un objet irregulier ; decode_auto relit les deux sans indication."""
-    from cstl_compact import choose_format, decode_auto, encode_auto
-    table = {"orders": [{"id": f"o{i}", "client": f"c{i % 3}", "lines": [{"item": "gpu", "qty": i, "price": 9}]}
-                        for i in range(10)]}
-    config = {"name": "x", "scripts": {"build": "tsc", "lint": "eslint ."}, "engines": {"node": ">=18"}}
-    assert choose_format(table)[0] == "arbre" and choose_format(config)[0] == "json"
-    for d in (table, config, [1, 2], "texte", None, {}):
+def test_polymorphic_cstl_picks_the_right_cstl_form():
+    """2026-11-24 : CSTL polymorphe = la bonne forme de CSTL pour le type de
+    donnees. Relations -> une forme de relations (symboles pour une politique) ;
+    document imbrique -> arbre ; chaque forme retenue se relit a l'identique."""
+    from cstl_compact import candidates, choose_format, decode_auto, encode_auto
+    policy = [{"type": "PERFORM", "subject": "bot", "object": "refund_order", "modality": "MUST_NOT",
+               "amount_above": "100"},
+              {"type": "PERFORM", "subject": "bot", "object": "log_transaction", "modality": "MUST"},
+              {"type": "POSSESSES", "subject": "bot", "object": "role:support"},
+              {"type": "STATE", "subject": "incident_open", "object": "true"}]
+    form, _, costs = choose_format(policy)
+    assert form in ("lignes", "symboles") and costs[form] * 3 < costs["complet"]
+    assert decode_auto(encode_auto(policy)) == policy
+    doc = {"orders": [{"id": f"o{i}", "client": f"c{i % 3}", "lines": [{"item": "gpu", "qty": i}]} for i in range(6)]}
+    assert choose_format(doc)[0] == "arbre" and choose_format(doc, for_model=True)[0] == "arbre_n"
+    for d in (doc, {"name": "x", "scripts": {"build": "tsc"}}, [1, 2], "texte", None, {}):
         assert decode_auto(encode_auto(d)) == d
+    # Une forme qui perdrait l'ordre des regles (tableau regroupe par sorte) est ecartee.
+    assert "tableau" not in candidates(policy)
     with pytest.raises(CompactError):
-        decode_auto("ni l'un ni l'autre")
+        decode_auto("rien de reconnaissable")
