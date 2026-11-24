@@ -1650,7 +1650,11 @@ RELIABILITY = {
     # arbre a egalite avec JSON, questions trop faciles (effet plafond).
     # mixte (tables a cellules JSON) : 37/48 -- les tables ou un champ manque
     # dans certains elements sont mal remplies (valeurs decalees).
-    ("irregulier", "ecrire"): {"objets_json": (48, 48), "mixte": (37, 48), "objets": (29, 48), "arbre_n": (25, 48)},
+    # relationnel : 40/48 (v1 mesuree ; v2 36/48 mesuree, 40/48 relue avec le
+    # lecteur qui accepte les cles a espaces). Echecs restants : du contenu
+    # (champs inventes ou omis, elements manquants), pas de la syntaxe.
+    ("irregulier", "ecrire"): {"objets_json": (48, 48), "relationnel": (40, 48), "mixte": (37, 48),
+                               "objets": (29, 48), "arbre_n": (25, 48)},
     ("irregulier", "lire"): {"arbre": (75 * 7 - 6, 75 * 7), "arbre_n": (75 * 7 - 8, 75 * 7)},
 }
 

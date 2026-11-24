@@ -837,15 +837,23 @@ def apply(doc, ops):
 # (versions 2.34.0, lodash.get), presque jamais « > ». Une cle qui contient
 # « > », un espace, « " », ou commence par - ? = # [ s'ecrit en JSON.
 
-_RKEY = re.compile(r"[^\s\"?=#\-\[\]{>][^\s\">]*")
+# Une cle nue peut contenir des espaces (« Release notes ») : elle va jusqu'au
+# premier « : », comme en YAML. Entre guillemets si elle contient « : ».
+_RKEY = re.compile(r"[^\s\"?=#\-\[\]{>](?:(?:[^\s\">\[\]]| )*[^\s\">\[\]])?")
 
 
 def _rkey_bare(k):
-    return bool(k) and bool(_RKEY.fullmatch(k)) and not k.endswith(":") and not re.search(r"\[\d+\]$", k)
+    return (bool(k) and bool(_RKEY.fullmatch(k)) and not k.endswith(":") and ": " not in k
+            and "  " not in k and not re.search(r"\[\d+\]$", k))
 
 
 def _rkey(k):
     return k if _rkey_bare(k) else _J(k)
+
+
+def _rcol(k):
+    """Nom de colonne d'une table : separe par des espaces, donc sans espace."""
+    return k if _rkey_bare(k) and not re.search(r"\s", k) else _J(k)
 
 
 def _unknown(v):
@@ -881,7 +889,7 @@ def encode_relationnel(data):
         head = ind + ">".join(path if len(path) > 1 else [_rkey(key)])
         cols = _regular_table(v)
         if cols is not None:
-            lines.append(f"{head}[{len(v)}]:" + "".join(f" {_rkey(c)}" for c in cols))
+            lines.append(f"{head}[{len(v)}]:" + "".join(f" {_rcol(c)}" for c in cols))
             lines.extend(ind + "  " + " ".join(_rval(x[c]) for c in cols) for x in v)
         elif isinstance(v, list) and v and any(isinstance(x, (dict, list)) and x and not _unknown(x) for x in v):
             lines.append(f"{head}[{len(v)}]:")
@@ -910,7 +918,7 @@ def encode_relationnel(data):
         return "\n".join(lines)
     cols = _regular_table(data)
     if cols is not None:
-        lines.append(f"[{len(data)}]:" + "".join(f" {_rkey(c)}" for c in cols))
+        lines.append(f"[{len(data)}]:" + "".join(f" {_rcol(c)}" for c in cols))
         lines.extend("  " + " ".join(_rval(x[c]) for c in cols) for x in data)
         return "\n".join(lines)
     if isinstance(data, list) and data and any(isinstance(x, (dict, list)) and x and not _unknown(x) for x in data):
@@ -937,7 +945,7 @@ def _rparse_value(raw, n):
         raise CompactError(f"ligne {n} : valeur JSON attendue : {raw[:60]!r}") from None
 
 
-_RHEAD = re.compile(r'^(?P<key>"(?:[^"\\]|\\.)*"|[^\s"\[]+?)(?:\[(?P<n>\d+)\])?:(?P<rest>(?: .*)?)$')
+_RHEAD = re.compile(r'^(?P<key>"(?:[^"\\]|\\.)*"|[^\s"\[](?:[^"\[]*?[^\s"\[])??)(?:\[(?P<n>\d+)\])?:(?P<rest>(?: .*)?)$')
 
 
 def _rsplit_key(body, n):

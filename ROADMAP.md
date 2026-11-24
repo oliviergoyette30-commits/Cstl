@@ -460,6 +460,28 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       donc à transmettre, pas à faire écrire un modèle.
     - **changements** : opérations JSON Patch d'une ligne, avec `diff` et
       `apply`.
+  - **Forme « relationnel »** (2026-11-24, `cstl_formes.py`) : un format
+    CSTL propre aux données irrégulières, pour ne pas copier le JSON.
+    - Principe : valeurs JSON ; un objet à un seul champ s'écrit en chemin
+      (`engines>node: ">=18"`) ; une table seulement si tous les éléments ont
+      exactement les mêmes champs ; `[N]` ; `?` pour l'inconnu.
+    - Coût : −6 à 0 % de tokens face au JSON compact.
+    - Écriture des 12 réponses d'API réelles (GPT-5 mini, Claude Haiku,
+      Llama 4, Mistral) :
+      - v1 (chemins `a.b`) : 40/48. Deux erreurs de conception : les vraies
+        clés contiennent des points (`2.34.0`) ; les modèles écrivent
+        plusieurs chemins vers le même objet.
+      - v2 (séparateur `>`, chemins fusionnés) : 36/48 mesurée. Trois
+        modèles échouaient sur la même clé à espace (`Release notes`),
+        écrite sans guillemets comme la consigne le dit. Le lecteur accepte
+        maintenant une clé jusqu'au premier `: ` (comme en YAML) : 40/48 en
+        relisant les mêmes réponses (pas une nouvelle mesure).
+    - Échecs restants : du contenu, pas de la syntaxe (un `id` inventé, une
+      liste vide ajoutée, des éléments omis par Llama).
+    - Conclusion : plus compact que `objets_json`, moins fiable (40 contre
+      48), à peu près égal au JSON (42). `choose_format(..., "ecrire")`
+      garde `objets_json` pour faire écrire un modèle ; entre machines, la
+      forme la moins chère l'emporte.
   - **Cinq formes spécialisées** : `serie`, `graphe`, `conversation`,
     `appels` et `matrice`. Sans perte, mais pas encore mesurées sur des
     modèles.
