@@ -27,7 +27,7 @@ Les jeux en erreur d'API sont exclus du total (x/y), jamais comptes faux.
 |---|---|---|---|---|
 | anthropic/claude-haiku-5.5 | 106/108 | 105/108 | 106/108 | 106/108 |
 | anthropic/claude-sonnet-5.5 | 106/108 | 108/108 | 107/108 | 105/108 |
-| deepseek/deepseek-v4.1-flash | 36/36 | 36/36 | 36/36 | - |
+| deepseek/deepseek-v4.1-flash | 108/108 | 108/108 | 108/108 | 108/108 |
 | gemini-3.5-flash-lite | 23/36 | 23/36 | 19/36 | 24/36 |
 | gemma-4-26b-a4b-it | 36/36 | 36/36 | 35/36 | - |
 | gemma-4-31b-it | 35/36 | 35/36 | 36/36 | - |
@@ -72,7 +72,7 @@ Le mode tolerant (`decode_tree_indented(texte, lenient=True)`) est celui que la 
 
 | Test | JSON | TOON | Arbre indente | Arbre indente + /N |
 |---|---|---|---|---|
-| Lecture | 610/720 (84.7 %) | 629/720 (87.4 %) | 616/720 (85.6 %) | 482/576 (83.7 %) |
+| Lecture | 682/792 (86.1 %) | 701/792 (88.5 %) | 688/792 (86.9 %) | 590/684 (86.3 %) |
 | Ecriture stricte | 110/118 (93.2 %) | 102/116 (87.9 %) | - | 107/120 (89.2 %) |
 | Ecriture tolerante | - | - | - | 116/120 (96.7 %) |
 | Vide qui parle | 215/240 (89.6 %) | 212/240 (88.3 %) | 214/240 (89.2 %) | - |
@@ -123,6 +123,7 @@ Moyenne et ecart-type du score par passe (sur 36), modele par modele.
 |---|---|---|---|---|
 | anthropic/claude-haiku-5.5 | 35.3 ± 0.6 | 35.0 ± 0.0 | 35.3 ± 0.6 | 35.3 ± 0.6 |
 | anthropic/claude-sonnet-5.5 | 35.3 ± 0.6 | 36.0 ± 0.0 | 35.7 ± 0.6 | 35.0 ± 0.0 |
+| deepseek/deepseek-v4.1-flash | 36.0 ± 0.0 | 36.0 ± 0.0 | 36.0 ± 0.0 | 36.0 ± 0.0 |
 | meta-llama/llama-4-maverick | 24.7 ± 0.6 | 29.7 ± 0.6 | 25.7 ± 1.2 | 29.7 ± 2.5 |
 | mistralai/mistral-medium-3-5 | 17.0 ± 1.0 | 19.0 ± 0.0 | 19.3 ± 0.6 | 17.0 ± 0.0 |
 | openai/gpt-5-mini | 36.0 ± 0.0 | 35.3 ± 0.6 | 35.7 ± 0.6 | 35.7 ± 0.6 |

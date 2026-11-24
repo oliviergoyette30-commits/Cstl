@@ -428,6 +428,24 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       peu plus sur l'arbre indenté en lecture et en écriture.
     - Le JSON naïf échoue sur le vide chez tous les modèles.
     - Coût OpenRouter : 5,37 $.
+  - **Données réelles et polymorphisme** (2026-11-24, `scripts/real_data_benchmark.py`).
+    Les jeux : 12 réponses d'API publiques (PyPI, npm, crates.io, Wikidata).
+    - Tokens comptés par 6 fournisseurs : −39 à −49 % sur les données
+      tabulaires imbriquées, mais seulement −8 à −13 % sur les données
+      réelles riches en objets.
+    - Lecture : parité, mais les questions générées sont trop faciles
+      (effet plafond).
+    - Écriture par un modèle sur données réelles : nettement moins fiable
+      que JSON. GPT-5 mini 5/12 contre 12/12, Llama 3/12 contre 10/12,
+      Claude 10/12 contre 12/12.
+    - Permettre le JSON pur dans les valeurs en ligne n'aide pas (GPT-5 mini
+      6/12, Llama 3/12). Les modèles inventent de la syntaxe à partir d'un
+      seul exemple : `^@@`, colonnes séparées par des virgules, `nom:valeur`.
+    - Conclusion : sur des données irrégulières, un modèle doit écrire du
+      JSON. `cstl_compact.choose_format` / `encode_auto` choisissent
+      l'arbre indenté seulement quand il fait gagner au moins 15 % de tokens
+      (estimés) : l'arbre pour les 12 jeux tabulaires, JSON pour 11 des 12
+      réponses d'API.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).

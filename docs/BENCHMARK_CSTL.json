@@ -139,16 +139,20 @@
     "deepseek/deepseek-v4.1-flash": {
       "lecture": {
         "json": {
-          "justes": 36,
-          "total": 36
+          "justes": 108,
+          "total": 108
         },
         "toon": {
-          "justes": 36,
-          "total": 36
+          "justes": 108,
+          "total": 108
         },
         "cstl_indent": {
-          "justes": 36,
-          "total": 36
+          "justes": 108,
+          "total": 108
+        },
+        "cstl_indent_ligne": {
+          "justes": 108,
+          "total": 108
         }
       },
       "ecriture": {
@@ -970,6 +974,28 @@
       ],
       "cstl_indent_ligne": [
         35,
+        0.0,
+        3
+      ]
+    },
+    "deepseek/deepseek-v4.1-flash": {
+      "json": [
+        36,
+        0.0,
+        3
+      ],
+      "toon": [
+        36,
+        0.0,
+        3
+      ],
+      "cstl_indent": [
+        36,
+        0.0,
+        3
+      ],
+      "cstl_indent_ligne": [
+        36,
         0.0,
         3
       ]
