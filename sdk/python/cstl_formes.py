@@ -824,7 +824,8 @@ def apply(doc, ops):
 # chaque valeur en JSON, structure indentee « cle: valeur » (objets_json :
 # 48/48 en ecriture sur 12 reponses d'API). Trois apports propres a CSTL :
 #   1. chemins condenses : une chaine d'objets a UN seul champ s'ecrit en un
-#      chemin, sur une ligne : repository.url: "git+https://..."
+#      chemin, sur une ligne : repository>url: "git+https://..." ; plusieurs
+#      chemins vers le meme objet se fusionnent (scripts>lint, scripts>test)
 #      (« les relations comptent plus que l'information ») ;
 #   2. tables seulement si TOUS les elements ont exactement les memes champs,
 #      dans le meme ordre (la cause des echecs de la forme mixte : des
@@ -832,10 +833,11 @@ def apply(doc, ops):
 #      « - » ;
 #   3. le vide qui parle : ? ou ?{"sigma":0.3} ; le nombre d'elements de
 #      chaque liste en tete : maintainers[2]:
-# Une cle qui contient « . », un espace, « " », ou commence par - ? = # [ s'ecrit
-# en JSON ("lodash.get": ...) ; une cle sans guillemets est un chemin.
+# Le separateur de chemin est « > » : les vraies cles contiennent des points
+# (versions 2.34.0, lodash.get), presque jamais « > ». Une cle qui contient
+# « > », un espace, « " », ou commence par - ? = # [ s'ecrit en JSON.
 
-_RKEY = re.compile(r"[^\s\"?=#\-\[\]{.][^\s\".]*")
+_RKEY = re.compile(r"[^\s\"?=#\-\[\]{>][^\s\">]*")
 
 
 def _rkey_bare(k):
@@ -876,7 +878,7 @@ def encode_relationnel(data):
             k = next(iter(v))
             path.append(k)
             v = v[k]
-        head = ind + ".".join(path if len(path) > 1 else [_rkey(key)])
+        head = ind + ">".join(path if len(path) > 1 else [_rkey(key)])
         cols = _regular_table(v)
         if cols is not None:
             lines.append(f"{head}[{len(v)}]:" + "".join(f" {_rkey(c)}" for c in cols))
@@ -943,7 +945,7 @@ def _rsplit_key(body, n):
     if not m:
         raise CompactError(f"ligne {n} : « cle: valeur » attendu : {body[:50]!r}")
     raw = m.group("key")
-    path = [json.loads(raw)] if raw.startswith('"') else raw.split(".")
+    path = [json.loads(raw)] if raw.startswith('"') else raw.split(">")
     if not raw.startswith('"') and any(not p for p in path):
         raise CompactError(f"ligne {n} : chemin invalide : {raw!r}")
     return path, (int(m.group("n")) if m.group("n") is not None else None), m.group("rest")
@@ -1007,8 +1009,12 @@ def decode_relationnel(text):
                 n = pos
             key, value = entry(body, ind, n)
             if key in out:
-                raise CompactError(f"ligne {n} : cle en double {key!r}")
-            out[key] = value
+                # Plusieurs chemins vers le meme objet (scripts>lint, puis
+                # scripts>test) : ils se FUSIONNENT ; une vraie contradiction
+                # (meme champ, deux valeurs) reste une erreur.
+                out[key] = _merge(out[key], value, key, n)
+            else:
+                out[key] = value
         if not out:
             raise CompactError(f"ligne {pos + 1} : objet vide (ecrire {{}})")
         return out
@@ -1039,6 +1045,15 @@ def decode_relationnel(text):
     if any(ln.strip() for ln in lines[pos:]):
         raise CompactError(f"ligne {pos + 1} : texte en trop")
     return result
+
+
+def _merge(a, b, key, n):
+    if isinstance(a, dict) and isinstance(b, dict) and not _unknown(a) and not _unknown(b):
+        out = dict(a)
+        for k, v in b.items():
+            out[k] = _merge(out[k], v, k, n) if k in out else v
+        return out
+    raise CompactError(f"ligne {n} : cle en double {key!r}")
 
 
 def _is_json_scalar(body):

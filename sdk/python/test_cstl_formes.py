@@ -102,10 +102,14 @@ def test_relationnel_paths_strict_tables_and_unknown():
            "files": [{"p": "a"}, {"p": "b", "size": 3}], "pay": {"$unknown": {"why": "bank"}},
            "lodash.get": 1, "keywords": ["react"]}
     text = F.encode_relationnel(doc)
-    assert text.splitlines()[:6] == ['name: "react"', 'engines.node: ">=0.10"', "repository:", '  url: "git+x"',
+    assert text.splitlines()[:6] == ['name: "react"', 'engines>node: ">=0.10"', "repository:", '  url: "git+x"',
                                      '  type: "git"', "maintainers[2]: name email"]
     assert 'files[2]:' in text and '  - p: "a"' in text and 'pay: ?{"why":"bank"}' in text
-    assert '"lodash.get": 1' in text
+    assert 'lodash.get: 1' in text
+    # Plusieurs chemins vers le meme objet se fusionnent ; une contradiction reste refusee.
+    assert F.decode_relationnel('s>a: 1\ns>b: 2\n2.34.0: 3') == {"s": {"a": 1, "b": 2}, "2.34.0": 3}
+    with pytest.raises(CompactError):
+        F.decode_relationnel('s>a: 1\ns>a: 2')
     assert F.decode_relationnel(text) == doc
     for d in ([{"a": 1}, {"a": 2}], [{"a": 1}, [2]], {}, [], 5, None, {"a": {"b": {"c": {}}}}):
         assert F.decode_relationnel(F.encode_relationnel(d)) == d

@@ -64,7 +64,7 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
-    if fmt == "cstl_relationnel":
+    if fmt.startswith("cstl_relationnel"):
         import cstl_formes
         return cstl_formes.encode_relationnel(d)
     if fmt == "cstl_mixte":
@@ -82,7 +82,7 @@ def decode(fmt, text, lenient=False):
         return json.loads(text)
     if fmt == "toon":
         return toon_lite.decode_nested(text)
-    if fmt == "cstl_relationnel":
+    if fmt.startswith("cstl_relationnel"):
         import cstl_formes
         return cstl_formes.decode_relationnel(text)
     if fmt == "cstl_mixte":
@@ -143,6 +143,20 @@ NOTES["cstl_relationnel"] = (
     "espaces, avec ses valeurs JSON separees par des espaces. Une autre liste qui contient des objets : « cle[N]: » "
     "puis un element par « - » (ses champs apres le tiret et alignes dessous). Une liste de valeurs simples : "
     "en ligne, en JSON. N = le nombre d'elements.")
+
+
+# 2026-11-24, v2 : separateur de chemin « > » (les vraies cles contiennent des
+# points : versions 2.34.0), chemins vers un meme objet fusionnes. Les
+# resultats de la v1 (separateur « . ») restent sous cstl_relationnel.
+NOTES["cstl_relationnel2"] = (
+    "Format : CSTL relationnel. Chaque VALEUR s'ecrit exactement comme en JSON : \"texte\", 27, false, null, "
+    "[\"a\",\"b\"], {\"k\":1}. Un champ : « cle: valeur » ; la cle s'ecrit telle quelle, sans guillemets "
+    "(2.34.0, docs:dev, lodash.get). Un objet : « cle: » puis ses champs dessous, indentes de 2 espaces. Un "
+    "objet qui n'a qu'UN champ peut s'ecrire en chemin sur une seule ligne, avec « > » : « a>b>c: valeur ». Une "
+    "liste d'objets qui ont EXACTEMENT les memes champs : « cle[N]: col1 col2 » sur la meme ligne, puis une ligne "
+    "par objet, indentee de 2 espaces, avec ses valeurs JSON separees par des espaces. Une autre liste qui "
+    "contient des objets : « cle[N]: » puis un element par « - » (ses champs apres le tiret, les suivants alignes "
+    "dessous). Une liste de valeurs simples : en ligne, en JSON. N = le nombre d'elements.")
 
 
 def toon_ok(d):
