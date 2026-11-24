@@ -1743,7 +1743,7 @@ def choose_format(data, task=None, forms=None):
     (RELIABILITY) ; a fiabilite egale a 2 points pres, la moins chere. Une forme
     non mesuree n'est retenue que si aucune forme mesuree ne convient.
     detail = {"sorte", "tache", "fiabilite": {forme: taux}, "tokens": {forme: n}}."""
-    kind = data_kind(data)
+    kind = globals()["data_kind"](data)
     if forms is None:
         forms = FORMS_RELATIONS + ("arbre", "arbre_n") if kind == "relations" else FORMS_DOCUMENT
     cands = candidates(data, forms)
@@ -1778,10 +1778,12 @@ def decode_auto(text, lenient=False, warnings=None):
     """Relit un texte ecrit par encode_auto (« #cstl <forme> » en tete). Sans
     cette ligne : arbre indente s'il commence par « @ », format complet s'il
     contient « RELATION [ »."""
-    body = text.strip()
-    m = re.match(r"#cstl (\w+)\n?", body)
+    # Rien n'est retire apres l'en-tete : la fin du texte peut faire partie
+    # des donnees (dernier message termine par un espace, 2026-11-24).
+    m = re.match(r"\s*#cstl (\w+)\n", text)
+    body = text[m.end():] if m else text.strip()
     if m:
-        form, body = m.group(1), body[m.end():]
+        form = m.group(1)
     elif body.startswith("@"):
         form = "arbre"
     elif "RELATION [" in body:
@@ -2068,3 +2070,34 @@ def decode_objects(text, json_values=False):
     if pos < len(lines):
         raise CompactError(f"ligne {pos + 1} : texte en trop")
     return result
+
+
+# ------------------------------------------- formes specialisees (2026-11-24)
+# serie, graphe, conversation, appels, matrice : voir cstl_formes.py. Elles
+# rejoignent le CSTL polymorphe ; une forme qui ne convient pas aux donnees
+# leve CompactError et n'est simplement pas candidate.
+_data_kind_base = data_kind
+
+
+def data_kind(data):  # noqa: F811 -- etend la version de base
+    """Sorte de donnees : relations, appels, conversation, serie, graphe,
+    matrice (quand la forme specialisee les represente sans perte), sinon
+    tabulaire ou irregulier."""
+    if _is_relations(data):
+        return "relations"
+    for form in ("appels", "conversation", "serie", "graphe", "matrice"):
+        try:
+            text = _ENCODERS[form](data)
+            if _DECODERS[form](text) == data:
+                return form
+        except Exception:  # noqa: BLE001
+            continue
+    return _data_kind_base(data)
+
+
+# Enregistrement des formes specialisees : fait par cstl_formes lui-meme (a la
+# fin de son chargement), quel que soit le module importe en premier.
+try:
+    import cstl_formes  # noqa: E402,F401
+except ImportError:      # cstl_compact seul (ex. fichier tout-en-un) : formes de base uniquement
+    pass
