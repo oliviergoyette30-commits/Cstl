@@ -33,7 +33,7 @@ Les jeux en erreur d'API sont exclus du total (x/y), jamais comptes faux.
 | gemma-4-31b-it | 35/36 | 35/36 | 36/36 | - |
 | meta-llama/llama-4-maverick | 25/36 | 30/36 | 25/36 | 32/36 |
 | mistralai/mistral-medium-3-5 | 18/36 | 19/36 | 19/36 | 17/36 |
-| openai/gpt-5-mini | 36/36 | 35/36 | 36/36 | - |
+| openai/gpt-5-mini | 36/36 | 35/36 | 36/36 | 35/36 |
 | qwen/qwen3.8-flash | 35/36 | 34/36 | 35/36 | - |
 
 ## 2. Ecriture (documents identiques au JSON de depart)
@@ -72,7 +72,7 @@ Le mode tolerant (`decode_tree_indented(texte, lenient=True)`) est celui que la 
 
 | Test | JSON | TOON | Arbre indente | Arbre indente + /N |
 |---|---|---|---|---|
-| Lecture | 315/360 (87.5 %) | 319/360 (88.6 %) | 312/360 (86.7 %) | 49/72 (68.1 %) |
+| Lecture | 315/360 (87.5 %) | 319/360 (88.6 %) | 312/360 (86.7 %) | 84/108 (77.8 %) |
 | Ecriture stricte | 110/118 (93.2 %) | 102/116 (87.9 %) | - | 107/120 (89.2 %) |
 | Ecriture tolerante | - | - | - | 116/120 (96.7 %) |
 | Vide qui parle | 215/240 (89.6 %) | 212/240 (88.3 %) | 214/240 (89.2 %) | - |
