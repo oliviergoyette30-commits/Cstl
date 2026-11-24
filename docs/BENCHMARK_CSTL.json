@@ -1,0 +1,548 @@
+{
+  "date": "2026-11-23",
+  "tokens_gemini": {
+    "imbrique_12_jeux": {
+      "json": 17577,
+      "toon": 21102,
+      "cstl": 43236,
+      "cstl_compact": 29099,
+      "cstl_tableau": 21709,
+      "cstl_symboles": 21637,
+      "cstl_arbre": 14524,
+      "cstl_indent": 10792,
+      "cstl_indent_fin": 10864,
+      "cstl_indent_ligne": 11457
+    },
+    "vide_qui_parle_6_jeux": {
+      "json_naif": 2972,
+      "json": 3697,
+      "toon": 4928,
+      "cstl_indent": 2390,
+      "json_indente": 7604,
+      "yaml": 4802,
+      "xml": 5809,
+      "csv": 2293,
+      "cstl_arbre": 2665
+    }
+  },
+  "modeles": {
+    "anthropic/claude-haiku-5.5": {
+      "lecture": {
+        "json": {
+          "justes": 36,
+          "total": 36
+        },
+        "toon": {
+          "justes": 35,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 35,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 10,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 8,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 23,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 24,
+          "total": 24
+        }
+      }
+    },
+    "anthropic/claude-sonnet-5.5": {
+      "lecture": {
+        "json": {
+          "justes": 35,
+          "total": 36
+        },
+        "toon": {
+          "justes": 36,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 36,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 8,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 24,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 24,
+          "total": 24
+        }
+      }
+    },
+    "deepseek/deepseek-v4.1-flash": {
+      "lecture": {
+        "json": {
+          "justes": 36,
+          "total": 36
+        },
+        "toon": {
+          "justes": 36,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 36,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 10,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 8,
+          "identiques_tolerant": 8,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 10,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 7,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 24,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 23,
+          "total": 24
+        }
+      }
+    },
+    "gemini-3.5-flash-lite": {
+      "lecture": {
+        "json": {
+          "justes": 23,
+          "total": 36
+        },
+        "toon": {
+          "justes": 23,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 19,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 9,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 6,
+          "total": 24
+        },
+        "json": {
+          "justes": 16,
+          "total": 24
+        },
+        "toon": {
+          "justes": 16,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 18,
+          "total": 24
+        }
+      }
+    },
+    "gemma-4-26b-a4b-it": {
+      "lecture": {
+        "json": {
+          "justes": 36,
+          "total": 36
+        },
+        "toon": {
+          "justes": 36,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 35,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 10,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 11,
+          "identiques_tolerant": 11,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 8,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 24,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 24,
+          "total": 24
+        }
+      }
+    },
+    "gemma-4-31b-it": {
+      "lecture": {
+        "json": {
+          "justes": 35,
+          "total": 36
+        },
+        "toon": {
+          "justes": 35,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 36,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 10,
+          "total": 10
+        },
+        "toon": {
+          "identiques_strict": 8,
+          "identiques_tolerant": 8,
+          "total": 10
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 8,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 24,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 24,
+          "total": 24
+        }
+      }
+    },
+    "meta-llama/llama-4-maverick": {
+      "lecture": {
+        "json": {
+          "justes": 25,
+          "total": 36
+        },
+        "toon": {
+          "justes": 30,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 25,
+          "total": 36
+        },
+        "cstl_indent_ligne": {
+          "justes": 32,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 11,
+          "identiques_tolerant": 11,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 8,
+          "identiques_tolerant": 8,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 8,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 6,
+          "total": 24
+        },
+        "json": {
+          "justes": 16,
+          "total": 24
+        },
+        "toon": {
+          "justes": 17,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 20,
+          "total": 24
+        }
+      }
+    },
+    "mistralai/mistral-medium-3-5": {
+      "lecture": {
+        "json": {
+          "justes": 18,
+          "total": 36
+        },
+        "toon": {
+          "justes": 19,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 19,
+          "total": 36
+        },
+        "cstl_indent_ligne": {
+          "justes": 17,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 1,
+          "total": 24
+        },
+        "json": {
+          "justes": 15,
+          "total": 24
+        },
+        "toon": {
+          "justes": 13,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 9,
+          "total": 24
+        }
+      }
+    },
+    "openai/gpt-5-mini": {
+      "lecture": {
+        "json": {
+          "justes": 36,
+          "total": 36
+        },
+        "toon": {
+          "justes": 35,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 36,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 12,
+          "identiques_tolerant": 12,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 8,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 24,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 24,
+          "total": 24
+        }
+      }
+    },
+    "qwen/qwen3.8-flash": {
+      "lecture": {
+        "json": {
+          "justes": 35,
+          "total": 36
+        },
+        "toon": {
+          "justes": 34,
+          "total": 36
+        },
+        "cstl_indent": {
+          "justes": 35,
+          "total": 36
+        }
+      },
+      "ecriture": {
+        "json": {
+          "identiques_strict": 9,
+          "identiques_tolerant": 9,
+          "total": 12
+        },
+        "toon": {
+          "identiques_strict": 9,
+          "identiques_tolerant": 9,
+          "total": 10
+        },
+        "cstl_indent_ligne": {
+          "identiques_strict": 10,
+          "identiques_tolerant": 10,
+          "total": 12
+        }
+      },
+      "vide_qui_parle": {
+        "json_naif": {
+          "justes": 8,
+          "total": 24
+        },
+        "json": {
+          "justes": 24,
+          "total": 24
+        },
+        "toon": {
+          "justes": 23,
+          "total": 24
+        },
+        "cstl_indent": {
+          "justes": 24,
+          "total": 24
+        }
+      }
+    }
+  }
+}

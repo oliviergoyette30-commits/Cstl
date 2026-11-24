@@ -406,15 +406,21 @@ def main():
         jobs = [(k, n, s, d, f, r) for r in range(args.runs) for k, n, s, d in datasets for f in formats]
         dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension.replace('/', '__')}.json"
         rows = [None] * len(jobs)
-        if args.resume and dest.exists():
-            old = json.loads(dest.read_text())["rows"]
-            if len(old) == len(jobs):  # meme ordre que les jobs
-                rows = [r if r.get("ok") is not None and r.get("parsed", extract_answer(r.get("raw", ""))[1])
-                        else None for r in old]
+        old = json.loads(dest.read_text())["rows"] if dest.exists() else []
+        if args.resume:
+            # Par (type, taille, graine, format, passe) : ajouter un format ne
+            # repose que ses questions, et les autres formats sont gardes.
+            done = {(r["kind"], r.get("size"), r.get("seed"), r["format"], r.get("run", 0)): r for r in old
+                    if r.get("ok") is not None and r.get("parsed", extract_answer(r.get("raw", ""))[1])}
+            rows = [done.get((k, n, s, f, run)) for k, n, s, d, f, run in jobs]
         todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "4"))) as pool:
             for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):
                 rows[i] = r
+        # Les resultats d'autres formats deja dans le fichier sont conserves.
+        mine = {(r["kind"], r.get("size"), r.get("seed"), r["format"], r.get("run", 0)) for r in rows}
+        rows = rows + [r for r in old if (r["kind"], r.get("size"), r.get("seed"), r["format"], r.get("run", 0))
+                       not in mine]
         print(f"\n  Comprehension ({args.comprehension}) :")
         for f in formats:
             r = [x for x in rows if x["format"] == f and x["ok"] is not None]

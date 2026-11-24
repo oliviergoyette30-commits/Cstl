@@ -5,5 +5,8 @@
   "cstl_compact": 29099,
   "cstl_tableau": 21709,
   "cstl_symboles": 21637,
-  "cstl_arbre": 14524
+  "cstl_arbre": 14524,
+  "cstl_indent": 10792,
+  "cstl_indent_fin": 10864,
+  "cstl_indent_ligne": 11457
 }
