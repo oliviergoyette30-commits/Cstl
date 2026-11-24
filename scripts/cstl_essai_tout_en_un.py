@@ -2130,7 +2130,7 @@ def data_kind(data):  # noqa: F811 -- etend la version de base
     tabulaire ou irregulier."""
     if _is_relations(data):
         return "relations"
-    for form in ("appels", "conversation", "serie", "graphe", "matrice"):
+    for form in ("changements", "appels", "conversation", "serie", "graphe", "matrice"):
         try:
             text = _ENCODERS[form](data)
             if _DECODERS[form](text) == data:

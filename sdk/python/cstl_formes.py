@@ -446,10 +446,385 @@ def decode_matrice(text):
     return rows
 
 
+# ------------------------------------------------------------------ mixte
+# Les vraies reponses d'API melangent des objets irreguliers (ou la forme
+# objets_json est la seule fiable en ecriture : 48/48) et des listes d'objets
+# semblables (ou une table est 2 fois plus courte). La forme mixte fait les
+# deux : la structure d'objets_json, et chaque liste d'objets devient une
+# table dont les cellules sont des valeurs JSON.
+#   crate:
+#     name: "serde"
+#   versions[2]: num downloads yanked
+#     "1.0.229" 291102851 false
+#     "1.0.228" 589727930 false license="MIT"
+# Une colonne = un champ present dans TOUS les elements ; un autre champ
+# s'ecrit nom=valeur en fin de ligne. Toutes les valeurs sont du JSON.
+
+_MKEY = re.compile(r"[^\s\"?=#\-\[\]][^\s\"]*")
+_MNAME = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*")
+
+
+def _mkey(k):
+    """Cle sans guillemets si elle est sans espace, ne commence ni par « - »,
+    « " », « ? », « = », « # », « [ », ne finit ni par « : » ni par « [N] »."""
+    if k and _MKEY.fullmatch(k) and not k.endswith(":") and ": " not in k and not re.search(r"\[\d+\]$", k):
+        return k
+    return _J(k)
+
+
+def _mcol(k):
+    return k if _MNAME.fullmatch(k) else _J(k)
+
+
+def _table_ok(v):
+    return (isinstance(v, list) and len(v) >= 2 and all(isinstance(x, dict) and x and not
+                                                         (len(x) == 1 and "$unknown" in x) for x in v))
+
+
+def encode_mixte(data):
+    lines = []
+
+    def table(key, rows, ind):
+        cols = [k for k in rows[0] if all(k in r for r in rows)]
+        lines.append(f"{ind}{key}[{len(rows)}]:" + "".join(f" {_mcol(c)}" for c in cols))
+        for r in rows:
+            cells = [_J(r[c]) for c in cols] + [f"{_mcol(k)}={_J(v)}" for k, v in r.items() if k not in cols]
+            lines.append(ind + "  " + (" ".join(cells) if cells else "."))
+
+    def obj(d, ind):
+        for k, v in d.items():
+            key = _mkey(k)
+            if _table_ok(v):
+                table(key, v, ind)
+            elif isinstance(v, dict) and v and not (len(v) == 1 and "$unknown" in v):
+                lines.append(f"{ind}{key}:")
+                obj(v, ind + "  ")
+            elif isinstance(v, list) and v and any(isinstance(x, (dict, list)) for x in v):
+                lines.append(f"{ind}{key}:")
+                lines.extend(f"{ind}  - {_J(x)}" for x in v)
+            else:
+                lines.append(f"{ind}{key}: {_J(v)}")
+
+    if isinstance(data, dict) and data and not (len(data) == 1 and "$unknown" in data):
+        obj(data, "")
+    elif _table_ok(data):
+        table("", data, "")
+    else:
+        return "= " + _J(data)
+    return "\n".join(lines)
+
+
+def _json_seq(s, i, n):
+    """Valeurs JSON separees par des espaces, puis des « nom=valeur »."""
+    dec, vals, named = json.JSONDecoder(), [], {}
+    while True:
+        while i < len(s) and s[i] == " ":
+            i += 1
+        if i >= len(s):
+            return vals, named
+        m = re.compile(r'(?:"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_.\-]*)=').match(s, i)
+        if m:
+            key = m.group(0)[:-1]
+            key = json.loads(key) if key.startswith('"') else key
+            try:
+                named[key], i = dec.raw_decode(s, m.end())
+            except ValueError:
+                raise CompactError(f"ligne {n} : valeur JSON attendue apres {key}=") from None
+            continue
+        if named:
+            raise CompactError(f"ligne {n} : valeur apres un champ nom=valeur")
+        try:
+            v, i = dec.raw_decode(s, i)
+        except ValueError:
+            raise CompactError(f"ligne {n} : valeur JSON attendue : {s[i:i + 40]!r}") from None
+        vals.append(v)
+
+
+def decode_mixte(text):
+    lines = text.split("\n")
+    pos = 0
+    head_re = re.compile(r'^(?P<key>"(?:[^"\\]|\\.)*"|[^\s"]*?)\[(?P<n>\d+)\]:(?P<cols>.*)$')
+
+    def indent(ln):
+        return len(ln) - len(ln.lstrip(" "))
+
+    def read_table(body, ind, n):
+        nonlocal pos
+        m = head_re.match(body)
+        cols = []
+        for t in _raw_tokens(m.group("cols")):
+            cols.append(json.loads(t) if t.startswith('"') else t)
+        rows = []
+        for _ in range(int(m.group("n"))):
+            if pos >= len(lines) or indent(lines[pos]) != ind + 2:
+                raise CompactError(f"ligne {pos + 1} : ligne de table attendue (indentation {ind + 2})")
+            row = lines[pos][ind + 2:]
+            pos += 1
+            vals, named = _json_seq(row, 0, pos) if row.strip() != "." else ([], {})
+            if len(vals) != len(cols):
+                raise CompactError(f"ligne {pos} : {len(cols)} valeurs attendues, {len(vals)} lues")
+            r = dict(zip(cols, vals))
+            r.update(named)
+            rows.append(r)
+        return rows
+
+    def key_of(body, n):
+        if body.startswith('"'):
+            dec = json.JSONDecoder()
+            key, j = dec.raw_decode(body)
+            return key, body[j:]
+        m = re.match(r"(.*?)(:(?: |$)|\[\d+\]:)", body)
+        if not m or not m.group(1):
+            raise CompactError(f"ligne {n} : « cle: valeur » attendu")
+        return m.group(1), body[len(m.group(1)):]
+
+    def obj(ind):
+        nonlocal pos
+        out = {}
+        while pos < len(lines):
+            ln = lines[pos]
+            if not ln.strip():
+                pos += 1
+                continue
+            if indent(ln) < ind:
+                break
+            if indent(ln) > ind:
+                raise CompactError(f"ligne {pos + 1} : indentation inattendue")
+            body = ln[ind:]
+            pos += 1
+            n = pos
+            key, rest = key_of(body, n)
+            if key in out:
+                raise CompactError(f"ligne {n} : cle en double {key!r}")
+            if re.match(r"^\[\d+\]:", rest):
+                out[key] = read_table('""' + rest if body.startswith('"') else body, ind, n) \
+                    if not body.startswith('"') else read_table(_J(key) + rest, ind, n)
+            elif rest == ":":
+                if pos < len(lines) and lines[pos][ind + 2:ind + 4] == "- " and indent(lines[pos]) == ind + 2:
+                    items = []
+                    while pos < len(lines) and indent(lines[pos]) == ind + 2 and lines[pos][ind + 2:].startswith("- "):
+                        try:
+                            items.append(json.loads(lines[pos][ind + 4:]))
+                        except ValueError:
+                            raise CompactError(f"ligne {pos + 1} : valeur JSON attendue apres « - »") from None
+                        pos += 1
+                    out[key] = items
+                else:
+                    out[key] = obj(ind + 2)
+            elif rest.startswith(": "):
+                try:
+                    out[key] = json.loads(rest[2:])
+                except ValueError:
+                    raise CompactError(f"ligne {n} : valeur JSON attendue : {rest[2:42]!r}") from None
+            else:
+                raise CompactError(f"ligne {n} : « : » attendu apres la cle")
+        return out
+
+    if text.startswith("= "):
+        return json.loads(text[2:])
+    if head_re.match(lines[0]) and lines[0].startswith("["):
+        pos = 1
+        rows = read_table(lines[0], 0, 1)
+        if any(ln.strip() for ln in lines[pos:]):
+            raise CompactError(f"ligne {pos + 1} : texte en trop")
+        return rows
+    result = obj(0)
+    if pos < len(lines) and any(ln.strip() for ln in lines[pos:]):
+        raise CompactError(f"ligne {pos + 1} : texte en trop")
+    return result
+
+
+# -------------------------------------------------------------- changements
+# Une liste d'operations JSON Patch (RFC 6902) : ce qui a change, pas le
+# document entier. Une ligne par operation :
+#   ~ /commandes/0/statut "expediee"        replace
+#   + /commandes/0/lignes/- {"article":"x"}  add
+#   - /commandes/1                           remove
+#   > /a /b                                  move (de /a vers /b)
+#   & /a /b                                  copy
+#   = /x 5                                   test
+# Le chemin est un pointeur JSON ; entre guillemets JSON s'il contient un espace
+# ou commence par « " ». diff(avant, apres) calcule ces operations, apply les
+# applique.
+
+_OPS = {"replace": "~", "add": "+", "remove": "-", "move": ">", "copy": "&", "test": "="}
+_SYM = {v: k for k, v in _OPS.items()}
+
+
+def _path(p):
+    return p if p and " " not in p and not p.startswith('"') and "\n" not in p and "\t" not in p else _J(p)
+
+
+def encode_changements(data):
+    if not isinstance(data, list) or not data:
+        raise CompactError("pas une liste d'operations")
+    lines = ["@changements"]
+    for op in data:
+        if not isinstance(op, dict) or op.get("op") not in _OPS or not isinstance(op.get("path"), str):
+            raise CompactError("operation JSON Patch attendue")
+        kind = op["op"]
+        want = {"replace": ["op", "path", "value"], "add": ["op", "path", "value"], "test": ["op", "path", "value"],
+                "remove": ["op", "path"], "move": ["op", "from", "path"], "copy": ["op", "from", "path"]}[kind]
+        if sorted(op) != sorted(want):
+            raise CompactError(f"operation {kind} : champs {want} attendus")
+        if kind in ("move", "copy"):
+            if not isinstance(op["from"], str):
+                raise CompactError("from : texte attendu")
+            lines.append(f"{_OPS[kind]} {_path(op['from'])} {_path(op['path'])}")
+        elif kind == "remove":
+            lines.append(f"- {_path(op['path'])}")
+        else:
+            lines.append(f"{_OPS[kind]} {_path(op['path'])} {_J(op['value'])}")
+    return "\n".join(lines)
+
+
+def decode_changements(text):
+    lines = text.split("\n")
+    if lines[0] != "@changements":
+        raise CompactError("ligne 1 : « @changements » attendu")
+    dec, out = json.JSONDecoder(), []
+    for n, ln in enumerate(lines[1:], 2):
+        if len(ln) < 3 or ln[0] not in _SYM or ln[1] != " ":
+            raise CompactError(f"ligne {n} : « ~ + - > & = » suivi d'un espace attendu")
+        kind, rest = _SYM[ln[0]], ln[2:]
+
+        def path_at(s, i):
+            if s[i:i + 1] == '"':
+                return dec.raw_decode(s, i)
+            j = s.find(" ", i)
+            j = len(s) if j < 0 else j
+            return s[i:j], j
+
+        p1, i = path_at(rest, 0)
+        if kind == "remove":
+            if i != len(rest):
+                raise CompactError(f"ligne {n} : texte en trop apres le chemin")
+            out.append({"op": kind, "path": p1})
+            continue
+        if i >= len(rest) or rest[i] != " ":
+            raise CompactError(f"ligne {n} : deuxieme element attendu")
+        if kind in ("move", "copy"):
+            p2, j = path_at(rest, i + 1)
+            if j != len(rest):
+                raise CompactError(f"ligne {n} : texte en trop")
+            out.append({"op": kind, "from": p1, "path": p2})
+        else:
+            try:
+                val, j = dec.raw_decode(rest, i + 1)
+            except ValueError:
+                raise CompactError(f"ligne {n} : valeur JSON attendue") from None
+            if j != len(rest):
+                raise CompactError(f"ligne {n} : texte en trop apres la valeur")
+            out.append({"op": kind, "path": p1, "value": val})
+    return out
+
+
+def _esc(k):
+    return str(k).replace("~", "~0").replace("/", "~1")
+
+
+def diff(old, new, path=""):
+    """Operations JSON Patch qui transforment `old` en `new` (apply(old, diff)
+    == new). Objets : champ par champ ; listes : element par element, puis
+    ajouts ou retraits en fin ; sinon remplacement."""
+    if type(old) is type(new) and isinstance(old, dict):
+        ops = []
+        for k in old:
+            if k not in new:
+                ops.append({"op": "remove", "path": f"{path}/{_esc(k)}"})
+            else:
+                ops += diff(old[k], new[k], f"{path}/{_esc(k)}")
+        for k in new:
+            if k not in old:
+                ops.append({"op": "add", "path": f"{path}/{_esc(k)}", "value": new[k]})
+        return ops
+    if type(old) is type(new) and isinstance(old, list):
+        ops = []
+        for i in range(min(len(old), len(new))):
+            ops += diff(old[i], new[i], f"{path}/{i}")
+        for i in range(len(old) - 1, len(new) - 1, -1):
+            ops.append({"op": "remove", "path": f"{path}/{i}"})
+        for i in range(len(old), len(new)):
+            ops.append({"op": "add", "path": f"{path}/-", "value": new[i]})
+        return ops
+    if old == new and type(old) is type(new):
+        return []
+    return [{"op": "replace", "path": path, "value": new}]
+
+
+def apply(doc, ops):
+    """Applique des operations JSON Patch (add, remove, replace, move, copy,
+    test) a une copie de `doc`. Leve CompactError si une operation echoue."""
+    import copy
+    doc = copy.deepcopy(doc)
+
+    def parts(p):
+        if p == "":
+            return []
+        if not p.startswith("/"):
+            raise CompactError(f"chemin invalide : {p!r}")
+        return [x.replace("~1", "/").replace("~0", "~") for x in p[1:].split("/")]
+
+    def parent(d, ps):
+        for k in ps[:-1]:
+            d = d[int(k)] if isinstance(d, list) else d[k]
+        return d
+
+    def get(d, ps):
+        for k in ps:
+            d = d[int(k)] if isinstance(d, list) else d[k]
+        return d
+
+    try:
+        for op in ops:
+            ps = parts(op["path"])
+            kind = op["op"]
+            if kind in ("move", "copy"):
+                value = get(doc, parts(op["from"]))
+                if kind == "move":
+                    fp = parts(op["from"])
+                    par = parent(doc, fp)
+                    del par[int(fp[-1]) if isinstance(par, list) else fp[-1]]
+                kind, op = "add", {"op": "add", "path": op["path"], "value": copy.deepcopy(value)}
+            if kind == "test":
+                if get(doc, ps) != op["value"]:
+                    raise CompactError(f"test echoue : {op['path']}")
+                continue
+            if not ps:
+                if kind == "remove":
+                    raise CompactError("retrait de la racine")
+                doc = copy.deepcopy(op["value"])
+                continue
+            par = parent(doc, ps)
+            last = ps[-1]
+            if isinstance(par, list):
+                if kind == "add":
+                    if last == "-":
+                        par.append(copy.deepcopy(op["value"]))
+                    else:
+                        par.insert(int(last), copy.deepcopy(op["value"]))
+                elif kind == "remove":
+                    del par[int(last)]
+                else:
+                    par[int(last)] = copy.deepcopy(op["value"])
+            else:
+                if kind == "remove":
+                    del par[last]
+                elif kind == "replace" and last not in par:
+                    raise CompactError(f"replace sur un champ absent : {op['path']}")
+                else:
+                    par[last] = copy.deepcopy(op["value"])
+    except (KeyError, IndexError, ValueError, TypeError) as e:
+        raise CompactError(f"operation impossible : {e}") from None
+    return doc
+
+
 ENCODERS = {"serie": encode_serie, "graphe": encode_graphe, "conversation": encode_conversation,
-            "appels": encode_appels, "matrice": encode_matrice}
+            "appels": encode_appels, "matrice": encode_matrice, "mixte": encode_mixte,
+            "changements": encode_changements}
 DECODERS = {"serie": decode_serie, "graphe": decode_graphe, "conversation": decode_conversation,
-            "appels": decode_appels, "matrice": decode_matrice}
+            "appels": decode_appels, "matrice": decode_matrice, "mixte": decode_mixte,
+            "changements": decode_changements}
 
 
 # Ces formes rejoignent le CSTL polymorphe de cstl_compact.

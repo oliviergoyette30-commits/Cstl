@@ -60,3 +60,34 @@ def test_random_documents_of_every_kind_round_trip():
     script = Path(__file__).with_name("fuzz_cstl_formes.py")
     out = subprocess.run([sys.executable, str(script), "600"], capture_output=True, text=True, check=True).stdout
     assert "echecs 0 / 600" in out, out
+
+
+MIXTE = {"crate": {"name": "serde", "downloads": 17}, "keywords": [{"id": "a", "n": 1}, {"id": "b", "n": 2, "x": None}],
+         "tags": ["web"], "deps": [{"a": 1}, [2]]}
+
+
+def test_mixte_tables_regular_lists_with_json_values():
+    """2026-11-24 : structure d'objets_json, listes d'objets en tables a
+    cellules JSON ; un champ absent d'un element s'ecrit nom=valeur."""
+    text = F.encode_mixte(MIXTE)
+    assert text.splitlines() == ['crate:', '  name: "serde"', '  downloads: 17', 'keywords[2]: id n',
+                                 '  "a" 1', '  "b" 2 x=null', 'tags: ["web"]', 'deps:', '  - {"a":1}', '  - [2]']
+    assert F.decode_mixte(text) == MIXTE
+    assert F.decode_mixte(F.encode_mixte([{"a": 1}, {"a": 2}])) == [{"a": 1}, {"a": 2}]
+    with pytest.raises(CompactError):
+        F.decode_mixte("keywords[2]: id\n  \"a\"")
+
+
+def test_changements_diff_apply_and_text():
+    """2026-11-24 : ce qui a change, en operations JSON Patch ; diff puis
+    apply redonne le document ; la forme texte se relit a l'identique."""
+    old = {"commandes": [{"id": "o1", "statut": "payee"}, {"id": "o2"}], "total": 3}
+    new = {"commandes": [{"id": "o1", "statut": "expediee", "suivi": "X1"}], "total": 3, "note": "a b"}
+    ops = F.diff(old, new)
+    assert F.apply(old, ops) == new
+    text = F.encode_changements(ops)
+    assert text.splitlines()[:2] == ["@changements", '~ /commandes/0/statut "expediee"']
+    assert F.decode_changements(text) == ops
+    assert data_kind(ops) == "changements" and decode_auto(encode_auto(ops)) == ops
+    with pytest.raises(CompactError):
+        F.apply(old, [{"op": "replace", "path": "/absent", "value": 1}])

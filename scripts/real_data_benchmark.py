@@ -64,6 +64,9 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
+    if fmt == "cstl_mixte":
+        import cstl_formes
+        return cstl_formes.encode_mixte(d)
     if fmt == "cstl_objets_json":
         return cstl_compact.encode_objects_json(d)
     if fmt.startswith("cstl_objets"):
@@ -76,6 +79,9 @@ def decode(fmt, text, lenient=False):
         return json.loads(text)
     if fmt == "toon":
         return toon_lite.decode_nested(text)
+    if fmt == "cstl_mixte":
+        import cstl_formes
+        return cstl_formes.decode_mixte(text)
     if fmt == "cstl_objets_json":
         return cstl_compact.decode_objects_json(text)
     if fmt.startswith("cstl_objets"):
@@ -110,6 +116,16 @@ NOTES["cstl_objets_json"] = (
     "termine au premier « : » suivi d'un espace. Un objet : « cle: » puis ses champs dessous, indentes de 2 "
     "espaces. Une liste d'objets : « cle: » puis un element par « - », ses champs apres le tiret et alignes "
     "dessous. Un objet ou une liste vides : {} ou [].")
+
+
+NOTES["cstl_mixte"] = (
+    "Format : CSTL forme mixte. Chaque VALEUR s'ecrit exactement comme en JSON : \"texte\", 27, false, null, "
+    "[\"a\",\"b\"], {\"k\":1}. Un champ : « cle: valeur » ; la cle sans guillemets se termine au premier "
+    "« : » suivi d'un espace. Un objet : « cle: » puis ses champs dessous, indentes de 2 espaces. Une liste "
+    "d'objets : « cle[N]: col1 col2 » (les colonnes = les champs presents dans TOUS les objets), puis une ligne "
+    "par objet, indentee de 2 espaces, avec ses valeurs JSON dans l'ordre des colonnes, separees par des espaces ; "
+    "un autre champ s'ecrit nom=valeur en fin de ligne. Une autre liste : « cle: » puis un element JSON par ligne "
+    "« - valeur ».")
 
 
 def toon_ok(d):
