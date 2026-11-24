@@ -1767,17 +1767,43 @@ def _osimple(v):
     return None
 
 
-def encode_objects(data):
-    """Document JSON -> CSTL forme « objets ». Sans perte (decode_objects)."""
-    lines = []
+def encode_objects(data, json_values=False):
+    """Document JSON -> CSTL forme « objets ». Sans perte (decode_objects).
 
-    def scalar_cell(v, ind):
+    json_values=True (forme « objets_json », 2026-11-24) : la meme structure
+    (indentation, cles sans guillemets, ni accolades ni virgules), mais chaque
+    valeur ecrite EXACTEMENT comme en JSON ("texte", 27, false, null, [..]).
+    Les modeles ecrivent les valeurs JSON sans erreur ; les regles de
+    guillemets propres a CSTL etaient la premiere source d'echecs d'ecriture
+    sur des donnees reelles."""
+    lines = []
+    if json_values:
+        dumps = lambda v: json.dumps(v, ensure_ascii=False, separators=(",", ":"))  # noqa: E731
+
+        def scalar_cell(v, ind):
+            return dumps(v), []
+    else:
+        dumps = None
+
+    def scalar_cell_cstl(v, ind):
         blocks = []
         cell = _icell(v, blocks)
         return cell, [ind + "  " + ("| " + t if t else "|") for part in blocks for t in part]
 
+    if not json_values:
+        scalar_cell = scalar_cell_cstl
+
+    def simple_of(v):
+        if json_values:
+            if isinstance(v, dict) and v and not is_unknown(v):
+                return None
+            if isinstance(v, list) and v and not all(not isinstance(x, (dict, list)) for x in v):
+                return None
+            return dumps(v) if isinstance(v, (dict, list)) else None
+        return _osimple(v)
+
     def field(k, v, ind):
-        simple = _osimple(v)
+        simple = simple_of(v)
         if simple is not None:
             lines.append(f"{ind}{_okey(k)}: {simple}")
         elif isinstance(v, dict):
@@ -1807,11 +1833,11 @@ def encode_objects(data):
                         first = False
                     else:
                         field(k, v, ind + "  ")
-            elif isinstance(x, list) and x and _osimple(x) is None:
+            elif isinstance(x, list) and x and simple_of(x) is None:
                 lines.append(f"{ind}-")
                 items(x, ind + "  ")
             else:
-                simple = _osimple(x) if isinstance(x, (dict, list)) else None
+                simple = simple_of(x) if isinstance(x, (dict, list)) else None
                 if simple is not None:
                     lines.append(f"{ind}- {simple}")
                 else:
@@ -1819,18 +1845,28 @@ def encode_objects(data):
                     lines.append(f"{ind}- {cell}")
                     lines.extend(extra)
 
-    if isinstance(data, dict) and data:
+    if isinstance(data, dict) and data and not (json_values and is_unknown(data)):
         obj(data, "")
-    elif isinstance(data, list) and data and _osimple(data) is None:
+    elif isinstance(data, list) and data and simple_of(data) is None:
         items(data, "")
     else:
-        simple = _osimple(data) if isinstance(data, (dict, list)) else None
-        return "= " + (simple if simple is not None else _inline(data))
+        simple = simple_of(data) if isinstance(data, (dict, list)) else None
+        return "= " + (simple if simple is not None else (dumps(data) if json_values else _inline(data)))
     return "\n".join(lines)
 
 
-def decode_objects(text):
+def encode_objects_json(data):
+    """Forme « objets_json » : voir encode_objects(json_values=True)."""
+    return encode_objects(data, json_values=True)
+
+
+def decode_objects_json(text):
+    return decode_objects(text, json_values=True)
+
+
+def decode_objects(text, json_values=False):
     """Inverse de encode_objects. Leve CompactError si une ligne ne colle pas."""
+    _json_values = json_values
     lines = [ln for ln in text.split("\n")]
     pos = 0
 
@@ -1841,6 +1877,16 @@ def decode_objects(text):
         """Cellule d'une ligne, plus ses lignes de bloc « | » eventuelles."""
         nonlocal pos
         raw = raw.strip()
+        if raw and raw[0] in "[{" and not _json_values:
+            raw = "".join(_raw_tokens(raw))          # [a, b] : espaces apres les virgules permis
+        if _json_values:
+            if _IBLOCK.match(raw):
+                pass
+            else:
+                try:
+                    return json.loads(raw)
+                except ValueError as e:
+                    raise CompactError(f"ligne {n} : valeur JSON attendue : {raw[:60]!r} ({e})") from None
         if raw and raw[0] not in '"[{?|' and len(_raw_tokens(raw)) > 1:
             # Valeur sans guillemets avec des espaces : toute la fin de ligne est
             # le texte (comme en YAML). Jamais le premier mot seul en silence.
@@ -1939,6 +1985,8 @@ def decode_objects(text):
 
     text_body = text.strip("\n")
     if text_body.startswith("= "):
+        if json_values:
+            return json.loads(text_body[2:])
         val, j = _parse_inline(text_body[2:].strip())
         return val
     if not text_body.strip():

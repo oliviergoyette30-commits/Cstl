@@ -64,6 +64,8 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
+    if fmt == "cstl_objets_json":
+        return cstl_compact.encode_objects_json(d)
     if fmt.startswith("cstl_objets"):
         return cstl_compact.encode_objects(d)
     return cstl_compact.encode_tree_indented(d, counts="line" if fmt.startswith("cstl_indent_ligne") else "head")
@@ -74,6 +76,8 @@ def decode(fmt, text, lenient=False):
         return json.loads(text)
     if fmt == "toon":
         return toon_lite.decode_nested(text)
+    if fmt == "cstl_objets_json":
+        return cstl_compact.decode_objects_json(text)
     if fmt.startswith("cstl_objets"):
         return cstl_compact.decode_objects(text)
     return cstl_compact.decode_tree_indented(text, lenient=lenient)
@@ -99,6 +103,13 @@ NOTES["cstl_objets"] = (
 # terminee au premier « : ») sont dans la section « writing_<modele> » ; la
 # version corrigee est mesuree sous le nom cstl_objets2.
 NOTES["cstl_objets2"] = NOTES["cstl_objets"]
+# 2026-11-24 : la structure de la forme objets, chaque valeur ecrite comme en JSON.
+NOTES["cstl_objets_json"] = (
+    "Format : CSTL forme objets, valeurs JSON. Une ligne « cle: valeur » par champ, ou la VALEUR s'ecrit "
+    "exactement comme en JSON : \"texte\", 27, false, null, [\"a\",\"b\"]. La cle s'ecrit sans guillemets et se "
+    "termine au premier « : » suivi d'un espace. Un objet : « cle: » puis ses champs dessous, indentes de 2 "
+    "espaces. Une liste d'objets : « cle: » puis un element par « - », ses champs apres le tiret et alignes "
+    "dessous. Un objet ou une liste vides : {} ou [].")
 
 
 def toon_ok(d):
