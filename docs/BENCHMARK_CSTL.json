@@ -192,6 +192,10 @@
         "cstl_indent": {
           "justes": 19,
           "total": 36
+        },
+        "cstl_indent_ligne": {
+          "justes": 24,
+          "total": 36
         }
       },
       "ecriture": {

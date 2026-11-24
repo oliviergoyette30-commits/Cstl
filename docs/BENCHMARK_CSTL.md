@@ -28,7 +28,7 @@ Les jeux en erreur d'API sont exclus du total (x/y), jamais comptes faux.
 | anthropic/claude-haiku-5.5 | 36/36 | 35/36 | 35/36 | - |
 | anthropic/claude-sonnet-5.5 | 35/36 | 36/36 | 36/36 | - |
 | deepseek/deepseek-v4.1-flash | 36/36 | 36/36 | 36/36 | - |
-| gemini-3.5-flash-lite | 23/36 | 23/36 | 19/36 | - |
+| gemini-3.5-flash-lite | 23/36 | 23/36 | 19/36 | 24/36 |
 | gemma-4-26b-a4b-it | 36/36 | 36/36 | 35/36 | - |
 | gemma-4-31b-it | 35/36 | 35/36 | 36/36 | - |
 | meta-llama/llama-4-maverick | 25/36 | 30/36 | 25/36 | 32/36 |
@@ -72,7 +72,7 @@ Le mode tolerant (`decode_tree_indented(texte, lenient=True)`) est celui que la 
 
 | Test | JSON | TOON | Arbre indente | Arbre indente + /N |
 |---|---|---|---|---|
-| Lecture | 315/360 (87.5 %) | 319/360 (88.6 %) | 312/360 (86.7 %) | 84/108 (77.8 %) |
+| Lecture | 315/360 (87.5 %) | 319/360 (88.6 %) | 312/360 (86.7 %) | 108/144 (75.0 %) |
 | Ecriture stricte | 110/118 (93.2 %) | 102/116 (87.9 %) | - | 107/120 (89.2 %) |
 | Ecriture tolerante | - | - | - | 116/120 (96.7 %) |
 | Vide qui parle | 215/240 (89.6 %) | 212/240 (88.3 %) | 214/240 (89.2 %) | - |
