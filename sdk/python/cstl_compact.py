@@ -1648,7 +1648,9 @@ RELIABILITY = {
     # Donnees irregulieres (12 reponses d'API reelles) : ecriture sur GPT-5
     # mini, Claude Haiku, Llama 4, Mistral (real_data_benchmark). Lecture :
     # arbre a egalite avec JSON, questions trop faciles (effet plafond).
-    ("irregulier", "ecrire"): {"objets_json": (48, 48), "objets": (29, 48), "arbre_n": (25, 48)},
+    # mixte (tables a cellules JSON) : 37/48 -- les tables ou un champ manque
+    # dans certains elements sont mal remplies (valeurs decalees).
+    ("irregulier", "ecrire"): {"objets_json": (48, 48), "mixte": (37, 48), "objets": (29, 48), "arbre_n": (25, 48)},
     ("irregulier", "lire"): {"arbre": (75 * 7 - 6, 75 * 7), "arbre_n": (75 * 7 - 8, 75 * 7)},
 }
 

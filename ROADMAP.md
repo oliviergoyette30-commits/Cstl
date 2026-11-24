@@ -451,6 +451,18 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       indenté et 29/48 en forme « objets » à valeurs CSTL.
     - Coût : +7 à +18 % de tokens face au JSON compact. On paie la fiabilité.
     - Une seule passe : à confirmer.
+  - **Formes mixte et changements** (2026-11-24, `sdk/python/cstl_formes.py`).
+    - **mixte** : la structure d'`objets_json`, avec les listes d'objets en
+      tables à cellules JSON. Sur les données réelles, −3 à −8 % de tokens
+      face au JSON. Écriture : 37/48, contre 42 pour le JSON et 48 pour
+      `objets_json`. Les échecs viennent des tables dont certains éléments
+      n'ont pas tous les champs : le modèle décale les valeurs. Elle sert
+      donc à transmettre, pas à faire écrire un modèle.
+    - **changements** : opérations JSON Patch d'une ligne, avec `diff` et
+      `apply`.
+  - **Cinq formes spécialisées** : `serie`, `graphe`, `conversation`,
+    `appels` et `matrice`. Sans perte, mais pas encore mesurées sur des
+    modèles.
   - **Fiabilité des formes de relations** (4 modèles, 48 politiques) :
     - lecture : lignes 26, symboles 25, complet 22, tableau 18 ;
     - écriture : complet 24, symboles 21, lignes 17, tableau 15.
