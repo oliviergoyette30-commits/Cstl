@@ -389,6 +389,83 @@ def provider_tokens(models):
     OUT.write_text(json.dumps(store, indent=1, ensure_ascii=False) + "\n")
 
 
+def writing_fix(model, workers, formats, n_examples, repair):
+    """Ecriture avec plusieurs exemples et, si `repair`, un tour de correction.
+
+    2026-11-24. Les exemples viennent de familles de donnees differentes de
+    celle du document (crates, npm, pypi, wikidata). Le tour de correction ne
+    renvoie au modele QUE le message d'erreur du vrai lecteur du format (avec
+    son numero de ligne) : rien n'est devine, et une erreur silencieuse (champ
+    invente, valeur fausse) n'est pas signalee -- elle reste un echec. Le JSON
+    a droit au meme tour, avec le message de json.loads.
+    Cout : tokens estimes (cstl_compact.estimate_tokens) de toutes les
+    consignes et reponses, tour de correction compris.
+    """
+    import team_task_benchmark as tb
+    brain = tb.make_brain(model)
+    docs = documents()
+    names = list(docs)
+    fam = lambda n: n.split("_")[0]  # noqa: E731
+    T = cstl_compact.estimate_tokens
+
+    def examples(name):
+        out, seen = [], {fam(name)}
+        i = names.index(name)
+        for k in range(1, len(names)):
+            e = names[(i + k) % len(names)]
+            if fam(e) not in seen:
+                out.append(e)
+                seen.add(fam(e))
+            if len(out) == n_examples:
+                break
+        return out
+
+    def one(job):
+        name, fmt, run = job
+        d = docs[name]
+        ex = "".join(f"Exemple {j + 1} (autres donnees).\nJSON :\n{json.dumps(docs[e], ensure_ascii=False)}\n"
+                     f"Meme document dans le format :\n{render(fmt, docs[e])}\n\n" for j, e in enumerate(examples(name)))
+        prompt = (f"Convertis le document JSON ci-dessous dans le format decrit.\n{NOTES[fmt]}\n\n{ex}"
+                  f"Document a convertir :\n{json.dumps(d, ensure_ascii=False)}\n\n"
+                  "Reponds uniquement par le document converti, sans explication, sans bloc de code.")
+        base = {"doc": name, "format": fmt, "run": run}
+        cost = T(prompt)
+        try:
+            text = nw.strip_fences(brain.generate(prompt, max_tokens=8000))
+        except RuntimeError as e:
+            return {**base, "ok": None, "error": str(e)[:200]}
+        cost += T(text)
+
+        def check(t):
+            try:
+                return decode(fmt, t) == d, None
+            except Exception as e:  # noqa: BLE001
+                return False, f"{type(e).__name__}: {e}"[:300]
+
+        first, err = check(text)
+        final, fixed, detected = first, False, err is not None
+        if repair and err:
+            p2 = (f"{prompt}\n\nTa reponse :\n{text}\n\nLe lecteur du format l'a refusee : {err}\n"
+                  "Corrige et redonne le document complet, sans explication, sans bloc de code.")
+            cost += T(p2)
+            try:
+                text2 = nw.strip_fences(brain.generate(p2, max_tokens=8000))
+            except RuntimeError as e:
+                return {**base, "ok": None, "error": str(e)[:200]}
+            cost += T(text2)
+            final, _ = check(text2)
+            fixed = final
+            text = text2
+        print(f"    {name:14} {fmt:18} : {'identique' if first else 'corrige' if fixed else 'ECHEC'}"
+              + ("" if first or detected else "  (silencieux)"), flush=True)
+        return {**base, "ok": True, "exact_first": first, "exact": final, "detected": detected,
+                "cost_tokens": cost, "out_tokens": T(text), "raw": text}
+
+    jobs = [(n, f, 0) for n in docs for f in formats]
+    section = f"writing_ex{n_examples}{'_fix' if repair else ''}_{model}"
+    return run_jobs(section, jobs, one, workers, key=lambda r: (r["doc"], r["format"], r["run"]), jkey=lambda j: j)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--comprehension", metavar="MODELE")
@@ -397,6 +474,8 @@ def main():
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--formats", default="", help="ecriture : formats a tester (defaut : json,toon,cstl_indent_ligne)")
     ap.add_argument("--show-questions", action="store_true")
+    ap.add_argument("--examples", type=int, default=0, help="ecriture a N exemples (writing_fix)")
+    ap.add_argument("--repair", action="store_true", help="avec un tour de correction")
     args = ap.parse_args()
     workers = int(os.environ.get("BENCH_WORKERS", "3"))
     docs = documents()
@@ -415,6 +494,13 @@ def main():
             r = [x for x in rows if x and x["format"] == f and x.get("ok") is not None]
             if r:
                 print(f"  {f:18} {sum(sum(x['ok']) for x in r)}/{sum(len(x['ok']) for x in r)}")
+    if args.writing and args.examples:
+        rows = writing_fix(args.writing, workers, [f for f in args.formats.split(",") if f], args.examples, args.repair)
+        for f in sorted({x["format"] for x in rows if x}):
+            r = [x for x in rows if x and x["format"] == f and x.get("ok")]
+            print(f"  {f:18} du premier coup {sum(x['exact_first'] for x in r)}/{len(r)}  final {sum(x['exact'] for x in r)}/{len(r)}"
+                  f"  echecs silencieux {sum(not x['exact'] and not x['detected'] for x in r)}")
+        return
     if args.writing:
         rows = writing(args.writing, workers, [f for f in args.formats.split(",") if f] or None)
         for f in FORMATS + ("cstl_indent_ligne_json",):
