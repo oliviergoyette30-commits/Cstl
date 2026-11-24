@@ -1,0 +1,125 @@
+{
+ "info": {
+  "name": "requests",
+  "version": "2.34.2",
+  "summary": "Python HTTP for Humans.",
+  "author": null,
+  "license": "Apache-2.0",
+  "requires_python": ">=3.10",
+  "home_page": null,
+  "yanked": false,
+  "requires_dist": [
+   "charset_normalizer<4,>=2",
+   "idna<4,>=2.5",
+   "urllib3<3,>=1.26",
+   "certifi>=2023.5.7",
+   "PySocks!=1.5.7,>=1.5.6; extra == \"socks\"",
+   "chardet<8,>=3.0.2; extra == \"use-chardet-on-py3\""
+  ],
+  "project_urls": {
+   "Documentation": "https://requests.readthedocs.io",
+   "Source": "https://github.com/psf/requests"
+  },
+  "classifiers": [
+   "Development Status :: 5 - Production/Stable",
+   "Environment :: Web Environment",
+   "Intended Audience :: Developers",
+   "License :: OSI Approved :: Apache Software License",
+   "Natural Language :: English",
+   "Operating System :: OS Independent",
+   "Programming Language :: Python",
+   "Programming Language :: Python :: 3"
+  ]
+ },
+ "urls": [
+  {
+   "filename": "requests-2.34.2-py3-none-any.whl",
+   "packagetype": "bdist_wheel",
+   "python_version": "py3",
+   "requires_python": ">=3.10",
+   "size": 73075,
+   "upload_time": "2026-05-14T19:25:26",
+   "yanked": false,
+   "yanked_reason": null,
+   "digests": {
+    "blake2b_256": "a0f4c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a",
+    "md5": "cc4287951c320ff794e5e183c7a91f85",
+    "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"
+   }
+  },
+  {
+   "filename": "requests-2.34.2.tar.gz",
+   "packagetype": "sdist",
+   "python_version": "source",
+   "requires_python": ">=3.10",
+   "size": 142856,
+   "upload_time": "2026-05-14T19:25:27",
+   "yanked": false,
+   "yanked_reason": null,
+   "digests": {
+    "blake2b_256": "acc3e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf",
+    "md5": "611e438d0803e962500225f9807a475e",
+    "sha256": "f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"
+   }
+  }
+ ],
+ "releases": {
+  "2.34.0.dev1": [
+   {
+    "filename": "requests-2.34.0.dev1-py3-none-any.whl",
+    "packagetype": "bdist_wheel",
+    "size": 73077,
+    "yanked": false
+   },
+   {
+    "filename": "requests-2.34.0.dev1.tar.gz",
+    "packagetype": "sdist",
+    "size": 141686,
+    "yanked": false
+   }
+  ],
+  "2.34.0": [
+   {
+    "filename": "requests-2.34.0-py3-none-any.whl",
+    "packagetype": "bdist_wheel",
+    "size": 73021,
+    "yanked": false
+   },
+   {
+    "filename": "requests-2.34.0.tar.gz",
+    "packagetype": "sdist",
+    "size": 142436,
+    "yanked": false
+   }
+  ],
+  "2.34.1": [
+   {
+    "filename": "requests-2.34.1-py3-none-any.whl",
+    "packagetype": "bdist_wheel",
+    "size": 73085,
+    "yanked": false
+   },
+   {
+    "filename": "requests-2.34.1.tar.gz",
+    "packagetype": "sdist",
+    "size": 142783,
+    "yanked": false
+   }
+  ],
+  "2.34.2": [
+   {
+    "filename": "requests-2.34.2-py3-none-any.whl",
+    "packagetype": "bdist_wheel",
+    "size": 73075,
+    "yanked": false
+   },
+   {
+    "filename": "requests-2.34.2.tar.gz",
+    "packagetype": "sdist",
+    "size": 142856,
+    "yanked": false
+   }
+  ]
+ },
+ "vulnerabilities": []
+}

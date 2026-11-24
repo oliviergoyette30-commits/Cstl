@@ -1,0 +1,605 @@
+{
+ "crate": {
+  "name": "tokio",
+  "description": "An event-driven, non-blocking I/O platform for writing asynchronous I/O\nbacked applications.\n",
+  "downloads": 1238908323,
+  "recent_downloads": 327315262,
+  "max_version": "1.54.1",
+  "max_stable_version": "1.54.1",
+  "repository": "https://github.com/tokio-rs/tokio",
+  "num_versions": 201,
+  "yanked": false
+ },
+ "keywords": [
+  {
+   "id": "async",
+   "keyword": "async",
+   "crates_cnt": 6277
+  },
+  {
+   "id": "futures",
+   "keyword": "futures",
+   "crates_cnt": 683
+  },
+  {
+   "id": "io",
+   "keyword": "io",
+   "crates_cnt": 832
+  },
+  {
+   "id": "non-blocking",
+   "keyword": "non-blocking",
+   "crates_cnt": 179
+  }
+ ],
+ "categories": [
+  {
+   "id": "asynchronous",
+   "category": "Asynchronous",
+   "crates_cnt": 13213
+  },
+  {
+   "id": "network-programming",
+   "category": "Network programming",
+   "crates_cnt": 17005
+  }
+ ],
+ "versions": [
+  {
+   "num": "1.54.1",
+   "created_at": "2026-10-21T21:05:43.950213Z",
+   "downloads": 50683591,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT",
+   "crate_size": 983384,
+   "rust_version": "1.85",
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "schedule-latency": [],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "published_by": {
+    "login": "Darksonn",
+    "name": "Alice Ryhl"
+   }
+  },
+  {
+   "num": "1.54.0",
+   "created_at": "2026-10-19T16:33:48.987430Z",
+   "downloads": 2684698,
+   "yanked": true,
+   "yank_message": null,
+   "license": "MIT",
+   "crate_size": 983296,
+   "rust_version": "1.85",
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "schedule-latency": [],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "published_by": {
+    "login": "Darksonn",
+    "name": "Alice Ryhl"
+   }
+  },
+  {
+   "num": "1.53.3",
+   "created_at": "2026-10-13T20:51:46.498182Z",
+   "downloads": 20465871,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT",
+   "crate_size": 933090,
+   "rust_version": "1.71",
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "schedule-latency": [],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "published_by": {
+    "login": "Darksonn",
+    "name": "Alice Ryhl"
+   }
+  },
+  {
+   "num": "1.51.6",
+   "created_at": "2026-10-13T20:51:27.301864Z",
+   "downloads": 735089,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT",
+   "crate_size": 894946,
+   "rust_version": "1.71",
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "published_by": {
+    "login": "Darksonn",
+    "name": "Alice Ryhl"
+   }
+  },
+  {
+   "num": "1.53.2",
+   "created_at": "2026-10-03T11:18:32.487780Z",
+   "downloads": 16611302,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT",
+   "crate_size": 928280,
+   "rust_version": "1.71",
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "schedule-latency": [],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "published_by": {
+    "login": "Darksonn",
+    "name": "Alice Ryhl"
+   }
+  },
+  {
+   "num": "1.51.5",
+   "created_at": "2026-10-03T10:36:38.700128Z",
+   "downloads": 5650,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT",
+   "crate_size": 891732,
+   "rust_version": "1.71",
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "published_by": {
+    "login": "Darksonn",
+    "name": "Alice Ryhl"
+   }
+  }
+ ]
+}

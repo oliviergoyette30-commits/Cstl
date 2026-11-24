@@ -1,0 +1,34 @@
+{
+ "name": "react",
+ "version": "19.3.1",
+ "description": "React is a JavaScript library for building user interfaces.",
+ "license": "MIT",
+ "main": "index.js",
+ "engines": {
+  "node": ">=0.10.0"
+ },
+ "repository": {
+  "url": "git+https://github.com/react/react.git",
+  "type": "git",
+  "directory": "packages/react"
+ },
+ "maintainers": [
+  {
+   "name": "fb",
+   "email": "opensource+npm@fb.com"
+  },
+  {
+   "name": "react-bot",
+   "email": "react-core@meta.com"
+  }
+ ],
+ "keywords": [
+  "react"
+ ],
+ "dist": {
+  "shasum": "26e9523fc36ea06be5050ebb780249a133260ad7",
+  "tarball": "https://registry.npmjs.org/react/-/react-19.3.1.tgz",
+  "fileCount": 27,
+  "unpackedSize": 178663
+ }
+}

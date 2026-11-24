@@ -1,0 +1,296 @@
+{
+ "crate": {
+  "name": "rand",
+  "description": "Random number generators and other randomness functionality.\n",
+  "downloads": 2277119584,
+  "recent_downloads": 682397465,
+  "max_version": "0.10.4",
+  "max_stable_version": "0.10.4",
+  "repository": "https://github.com/rust-random/rand",
+  "num_versions": 95,
+  "yanked": false
+ },
+ "keywords": [
+  {
+   "id": "random",
+   "keyword": "random",
+   "crates_cnt": 622
+  },
+  {
+   "id": "rng",
+   "keyword": "rng",
+   "crates_cnt": 228
+  }
+ ],
+ "categories": [
+  {
+   "id": "algorithms",
+   "category": "Algorithms",
+   "crates_cnt": 9445
+  },
+  {
+   "id": "no-std",
+   "category": "No standard library",
+   "crates_cnt": 15372
+  }
+ ],
+ "versions": [
+  {
+   "num": "0.10.4",
+   "created_at": "2026-11-15T13:54:26.803018Z",
+   "downloads": 5267409,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 107579,
+   "rust_version": "1.85",
+   "features": {
+    "alloc": [],
+    "chacha": [
+     "dep:chacha20"
+    ],
+    "default": [
+     "std",
+     "std_rng",
+     "sys_rng",
+     "thread_rng"
+    ],
+    "log": [],
+    "serde": [
+     "dep:serde"
+    ],
+    "simd_support": [],
+    "std": [
+     "alloc",
+     "getrandom?/std"
+    ],
+    "std_rng": [
+     "dep:chacha20"
+    ],
+    "sys_rng": [
+     "dep:getrandom",
+     "getrandom/sys_rng"
+    ],
+    "thread_rng": [
+     "std",
+     "std_rng",
+     "sys_rng"
+    ],
+    "unbiased": []
+   }
+  },
+  {
+   "num": "0.10.3",
+   "created_at": "2026-09-20T06:37:47.850624Z",
+   "downloads": 80444102,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 105994,
+   "rust_version": "1.85",
+   "features": {
+    "alloc": [],
+    "chacha": [
+     "dep:chacha20"
+    ],
+    "default": [
+     "std",
+     "std_rng",
+     "sys_rng",
+     "thread_rng"
+    ],
+    "log": [],
+    "serde": [
+     "dep:serde"
+    ],
+    "simd_support": [],
+    "std": [
+     "alloc",
+     "getrandom?/std"
+    ],
+    "std_rng": [
+     "dep:chacha20"
+    ],
+    "sys_rng": [
+     "dep:getrandom",
+     "getrandom/sys_rng"
+    ],
+    "thread_rng": [
+     "std",
+     "std_rng",
+     "sys_rng"
+    ],
+    "unbiased": []
+   }
+  },
+  {
+   "num": "0.8.8",
+   "created_at": "2026-08-25T07:45:50.786344Z",
+   "downloads": 82332919,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 84217,
+   "rust_version": null,
+   "features": {
+    "alloc": [
+     "rand_core/alloc"
+    ],
+    "default": [
+     "std",
+     "std_rng"
+    ],
+    "getrandom": [
+     "rand_core/getrandom"
+    ],
+    "log": [],
+    "min_const_gen": [],
+    "nightly": [],
+    "serde1": [
+     "serde",
+     "rand_core/serde1"
+    ],
+    "small_rng": [],
+    "std": [
+     "rand_core/std",
+     "rand_chacha/std",
+     "alloc",
+     "getrandom",
+     "libc"
+    ],
+    "std_rng": [
+     "rand_chacha"
+    ]
+   }
+  },
+  {
+   "num": "0.9.5",
+   "created_at": "2026-07-11T11:16:46.750480Z",
+   "downloads": 116651449,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 100216,
+   "rust_version": "1.63",
+   "features": {
+    "alloc": [],
+    "default": [
+     "std",
+     "std_rng",
+     "os_rng",
+     "small_rng",
+     "thread_rng"
+    ],
+    "log": [],
+    "nightly": [],
+    "os_rng": [
+     "rand_core/os_rng"
+    ],
+    "serde": [
+     "dep:serde",
+     "rand_core/serde"
+    ],
+    "simd_support": [],
+    "small_rng": [],
+    "std": [
+     "rand_core/std",
+     "rand_chacha?/std",
+     "alloc"
+    ],
+    "std_rng": [
+     "dep:rand_chacha"
+    ],
+    "thread_rng": [
+     "std",
+     "std_rng",
+     "os_rng"
+    ],
+    "unbiased": []
+   }
+  },
+  {
+   "num": "0.8.7",
+   "created_at": "2026-07-11T11:16:35.816522Z",
+   "downloads": 58223583,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 84123,
+   "rust_version": null,
+   "features": {
+    "alloc": [
+     "rand_core/alloc"
+    ],
+    "default": [
+     "std",
+     "std_rng"
+    ],
+    "getrandom": [
+     "rand_core/getrandom"
+    ],
+    "log": [],
+    "min_const_gen": [],
+    "nightly": [],
+    "serde1": [
+     "serde",
+     "rand_core/serde1"
+    ],
+    "small_rng": [],
+    "std": [
+     "rand_core/std",
+     "rand_chacha/std",
+     "alloc",
+     "getrandom",
+     "libc"
+    ],
+    "std_rng": [
+     "rand_chacha"
+    ]
+   }
+  },
+  {
+   "num": "0.10.2",
+   "created_at": "2026-07-02T09:01:38.792937Z",
+   "downloads": 105570050,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 104493,
+   "rust_version": "1.85",
+   "features": {
+    "alloc": [],
+    "chacha": [
+     "dep:chacha20"
+    ],
+    "default": [
+     "std",
+     "std_rng",
+     "sys_rng",
+     "thread_rng"
+    ],
+    "log": [],
+    "serde": [
+     "dep:serde"
+    ],
+    "simd_support": [],
+    "std": [
+     "alloc",
+     "getrandom?/std"
+    ],
+    "std_rng": [
+     "dep:chacha20"
+    ],
+    "sys_rng": [
+     "dep:getrandom",
+     "getrandom/sys_rng"
+    ],
+    "thread_rng": [
+     "std",
+     "std_rng",
+     "sys_rng"
+    ],
+    "unbiased": []
+   }
+  }
+ ]
+}

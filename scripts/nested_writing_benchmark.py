@@ -62,11 +62,13 @@ import nested_benchmark as nb  # noqa: E402
 
 LENIENT = {"cstl_indent": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True),
            "cstl_indent_fin": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True),
-           "cstl_indent_ligne": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True)}
+           "cstl_indent_ligne": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True),
+           "cstl_indent_ligne2": lambda t: nb.cstl_compact.decode_tree_indented(t, lenient=True)}
 DECODE = {"json": json.loads, "toon": nb.toon_lite.decode_nested,
           "cstl_arbre": nb.cstl_compact.decode_tree, "cstl_indent": nb.cstl_compact.decode_tree_indented,
           "cstl_indent_fin": nb.cstl_compact.decode_tree_indented,
-          "cstl_indent_ligne": nb.cstl_compact.decode_tree_indented}
+          "cstl_indent_ligne": nb.cstl_compact.decode_tree_indented,
+          "cstl_indent_ligne2": nb.cstl_compact.decode_tree_indented}
 
 
 def leaves(v, path=""):
@@ -134,11 +136,10 @@ def main():
                 "error_decode": err, "chars_out": len(text), "raw": text}
 
     dest = REPO / "scripts" / f"nested_writing_{args.model.replace('/', '__')}.json"
-    rows = [None] * len(jobs)
-    if args.resume and dest.exists():
-        old = json.loads(dest.read_text())["rows"]
-        if len(old) == len(jobs):
-            rows = [r if r.get("ok") is not None else None for r in old]
+    old = json.loads(dest.read_text())["rows"] if dest.exists() else []
+    key = lambda r: (r["kind"], r["size"], r["seed"], r["format"], r.get("run", 0))  # noqa: E731
+    done = {key(r): r for r in old if r.get("ok") is not None} if args.resume else {}
+    rows = [done.get((k, n, s, f, r)) for k, n, s, d, f, r in jobs]
     todo = [i for i, r in enumerate(rows) if r is None]
     with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "2"))) as pool:
         for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):
@@ -153,6 +154,8 @@ def main():
               f" | feuilles {100 * sum(x['leaf_score'] for x in r) / len(r):5.1f} %"
               + (f" | erreurs d'API {sum(1 for x in rows if x['format'] == f and x['ok'] is None)}"
                  if any(x["format"] == f and x["ok"] is None for x in rows) else ""))
+    mine = {key(r) for r in rows if r}
+    rows = rows + [r for r in old if key(r) not in mine]   # les autres formats deja mesures restent
     dest.write_text(json.dumps({"rows": rows}, indent=2, ensure_ascii=False) + "\n")
     print(f"\nResultats bruts : {dest.relative_to(REPO)}")
 

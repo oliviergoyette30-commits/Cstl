@@ -1,0 +1,85 @@
+{
+ "name": "express",
+ "version": "5.3.0",
+ "description": "Fast, unopinionated, minimalist web framework",
+ "license": "MIT",
+ "engines": {
+  "node": ">= 18"
+ },
+ "dependencies": {
+  "qs": "^6.16.0",
+  "depd": "^2.0.0",
+  "etag": "^1.8.1",
+  "once": "^1.4.0",
+  "send": "^1.1.0",
+  "vary": "^1.1.2",
+  "debug": "^4.4.0",
+  "fresh": "^2.0.0",
+  "cookie": "^0.7.1",
+  "router": "^2.2.0"
+ },
+ "devDependencies": {
+  "ejs": "^3.1.10",
+  "hbs": "4.3.1",
+  "nyc": "^17.1.0",
+  "after": "0.8.2",
+  "mocha": "^11.7.5",
+  "vhost": "~3.0.2",
+  "eslint": "8.47.0",
+  "marked": "^15.0.3",
+  "morgan": "1.12.1",
+  "supertest": "^6.3.0"
+ },
+ "repository": {
+  "url": "git+https://github.com/expressjs/express.git",
+  "type": "git"
+ },
+ "maintainers": [
+  {
+   "name": "wesleytodd",
+   "email": "wes@wesleytodd.com"
+  },
+  {
+   "name": "jonchurch",
+   "email": "npm@jonchurch.com"
+  },
+  {
+   "name": "ctcpip",
+   "email": "c@labsector.com"
+  },
+  {
+   "name": "ulisesgascon",
+   "email": "ulisesgascondev@gmail.com"
+  },
+  {
+   "name": "sheplu",
+   "email": "jean.burellier@gmail.com"
+  }
+ ],
+ "scripts": {
+  "lint": "eslint .",
+  "test": "mocha --require test/support/env --reporter spec --check-leaks test/ test/acceptance/",
+  "test-ci": "nyc --exclude examples --exclude test --exclude benchmarks --reporter=lcovonly --reporter=text npm test",
+  "lint:fix": "eslint . --fix",
+  "test-cov": "nyc --exclude examples --exclude test --exclude benchmarks --reporter=html --reporter=text npm test",
+  "test-tap": "mocha --require test/support/env --reporter tap --check-leaks test/ test/acceptance/"
+ },
+ "keywords": [
+  "express",
+  "framework",
+  "sinatra",
+  "web",
+  "http",
+  "rest",
+  "restful",
+  "router",
+  "app",
+  "api"
+ ],
+ "dist": {
+  "shasum": "ab72dace89c50c8417bd3f865dad0b4fd1ca1c73",
+  "tarball": "https://registry.npmjs.org/express/-/express-5.3.0.tgz",
+  "fileCount": 10,
+  "unpackedSize": 76638
+ }
+}
