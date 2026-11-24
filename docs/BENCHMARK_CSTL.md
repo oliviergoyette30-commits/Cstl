@@ -102,6 +102,7 @@ JSON naif sur le vide qui parle : 68/240 (28.3 %).
 | meta-llama/llama-4-maverick | 10/12 / 10/12 | 4/10 / 4/10 | 3/12 / 3/12 |
 | openai/gpt-5-mini | 12/12 / 12/12 | 6/10 / 6/10 | 5/12 / 5/12 |
 | mistralai/mistral-medium-3-5 | 8/12 / 8/12 | 3/10 / 3/10 | 7/12 / 7/12 |
+| deepseek/deepseek-v4.1-flash | 11/12 / 11/12 | 5/9 / 5/9 | 7/10 / 7/10 |
 
 **Tokens d'entree comptes par chaque fournisseur** (usage.prompt_tokens, sur les memes documents ; « commun » = les documents que TOON relit) :
 

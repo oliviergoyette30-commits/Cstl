@@ -775,6 +775,23 @@
           7,
           12
         ]
+      },
+      "deepseek/deepseek-v4.1-flash": {
+        "json": [
+          11,
+          11,
+          12
+        ],
+        "toon": [
+          5,
+          5,
+          9
+        ],
+        "cstl_indent_ligne": [
+          7,
+          7,
+          10
+        ]
       }
     },
     "tokens": {
