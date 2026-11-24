@@ -533,7 +533,7 @@ def test_indented_tree_lenient_mode_for_model_written_text():
     got = decode_tree_indented(text, lenient=True, warnings=warn)
     assert got == {"orders": [{"id": "o0", "client": "c5", "lines": [{"item": "gpu", "qty": 5}, {"item": "lic", "qty": 3}]},
                               {"id": "o1", "client": "c3", "note": "fragile", "lines": [{"item": "router", "qty": 1}]}]}
-    assert warn == ["lines[9] annonce, 3 element(s) ecrit(s)"]
+    assert warn == ["ligne 3 : orders sans note (colonnes absentes)", "lines[9] annonce, 3 element(s) ecrit(s)"]
     # [N] facultatif, dans les deux modes.
     assert decode_tree_indented("@t: a\n1\n2") == {"t": [{"a": 1}, {"a": 2}]}
     # Une indentation incoherente reste refusee.
@@ -638,3 +638,16 @@ def test_indented_tree_unknown_value_speaks():
     assert back == data and is_unknown(back["patients"][0]["renal"]) and back["patients"][1]["renal"] is None
     assert "renal" not in back["patients"][2]
     assert relations_to_tree(tree_to_relations(data, "t1"), "t1") == data
+
+
+def test_lenient_mode_warns_about_every_row_with_missing_columns():
+    """2026-11-24 : une critique ecrite par un modele avait oublie d'indenter
+    ses lignes de detail ; le mode tolerant les lisait comme des sections a qui
+    il manque des colonnes, sans rien signaler. Il avertit maintenant."""
+    text = ("@crit: section rang titre\n@details^crit: preuve impact\n"
+            "1 1 \"Biais\"\n\"llama 8/12\" \"absorbe\"")
+    with pytest.raises(CompactError):
+        decode_tree_indented(text)
+    warn = []
+    decode_tree_indented(text, lenient=True, warnings=warn)
+    assert warn == ["ligne 4 : crit sans titre (colonnes absentes)"]

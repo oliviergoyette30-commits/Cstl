@@ -1547,6 +1547,14 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         if not lenient and len(toks) < len(cols):
             raise CompactError(f"ligne {n} : {key} attend {len(cols)} valeurs")
         npos = next((j for j, t in enumerate(toks) if _is_named(t)), len(toks)) if lenient else len(cols)
+        named = {_inamed(t)[0] for t in toks[npos:] if _is_named(t)} if lenient else set()
+        if lenient and [c for c in cols[npos:] if c not in named] and warnings is not None:
+            # Colonnes manquantes acceptees, mais jamais en silence (2026-11-24) :
+            # un enfant oublie de l'indentation se lit aussi comme un parent a
+            # qui il manque des colonnes (vu dans une critique ecrite par un
+            # modele). L'avertissement nomme la ligne a verifier.
+            warnings.append(f"ligne {n} : {key} sans {', '.join(c for c in cols[npos:] if c not in named)} "
+                            "(colonnes absentes)")
         obj = {}
         fill(obj, toks, cols[:npos], n)
         (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
