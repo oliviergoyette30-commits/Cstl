@@ -91,3 +91,23 @@ def test_changements_diff_apply_and_text():
     assert data_kind(ops) == "changements" and decode_auto(encode_auto(ops)) == ops
     with pytest.raises(CompactError):
         F.apply(old, [{"op": "replace", "path": "/absent", "value": 1}])
+
+
+def test_relationnel_paths_strict_tables_and_unknown():
+    """2026-11-24 : forme relationnel -- valeurs JSON, chemins condenses pour
+    les objets a un seul champ, tables seulement si tous les elements ont
+    exactement les memes champs, inconnu ?, comptes [N]."""
+    doc = {"name": "react", "engines": {"node": ">=0.10"}, "repository": {"url": "git+x", "type": "git"},
+           "maintainers": [{"name": "fb", "email": "a@x"}, {"name": "bot", "email": "b@x"}],
+           "files": [{"p": "a"}, {"p": "b", "size": 3}], "pay": {"$unknown": {"why": "bank"}},
+           "lodash.get": 1, "keywords": ["react"]}
+    text = F.encode_relationnel(doc)
+    assert text.splitlines()[:6] == ['name: "react"', 'engines.node: ">=0.10"', "repository:", '  url: "git+x"',
+                                     '  type: "git"', "maintainers[2]: name email"]
+    assert 'files[2]:' in text and '  - p: "a"' in text and 'pay: ?{"why":"bank"}' in text
+    assert '"lodash.get": 1' in text
+    assert F.decode_relationnel(text) == doc
+    for d in ([{"a": 1}, {"a": 2}], [{"a": 1}, [2]], {}, [], 5, None, {"a": {"b": {"c": {}}}}):
+        assert F.decode_relationnel(F.encode_relationnel(d)) == d
+    with pytest.raises(CompactError):
+        F.decode_relationnel('maintainers[3]: name\n  "a"\n  "b"')

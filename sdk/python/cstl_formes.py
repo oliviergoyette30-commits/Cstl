@@ -819,12 +819,266 @@ def apply(doc, ops):
     return doc
 
 
+# --------------------------------------------------------------- relationnel
+# Forme CSTL pour les donnees IRREGULIERES (2026-11-24). Base fiable mesuree :
+# chaque valeur en JSON, structure indentee « cle: valeur » (objets_json :
+# 48/48 en ecriture sur 12 reponses d'API). Trois apports propres a CSTL :
+#   1. chemins condenses : une chaine d'objets a UN seul champ s'ecrit en un
+#      chemin, sur une ligne : repository.url: "git+https://..."
+#      (« les relations comptent plus que l'information ») ;
+#   2. tables seulement si TOUS les elements ont exactement les memes champs,
+#      dans le meme ordre (la cause des echecs de la forme mixte : des
+#      colonnes partielles) : versions[3]: num downloads ; sinon, elements
+#      « - » ;
+#   3. le vide qui parle : ? ou ?{"sigma":0.3} ; le nombre d'elements de
+#      chaque liste en tete : maintainers[2]:
+# Une cle qui contient « . », un espace, « " », ou commence par - ? = # [ s'ecrit
+# en JSON ("lodash.get": ...) ; une cle sans guillemets est un chemin.
+
+_RKEY = re.compile(r"[^\s\"?=#\-\[\]{.][^\s\".]*")
+
+
+def _rkey_bare(k):
+    return bool(k) and bool(_RKEY.fullmatch(k)) and not k.endswith(":") and not re.search(r"\[\d+\]$", k)
+
+
+def _rkey(k):
+    return k if _rkey_bare(k) else _J(k)
+
+
+def _unknown(v):
+    return isinstance(v, dict) and len(v) == 1 and isinstance(v.get("$unknown"), dict)
+
+
+def _rval(v):
+    if _unknown(v):
+        return "?" + (_J(v["$unknown"]) if v["$unknown"] else "")
+    return _J(v)
+
+
+def _regular_table(v):
+    if not (isinstance(v, list) and len(v) >= 2 and all(isinstance(x, dict) and x and not _unknown(x) for x in v)):
+        return None
+    keys = list(v[0])
+    if any(list(x) != keys for x in v) or not all(_rkey_bare(k) or True for k in keys):
+        return None
+    return keys
+
+
+def encode_relationnel(data):
+    lines = []
+
+    def value_lines(key, v, ind):
+        path = [key]
+        # 1. chemins condenses : objets a un seul champ, cles sans guillemets
+        while (isinstance(v, dict) and len(v) == 1 and not _unknown(v) and _rkey_bare(path[-1])
+               and _rkey_bare(next(iter(v)))):
+            k = next(iter(v))
+            path.append(k)
+            v = v[k]
+        head = ind + ".".join(path if len(path) > 1 else [_rkey(key)])
+        cols = _regular_table(v)
+        if cols is not None:
+            lines.append(f"{head}[{len(v)}]:" + "".join(f" {_rkey(c)}" for c in cols))
+            lines.extend(ind + "  " + " ".join(_rval(x[c]) for c in cols) for x in v)
+        elif isinstance(v, list) and v and any(isinstance(x, (dict, list)) and x and not _unknown(x) for x in v):
+            lines.append(f"{head}[{len(v)}]:")
+            items(v, ind + "  ")
+        elif isinstance(v, dict) and v and not _unknown(v):
+            lines.append(f"{head}:")
+            obj(v, ind + "  ")
+        else:
+            lines.append(f"{head}: {_rval(v)}")
+
+    def obj(d, ind):
+        for k, v in d.items():
+            value_lines(k, v, ind)
+
+    def items(seq, ind):
+        for x in seq:
+            if isinstance(x, dict) and x and not _unknown(x):
+                start = len(lines)
+                obj(x, ind + "  ")
+                lines[start] = ind + "- " + lines[start][len(ind) + 2:]
+            else:
+                lines.append(f"{ind}- {_rval(x)}")
+
+    if isinstance(data, dict) and data and not _unknown(data):
+        obj(data, "")
+        return "\n".join(lines)
+    cols = _regular_table(data)
+    if cols is not None:
+        lines.append(f"[{len(data)}]:" + "".join(f" {_rkey(c)}" for c in cols))
+        lines.extend("  " + " ".join(_rval(x[c]) for c in cols) for x in data)
+        return "\n".join(lines)
+    if isinstance(data, list) and data and any(isinstance(x, (dict, list)) and x and not _unknown(x) for x in data):
+        lines.append(f"[{len(data)}]:")
+        items(data, "  ")
+        return "\n".join(lines)
+    return "= " + _rval(data)
+
+
+def _rparse_value(raw, n):
+    raw = raw.strip()
+    if raw.startswith("?"):
+        rest = raw[1:]
+        try:
+            details = json.loads(rest) if rest else {}
+        except ValueError:
+            raise CompactError(f"ligne {n} : « ?{{...}} » attendu : {raw[:40]!r}") from None
+        if not isinstance(details, dict):
+            raise CompactError(f"ligne {n} : details de l'inconnu : objet JSON attendu")
+        return {"$unknown": details}
+    try:
+        return json.loads(raw)
+    except ValueError:
+        raise CompactError(f"ligne {n} : valeur JSON attendue : {raw[:60]!r}") from None
+
+
+_RHEAD = re.compile(r'^(?P<key>"(?:[^"\\]|\\.)*"|[^\s"\[]+?)(?:\[(?P<n>\d+)\])?:(?P<rest>(?: .*)?)$')
+
+
+def _rsplit_key(body, n):
+    m = _RHEAD.match(body)
+    if not m:
+        raise CompactError(f"ligne {n} : « cle: valeur » attendu : {body[:50]!r}")
+    raw = m.group("key")
+    path = [json.loads(raw)] if raw.startswith('"') else raw.split(".")
+    if not raw.startswith('"') and any(not p for p in path):
+        raise CompactError(f"ligne {n} : chemin invalide : {raw!r}")
+    return path, (int(m.group("n")) if m.group("n") is not None else None), m.group("rest")
+
+
+def decode_relationnel(text):
+    lines = text.split("\n")
+    pos = 0
+
+    def indent(ln):
+        return len(ln) - len(ln.lstrip(" "))
+
+    def nest(path, value):
+        for k in reversed(path[1:]):
+            value = {k: value}
+        return path[0], value
+
+    def entry(body, ind, n):
+        """Une ligne « chemin[...]: ... » et ses lignes dessous -> (cle, valeur)."""
+        nonlocal pos
+        path, count, rest = _rsplit_key(body, n)
+        if count is not None:
+            cols_text = rest.strip()
+            if cols_text:
+                cols = [json.loads(t) if t.startswith('"') else t for t in _raw_tokens(cols_text)]
+                rows = []
+                for _ in range(count):
+                    if pos >= len(lines) or indent(lines[pos]) != ind + 2:
+                        raise CompactError(f"ligne {pos + 1} : ligne de table attendue")
+                    row, pos = lines[pos][ind + 2:], pos + 1
+                    vals = _row_values(row, pos)
+                    if len(vals) != len(cols):
+                        raise CompactError(f"ligne {pos} : {len(cols)} valeurs attendues, {len(vals)} lues")
+                    rows.append(dict(zip(cols, vals)))
+                return nest(path, rows)
+            got = items(ind + 2)
+            if len(got) != count:
+                raise CompactError(f"ligne {n} : [{count}] annonce, {len(got)} element(s) ecrit(s)")
+            return nest(path, got)
+        if rest.strip():
+            return nest(path, _rparse_value(rest, n))
+        return nest(path, obj(ind + 2))
+
+    def obj(ind, first=None):
+        nonlocal pos
+        out = {}
+        while True:
+            if first is not None:
+                body, n, first = first, pos, None
+            else:
+                while pos < len(lines) and not lines[pos].strip():
+                    pos += 1
+                if pos >= len(lines) or indent(lines[pos]) < ind:
+                    break
+                if indent(lines[pos]) > ind:
+                    raise CompactError(f"ligne {pos + 1} : indentation inattendue")
+                body = lines[pos][ind:]
+                if body.startswith("- ") or body == "-":
+                    break
+                pos += 1
+                n = pos
+            key, value = entry(body, ind, n)
+            if key in out:
+                raise CompactError(f"ligne {n} : cle en double {key!r}")
+            out[key] = value
+        if not out:
+            raise CompactError(f"ligne {pos + 1} : objet vide (ecrire {{}})")
+        return out
+
+    def items(ind):
+        nonlocal pos
+        out = []
+        while pos < len(lines) and lines[pos].strip() and indent(lines[pos]) == ind and lines[pos][ind:].startswith("- "):
+            body = lines[pos][ind + 2:]
+            pos += 1
+            n = pos
+            if _RHEAD.match(body) and not body.startswith(("{", "[")) and not _is_json_scalar(body):
+                out.append(obj(ind + 2, first=body))
+            else:
+                out.append(_rparse_value(body, n))
+        return out
+
+    body = text
+    if body.startswith("= "):
+        return _rparse_value(body[2:], 1)
+    m = re.match(r"^\[(\d+)\]:(.*)$", lines[0])
+    if m:
+        pos = 1
+        key, value = entry("_root" + lines[0], 0, 1)
+        result = value
+    else:
+        result = obj(0)
+    if any(ln.strip() for ln in lines[pos:]):
+        raise CompactError(f"ligne {pos + 1} : texte en trop")
+    return result
+
+
+def _is_json_scalar(body):
+    try:
+        json.loads(body)
+        return True
+    except ValueError:
+        return body.startswith("?")
+
+
+def _row_values(row, n):
+    dec, vals, i = json.JSONDecoder(), [], 0
+    while i < len(row):
+        while i < len(row) and row[i] == " ":
+            i += 1
+        if i >= len(row):
+            break
+        if row[i] == "?":
+            j = i + 1
+            if j < len(row) and row[j] == "{":
+                details, j = dec.raw_decode(row, j)
+            else:
+                details = {}
+            vals.append({"$unknown": details})
+            i = j
+            continue
+        try:
+            v, i = dec.raw_decode(row, i)
+        except ValueError:
+            raise CompactError(f"ligne {n} : valeur JSON attendue : {row[i:i + 40]!r}") from None
+        vals.append(v)
+    return vals
+
+
 ENCODERS = {"serie": encode_serie, "graphe": encode_graphe, "conversation": encode_conversation,
             "appels": encode_appels, "matrice": encode_matrice, "mixte": encode_mixte,
-            "changements": encode_changements}
+            "changements": encode_changements, "relationnel": encode_relationnel}
 DECODERS = {"serie": decode_serie, "graphe": decode_graphe, "conversation": decode_conversation,
             "appels": decode_appels, "matrice": decode_matrice, "mixte": decode_mixte,
-            "changements": decode_changements}
+            "changements": decode_changements, "relationnel": decode_relationnel}
 
 
 # Ces formes rejoignent le CSTL polymorphe de cstl_compact.

@@ -64,6 +64,9 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
+    if fmt == "cstl_relationnel":
+        import cstl_formes
+        return cstl_formes.encode_relationnel(d)
     if fmt == "cstl_mixte":
         import cstl_formes
         return cstl_formes.encode_mixte(d)
@@ -79,6 +82,9 @@ def decode(fmt, text, lenient=False):
         return json.loads(text)
     if fmt == "toon":
         return toon_lite.decode_nested(text)
+    if fmt == "cstl_relationnel":
+        import cstl_formes
+        return cstl_formes.decode_relationnel(text)
     if fmt == "cstl_mixte":
         import cstl_formes
         return cstl_formes.decode_mixte(text)
@@ -126,6 +132,17 @@ NOTES["cstl_mixte"] = (
     "par objet, indentee de 2 espaces, avec ses valeurs JSON dans l'ordre des colonnes, separees par des espaces ; "
     "un autre champ s'ecrit nom=valeur en fin de ligne. Une autre liste : « cle: » puis un element JSON par ligne "
     "« - valeur ».")
+
+
+NOTES["cstl_relationnel"] = (
+    "Format : CSTL relationnel. Chaque VALEUR s'ecrit exactement comme en JSON : \"texte\", 27, false, null, "
+    "[\"a\",\"b\"], {\"k\":1}. Un champ : « cle: valeur ». Un objet : « cle: » puis ses champs dessous, indentes "
+    "de 2 espaces. Un objet qui n'a qu'UN champ s'ecrit en chemin sur une seule ligne : « a.b.c: valeur » "
+    "(une cle qui contient un point ou un espace s'ecrit entre guillemets : \"lodash.get\": ...). Une liste "
+    "d'objets qui ont EXACTEMENT les memes champs : « cle[N]: col1 col2 » puis une ligne par objet, indentee de 2 "
+    "espaces, avec ses valeurs JSON separees par des espaces. Une autre liste qui contient des objets : « cle[N]: » "
+    "puis un element par « - » (ses champs apres le tiret et alignes dessous). Une liste de valeurs simples : "
+    "en ligne, en JSON. N = le nombre d'elements.")
 
 
 def toon_ok(d):
