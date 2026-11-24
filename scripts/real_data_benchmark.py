@@ -64,7 +64,7 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
-    return cstl_compact.encode_tree_indented(d, counts="line" if fmt == "cstl_indent_ligne" else "head")
+    return cstl_compact.encode_tree_indented(d, counts="line" if fmt.startswith("cstl_indent_ligne") else "head")
 
 
 def decode(fmt, text, lenient=False):
@@ -73,6 +73,15 @@ def decode(fmt, text, lenient=False):
     if fmt == "toon":
         return toon_lite.decode_nested(text)
     return cstl_compact.decode_tree_indented(text, lenient=lenient)
+
+
+# 2026-11-24 : meme forme que cstl_indent_ligne, consigne qui dit qu'une valeur
+# complexe peut s'ecrire en JSON pur (les valeurs en ligne sont un sur-ensemble
+# de JSON). Les echecs d'ecriture sur donnees reelles venaient des guillemets et
+# des cles speciales dans les objets en ligne.
+NOTES["cstl_indent_ligne_json"] = NOTES["cstl_indent_ligne"] + (
+    " Une valeur complexe (objet, liste) peut toujours s'ecrire en JSON pur, sur une seule ligne, par exemple "
+    "{\"docs:dev\": \"vitepress dev\", \"n\": 3} ; un texte qui contient un espace s'ecrit entre guillemets.")
 
 
 def toon_ok(d):
@@ -200,7 +209,7 @@ def comprehension(model, runs, workers):
                     key=lambda r: (r["doc"], r["format"], r["run"]), jkey=lambda j: j)
 
 
-def writing(model, workers):
+def writing(model, workers, formats=None):
     import team_task_benchmark as tb
     brain = tb.make_brain(model)
     docs = documents()
@@ -234,7 +243,8 @@ def writing(model, workers):
               flush=True)
         return {**base, "ok": True, "exact": exact, "exact_lenient": soft, "raw": text[-3000:]}
 
-    jobs = [(n, f, 0) for n, d in docs.items() for f in formats_for(d) if f != "cstl_indent"]
+    jobs = [(n, f, 0) for n, d in docs.items() for f in (formats or formats_for(d)) if f != "cstl_indent"
+            and (f != "toon" or toon_ok(d))]
     return run_jobs(f"writing_{model}", jobs, one, workers,
                     key=lambda r: (r["doc"], r["format"], r["run"]), jkey=lambda j: j)
 
@@ -251,7 +261,9 @@ def run_jobs(section, jobs, one, workers, key, jkey):
     with open(OUT.with_suffix(".lock"), "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         store = json.loads(OUT.read_text()) if OUT.exists() else {}
-        store[section] = rows
+        mine = {key(r) for r in rows if r}
+        # Les resultats d'autres formats deja mesures dans cette section restent.
+        store[section] = rows + [r for r in store.get(section, []) if r and key(r) not in mine]
         OUT.write_text(json.dumps(store, indent=1, ensure_ascii=False) + "\n")
     return rows
 
@@ -308,6 +320,7 @@ def main():
     ap.add_argument("--writing", metavar="MODELE")
     ap.add_argument("--tokens-providers", metavar="M1,M2")
     ap.add_argument("--runs", type=int, default=1)
+    ap.add_argument("--formats", default="", help="ecriture : formats a tester (defaut : json,toon,cstl_indent_ligne)")
     ap.add_argument("--show-questions", action="store_true")
     args = ap.parse_args()
     workers = int(os.environ.get("BENCH_WORKERS", "3"))
@@ -328,8 +341,8 @@ def main():
             if r:
                 print(f"  {f:18} {sum(sum(x['ok']) for x in r)}/{sum(len(x['ok']) for x in r)}")
     if args.writing:
-        rows = writing(args.writing, workers)
-        for f in FORMATS:
+        rows = writing(args.writing, workers, [f for f in args.formats.split(",") if f] or None)
+        for f in FORMATS + ("cstl_indent_ligne_json",):
             r = [x for x in rows if x and x["format"] == f and x.get("ok") is not None]
             if r:
                 print(f"  {f:18} strict {sum(x['exact'] for x in r)}/{len(r)}  tolerant "

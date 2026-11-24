@@ -651,3 +651,27 @@ def test_lenient_mode_warns_about_every_row_with_missing_columns():
     warn = []
     decode_tree_indented(text, lenient=True, warnings=warn)
     assert warn == ["ligne 4 : crit sans titre (colonnes absentes)"]
+
+
+def test_inline_values_accept_plain_json_with_spaces():
+    """2026-11-24 : du JSON pur, espaces compris, est une valeur en ligne
+    valide ; un espace ambigu ([hello world]) est refuse, pas recolle."""
+    text = '@t: id cfg\nx1 {"a": 1, "b": [1, 2], "c d": "e f"}\nx2 [] extra={"k": null}'
+    assert decode_tree_indented(text) == {"t": [{"id": "x1", "cfg": {"a": 1, "b": [1, 2], "c d": "e f"}},
+                                                {"id": "x2", "cfg": [], "extra": {"k": None}}]}
+    with pytest.raises(CompactError, match="espace"):
+        decode_tree_indented("@t: v\n[hello world]")
+
+
+def test_polymorphic_cstl_picks_the_cheaper_form():
+    """2026-11-24 : arbre indente pour des donnees tabulaires imbriquees, JSON
+    pour un objet irregulier ; decode_auto relit les deux sans indication."""
+    from cstl_compact import choose_format, decode_auto, encode_auto
+    table = {"orders": [{"id": f"o{i}", "client": f"c{i % 3}", "lines": [{"item": "gpu", "qty": i, "price": 9}]}
+                        for i in range(10)]}
+    config = {"name": "x", "scripts": {"build": "tsc", "lint": "eslint ."}, "engines": {"node": ">=18"}}
+    assert choose_format(table)[0] == "arbre" and choose_format(config)[0] == "json"
+    for d in (table, config, [1, 2], "texte", None, {}):
+        assert decode_auto(encode_auto(d)) == d
+    with pytest.raises(CompactError):
+        decode_auto("ni l'un ni l'autre")

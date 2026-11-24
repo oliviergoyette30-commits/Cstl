@@ -1117,10 +1117,30 @@ _TREE2_HEAD = re.compile(r"^@([A-Za-z_][A-Za-z0-9_.]*)(?:\[(\d+)\])?(?:\^([A-Za-
 
 
 def _raw_tokens(line):
-    """Mots d'une ligne, guillemets compris (pour relire « nom=valeur »)."""
-    out, cur, quoted, i = [], [], False, 0
+    """Mots d'une ligne, guillemets compris (pour relire « nom=valeur »).
+
+    Une valeur en ligne ([...], {...}, ?{...}) peut contenir des espaces autour
+    de sa ponctuation : `{"a": 1, "b": [1, 2]}` est un seul mot (2026-11-24) --
+    du JSON pur est donc toujours une valeur en ligne valide. Un espace ailleurs
+    dans une valeur en ligne (`[hello world]`) est une erreur, pas un mot
+    recolle en silence."""
+    out, cur, quoted, depth, i = [], [], False, 0, 0
     while i < len(line):
         ch = line[i]
+        if depth and not quoted and ch.isspace():
+            prev = next((c for c in reversed(cur) if not c.isspace()), "")
+            j = i
+            while j < len(line) and line[j].isspace():
+                j += 1
+            nxt = line[j] if j < len(line) else ""
+            if prev in "[{,:" or nxt in "]},:":
+                i = j
+                continue
+            raise CompactError(f"espace dans une valeur en ligne (mettre le texte entre guillemets) : {line!r}")
+        if not quoted and ch in "[{" and (depth or not cur or cur[-1] in "=?"):
+            depth += 1
+        elif not quoted and ch in "]}" and depth:
+            depth -= 1
         if quoted:
             cur.append(ch)
             if ch == "\\" and i + 1 < len(line):
@@ -1625,6 +1645,55 @@ def decode_tree_indented(text, lenient=False, warnings=None):
             raise CompactError("« @@list » : seule la liste « _ » est attendue")
         return root.get("_", [])
     return root
+
+
+# ------------------------------------------------- CSTL polymorphe (2026-11-24)
+# Mesures sur 10 modeles et 6 tokenizers (docs/BENCHMARK_CSTL.md) : l'arbre
+# indente coute 39 a 49 % de tokens de moins que le JSON sur des donnees
+# TABULAIRES IMBRIQUEES, mais seulement 8 a 13 % sur des donnees reelles riches
+# en objets, ou il est aussi plus difficile a ecrire pour un modele. CSTL
+# choisit donc sa forme selon les donnees : l'arbre indente quand il fait
+# vraiment gagner, le JSON sinon. Le lecteur n'a rien a savoir : un arbre
+# indente commence toujours par « @ », un JSON jamais.
+
+_TOKEN_RE = re.compile(r" ?[A-Za-z]+| ?\d{1,3}|[^\sA-Za-z\d]+|\s+")
+
+
+def estimate_tokens(text):
+    """Estimation des tokens d'un texte, proche des tokenizers BPE : mots,
+    nombres par groupes de 3 chiffres, ponctuation par suites, espaces par
+    suites. Sur les bancs d'essai, elle donne -46 % / -6 % la ou les 6
+    tokenizers mesures donnent -39 a -49 % / -8 a -13 %."""
+    return len(_TOKEN_RE.findall(text))
+
+
+def choose_format(data, min_gain=0.15, counts="line"):
+    """Choisit la forme CSTL d'un document JSON. Renvoie (forme, texte, gain) :
+    forme = "arbre" (arbre indente) si son estimation de tokens est au moins
+    `min_gain` plus petite que celle du JSON compact, sinon "json" ; gain = la
+    fraction de tokens economisee par l'arbre (negative s'il coute plus)."""
+    as_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    as_tree = encode_tree_indented(data, counts=counts)
+    j, t = estimate_tokens(as_json), estimate_tokens(as_tree)
+    gain = (j - t) / j if j else 0.0
+    return ("arbre", as_tree, gain) if gain >= min_gain else ("json", as_json, gain)
+
+
+def encode_auto(data, min_gain=0.15, counts="line"):
+    """Le texte CSTL le plus avantageux pour ces donnees (voir choose_format)."""
+    return choose_format(data, min_gain, counts)[1]
+
+
+def decode_auto(text, lenient=False, warnings=None):
+    """Relit un texte ecrit par encode_auto, ou par un modele : arbre indente
+    s'il commence par « @ », JSON sinon."""
+    body = text.strip()
+    if body.startswith("@"):
+        return decode_tree_indented(body, lenient=lenient, warnings=warnings)
+    try:
+        return json.loads(body)
+    except ValueError as e:
+        raise CompactError(f"ni arbre indente (« @ ») ni JSON lisible : {e}") from None
 ''')
 toon_lite = _module('toon_lite', r'''"""
 scripts/toon_lite.py -- encodeur et decodeur TOON (Token-Oriented Object
