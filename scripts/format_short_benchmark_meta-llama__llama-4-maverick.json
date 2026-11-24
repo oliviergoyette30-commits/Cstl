@@ -1,0 +1,1328 @@
+{
+  "summary": {
+    "cstl": {
+      "cases": 12,
+      "perm_ok": 32,
+      "perm_total": 36,
+      "obl_ok": 6,
+      "all_ok": 4,
+      "pass_k": 4,
+      "policies": 12,
+      "tokens_data": 1048,
+      "tokens_prompt": 1384
+    },
+    "cstl_court": {
+      "cases": 12,
+      "perm_ok": 31,
+      "perm_total": 36,
+      "obl_ok": 6,
+      "all_ok": 5,
+      "pass_k": 5,
+      "policies": 12,
+      "tokens_data": 415,
+      "tokens_prompt": 856
+    },
+    "cstl_tableau": {
+      "cases": 12,
+      "perm_ok": 31,
+      "perm_total": 36,
+      "obl_ok": 5,
+      "all_ok": 4,
+      "pass_k": 4,
+      "policies": 12,
+      "tokens_data": 460,
+      "tokens_prompt": 904
+    },
+    "cstl_symboles": {
+      "cases": 12,
+      "perm_ok": 32,
+      "perm_total": 36,
+      "obl_ok": 5,
+      "all_ok": 4,
+      "pass_k": 4,
+      "policies": 12,
+      "tokens_data": 326,
+      "tokens_prompt": 772
+    }
+  },
+  "rows": [
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "chars": 1869,
+      "tokens_data": 467,
+      "tokens_prompt": 802,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "Pour répondre aux questions, nous allons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### 1. Analyse des faits et des rôles des agents\n\n- Les faits :\n  - `kyc_done` est vrai.\n  - `audit_open` est vrai.\n  - `incident_active` est faux.\n  - `contract_signed` est faux.\n  - `patient_consent` est faux.\n  - `freeze_period` est vrai.\n\n- Les rôles des agents :\n  - `agent_a` a les rôles `finance` et `ops`.\n  - `agent_b` a les rôles `support` et `finance`.\n  - `agent_c` a le rôle `support`.\n  - `agent_f` a le rôle `ops`.\n\n### 2. Réponses aux questions\n\n#### 1. agent_b",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 658,
+      "tokens_data": 164,
+      "tokens_prompt": 603,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les Rôles et les Faits\n\n- Les rôles des agents :\n  - `agent_a` : finance, ops\n  - `agent_b` : support, finance\n  - `agent_c` : support\n  - `agent_f` : ops\n\n- Les faits :\n  - `kyc_done` : true\n  - `audit_open` : true\n  - `incident_active` : false\n  - `contract_signed` : false\n  - `patient_consent` : false\n  - `freeze_period` : true\n\n### Étape 2 : Analyser les Questions\n\n1. **agent_b veut lancer log_transaction pour 130 euros : est-ce permis ?**\n   - `",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 762,
+      "tokens_data": 190,
+      "tokens_prompt": 633,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "Pour répondre aux questions, nous allons analyser la politique donnée en suivant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- \"ROLES[6] agent role\" nous indique que :\n  - agent_a a les rôles finance et ops.\n  - agent_b a les rôles support et finance.\n  - agent_c a le rôle support.\n  - agent_f a le rôle ops.\n\n### Étape 2 : Comprendre les faits\n- \"FACTS[6] fait valeur\" nous indique que :\n  - kyc_done est true.\n  - audit_open est true.\n  - incident_active est false.\n  - contract_signed est false.\n  - patient_consent est false.\n  - freeze_period est true.\n",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 1,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 513,
+      "tokens_data": 128,
+      "tokens_prompt": 572,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account"
+      ],
+      "obl_answer": [
+        "close_account"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre la politique donnée\n\n1. **Rôles des agents** :\n   - `agent_a` a les rôles `finance` et `ops`.\n   - `agent_b` a les rôles `support` et `finance`.\n   - `agent_c` a le rôle `support`.\n   - `agent_f` a le rôle `ops`.\n\n2. **Faits** :\n   - `kyc_done` est vrai.\n   - `audit_open` est vrai.\n   - `incident_active` est faux.\n   - `contract_signed` est faux.\n   - `patient_consent` est faux.\n   - `freeze_period` est vrai.\n\n3. **Règles** :\n   - `agent_f !wipe_db",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "chars": 1776,
+      "tokens_data": 444,
+      "tokens_prompt": 778,
+      "perm_ok": [
+        false,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "Pour répondre aux questions, nous allons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les faits et les rôles des agents\n\n1. Faits :\n   - `freeze_period` est vrai.\n   - `kyc_done` est vrai.\n   - `patient_consent` est vrai.\n   - `incident_active` est vrai.\n   - `contract_signed` est faux.\n   - `audit_open` est faux.\n\n2. Rôles des agents :\n   - `agent_d` a les rôles : `ops` et `support`.\n   - `agent_b` a le rôle : `support`.\n   - `agent_e` a le rôle : `support`.\n\n### Étape 2 : Analyser les permissions et obligations\n\n1. **agent_e veut ",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 679,
+      "tokens_data": 169,
+      "tokens_prompt": 608,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "Pour répondre aux questions, nous allons d'abord analyser la politique donnée et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_d` a les rôles `ops` et `support`.\n- `agent_b` a le rôle `support`.\n- `agent_e` a le rôle `support`.\n\n### Étape 2 : Comprendre les faits\n- `freeze_period` est vrai.\n- `kyc_done` est vrai.\n- `patient_consent` est vrai.\n- `incident_active` est vrai.\n- `contract_signed` est faux.\n- `audit_open` est faux.\n\n### Étape 3 : Analyser les règles\n1. `agent_e MUST_NOT grant_admin unless:audit_open` : `agent_e` ne doit pas faire `gra",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 765,
+      "tokens_data": 191,
+      "tokens_prompt": 633,
+      "perm_ok": [
+        false,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- \"ROLES[4] agent role\" nous donne les rôles des agents :\n  - agent_d : ops, support\n  - agent_b : support\n  - agent_e : support\n\n### Étape 2 : Comprendre les faits\n- \"FACTS[6] fait valeur\" nous donne l'état des faits :\n  - freeze_period : true\n  - kyc_done : true\n  - patient_consent : true\n  - incident_active : true\n  - contract_signed : false\n  - audit_open : false\n\n### Étape 3 : Analyser les règles\n- \"RULES[10] qui modalite ",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 2,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 519,
+      "tokens_data": 129,
+      "tokens_prompt": 573,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les Faits et les Rôles\n\n- Les agents et leurs rôles :\n  - `agent_d` a le rôle `ops`.\n  - `agent_b` et `agent_e` ont le rôle `support`.\n  - `agent_d` a donc les rôles `ops` et `support`.\n\n- Les faits :\n  - `freeze_period = 1` (vrai)\n  - `kyc_done = 1` (vrai)\n  - `patient_consent = 1` (vrai)\n  - `incident_active = 1` (vrai)\n  - `contract_signed = 0` (faux)\n  - `audit_open = 0` (faux)\n\n### Étape 2 : Analyser les Règles pour Chaque Question\n\n1. **agent",
+      "all_ok": false
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl",
+      "run": 0,
+      "chars": 2065,
+      "tokens_data": 516,
+      "tokens_prompt": 852,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. Analyse des rôles des agents\n- `agent_b` a le rôle `ops` et `support`.\n- `agent_c` a les rôles `finance` et `ops`.\n- `agent_e` a le rôle `support`.\n- `agent_a` a le rôle `support`.\n- `agent_f` a le rôle `ops`.\n\n### 2. État des faits\n- `freeze_period` est vrai.\n- `contract_signed` est vrai.\n- `incident_active` est vrai.\n- `patient_consent` est faux.\n- `audit_open` est faux.\n\n### 3. Évaluation des permissions et obligations\n\n#### Question 1 : `agent_c` veut lancer `noti",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 778,
+      "tokens_data": 194,
+      "tokens_prompt": 635,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les Rôles et les Faits\n\n- Les rôles des agents :\n  - `agent_a` : support, ops\n  - `agent_b` : ops, support\n  - `agent_c` : finance, ops\n  - `agent_e` : support\n  - `agent_f` : ops\n\n- Les faits :\n  - `freeze_period` : true\n  - `contract_signed` : true\n  - `audit_open` : false\n  - `patient_consent` : false\n  - `incident_active` : true\n  - `kyc_done` : faux (car absent)\n\n### Étape 2 : Analyser les Règles pour Chaque Question\n\n1. **agent_c veut lancer ",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 847,
+      "tokens_data": 211,
+      "tokens_prompt": 655,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- \"ROLES[8] agent role\" nous indique les rôles de chaque agent.\n  - agent_a : support, ops\n  - agent_b : ops, support\n  - agent_c : finance, ops\n  - agent_e : support\n  - agent_f : ops\n\n### Étape 2 : Comprendre les faits\n- \"FACTS[5] fait valeur\" nous donne l'état des faits.\n  - freeze_period : true\n  - contract_signed : true\n  - audit_open : false\n  - patient_consent : false\n  - incident_active : true\n  - kyc_done : faux (car a",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 3,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 610,
+      "tokens_data": 152,
+      "tokens_prompt": 598,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons d'abord analyser la politique donnée et comprendre les rôles et les faits.\n\n### Rôles des agents\n- `agent_a` a les rôles : support, ops\n- `agent_b` a les rôles : ops, support\n- `agent_c` a les rôles : finance, ops\n- `agent_e` a les rôles : support\n- `agent_f` a les rôles : ops\n\n### Faits\n- `freeze_period` = vrai (1)\n- `contract_signed` = vrai (1)\n- `patient_consent` = faux (0)\n- `audit_open` = faux (0)\n- `incident_active` = vrai (1)\n\n### Analyse des règles\n1. `role:support !export_customer_data -contract_signed` : Les agents avec le rôle support ne peuv",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl",
+      "run": 0,
+      "chars": 2132,
+      "tokens_data": 533,
+      "tokens_prompt": 870,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les Rôles des Agents\n- `agent_a` a les rôles : support, finance\n- `agent_b` a les rôles : support, finance\n- `agent_c` a le rôle : support\n- `agent_e` a les rôles : finance, support\n- `agent_f` a les rôles : ops, support\n\n### Étape 2 : Évaluation des Faits\n- `kyc_done` = false\n- `patient_consent` = false\n- `audit_open` = true\n- `freeze_period` = true\n- `incident_active` = true\n- `contract_signed` = true\n\n### Étape 3 : Répondre aux Questions\n\n#### 1. ",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 793,
+      "tokens_data": 198,
+      "tokens_prompt": 639,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "Pour répondre aux questions, nous allons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les Rôles et les Faits\n\n- Les agents et leurs rôles :\n  - `agent_a` : support, finance\n  - `agent_b` : support, finance\n  - `agent_c` : support\n  - `agent_e` : finance, support\n  - `agent_f` : ops, support\n\n- Les faits :\n  - `kyc_done` : false\n  - `patient_consent` : false\n  - `audit_open` : true\n  - `freeze_period` : true\n  - `incident_active` : true\n  - `contract_signed` : true\n\n### Étape 2 : Analyser les Règles\n\n1. `role:finance MUST_NOT notify_",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 865,
+      "tokens_data": 216,
+      "tokens_prompt": 661,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "Pour répondre aux questions, nous allons d'abord analyser la politique donnée en CSTL compact.\n\n### ROLES\n- agent_c : support\n- agent_e : finance, support\n- agent_f : ops, support\n- agent_a : support, finance\n- agent_b : support, finance\n\n### FACTS\n- kyc_done : false\n- patient_consent : false\n- audit_open : true\n- freeze_period : true\n- incident_active : true\n- contract_signed : true\n\n### RULES\n1. role:finance MUST_NOT notify_regulator 100 - incident_active\n   - Interdit à finance de notify_regulator si montant > 100 et incident_active est vrai.\n2. agent_a MUST backup_db - - audit_open\n   - Ob",
+      "all_ok": true
+    },
+    {
+      "size": 10,
+      "seed": 4,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 613,
+      "tokens_data": 153,
+      "tokens_prompt": 599,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "log_transaction"
+      ],
+      "raw": "Pour répondre aux questions, il faut d'abord analyser la politique donnée et comprendre les rôles et les faits.\n\n### Rôles des agents\n- `agent_a` : support, finance\n- `agent_b` : log_transaction, support, finance\n- `agent_c` : support\n- `agent_d` : aucun rôle mentionné\n- `agent_e` : finance, support\n- `agent_f` : ops, support\n\n### Faits\n- `kyc_done` : faux (0)\n- `patient_consent` : faux (0)\n- `audit_open` : vrai (1)\n- `freeze_period` : vrai (1)\n- `incident_active` : vrai (1)\n- `contract_signed` : vrai (1)\n\n### Analyse des règles\n1. `role:finance !notify_regulator >100 -incident_active` : Les a",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3916,
+      "tokens_data": 979,
+      "tokens_prompt": 1313,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "send_receipt"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_d` a les rôles `finance` et `support` car il possède les relations `POSSESSES` avec `role:finance` et `role:support`.\n- `agent_b` a le rôle `ops` car il possède la relation `POSSESSES` avec `role:ops`.\n- `agent_e` a les rôles `finance` et `support` car il possède les relations `POSSESSES` avec `role:finance` et `role:support`.\n- `agent_f` a le rôle `ops` car il possède la relation `POSSESSES` avec `role:ops`.\n\n### Étape ",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1522,
+      "tokens_data": 380,
+      "tokens_prompt": 819,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_d` a les rôles : finance, support\n- `agent_b` a le rôle : ops\n- `agent_e` a les rôles : finance, support\n- `agent_f` a le rôle : ops\n\n### Étape 2 : Comprendre les faits\n- `incident_active` : false\n- `kyc_done` : true\n- `patient_consent` : true\n- `audit_open` : true\n- `contract_signed` : true\n- `freeze_period` : false\n\n### Étape 3 : Analyser les permissions et obligations pour chaque question\n\n1. **agent_e veut lancer `ba",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1677,
+      "tokens_data": 419,
+      "tokens_prompt": 861,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_d` a les rôles `finance` et `support`.\n- `agent_e` a les rôles `finance` et `support`.\n- `agent_b` a le rôle `ops`.\n- `agent_f` a le rôle `ops`.\n\n### Étape 2 : Comprendre les faits\n- `incident_active` est faux.\n- `kyc_done` est vrai.\n- `patient_consent` est vrai.\n- `audit_open` est vrai.\n- `contract_signed` est vrai.\n- `freeze_period` est faux.\n\n### Étape 3 : Analyser les règles pour chaque question\n\n#### Question 1 : `agent_e`",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 1,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 1182,
+      "tokens_data": 295,
+      "tokens_prompt": 739,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "Pour répondre aux questions, nous devons d'abord interpréter la politique donnée en CSTL et comprendre les rôles et les faits.\n\n### Rôles des agents\n- `agent_d` a les rôles : finance, support\n- `agent_b` a les rôles : ops\n- `agent_f` a les rôles : ops (et implicitement rien d'autre d'après les données fournies)\n- `agent_c` n'a pas de rôle mentionné explicitement.\n- `agent_e` a les rôles : finance, support\n- `agent_a` n'a pas de rôle mentionné.\n\n### Faits\n- `incident_active` = 0 (faux)\n- `kyc_done` = 1 (vrai)\n- `patient_consent` = 1 (vrai)\n- `audit_open` = 1 (vrai)\n- `contract_signed` = 1 (vrai",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3865,
+      "tokens_data": 966,
+      "tokens_prompt": 1304,
+      "perm_ok": [
+        false,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. Analyse des rôles des agents\n- `agent_f` a le rôle `finance`.\n- `agent_a` a le rôle `support`.\n- `agent_d` a le rôle `ops`.\n- `agent_e` a le rôle `support`.\n\n### 2. État des faits\n- `patient_consent` est faux.\n- `kyc_done` est vrai.\n- `incident_active` est vrai.\n- `freeze_period` est faux.\n\n### 3. Évaluation des permissions et obligations\n\n#### Question 1 : `agent_a` veut lancer `export_customer_data` pour 130 euros\n- `agent_a` a le rôle `support`.\n- La règle pour `ex",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1616,
+      "tokens_data": 404,
+      "tokens_prompt": 846,
+      "perm_ok": [
+        false,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles et les faits\n- Les agents et leurs rôles : \n  - `agent_f` : finance\n  - `agent_a` : support\n  - `agent_d` : ops\n  - `agent_b` : ops\n  - `agent_e` : support\n- Les faits :\n  - `patient_consent` : false\n  - `freeze_period` : false\n  - `kyc_done` : true\n  - `incident_active` : true\n  - `contract_signed`, `audit_open` : non mentionnés, donc considérés comme faux.\n\n### Étape 2 : Analyser les permissions et obligations pour chaque question\n\n1. **a",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1757,
+      "tokens_data": 439,
+      "tokens_prompt": 885,
+      "perm_ok": [
+        false,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en appliquant les règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_f` a le rôle `finance`.\n- `agent_a` et `agent_e` ont le rôle `support`.\n- `agent_d` et `agent_b` ont le rôle `ops`.\n\n### Étape 2 : Comprendre les faits\n- `patient_consent` est `false`.\n- `freeze_period` est `false`.\n- `kyc_done` est `true`.\n- `incident_active` est `true`.\n- `contract_signed` est considéré comme `false` puisqu'il n'est pas mentionné.\n\n### Étape 3 : Analyser les règles pour chaque question\n\n#### Question",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 2,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 1266,
+      "tokens_data": 316,
+      "tokens_prompt": 764,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_f` a le rôle `finance` car `agent_f @finance`.\n- `agent_a` a le rôle `support` car `agent_a @support`.\n- `agent_d` a le rôle `ops` car `agent_d @ops`.\n- `agent_e` a le rôle `support` car `agent_e @support`.\n- `agent_b` a le rôle `ops` car `agent_b @ops`.\n\n### Étape 2 : Évaluer les faits\n- `patient_consent` est faux car `patient_consent=0`.\n- `kyc_done` est vrai car `kyc_done=1`.\n- `incident_active` est vrai car `incident",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3714,
+      "tokens_data": 928,
+      "tokens_prompt": 1264,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. agent_c veut lancer grant_admin pour 201 euros : est-ce permis ?\n\n- La relation `RELATION [type=PERFORM, subject=agent_c, object=grant_admin, modality=MUST_NOT]` indique que `agent_c` est interdit de lancer `grant_admin` sans condition de montant.\n- Il n'y a pas de règle spécifique pour `agent_c` avec une condition de montant pour `grant_admin`.\n- Cependant, il faut vérifier les règles générales pour le rôle de `agent_c`, mais aucune n'est spécifiée directement.\n\nPuis",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1496,
+      "tokens_data": 374,
+      "tokens_prompt": 814,
+      "perm_ok": [
+        false,
+        false,
+        false
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": null,
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles et les faits\n- Les rôles : \n  - `agent_b` a le rôle `ops`.\n  - `agent_e` et `agent_f` ont le rôle `support`.\n- Les faits :\n  - `audit_open` est vrai.\n  - `patient_consent` est vrai.\n  - `kyc_done` est vrai.\n  - `freeze_period` est vrai.\n  - `incident_active` est faux.\n\n### Étape 2 : Analyser les permissions et obligations pour chaque question\n\n1. **agent_c veut lancer grant_admin pour 201 euros : est-ce permis ?**\n   - Il n'y a pas de règle",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1666,
+      "tokens_data": 416,
+      "tokens_prompt": 860,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL compact et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- \"ROLES[3] agent role\" nous indique que :\n  - agent_b a le rôle ops.\n  - agent_e a le rôle support.\n  - agent_f a le rôle support.\n\n### Étape 2 : Comprendre les faits\n- \"FACTS[5] fait valeur\" nous indique que :\n  - audit_open est vrai.\n  - patient_consent est vrai.\n  - kyc_done est vrai.\n  - freeze_period est vrai.\n  - incident_active est faux.\n\n### Étape 3 : Analyser les règles pour chaque question\n\n#### Question 1 : ag",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 3,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 1181,
+      "tokens_data": 295,
+      "tokens_prompt": 740,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_b` a le rôle `ops` car `agent_b @ops`.\n- `agent_e` a le rôle `support` car `agent_e @support`.\n- `agent_f` a le rôle `support` car `agent_f @support`.\n\n### Étape 2 : Évaluation des faits\n- `audit_open` est vrai car `audit_open=1`.\n- `freeze_period` est vrai car `freeze_period=1`.\n- `incident_active` est faux car `incident_active=0`.\n- `kyc_done` est vrai car `kyc_done=1`.\n- `patient_consent` est vrai car `patient_consent=1`.\n\n##",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl",
+      "run": 0,
+      "chars": 3912,
+      "tokens_data": 978,
+      "tokens_prompt": 1316,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. Analyse des rôles des agents\n- `agent_a` a le rôle `ops`.\n- `agent_b` a les rôles `finance` et `ops`.\n- `agent_c` a le rôle `ops`.\n- `agent_d` a le rôle `support`.\n- `agent_e` a les rôles `finance` et `ops`.\n- `agent_f` a le rôle `ops`.\n\n### 2. Évaluation des faits\n- `contract_signed` est faux.\n- `kyc_done` est faux.\n- `freeze_period` est faux.\n- `patient_consent` est faux.\n- `incident_active` est faux.\n- `audit_open` n'est pas mentionné, donc considéré comme faux.\n\n#",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 1480,
+      "tokens_data": 370,
+      "tokens_prompt": 812,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles et les faits\n- Les agents et leurs rôles :\n  - `agent_a` : ops\n  - `agent_b` : finance, ops\n  - `agent_c` : finance, ops\n  - `agent_d` : support\n  - `agent_e` : finance, ops\n  - `agent_f` : ops\n- Les faits :\n  - `contract_signed` : false\n  - `kyc_done` : false\n  - `freeze_period` : false\n  - `patient_consent` : false\n  - `incident_active` : false\n  - `audit_open` : non mentionné, donc considéré comme faux\n\n### Étape 2 : Analyser les questions\n\n1. *",
+      "all_ok": true
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 1661,
+      "tokens_data": 415,
+      "tokens_prompt": 861,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_c` a les rôles `finance` et `ops`.\n- `agent_a` a le rôle `ops`.\n- `agent_b` a les rôles `finance` et `ops`.\n- `agent_e` a les rôles `finance` et `ops`.\n- `agent_f` a le rôle `ops`.\n- `agent_d` a le rôle `support`.\n\n### Étape 2 : Comprendre les faits\n- `contract_signed` est faux.\n- `kyc_done` est faux.\n- `freeze_period` est faux.\n- `patient_consent` est faux.\n- `incident_active` est faux.\n- `audit_open` n'est pas mentionn",
+      "all_ok": false
+    },
+    {
+      "size": 30,
+      "seed": 4,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 1155,
+      "tokens_data": 288,
+      "tokens_prompt": 736,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "share_medical_record",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL compact et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_a` a le rôle `ops`.\n- `agent_b` a les rôles `finance` et `ops`.\n- `agent_c` a les rôles `finance` et `ops`.\n- `agent_d` a le rôle `support`.\n- `agent_e` a les rôles `finance` et `ops`.\n- `agent_f` a le rôle `ops`.\n\n### Étape 2 : Évaluer les faits\n- `contract_signed = 0` (faux)\n- `kyc_done = 0` (faux)\n- `freeze_period = 0` (faux)\n- `patient_consent = 0` (faux)\n- `incident_active = 0` (faux)\n- `audit_open` n'est pa",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6503,
+      "tokens_data": 1625,
+      "tokens_prompt": 1961,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. agent_d veut lancer refund_order pour 230 euros : est-ce permis ?\n\n- Il y a une relation `RELATION [type=PERFORM, subject=agent_d, object=refund_order, modality=MUST]` qui oblige `agent_d` à faire `refund_order`.\n- Il y a également `RELATION [type=PERFORM, subject=agent_d, object=refund_order, modality=MUST_NOT]` qui interdit `refund_order` à `agent_d`.\n- Puisque les deux règles sont contradictoires et que l'une est une obligation et l'autre une interdiction, nous dev",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2660,
+      "tokens_data": 665,
+      "tokens_prompt": 1105,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles et les faits\n- `agent_e` a les rôles `ops` et `finance`.\n- Les faits : `incident_active=true`, `patient_consent=false`, `freeze_period=false`, `contract_signed=true`, `kyc_done=false`, `audit_open=true`.\n\n### Étape 2 : Analyser les permissions et obligations pour chaque question\n\n#### 1. `agent_d` veut lancer `refund_order` pour 230 euros : est-ce permis ?\n- `agent_d` a une règle `MUST refund_order` (toujours vraie) et une autre `MUST_NOT r",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 2971,
+      "tokens_data": 742,
+      "tokens_prompt": 1186,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- \"ROLES[2] agent role\" indique que nous avons 2 lignes de rôles.\n  - agent_e a les rôles ops et finance.\n\n### Étape 2 : Comprendre les faits\n- \"FACTS[6] fait valeur\" nous donne l'état des faits.\n  - incident_active = true\n  - patient_consent = false\n  - freeze_period = false\n  - contract_signed = true\n  - kyc_done = false\n  - audit_open = true\n\n### Étape 3 : Analyser les règles pour chaque question\n\n#### Question 1 : agent_d veu",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 1,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 2117,
+      "tokens_data": 529,
+      "tokens_prompt": 974,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "export_customer_data",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "export_customer_data",
+        "notify_regulator",
+        "send_receipt"
+      ],
+      "raw": "Pour répondre aux questions, il faut d'abord analyser la politique donnée et comprendre les rôles et les faits.\n\n### Rôles et Faits\n\n1. Rôles :\n   - Les agents et leurs rôles sont définis par les lignes « <agent> @<role> ». On trouve :\n     - `agent_e @ops`\n     - `agent_e @finance`\n\n2. Faits :\n   - Les faits sont définis par les lignes « <fait>=1 » ou « <fait>=0 ». On trouve :\n     - `incident_active=1`\n     - `patient_consent=0`\n     - `freeze_period=0`\n     - `contract_signed=1`\n     - `kyc_done=0`\n     - `audit_open=1`\n\n### Analyse des Questions\n\n#### 1. agent_d veut lancer refund_order po",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6842,
+      "tokens_data": 1710,
+      "tokens_prompt": 2048,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. agent_b veut lancer log_transaction pour 180 euros : est-ce permis ?\n\n- **Rôle de agent_b** : D'après les relations POSSESSES, agent_b a le rôle finance.\n- **Règles pour log_transaction** :\n  - Pour role:finance, il y a une relation PERFORM avec object=log_transaction et modality=MUST, ce qui signifie que log_transaction est obligatoire pour finance.\n  - Il y a aussi une relation PERFORM avec subject=role:finance, object=log_transaction, modality=MUST_NOT, mais sans c",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2686,
+      "tokens_data": 671,
+      "tokens_prompt": 1113,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_a` a les rôles `support` et `ops`.\n- `agent_b` a le rôle `finance`.\n- `agent_c` a le rôle `finance`.\n- `agent_d` a les rôles `finance` et `ops`.\n- `agent_e` a les rôles `support` et `ops`.\n- `agent_f` n'a pas de rôle spécifié.\n\n### Étape 2 : Comprendre les faits\n- `incident_active` est faux.\n- `kyc_done` est faux.\n- `patient_consent` est faux.\n- `freeze_period` est faux.\n- `contract_signed` est faux.\n- `audit_open` est faux.\n\n##",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 3004,
+      "tokens_data": 751,
+      "tokens_prompt": 1196,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_a` : support, ops\n- `agent_b` : finance\n- `agent_c` : finance\n- `agent_d` : finance, ops\n- `agent_e` : support, ops\n\n### Étape 2 : Comprendre les faits\n- `incident_active` : false\n- `kyc_done` : false\n- `patient_consent` : false\n- `freeze_period` : false\n- `contract_signed` : false\n- `audit_open` : false\n\n### Étape 3 : Analyser les règles pour chaque question\n\n1. **agent_b veut lancer log_transaction pour 180 euros : est",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 2,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 2116,
+      "tokens_data": 529,
+      "tokens_prompt": 976,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "log_transaction",
+        "notify_regulator",
+        "refund_order",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "obl_answer": [
+        "log_transaction",
+        "notify_regulator",
+        "send_receipt",
+        "wipe_db"
+      ],
+      "raw": "Pour répondre aux questions, nous devons d'abord analyser la politique donnée et comprendre les rôles et les faits.\n\n### Rôles des agents\n- `agent_a` a les rôles : support, ops (car `agent_a @support` et `agent_a @ops`)\n- `agent_b` a le rôle : finance (car `agent_b @finance`)\n- `agent_c` a le rôle : finance (car `agent_c @finance`)\n- `agent_d` a les rôles : finance, ops (car `agent_d @finance` et `agent_d @ops`)\n- `agent_e` a les rôles : support, ops (car `agent_e @support` et `agent_e @ops`)\n- `agent_f` n'a pas de rôle spécifié explicitement.\n\n### Faits\n- `incident_active = 0` (faux)\n- `kyc_d",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6866,
+      "tokens_data": 1716,
+      "tokens_prompt": 2053,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. agent_c veut lancer grant_admin pour 201 euros : est-ce permis ?\n\n- **Rôle de agent_c** : D'après les relations POSSESSES, agent_c a les rôles finance et ops.\n- **Règles pour grant_admin** :\n  - `RELATION [type=PERFORM, subject=role:finance, object=grant_admin, modality=MUST]`\n  - `RELATION [type=PERFORM, subject=agent_c, object=grant_admin, modality=MUST_NOT]`\n  - `RELATION [type=PERFORM, subject=role:finance, object=grant_admin, modality=MUST, if_fact=incident_activ",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2741,
+      "tokens_data": 685,
+      "tokens_prompt": 1126,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_e` a les rôles `support` et `finance`.\n- `agent_f` a le rôle `ops`.\n- `agent_c` a les rôles `finance` et `ops`.\n\n### Étape 2 : Comprendre les faits\n- `kyc_done` est faux.\n- `contract_signed` est faux.\n- `freeze_period` est faux.\n- `patient_consent` est faux.\n- `audit_open` est vrai.\n- `incident_active` est faux.\n\n### Étape 3 : Analyser les permissions et obligations pour chaque question\n\n#### 1. `agent_c` veut lancer `gr",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 3023,
+      "tokens_data": 755,
+      "tokens_prompt": 1200,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_e` a les rôles : support, finance\n- `agent_f` a le rôle : ops\n- `agent_c` a les rôles : finance, ops\n- `agent_d` a le rôle : finance\n\n### Étape 2 : Comprendre les faits\n- `kyc_done` : false\n- `contract_signed` : false\n- `freeze_period` : false\n- `patient_consent` : false\n- `audit_open` : true\n- `incident_active` : false\n\n### Étape 3 : Analyser les règles pour chaque question\n\n#### Question 1 : `agent_c` veut lancer `gran",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 3,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 2150,
+      "tokens_data": 537,
+      "tokens_prompt": 983,
+      "perm_ok": [
+        true,
+        true,
+        false
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "backup_db",
+        "export_customer_data",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "obl_answer": [
+        "backup_db",
+        "grant_admin",
+        "notify_regulator",
+        "refund_order"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_e @support` et `agent_e @finance` indiquent que `agent_e` a les rôles `support` et `finance`.\n- `agent_d @finance` indique que `agent_d` a le rôle `finance`.\n- `agent_c @finance` et `agent_c @ops` indiquent que `agent_c` a les rôles `finance` et `ops`.\n- `agent_f @ops` indique que `agent_f` a le rôle `ops`.\n\n### Étape 2 : Évaluation des faits\n- `kyc_done=0` signifie que `kyc_done` est faux.\n- `contract_signed=0` signifie",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl",
+      "run": 0,
+      "chars": 6832,
+      "tokens_data": 1708,
+      "tokens_prompt": 2047,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": true,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en fonction des règles d'interprétation fournies.\n\n### 1. agent_f veut lancer send_receipt pour 199 euros : est-ce permis ?\n\n- La relation `RELATION [type=PERFORM, subject=agent_f, object=send_receipt, modality=MUST_NOT, amount_above=200, if_fact=incident_active]` s'applique si le montant est supérieur à 200 et si `incident_active` est vrai. Puisque `incident_active` est faux (`RELATION [type=STATE, subject=incident_active, object=false]`), cette règle ne s'applique pas.\n- La relation `RELATION [type=PERFORM, subject=agent_f",
+      "all_ok": true
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_court",
+      "run": 0,
+      "chars": 2814,
+      "tokens_data": 703,
+      "tokens_prompt": 1147,
+      "perm_ok": [
+        true,
+        true,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_a` et `agent_b` ont les rôles `support` et `finance`.\n- `agent_c` a le rôle `finance`.\n- `agent_f` a le rôle `ops`.\n\n### Étape 2 : Comprendre les faits\n- `incident_active` est faux.\n- `kyc_done` est faux.\n- `contract_signed` est faux.\n- `freeze_period` est faux.\n- `audit_open` est faux.\n\n### Étape 3 : Analyser les questions\n\n1. **agent_f veut lancer send_receipt pour 199 euros : est-ce permis ?**\n   - `agent_f` a le rôle `ops`.\n",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_tableau",
+      "run": 0,
+      "chars": 3093,
+      "tokens_data": 773,
+      "tokens_prompt": 1220,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "refund_order",
+        "send_receipt"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée en CSTL et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_a` : support, finance\n- `agent_b` : support, finance\n- `agent_c` : finance\n- `agent_f` : ops\n\n### Étape 2 : Comprendre les faits\n- `incident_active` : false\n- `kyc_done` : false\n- `contract_signed` : false\n- `freeze_period` : false\n- `audit_open` : false\n\n### Étape 3 : Analyser les règles pour chaque question\n\n#### Question 1 : `agent_f` veut lancer `send_receipt` pour 199 euros\n- Règles pertinentes pour `send_receipt` :",
+      "all_ok": false
+    },
+    {
+      "size": 60,
+      "seed": 4,
+      "format": "cstl_symboles",
+      "run": 0,
+      "chars": 2225,
+      "tokens_data": 556,
+      "tokens_prompt": 1005,
+      "perm_ok": [
+        true,
+        false,
+        true
+      ],
+      "obl_ok": false,
+      "obl_truth": [
+        "close_account",
+        "grant_admin",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "obl_answer": [
+        "close_account",
+        "refund_order",
+        "send_receipt",
+        "share_medical_record"
+      ],
+      "raw": "Pour répondre aux questions, nous devons analyser la politique donnée et appliquer les règles d'interprétation.\n\n### Étape 1 : Comprendre les rôles des agents\n- `agent_a` a les rôles : support, finance (car `agent_a @support` et `agent_a @finance`)\n- `agent_b` a les rôles : support, finance (car `agent_b @support` et `agent_b @finance`)\n- `agent_c` a le rôle : finance (car `agent_c @finance`)\n- `agent_d` n'a pas de rôle spécifié explicitement.\n- `agent_e` n'a pas de rôle spécifié explicitement.\n- `agent_f` a le rôle : ops (car `agent_f @ops`)\n\n### Étape 2 : Évaluer les faits\n- `incident_active",
+      "all_ok": false
+    }
+  ]
+}

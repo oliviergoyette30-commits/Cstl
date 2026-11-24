@@ -64,6 +64,8 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
+    if fmt == "cstl_objets":
+        return cstl_compact.encode_objects(d)
     return cstl_compact.encode_tree_indented(d, counts="line" if fmt.startswith("cstl_indent_ligne") else "head")
 
 
@@ -72,6 +74,8 @@ def decode(fmt, text, lenient=False):
         return json.loads(text)
     if fmt == "toon":
         return toon_lite.decode_nested(text)
+    if fmt == "cstl_objets":
+        return cstl_compact.decode_objects(text)
     return cstl_compact.decode_tree_indented(text, lenient=lenient)
 
 
@@ -82,6 +86,14 @@ def decode(fmt, text, lenient=False):
 NOTES["cstl_indent_ligne_json"] = NOTES["cstl_indent_ligne"] + (
     " Une valeur complexe (objet, liste) peut toujours s'ecrire en JSON pur, sur une seule ligne, par exemple "
     "{\"docs:dev\": \"vitepress dev\", \"n\": 3} ; un texte qui contient un espace s'ecrit entre guillemets.")
+
+
+NOTES["cstl_objets"] = (
+    "Format : CSTL forme objets. Une ligne « cle: valeur » par champ. Un objet : « cle: » puis ses champs "
+    "dessous, indentes de 2 espaces. Une liste de valeurs simples s'ecrit en ligne : cle: [a,b,c]. Une liste "
+    "d'objets : « cle: » puis un element par « - », ses champs apres le tiret et alignes dessous. Un objet ou "
+    "une liste vides : {} ou []. Un texte qui contient un espace, « : », « , » ou qui ressemble a un nombre, "
+    "a true/false/null s'ecrit entre guillemets ; une cle speciale aussi (\"docs:dev\": ...).")
 
 
 def toon_ok(d):

@@ -684,3 +684,20 @@ def test_polymorphic_cstl_picks_the_right_cstl_form():
     assert "tableau" not in candidates(policy)
     with pytest.raises(CompactError):
         decode_auto("rien de reconnaissable")
+
+
+def test_objects_form_round_trips_any_json():
+    """2026-11-24 : forme « objets » (donnees irregulieres) : cle: valeur,
+    objets indentes, listes en « - » ; sans perte sur des documents
+    aleatoires, cles pieges comprises (« - », « x=y », « docs:dev »)."""
+    from cstl_compact import decode_objects, encode_objects
+    doc = {"name": "express", "scripts": {"docs:dev": "vitepress dev", "lint": "eslint ."},
+           "maintainers": [{"name": "a", "email": "a@x"}, {"name": "b"}], "keywords": ["web", "api"],
+           "-": [{}, []], "x=y": None, "pay": {"$unknown": {"why": "bank"}}, "note": "l1\nl2", "v": "1.0"}
+    text = encode_objects(doc)
+    assert "scripts:\n  \"docs:dev\": \"vitepress dev\"" in text and "- name: a" in text
+    assert decode_objects(text) == doc
+    for d in ([{"a": 1}, {"b": [1, {"c": 2}]}], [], {}, 5, "texte", None, [[1, 2], [3]]):
+        assert decode_objects(encode_objects(d)) == d
+    with pytest.raises(CompactError):
+        decode_objects("a: 1\n   b: 2")
