@@ -231,7 +231,7 @@ def main():
         for f, s in summarize(rows, size).items():
             print(f"    {f:8} | {s['exact']:>3}/{s['cases']:<3} | {s['pass_k']:>3}/{s['policies']:<3} | {s['unreadable']:>10} | "
                   f"{s['missing']:>10} | {s['extra']:>7} | {s['tokens_out']:>13}")
-    dest = REPO / "scripts" / f"compact_writing_benchmark_{'stub' if args.stub else args.model}.json"
+    dest = REPO / "scripts" / f"compact_writing_benchmark_{'stub' if args.stub else args.model.replace('/', '__')}.json"
     dest.write_text(json.dumps({"summary": summarize(rows), "rows": rows}, indent=2, ensure_ascii=False) + "\n")
     print(f"\n  Resultats bruts : {dest.relative_to(REPO)}")
 
