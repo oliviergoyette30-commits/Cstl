@@ -443,6 +443,17 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       seul exemple : `^@@`, colonnes séparées par des virgules, `nom:valeur`.
     - Conclusion : sur des données irrégulières, l'écriture par un modèle
       reste le point faible.
+  - **Forme « objets_json »** pour les données irrégulières (2026-11-24) :
+    clés sans guillemets, indentation, ni accolades ni virgules, mais chaque
+    valeur écrite comme en JSON.
+    - Écriture des 12 réponses d'API réelles : **48/48** sur GPT-5 mini,
+      Claude Haiku, Llama 4 et Mistral, contre 42/48 en JSON, 25/48 en arbre
+      indenté et 29/48 en forme « objets » à valeurs CSTL.
+    - Coût : +7 à +18 % de tokens face au JSON compact. On paie la fiabilité.
+    - Une seule passe : à confirmer.
+  - **Fiabilité des formes de relations** (4 modèles, 48 politiques) :
+    - lecture : lignes 26, symboles 25, complet 22, tableau 18 ;
+    - écriture : complet 24, symboles 21, lignes 17, tableau 15.
   - **CSTL polymorphe** (2026-11-24) : `cstl_compact.encode_auto(data)`
     choisit la forme de CSTL selon les données.
     - Relations : `complet`, `lignes`, `tableau` ou `symboles`.
@@ -453,6 +464,13 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
     - Le texte commence par `#cstl <forme>` ; `decode_auto` le relit.
     - Choix observés : politiques de 30 à 60 règles → `symboles` (2,5 fois
       moins cher que `complet`) ; 10 règles → `lignes` ; documents → `arbre`.
+    - Depuis le 2026-11-24, `choose_format(data, task)` choisit **la forme la
+      plus fiable mesurée** quand un modèle lit (`task="lire"`) ou écrit
+      (`task="ecrire"`), selon la sorte de données (relations, tabulaire,
+      irrégulier ; table `RELIABILITY`). La moins chère ne départage qu'à
+      fiabilité égale. Entre machines (`task=None`), la moins chère.
+    - Choix : politique → lignes pour lire, complet pour écrire ; données
+      tabulaires → arbre_n ; données irrégulières à écrire → objets_json.
     - Vérifié sur 3 000 documents et 2 000 listes de relations aléatoires
       sans perte.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre

@@ -1619,7 +1619,38 @@ def decode_tree_indented(text, lenient=False, warnings=None):
 _TOKEN_RE = re.compile(r" ?[A-Za-z]+| ?\d{1,3}|[^\sA-Za-z\d]+|\s+")
 
 FORMS_RELATIONS = ("complet", "lignes", "tableau", "symboles")
-FORMS_DOCUMENT = ("arbre", "arbre_n", "arbre_ids")
+FORMS_DOCUMENT = ("arbre", "arbre_n", "arbre_ids", "objets", "objets_json")
+
+# FIABILITE MESUREE (2026-11-24) de chaque forme, par sorte de donnees et par
+# tache, quand un MODELE lit ou ecrit : (reussites, essais), sur les memes
+# modeles et les memes donnees pour toutes les formes d'une meme ligne.
+# Sources : docs/BENCHMARK_CSTL.md, scripts/*_results / *_benchmark_*.json.
+# Une forme absente d'une ligne n'a pas ete mesuree pour cette tache : elle ne
+# sera choisie que si aucune forme mesuree ne represente les donnees.
+RELIABILITY = {
+    # 12 politiques (10 a 60 regles, roles, faits, conditions), GPT-5 mini,
+    # Claude Haiku 5.5, Llama 4 Maverick, Mistral Medium 3.5 ; lecture : toute
+    # la politique juste ; ecriture : politique exacte (format_short_benchmark,
+    # compact_writing_benchmark).
+    ("relations", "lire"): {"lignes": (26, 48), "symboles": (25, 48), "complet": (22, 48), "tableau": (18, 48)},
+    ("relations", "ecrire"): {"complet": (24, 48), "symboles": (21, 48), "lignes": (17, 48), "tableau": (15, 48)},
+    # Donnees tabulaires imbriquees : lecture sur les 4 modeles ou les deux
+    # formes d'arbre ont ete posees (Llama, Mistral, Flash-Lite, GPT-5 mini).
+    # L'arbre par ids n'a ete mesure QUE sur Gemma 4 31B (31/36 contre 36/36
+    # pour l'arbre) : ramene a la meme base que les autres par ce rapport
+    # (99/144 x 31/36 = 85/144). Ne jamais comparer des taux mesures sur des
+    # modeles differents.
+    ("tabulaire", "lire"): {"arbre_n": (108, 144), "arbre": (99, 144), "arbre_ids": (85, 144)},
+    # Ecriture stricte : arbre_n sur 10 modeles (107/120). Arbre a comptes en
+    # tete mesure sur Gemma seulement (9/12 contre 12/12 pour arbre_n) : ramene
+    # par ce rapport (107 x 9/12 = 80/120).
+    ("tabulaire", "ecrire"): {"arbre_n": (107, 120), "arbre": (80, 120)},
+    # Donnees irregulieres (12 reponses d'API reelles) : ecriture sur GPT-5
+    # mini, Claude Haiku, Llama 4, Mistral (real_data_benchmark). Lecture :
+    # arbre a egalite avec JSON, questions trop faciles (effet plafond).
+    ("irregulier", "ecrire"): {"objets_json": (48, 48), "objets": (29, 48), "arbre_n": (25, 48)},
+    ("irregulier", "lire"): {"arbre": (75 * 7 - 6, 75 * 7), "arbre_n": (75 * 7 - 8, 75 * 7)},
+}
 
 
 def estimate_tokens(text):
@@ -1654,12 +1685,16 @@ _ENCODERS = {
     "arbre": lambda d: encode_tree_indented(d),
     "arbre_n": lambda d: encode_tree_indented(d, counts="line"),
     "arbre_ids": encode_tree,
+    "objets": lambda d: encode_objects(d),
+    "objets_json": lambda d: encode_objects_json(d),
 }
 _DECODERS = {
     "complet": _decode_full,
     "lignes": decode, "tableau": decode, "symboles": decode,
     "arbre": decode_tree_indented, "arbre_n": decode_tree_indented,
     "arbre_ids": decode_tree,
+    "objets": lambda t: decode_objects(t),
+    "objets_json": lambda t: decode_objects_json(t),
 }
 
 
@@ -1679,27 +1714,63 @@ def candidates(data, forms=None):
     return out
 
 
-def choose_format(data, for_model=False, forms=None):
-    """La forme CSTL la moins chere pour ces donnees. Renvoie (forme, texte,
-    {forme: tokens estimes}). for_model=True : un modele lira le texte ; pour
-    un document, la forme arbre_n (comptes /N, qui aident les modeles plus
-    faibles a compter) remplace arbre."""
-    if forms is None and not _is_relations(data):
-        # Pour un modele, seulement l'arbre avec /N : l'arbre par ids, parfois
-        # plus court, est moins bien compris (Gemma : 31/36 contre 36/36).
-        forms = ("arbre_n",) if for_model else ("arbre", "arbre_ids")
+def data_kind(data):
+    """« relations », « tabulaire » (document dont l'arbre indente fait gagner
+    au moins 25 % de tokens estimes : listes d'objets reguliers) ou
+    « irregulier » (objets, configurations, metadonnees)."""
+    if _is_relations(data):
+        return "relations"
+    try:
+        j = estimate_tokens(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+        t = estimate_tokens(encode_tree_indented(data))
+    except CompactError:
+        return "irregulier"
+    return "tabulaire" if j and (j - t) / j >= 0.25 else "irregulier"
+
+
+def _rate(cell):
+    ok, n = cell
+    return ok / n if n else 0.0
+
+
+def choose_format(data, task=None, forms=None):
+    """La forme CSTL a utiliser pour ces donnees. Renvoie (forme, texte, detail).
+
+    task=None (entre machines) : toutes les formes sans perte sont aussi
+    fiables (decodeurs deterministes) -> la moins chere en tokens.
+    task="lire" ou "ecrire" (un MODELE lit, ou doit ecrire, ces donnees) : la
+    forme la plus FIABLE mesuree pour cette sorte de donnees et cette tache
+    (RELIABILITY) ; a fiabilite egale a 2 points pres, la moins chere. Une forme
+    non mesuree n'est retenue que si aucune forme mesuree ne convient.
+    detail = {"sorte", "tache", "fiabilite": {forme: taux}, "tokens": {forme: n}}."""
+    kind = data_kind(data)
+    if forms is None:
+        forms = FORMS_RELATIONS + ("arbre", "arbre_n") if kind == "relations" else FORMS_DOCUMENT
     cands = candidates(data, forms)
     if not cands:
         raise CompactError("aucune forme CSTL ne represente ces donnees sans perte")
     costs = {f: estimate_tokens(t) for f, t in cands.items()}
-    best = min(costs, key=lambda f: (costs[f], list(_ENCODERS).index(f)))
-    return best, cands[best], costs
+    order = list(_ENCODERS)
+    if task is None:
+        best = min(costs, key=lambda f: (costs[f], order.index(f)))
+        return best, cands[best], {"sorte": kind, "tache": None, "fiabilite": {}, "tokens": costs}
+    if task not in ("lire", "ecrire"):
+        raise CompactError(f"tache inconnue : {task!r} (lire ou ecrire)")
+    table = RELIABILITY.get((kind, task), {})
+    rates = {f: _rate(table[f]) for f in cands if f in table}
+    if rates:
+        top = max(rates.values())
+        pool = [f for f, r in rates.items() if r >= top - 0.02]
+    else:
+        pool = list(cands)
+    best = min(pool, key=lambda f: (costs[f], order.index(f)))
+    return best, cands[best], {"sorte": kind, "tache": task, "fiabilite": rates, "tokens": costs}
 
 
-def encode_auto(data, for_model=False, forms=None):
-    """CSTL polymorphe : la forme la plus avantageuse pour ces donnees,
-    precedee de « #cstl <forme> »."""
-    form, text, _ = choose_format(data, for_model, forms)
+def encode_auto(data, task=None, forms=None):
+    """CSTL polymorphe : la forme choisie par choose_format, precedee de
+    « #cstl <forme> »."""
+    form, text, _ = choose_format(data, task, forms)
     return f"#cstl {form}\n{text}"
 
 
@@ -1719,7 +1790,7 @@ def decode_auto(text, lenient=False, warnings=None):
         raise CompactError("forme CSTL inconnue : il manque « #cstl <forme> »")
     if form not in _DECODERS:
         raise CompactError(f"forme CSTL inconnue : {form!r}")
-    if form.startswith("arbre") and form != "arbre_ids":
+    if form in ("arbre", "arbre_n"):
         return decode_tree_indented(body, lenient=lenient, warnings=warnings)
     return _DECODERS[form](body)
 

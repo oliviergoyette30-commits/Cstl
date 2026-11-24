@@ -663,25 +663,30 @@ def test_inline_values_accept_plain_json_with_spaces():
         decode_tree_indented("@t: v\n[hello world]")
 
 
-def test_polymorphic_cstl_picks_the_right_cstl_form():
-    """2026-11-24 : CSTL polymorphe = la bonne forme de CSTL pour le type de
-    donnees. Relations -> une forme de relations (symboles pour une politique) ;
-    document imbrique -> arbre ; chaque forme retenue se relit a l'identique."""
-    from cstl_compact import candidates, choose_format, decode_auto, encode_auto
+def test_polymorphic_cstl_picks_the_most_reliable_form_for_the_task():
+    """2026-11-24 : CSTL polymorphe. Entre machines : la forme sans perte la
+    moins chere. Quand un modele lit ou ecrit : la forme la plus fiable mesuree
+    pour la sorte de donnees et la tache. Chaque choix se relit a l'identique."""
+    from cstl_compact import candidates, choose_format, data_kind, decode_auto, encode_auto
     policy = [{"type": "PERFORM", "subject": "bot", "object": "refund_order", "modality": "MUST_NOT",
                "amount_above": "100"},
               {"type": "PERFORM", "subject": "bot", "object": "log_transaction", "modality": "MUST"},
               {"type": "POSSESSES", "subject": "bot", "object": "role:support"},
               {"type": "STATE", "subject": "incident_open", "object": "true"}]
-    form, _, costs = choose_format(policy)
-    assert form in ("lignes", "symboles") and costs[form] * 3 < costs["complet"]
-    assert decode_auto(encode_auto(policy)) == policy
-    doc = {"orders": [{"id": f"o{i}", "client": f"c{i % 3}", "lines": [{"item": "gpu", "qty": i}]} for i in range(6)]}
-    assert choose_format(doc)[0] == "arbre" and choose_format(doc, for_model=True)[0] == "arbre_n"
-    for d in (doc, {"name": "x", "scripts": {"build": "tsc"}}, [1, 2], "texte", None, {}):
-        assert decode_auto(encode_auto(d)) == d
-    # Une forme qui perdrait l'ordre des regles (tableau regroupe par sorte) est ecartee.
-    assert "tableau" not in candidates(policy)
+    table = {"orders": [{"id": f"o{i}", "client": f"c{i % 3}", "lines": [{"item": "gpu", "qty": i, "price": 9}]}
+                        for i in range(8)]}
+    config = {"name": "x", "scripts": {"lint:fix": "eslint --fix", "build": "tsc"}, "engines": {"node": ">=18"},
+              "maintainers": [{"name": "a", "email": "a@x"}], "private": False}
+    assert (data_kind(policy), data_kind(table), data_kind(config)) == ("relations", "tabulaire", "irregulier")
+    assert choose_format(policy, "ecrire")[0] == "complet"
+    assert choose_format(policy, "lire")[0] in ("lignes", "symboles")
+    assert choose_format(table, "lire")[0] == "arbre_n" and choose_format(table, "ecrire")[0] == "arbre_n"
+    assert choose_format(config, "ecrire")[0] == "objets_json"
+    assert choose_format(table)[0] in ("arbre", "arbre_ids")          # entre machines : la moins chere
+    for d in (policy, table, config, [1, 2], "texte", None, {}):
+        for task in (None, "lire", "ecrire"):
+            assert decode_auto(encode_auto(d, task)) == d
+    assert "tableau" not in candidates(policy)     # regrouperait les regles : ordre perdu
     with pytest.raises(CompactError):
         decode_auto("rien de reconnaissable")
 
