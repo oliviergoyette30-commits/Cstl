@@ -1767,6 +1767,233 @@ def decode_auto(text, lenient=False, warnings=None):
     if form.startswith("arbre") and form != "arbre_ids":
         return decode_tree_indented(body, lenient=lenient, warnings=warnings)
     return _DECODERS[form](body)
+
+
+# ------------------------------------------------- forme « objets » (2026-11-24)
+# Pour les donnees IRREGULIERES riches en objets (configurations, metadonnees,
+# reponses d'API), ou l'arbre indente s'est montre difficile a ecrire pour un
+# modele (GPT-5 mini 5/12, Llama 3/12 sur 12 reponses d'API reelles) : trop de
+# regles propres (@@, ^., nom>, guillemets des objets en ligne). Ici, le moins
+# de regles possible, dans une syntaxe que les modeles connaissent (proche de
+# YAML), mais sans ses ambiguites :
+#   cle: valeur                 une valeur simple (memes regles que les cellules)
+#   cle:                        un objet : ses champs dessous, indentes de 2
+#   cle: [a,b] / {} / []        liste de valeurs, objet ou liste vides : en ligne
+#   cle:                        une liste dont un element n'est pas une valeur
+#     - valeur                    simple : un element par ligne « - » ;
+#     - cle: valeur               un objet : ses champs apres « - », puis
+#       cle2: valeur              alignes dessous
+#   cle: |N                     texte de N lignes, en bloc « | »
+#   cle: ? / ?{...}             valeur inconnue
+# Une cle hors [A-Za-z0-9_.-] s'ecrit en JSON ("docs:dev": ...). Racine : un
+# objet (ses champs), une liste (des « - ») ou « = valeur ».
+
+def _okey(k):
+    """Cle de la forme objets. Le separateur est « : » suivi d'un espace (ou
+    la fin de ligne), comme en YAML : une cle peut contenir « : » (lint:fix,
+    docs:dev), cas frequent dans les vraies API, que les modeles n'entourent
+    pas de guillemets. Entre guillemets seulement si elle est vide, contient
+    « : » suivi d'un espace ou un retour a la ligne, finit par « : », commence
+    par « - », « \" », « ? », « = » ou un espace, ou finit par un espace."""
+    if (not k or ": " in k or "\n" in k or "\r" in k or k.endswith(":") or k[0] in "-\"?= \t"
+            or k[-1] in " \t" or "#" in k):
+        return json.dumps(k, ensure_ascii=False)
+    return k
+
+
+def _osimple(v):
+    """Valeur ecrite sur la ligne de sa cle (sinon : None, en bloc dessous)."""
+    if isinstance(v, dict):
+        return "{}" if not v else (_inline(v) if is_unknown(v) else None)
+    if isinstance(v, list):
+        if not v:
+            return "[]"
+        return _inline(v) if all(_iscalar_out(x) is not None or isinstance(x, str) for x in v) else None
+    return None
+
+
+def encode_objects(data):
+    """Document JSON -> CSTL forme « objets ». Sans perte (decode_objects)."""
+    lines = []
+
+    def scalar_cell(v, ind):
+        blocks = []
+        cell = _icell(v, blocks)
+        return cell, [ind + "  " + ("| " + t if t else "|") for part in blocks for t in part]
+
+    def field(k, v, ind):
+        simple = _osimple(v)
+        if simple is not None:
+            lines.append(f"{ind}{_okey(k)}: {simple}")
+        elif isinstance(v, dict):
+            lines.append(f"{ind}{_okey(k)}:")
+            obj(v, ind + "  ")
+        elif isinstance(v, list):
+            lines.append(f"{ind}{_okey(k)}:")
+            items(v, ind + "  ")
+        else:
+            cell, extra = scalar_cell(v, ind)
+            lines.append(f"{ind}{_okey(k)}: {cell}")
+            lines.extend(extra)
+
+    def obj(o, ind):
+        for k, v in o.items():
+            field(k, v, ind)
+
+    def items(seq, ind):
+        for x in seq:
+            if isinstance(x, dict) and x and not is_unknown(x):
+                first = True
+                for k, v in x.items():
+                    if first:
+                        before = len(lines)
+                        field(k, v, ind + "  ")
+                        lines[before] = ind + "- " + lines[before][len(ind) + 2:]
+                        first = False
+                    else:
+                        field(k, v, ind + "  ")
+            elif isinstance(x, list) and x and _osimple(x) is None:
+                lines.append(f"{ind}-")
+                items(x, ind + "  ")
+            else:
+                simple = _osimple(x) if isinstance(x, (dict, list)) else None
+                if simple is not None:
+                    lines.append(f"{ind}- {simple}")
+                else:
+                    cell, extra = scalar_cell(x, ind)
+                    lines.append(f"{ind}- {cell}")
+                    lines.extend(extra)
+
+    if isinstance(data, dict) and data:
+        obj(data, "")
+    elif isinstance(data, list) and data and _osimple(data) is None:
+        items(data, "")
+    else:
+        simple = _osimple(data) if isinstance(data, (dict, list)) else None
+        return "= " + (simple if simple is not None else _inline(data))
+    return "\n".join(lines)
+
+
+def decode_objects(text):
+    """Inverse de encode_objects. Leve CompactError si une ligne ne colle pas."""
+    lines = [ln for ln in text.split("\n")]
+    pos = 0
+
+    def indent(ln):
+        return len(ln) - len(ln.lstrip(" "))
+
+    def value_of(raw, ind, n):
+        """Cellule d'une ligne, plus ses lignes de bloc « | » eventuelles."""
+        nonlocal pos
+        raw = raw.strip()
+        if raw and raw[0] not in '"[{?|' and len(_raw_tokens(raw)) > 1:
+            # Valeur sans guillemets avec des espaces : toute la fin de ligne est
+            # le texte (comme en YAML). Jamais le premier mot seul en silence.
+            return raw
+        val, blk = _icell_in(raw) if raw else ("", None)
+        if blk is not None:
+            part = []
+            for _ in range(blk):
+                if pos >= len(lines):
+                    raise CompactError(f"ligne {n} : bloc « | » incomplet")
+                body = lines[pos].lstrip(" ")
+                if body == "|":
+                    part.append("")
+                elif body.startswith("| "):
+                    part.append(body[2:])
+                else:
+                    raise CompactError(f"ligne {pos + 1} : ligne de bloc « | » attendue")
+                pos += 1
+            val = "\n".join(part)
+        return val
+
+    def split_key(body, n):
+        if body.startswith('"'):
+            key, j = _parse_inline(body)
+            if not isinstance(key, str) or body[j:j + 1] != ":":
+                raise CompactError(f"ligne {n} : « cle: valeur » attendu")
+            return key, body[j + 1:]
+        m = re.match(r"(.*?):(?: |$)", body)
+        if not m or not m.group(1) or m.group(1)[0] in "-\"?= \t":
+            raise CompactError(f"ligne {n} : « cle: valeur » attendu : {body!r}")
+        return m.group(1), body[m.end():]
+
+    def skip_blank():
+        nonlocal pos
+        while pos < len(lines) and not lines[pos].strip():
+            pos += 1
+
+    def block(ind):
+        """Bloc a l'indentation ind : objet (cle:) ou liste (- )."""
+        skip_blank()
+        if pos >= len(lines) or indent(lines[pos]) != ind:
+            raise CompactError(f"ligne {pos + 1} : bloc indente de {ind} espaces attendu")
+        return items(ind) if lines[pos].lstrip(" ").startswith("-") else obj(ind)
+
+    def obj(ind, first_body=None):
+        nonlocal pos
+        out = {}
+        while True:
+            if first_body is not None:
+                body, n, first_body = first_body, pos, None
+            else:
+                skip_blank()
+                if pos >= len(lines) or indent(lines[pos]) < ind:
+                    return out
+                if indent(lines[pos]) > ind:
+                    raise CompactError(f"ligne {pos + 1} : indentation inattendue")
+                body = lines[pos][ind:]
+                if body.startswith("-"):
+                    return out
+                pos += 1
+                n = pos
+            key, rest = split_key(body, n)
+            if key in out:
+                raise CompactError(f"ligne {n} : cle en double {key!r}")
+            if rest.strip():
+                out[key] = value_of(rest, ind, n)
+            else:
+                out[key] = block(ind + 2)
+
+    def items(ind):
+        nonlocal pos
+        out = []
+        while True:
+            skip_blank()
+            if pos >= len(lines) or indent(lines[pos]) != ind or not lines[pos][ind:].startswith("-"):
+                if pos < len(lines) and lines[pos].strip() and indent(lines[pos]) > ind:
+                    raise CompactError(f"ligne {pos + 1} : indentation inattendue")
+                return out
+            body = lines[pos][ind + 1:]
+            pos += 1
+            n = pos
+            if not body.strip():
+                out.append(block(ind + 2))
+            elif not body.startswith(" "):
+                raise CompactError(f"ligne {n} : « - » suivi d'un espace attendu")
+            else:
+                body = body[1:]
+                # Un champ « cle: valeur » ; une valeur simple non entre guillemets
+                # ne contient jamais d'espace, donc jamais « : ».
+                looks_field = (body.startswith('"') and re.match(r'"(?:[^"\\]|\\.)*":', body)) or \
+                    (body[0] not in '"[{?' and re.match(r"[^ ].*?:(?: |$)", body))
+                if looks_field:
+                    out.append(obj(ind + 2, first_body=body))
+                else:
+                    out.append(value_of(body, ind, n))
+
+    text_body = text.strip("\n")
+    if text_body.startswith("= "):
+        val, j = _parse_inline(text_body[2:].strip())
+        return val
+    if not text_body.strip():
+        return {}
+    first = text_body.lstrip(" ")
+    result = items(0) if first.startswith("-") else obj(0)
+    skip_blank()
+    if pos < len(lines):
+        raise CompactError(f"ligne {pos + 1} : texte en trop")
+    return result
 ''')
 toon_lite = _module('toon_lite', r'''"""
 scripts/toon_lite.py -- encodeur et decodeur TOON (Token-Oriented Object

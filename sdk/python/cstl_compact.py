@@ -1744,8 +1744,16 @@ def decode_auto(text, lenient=False, warnings=None):
 # objet (ses champs), une liste (des « - ») ou « = valeur ».
 
 def _okey(k):
-    # Une cle qui commence par « - » se confondrait avec un element de liste.
-    return k if _IKEY_OK.match(k) and not k.startswith("-") else json.dumps(k, ensure_ascii=False)
+    """Cle de la forme objets. Le separateur est « : » suivi d'un espace (ou
+    la fin de ligne), comme en YAML : une cle peut contenir « : » (lint:fix,
+    docs:dev), cas frequent dans les vraies API, que les modeles n'entourent
+    pas de guillemets. Entre guillemets seulement si elle est vide, contient
+    « : » suivi d'un espace ou un retour a la ligne, finit par « : », commence
+    par « - », « \" », « ? », « = » ou un espace, ou finit par un espace."""
+    if (not k or ": " in k or "\n" in k or "\r" in k or k.endswith(":") or k[0] in "-\"?= \t"
+            or k[-1] in " \t" or "#" in k):
+        return json.dumps(k, ensure_ascii=False)
+    return k
 
 
 def _osimple(v):
@@ -1833,6 +1841,10 @@ def decode_objects(text):
         """Cellule d'une ligne, plus ses lignes de bloc « | » eventuelles."""
         nonlocal pos
         raw = raw.strip()
+        if raw and raw[0] not in '"[{?|' and len(_raw_tokens(raw)) > 1:
+            # Valeur sans guillemets avec des espaces : toute la fin de ligne est
+            # le texte (comme en YAML). Jamais le premier mot seul en silence.
+            return raw
         val, blk = _icell_in(raw) if raw else ("", None)
         if blk is not None:
             part = []
@@ -1856,10 +1868,10 @@ def decode_objects(text):
             if not isinstance(key, str) or body[j:j + 1] != ":":
                 raise CompactError(f"ligne {n} : « cle: valeur » attendu")
             return key, body[j + 1:]
-        k, sep, rest = body.partition(":")
-        if not sep or not _IKEY_OK.match(k):
+        m = re.match(r"(.*?):(?: |$)", body)
+        if not m or not m.group(1) or m.group(1)[0] in "-\"?= \t":
             raise CompactError(f"ligne {n} : « cle: valeur » attendu : {body!r}")
-        return k, rest
+        return m.group(1), body[m.end():]
 
     def skip_blank():
         nonlocal pos
@@ -1916,8 +1928,10 @@ def decode_objects(text):
                 raise CompactError(f"ligne {n} : « - » suivi d'un espace attendu")
             else:
                 body = body[1:]
+                # Un champ « cle: valeur » ; une valeur simple non entre guillemets
+                # ne contient jamais d'espace, donc jamais « : ».
                 looks_field = (body.startswith('"') and re.match(r'"(?:[^"\\]|\\.)*":', body)) or \
-                    re.match(r"[A-Za-z0-9_.\-]+:(\s|$)", body)
+                    (body[0] not in '"[{?' and re.match(r"[^ ].*?:(?: |$)", body))
                 if looks_field:
                     out.append(obj(ind + 2, first_body=body))
                 else:

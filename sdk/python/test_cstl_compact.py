@@ -695,7 +695,10 @@ def test_objects_form_round_trips_any_json():
            "maintainers": [{"name": "a", "email": "a@x"}, {"name": "b"}], "keywords": ["web", "api"],
            "-": [{}, []], "x=y": None, "pay": {"$unknown": {"why": "bank"}}, "note": "l1\nl2", "v": "1.0"}
     text = encode_objects(doc)
-    assert "scripts:\n  \"docs:dev\": \"vitepress dev\"" in text and "- name: a" in text
+    assert "scripts:\n  docs:dev: \"vitepress dev\"" in text and "- name: a" in text
+    # Ce que les modeles ecrivent : cle avec « : », valeur sans guillemets.
+    assert decode_objects("s:\n  lint:fix: eslint --fix\n  docs:dev: vitepress dev") == \
+        {"s": {"lint:fix": "eslint --fix", "docs:dev": "vitepress dev"}}
     assert decode_objects(text) == doc
     for d in ([{"a": 1}, {"b": [1, {"c": 2}]}], [], {}, 5, "texte", None, [[1, 2], [3]]):
         assert decode_objects(encode_objects(d)) == d

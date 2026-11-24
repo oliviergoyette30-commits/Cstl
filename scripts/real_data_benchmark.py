@@ -64,7 +64,7 @@ def render(fmt, d):
         return json.dumps(d, ensure_ascii=False, separators=(",", ":"))
     if fmt == "toon":
         return toon_lite.encode_nested(d)
-    if fmt == "cstl_objets":
+    if fmt.startswith("cstl_objets"):
         return cstl_compact.encode_objects(d)
     return cstl_compact.encode_tree_indented(d, counts="line" if fmt.startswith("cstl_indent_ligne") else "head")
 
@@ -74,7 +74,7 @@ def decode(fmt, text, lenient=False):
         return json.loads(text)
     if fmt == "toon":
         return toon_lite.decode_nested(text)
-    if fmt == "cstl_objets":
+    if fmt.startswith("cstl_objets"):
         return cstl_compact.decode_objects(text)
     return cstl_compact.decode_tree_indented(text, lenient=lenient)
 
@@ -92,8 +92,13 @@ NOTES["cstl_objets"] = (
     "Format : CSTL forme objets. Une ligne « cle: valeur » par champ. Un objet : « cle: » puis ses champs "
     "dessous, indentes de 2 espaces. Une liste de valeurs simples s'ecrit en ligne : cle: [a,b,c]. Une liste "
     "d'objets : « cle: » puis un element par « - », ses champs apres le tiret et alignes dessous. Un objet ou "
-    "une liste vides : {} ou []. Un texte qui contient un espace, « : », « , » ou qui ressemble a un nombre, "
-    "a true/false/null s'ecrit entre guillemets ; une cle speciale aussi (\"docs:dev\": ...).")
+    "une liste vides : {} ou []. Un texte qui ressemble a un nombre ou a true/false/null s'ecrit entre "
+    "guillemets. La cle se termine au premier « : » suivi d'un espace : « lint:fix: eslint --fix » a pour cle "
+    "lint:fix et pour valeur eslint --fix.")
+# Les resultats d'ecriture de cstl_objets mesures avec la premiere consigne (cle
+# terminee au premier « : ») sont dans la section « writing_<modele> » ; la
+# version corrigee est mesuree sous le nom cstl_objets2.
+NOTES["cstl_objets2"] = NOTES["cstl_objets"]
 
 
 def toon_ok(d):
@@ -253,7 +258,7 @@ def writing(model, workers, formats=None):
             soft = False
         print(f"    {name:14} {fmt:18} : {'identique' if exact else 'tolerant: identique' if soft else 'ECHEC'}",
               flush=True)
-        return {**base, "ok": True, "exact": exact, "exact_lenient": soft, "raw": text[-3000:]}
+        return {**base, "ok": True, "exact": exact, "exact_lenient": soft, "raw": text}
 
     jobs = [(n, f, 0) for n, d in docs.items() for f in (formats or formats_for(d)) if f != "cstl_indent"
             and (f != "toon" or toon_ok(d))]
