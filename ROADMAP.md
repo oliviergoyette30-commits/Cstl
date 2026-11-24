@@ -482,6 +482,28 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       48), à peu près égal au JSON (42). `choose_format(..., "ecrire")`
       garde `objets_json` pour faire écrire un modèle ; entre machines, la
       forme la moins chère l'emporte.
+  - **Plusieurs exemples et tour de correction** (2026-11-24,
+    `real_data_benchmark.py --examples N --repair`, une passe, 4 modèles,
+    12 documents réels). Le tour de correction renvoie seulement l'erreur du
+    vrai lecteur.
+
+    | Écriture | JSON | objets_json | relationnel |
+    |---|---|---|---|
+    | 1 exemple, du premier coup | 36/48 | 48/48 | 32/48 |
+    | 1 exemple + correction | 36/48 | 48/48 | 40/48 |
+    | 3 exemples, du premier coup | 47/48 | 46/48 | 44/48 |
+    | 3 exemples + correction | 47/48 | 46/48 | 44/48 |
+
+    - Avec 1 exemple, les 12 échecs du JSON sont **tous silencieux** (JSON
+      valide, contenu faux). Les 16 de `relationnel` sont **tous
+      détectés** par le lecteur, mais la correction n'en répare que 8.
+    - Trois exemples aident surtout le JSON (36 → 47). Les écarts de 1 à
+      2 points sont du bruit : le JSON avait fait 42/48 à 1 exemple lors
+      d'une passe précédente.
+    - Avec de bons exemples, aucune forme CSTL ne bat le JSON en écriture
+      sur ces données. `objets_json` reste le seul à 48/48 avec 1 exemple,
+      la consigne la plus courte. L'avantage mesuré de CSTL ici, c'est la
+      détection des erreurs, pas le score.
   - **Cinq formes spécialisées** : `serie`, `graphe`, `conversation`,
     `appels` et `matrice`. Sans perte, mais pas encore mesurées sur des
     modèles.
