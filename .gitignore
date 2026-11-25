@@ -35,3 +35,6 @@ scripts/real_data_results.lock
 sdk/python/build/
 sdk/python/*.egg-info/
 dist/
+
+# Sortie du test de plomberie (--stub) : aucune conclusion
+scripts/competition_benchmark_stub*.json
