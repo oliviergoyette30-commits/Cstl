@@ -98,8 +98,14 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      qui jugent le message reçu perdent. Les 6 cas compromis de CSTL viennent
      d'une politique de l'auteur absente ou contradictoire (refusée par le
      serveur), avec un serveur ouvert par défaut ;
-   - à décider : rendre le serveur fermé par défaut quand
-     `CSTL_POLICY_AUTHORS` est défini ;
+   - **mesuré :** le mode fermé (`CSTL_ACTION_DEFAULT=deny`) supprime les
+     cas compromis sur tous les modèles (Llama : CSTL 13/0 contre 10/0 ;
+     Mistral : 15/0 contre 17/0), mais fait 5 refus à tort dans le banc
+     déterministe. Aucun défaut ne gagne partout. Le défaut reste ouvert ;
+     le mode fermé est recommandé avec `CSTL_POLICY_AUTHORS` pour les
+     actions à risque ;
+   - piste : un mode fermé limité aux actions qu'un auteur déclare
+     « gouvernées », pour garder 0 refus à tort sur les autres ;
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
    - questions plus dures ;

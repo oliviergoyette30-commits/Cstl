@@ -376,12 +376,14 @@ class OpenRouterBrain(agent_mod.LLMProvider):
                     delay = min(delay * 2, 120)
                     continue
                 raise RuntimeError(f"OpenRouter {e.code} : {e.read()[:300]!r}") from e
-            except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as e:
+            except (urllib.error.URLError, ConnectionError, TimeoutError, OSError, ValueError) as e:
+                # ValueError : corps de reponse qui n'est pas du JSON (coupe en route,
+                # vu le 2026-11-25 avec Llama 4) -- reessayer, puis erreur d'API.
                 if attempt < 7:
                     time.sleep(delay)
                     delay = min(delay * 2, 120)
                     continue
-                raise RuntimeError(f"OpenRouter : reseau ({e})") from e
+                raise RuntimeError(f"OpenRouter : reseau ou reponse illisible ({e})") from e
         raise RuntimeError("OpenRouter : trop d'echecs")
 
 

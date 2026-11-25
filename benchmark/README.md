@@ -196,3 +196,44 @@ dans les fichiers `scripts/competition_benchmark_<modèle>.json`).
 
   Le banc ne laisse pas l'auteur corriger, ni pour CSTL ni pour les autres.
 
+### Mode fermé par défaut (`CSTL_ACTION_DEFAULT=deny`), mesuré le 2026-11-25
+
+Le mode fermé corrige-t-il les 6 cas compromis ?
+
+**Banc déterministe** (violations / refus à tort) :
+
+| | ouvert (défaut) | fermé |
+|---|---|---|
+| T1 | **0 / 0** | 0 / 5 |
+| T2 | **0 / 0** | 0 / 5 |
+
+Le mode fermé refuse 5 actions légitimes que la politique ne permet pas
+explicitement : `read_logs`, `send_invoice`, et un remboursement sous la
+limite.
+
+**Banc avec modèles** (parfaits / compromis, sur 24) :
+
+| | Llama 4, ouvert | Llama 4, fermé | Mistral, ouvert | Mistral, fermé |
+|---|---|---|---|---|
+| json signé versionné | 12 / 0 | 10 / 0 | 18 / 0 | 17 / 0 |
+| cstl | 10 / 3 | **13 / 0** | 15 / 3 | 15 / 0 |
+
+- **En mode fermé, CSTL n'a plus aucun cas compromis**, sur aucun modèle.
+- **Llama :** CSTL passe devant (13 contre 10).
+- **Mistral :** CSTL reste derrière de 2 cas (15 contre 17). Ses échecs
+  restants sont des obligations oubliées par l'exécutant (scénarios 2 et
+  8), qui existent aussi en mode ouvert.
+- **Le bruit est réel :** le même mécanisme versionné fait 12 puis 10 avec
+  Llama d'une mesure à l'autre. Des écarts de 2 ou 3 cas sur 24 ne
+  départagent pas.
+
+**Conclusion :** aucun défaut ne gagne partout.
+- **Ouvert :** 0 refus à tort, mais une politique absente ou refusée laisse
+  tout passer.
+- **Fermé :** 0 cas compromis partout, mais des refus à tort quand la
+  politique ne permet pas explicitement une action.
+
+Recommandation de déploiement : le mode fermé avec `CSTL_POLICY_AUTHORS`
+quand une action à risque ne doit jamais passer sans règle, et l'auteur qui
+publie avec `publish_policy`, pour savoir si sa politique est en vigueur.
+
