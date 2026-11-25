@@ -28,6 +28,21 @@ await guard.run(token, "refund_order", () => refund(80), { agent: "agent_support
   - un jeton absent ou falsifié ;
   - un jeton pour une autre action, un autre agent ou un autre montant ;
   - un jeton expiré, ou déjà utilisé.
+- **Contrôle (2026-11-25) :**
+  - `revokeKey`, `enrollKey` : révocation d'une clé volée (section 5.5) ;
+  - `emergencyStop(scope, on)` : arrêt d'urgence (section 7.4) ;
+  - `authorize(action, amount, { approvalId, waitMs })`, `pendingApprovals`,
+    `approve`, `reject` : accord humain (section 7.5), avec `ApprovalRequired` ;
+  - `new CstlGuard(cle, { online: { host, port } })` : vérifie en direct que
+    le jeton vaut encore, ni révoqué ni arrêté (section 7.6).
+- **Données :**
+  - `sendTree`, `fetchTree`, `commitTree` : arbres JSON imbriqués, avec les
+    mêmes relations et la même empreinte que le SDK Python (vecteurs dans
+    `test/tree_vectors.json`) ;
+  - `policyText("symboles" | "compact")`, `sendCompact(dest, texte)` et
+    `encode`, `encodeSymbols`, `decode` : le CSTL compact, identique au
+    Python sur 900 encodages (`test/compact_vectors.json`). Les arbres
+    indentés et les formes de documents ne sont qu'en Python.
 - Même fichier de clé que le SDK Python (`~/.cstl/agent_<nom>.key`, 32
   octets) : un agent garde la même identité dans les deux langages.
 

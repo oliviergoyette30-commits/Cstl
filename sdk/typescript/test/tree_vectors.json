@@ -1,0 +1,442 @@
+[
+ {
+  "tree_id": "t_orders",
+  "data": {
+   "service": "billing",
+   "tags": [
+    "prod",
+    "eu"
+   ],
+   "orders": [
+    {
+     "id": "o1",
+     "client": "client_3",
+     "total": 12.5,
+     "paid": true,
+     "note": null,
+     "lines": [
+      {
+       "item": "gpu_rack",
+       "qty": 2,
+       "dims": [
+        [
+         1,
+         2
+        ],
+        [
+         3,
+         4
+        ]
+       ]
+      },
+      {
+       "item": "lic",
+       "qty": 1
+      }
+     ]
+    },
+    {
+     "id": "o2",
+     "client": "client_1",
+     "desc": "first line\nsecond line",
+     "type": "reserved",
+     "lines": [
+      {
+       "item": "router",
+       "qty": 3
+      }
+     ]
+    }
+   ]
+  },
+  "opts": {},
+  "relations": [
+   {
+    "type": "tree_root",
+    "subject": "tree_root",
+    "object": "-",
+    "tree": "t_orders",
+    "tree_kind": "fields",
+    "service": "billing",
+    "tags": "WyJwcm9kIiwiZXUiXQ",
+    "tree_types": "tags:json",
+    "tree_n": "2"
+   },
+   {
+    "type": "orders",
+    "subject": "o1",
+    "object": "-",
+    "tree": "t_orders",
+    "tree_id": "1",
+    "client": "client_3",
+    "total": "12.5",
+    "paid": "true",
+    "note": "",
+    "tree_types": "total:num paid:bool note:null",
+    "tree_n": "2"
+   },
+   {
+    "type": "lines",
+    "subject": "o1.0",
+    "object": "o1",
+    "tree": "t_orders",
+    "item": "gpu_rack",
+    "qty": "2",
+    "dims": "W1sxLDJdLFszLDRdXQ",
+    "tree_types": "qty:int dims:json"
+   },
+   {
+    "type": "lines",
+    "subject": "o1.1",
+    "object": "o1",
+    "tree": "t_orders",
+    "item": "lic",
+    "qty": "1",
+    "tree_types": "qty:int"
+   },
+   {
+    "type": "orders",
+    "subject": "o2",
+    "object": "-",
+    "tree": "t_orders",
+    "tree_id": "1",
+    "client": "client_1",
+    "desc": "ImZpcnN0IGxpbmVcbnNlY29uZCBsaW5lIg",
+    "f_type": "reserved",
+    "tree_types": "desc:json",
+    "tree_n": "1"
+   },
+   {
+    "type": "lines",
+    "subject": "o2.0",
+    "object": "o2",
+    "tree": "t_orders",
+    "item": "router",
+    "qty": "3",
+    "tree_types": "qty:int"
+   }
+  ],
+  "hash": "sha256:64fe8f0c3832089af4ec5a5834caf0c507cc61c2543494c4b9861f71f33c3098"
+ },
+ {
+  "tree_id": "t_list",
+  "data": [
+   {
+    "a": 1
+   },
+   {
+    "a": -2.75,
+    "b": "x y \"quoted\" [b]"
+   }
+  ],
+  "opts": {},
+  "relations": [
+   {
+    "type": "tree_root",
+    "subject": "tree_root",
+    "object": "-",
+    "tree": "t_list",
+    "tree_kind": "list",
+    "tree_n": "2"
+   },
+   {
+    "type": "_",
+    "subject": "_.0",
+    "object": "-",
+    "tree": "t_list",
+    "a": "1",
+    "tree_types": "a:int"
+   },
+   {
+    "type": "_",
+    "subject": "_.1",
+    "object": "-",
+    "tree": "t_list",
+    "a": "-2.75",
+    "b": "InggeSBcInF1b3RlZFwiIFtiXSI",
+    "tree_types": "a:num b:json"
+   }
+  ],
+  "hash": "sha256:64a3822c95c0e071ce3bcadbd5e8ba7eaab43c50a0c3d4884eac9d681ebbbf04"
+ },
+ {
+  "tree_id": "t_value",
+  "data": "juste une valeur",
+  "opts": {},
+  "relations": [
+   {
+    "type": "tree_root",
+    "subject": "tree_root",
+    "object": "-",
+    "tree": "t_value",
+    "tree_kind": "value",
+    "v": "juste une valeur",
+    "tree_n": "0"
+   }
+  ],
+  "hash": "sha256:8c8ad617c070921a31c5a50f03187c8f54e02fb248139ebe2008606761dc6059"
+ },
+ {
+  "tree_id": "t_long",
+  "data": {
+   "body": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀fin",
+   "big": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119
+   ],
+   "obj": {
+    "k": "v",
+    "n": [
+     1,
+     {
+      "z": null
+     }
+    ]
+   }
+  },
+  "opts": {},
+  "relations": [
+   {
+    "type": "tree_root",
+    "subject": "tree_root",
+    "object": "-",
+    "tree": "t_long",
+    "tree_kind": "fields",
+    "body": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "tree_c1_body": "éééééééééééééééééééééééééééééééééééééééééééééééééé🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀",
+    "tree_c2_body": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀fin",
+    "big": "WzAsMSwyLDMsNCw1LDYsNyw4LDksMTAsMTEsMTIsMTMsMTQsMTUsMTYsMTcsMTgsMTksMjAsMjEsMjIsMjMsMjQsMjUsMjYsMjcsMjgsMjksMzAsMzEsMzIsMzMsMzQsMzUsMzYsMzcsMzgsMzksNDAsNDEsNDIsNDMsNDQsNDUsNDYsNDcsNDgsNDksNTAsNTEsNTIsNTMsNTQsNTUsNTYsNTcsNTgsNTksNjAsNjEsNjIsNjMsNjQsNj",
+    "tree_c1_big": "UsNjYsNjcsNjgsNjksNzAsNzEsNzIsNzMsNzQsNzUsNzYsNzcsNzgsNzksODAsODEsODIsODMsODQsODUsODYsODcsODgsODksOTAsOTEsOTIsOTMsOTQsOTUsOTYsOTcsOTgsOTksMTAwLDEwMSwxMDIsMTAzLDEwNCwxMDUsMTA2LDEwNywxMDgsMTA5LDExMCwxMTEsMTEyLDExMywxMTQsMTE1LDExNiwxMTcsMTE4LDExOV0",
+    "obj": "eyJrIjoidiIsIm4iOlsxLHsieiI6bnVsbH1dfQ",
+    "tree_types": "body:str/3 big:json/2 obj:json",
+    "tree_n": "0"
+   }
+  ],
+  "hash": "sha256:69b1e4ecc600107dbdf3067cfbc598ee2a0e2bacf0df0af8e70ba67c972f9c5f"
+ },
+ {
+  "tree_id": "t_src",
+  "data": {
+   "items": [
+    {
+     "sku": "a",
+     "price": 3
+    },
+    {
+     "sku": "b",
+     "price": 0.1
+    }
+   ]
+  },
+  "opts": {
+   "source": "src_agent",
+   "nonce": "0123456789abcdef0123456789abcdef"
+  },
+  "relations": [
+   {
+    "type": "tree_root",
+    "subject": "tree_root",
+    "object": "-",
+    "tree": "t_src",
+    "tree_kind": "tables",
+    "tree_source": "src_agent",
+    "tree_nonce": "0123456789abcdef0123456789abcdef",
+    "tree_n": "2"
+   },
+   {
+    "type": "items",
+    "subject": "items.0",
+    "object": "-",
+    "tree": "t_src",
+    "sku": "a",
+    "price": "3",
+    "tree_types": "price:int"
+   },
+   {
+    "type": "items",
+    "subject": "items.1",
+    "object": "-",
+    "tree": "t_src",
+    "sku": "b",
+    "price": "0.1",
+    "tree_types": "price:num"
+   }
+  ],
+  "hash": "sha256:07bb7b0dd62a5b79b36f53e13124c4ff437d08fccbb1bcdf1a74feb3b598bc4e"
+ },
+ {
+  "tree_id": "t_tables",
+  "data": {
+   "teams": [
+    {
+     "id": "team_a",
+     "members": [
+      {
+       "name": "x"
+      },
+      {
+       "name": "y",
+       "f_odd": 1,
+       "tree_x": 2
+      }
+     ]
+    }
+   ]
+  },
+  "opts": {},
+  "relations": [
+   {
+    "type": "tree_root",
+    "subject": "tree_root",
+    "object": "-",
+    "tree": "t_tables",
+    "tree_kind": "tables",
+    "tree_n": "1"
+   },
+   {
+    "type": "teams",
+    "subject": "team_a",
+    "object": "-",
+    "tree": "t_tables",
+    "tree_id": "1",
+    "tree_n": "2"
+   },
+   {
+    "type": "members",
+    "subject": "team_a.0",
+    "object": "team_a",
+    "tree": "t_tables",
+    "name": "x"
+   },
+   {
+    "type": "members",
+    "subject": "team_a.1",
+    "object": "team_a",
+    "tree": "t_tables",
+    "name": "y",
+    "f_f_odd": "1",
+    "f_tree_x": "2",
+    "tree_types": "f_f_odd:int f_tree_x:int"
+   }
+  ],
+  "hash": "sha256:d37829bdce8fd188e046b57cbb4776def57d7bab34febeb99493953cb0fbc4f3"
+ }
+]

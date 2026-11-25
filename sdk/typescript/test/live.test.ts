@@ -158,3 +158,40 @@ test("accord humain, puis jeton verifie en direct (revoque avant expiration)", {
   const dead = new CstlGuard(serverKey, { online: { host: "127.0.0.1", port: 1 } });
   assert.equal(await dead.liveStatus(tok), "status_unavailable");
 });
+
+test("arbre : engagement de la source, transmission, arbre modifie refuse, relu identique (TS et Python)", { skip }, async () => {
+  const src = agent(`shared_${uid()}`), relay = agent(`bot_${uid()}`);
+  assert.ok(await src.register());
+  assert.ok(await relay.register());
+  const tid = `tree_${uid()}`;
+  const doc = { client: "c_7", orders: [{ id: "o1", total: 80.5, lines: [{ item: "gpu", qty: 2 }, { item: "lic", qty: 1 }] }] };
+  const [salt] = await src.commitTree(doc, tid);
+  const [, ok] = await relay.sendTree("server", doc, tid, { source: src.name, nonce: salt });
+  assert.notEqual(ok.intent.purpose, "tree_rejected");
+  const changed = { ...doc, orders: [{ ...doc.orders[0], total: 8 }] };
+  const [, bad] = await relay.sendTree("server", changed, tid, { source: src.name, nonce: salt });
+  assert.equal(bad.intent.purpose, "tree_rejected");
+  assert.deepEqual(await relay.fetchTree(tid, src.name), doc);
+
+  const py = spawnSync("python3", ["-c", `
+import sys, json, builtins; sys.path.insert(0, ${JSON.stringify(join(repo, "sdk", "python"))})
+builtins.print = lambda *a, **k: None
+import cstl_llm_agent as m
+a = m.CstlAgent(${JSON.stringify(src.name)}, "none", port=${PORT}); a.registered = True
+sys.stdout.write(json.dumps(a.fetch_tree(${JSON.stringify(tid)}, source=${JSON.stringify(src.name)})))
+`], { env: { ...process.env, HOME: work }, encoding: "utf8" });
+  assert.deepEqual(JSON.parse(py.stdout), doc, py.stderr);
+});
+
+test("CSTL compact : politique en symboles, relations ecrites en compact et appliquees", { skip }, async () => {
+  const owner = agent(`owner_${uid()}`), bot = agent(`bot_${uid()}`);
+  assert.ok(await owner.register());
+  assert.ok(await bot.register());
+  const r = await owner.sendCompact("server", `${bot.name} !wipe_db "production"\n${bot.name} !refund_order >100`);
+  assert.notEqual(r.meta.status, "error");
+  const text = await bot.policyText("symboles");
+  assert.match(text, /!wipe_db "production"/);
+  assert.match(text, /!refund_order >100/);
+  assert.equal((await bot.requestAction("wipe_db")).allowed, false);
+  assert.equal((await bot.requestAction("refund_order", 50)).allowed, true);
+});

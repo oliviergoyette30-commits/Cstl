@@ -64,6 +64,12 @@ const token = await bot.authorize("refund_order", 80);          // ActionDenied 
 await new CstlGuard(serverKeyHex).run(token, "refund_order", doIt, { amount: 80 });
 ```
 
+It also has (2026-11-25) revocation, emergency stop, human approval, the
+live token check, trees (`sendTree`, `fetchTree`, `commitTree`) and compact
+CSTL (`policyText`, `sendCompact`). Python and TypeScript produce identical
+tree relations, hashes and compact texts (vectors in `sdk/typescript/test/`).
+Only Python has the indented trees and the document forms.
+
 Tests: `cd sdk/typescript && npm install && npm test` (vectors, then live
 tests against `target/debug/cstl_parser`).
 

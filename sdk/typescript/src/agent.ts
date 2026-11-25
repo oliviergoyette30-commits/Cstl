@@ -2,7 +2,7 @@
 // politique. Meme fichier de cle que le SDK Python (~/.cstl/agent_<nom>.key,
 // 32 octets bruts) : un agent garde la meme identite dans les deux langages.
 import { connect } from "node:net";
-import { randomUUID, createHash } from "node:crypto";
+import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,8 @@ import type { KeyObject } from "node:crypto";
 import { render, parse, first, type Block, type Fields, type Message } from "./wire.js";
 import { generatePrivateKey, privateKeyFromRaw, publicHex, rawPrivate, signMessage, signingBytes, verifyHex } from "./signing.js";
 import { tokenFromFields, type AuthorizationToken } from "./guard.js";
+import { treeToRelations, relationsToTree, treeHash, type Json } from "./tree.js";
+import { decode as decodeCompact, policyToCompact, policyToSymbols, type PolicyView } from "./compact.js";
 
 export interface Response {
   raw: string;
@@ -259,6 +261,45 @@ export class CstlAgent {
   /** Auteur de politique : arrete (on) ou relance (off) les actions ; scope "all", "agent:<nom>" ou "action:<motif>". */
   emergencyStop(scope = "all", on = true, reason?: string): Promise<Fields> {
     return this.control("emergency_stop", { scope, state: on ? "on" : "off", reason });
+  }
+
+  // -- Arbres (donnees imbriquees), 2026-11-25 : memes relations que le SDK Python.
+  /** Envoie un document JSON imbrique ; renvoie [treeId, reponse]. source/nonce : voir commitTree. */
+  async sendTree(receiver: string, tree: Json, treeId?: string, opts: { source?: string; nonce?: string } = {}): Promise<[string, Response]> {
+    const id = treeId ?? `tree_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    return [id, await this.sendRelations(treeToRelations(tree, id, opts), receiver)];
+  }
+
+  /** La SOURCE s'engage sur un arbre (empreinte signee, avec un sel) ; renvoie [sel, reponse]. */
+  async commitTree(tree: Json, treeId: string): Promise<[string, Response]> {
+    const nonce = randomBytes(16).toString("hex");
+    const digest = treeHash(treeToRelations(tree, treeId, { source: this.name, nonce }), treeId);
+    return [nonce, await this.sendRelations([{ type: "tree_commit", subject: treeId, object: digest }])];
+  }
+
+  /** Relit un arbre (sa derniere version, ou celle qui se reclame de `source`). */
+  async fetchTree(treeId: string, source?: string): Promise<Json> {
+    const intent: Fields = { tree: treeId, request_id: randomUUID().replace(/-/g, "") };
+    if (source) intent.source = source;
+    const r = await this.send("tree_query", [], intent);
+    if (r.intent.purpose !== "tree") throw new Error(`arbre refuse : ${r.intent.reason ?? r.intent.purpose}`);
+    return relationsToTree(r.blocks.filter((b) => b.name === "RELATION").map((b) => b.fields), treeId);
+  }
+
+  /** Politique effective ecrite pour un modele : "compact" ou "symboles" (la plus courte). */
+  async policyText(fmt: "compact" | "symboles" = "symboles"): Promise<string> {
+    const p = await this.policy();
+    const view: PolicyView = { default: p.summary.default ?? "allow", required: [], permitted: [], forbidden: [], ignored: p.ignored };
+    for (const r of p.rules) {
+      const { decision, ...rest } = r;
+      (decision === "required" ? view.required! : decision === "permitted" ? view.permitted! : view.forbidden!).push(rest);
+    }
+    return fmt === "compact" ? policyToCompact(view) : policyToSymbols(view);
+  }
+
+  /** Relations ecrites en CSTL compact (par un modele), relues sans rien deviner, signees, envoyees. */
+  async sendCompact(receiver: string, text: string): Promise<Response> {
+    return this.sendRelations(decodeCompact(text), receiver);
   }
 
   /** Politique effective (section 8) : resume et regles. */
