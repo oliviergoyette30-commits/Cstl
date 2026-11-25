@@ -169,32 +169,84 @@ pub fn wire_to_json(text: &str) -> Value {
 /// Envoie un texte CSTL au listener TCP local et lit la reponse jusqu'a
 /// `---END---`.
 pub async fn relay(wire: &str, port: u16) -> Result<String, String> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let fut = async {
-        let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        let sock = tokio::net::TcpStream::connect(("127.0.0.1", port))
             .await
             .map_err(|e| format!("serveur CSTL injoignable sur 127.0.0.1:{port} : {e}"))?;
-        sock.write_all(wire.as_bytes()).await.map_err(|e| e.to_string())?;
-        let mut buf = Vec::new();
-        let mut chunk = [0u8; 8192];
-        loop {
-            let n = sock.read(&mut chunk).await.map_err(|e| e.to_string())?;
-            if n == 0 {
-                break;
-            }
-            buf.extend_from_slice(&chunk[..n]);
-            if buf.windows(9).any(|w| w == b"---END---") {
-                break;
-            }
-            if buf.len() > 8 * 1024 * 1024 {
-                return Err("reponse trop grande (> 8 Mio)".to_string());
+        match GatewayTls::from_env()? {
+            None => exchange(sock, wire).await,
+            Some(tls) => {
+                let name = rustls::pki_types::ServerName::try_from(tls.server_name.clone())
+                    .map_err(|e| format!("nom de serveur TLS invalide '{}' : {e}", tls.server_name))?;
+                let stream = tokio_rustls::TlsConnector::from(tls.config)
+                    .connect(name, sock)
+                    .await
+                    .map_err(|e| format!("poignee de main TLS avec le serveur CSTL refusee : {e}"))?;
+                exchange(stream, wire).await
             }
         }
-        String::from_utf8(buf).map_err(|_| "reponse non UTF-8".to_string())
     };
     tokio::time::timeout(std::time::Duration::from_secs(60), fut)
         .await
         .map_err(|_| "le serveur CSTL n'a pas repondu en 60 s".to_string())?
+}
+
+/// Relais vers un listener en TLS (2026-11-25). Actif des que
+/// `CSTL_TLS_CERT_PATH` est defini (le listener est alors en TLS).
+///   CSTL_GATEWAY_TLS_CA_PATH      certificat(s) de confiance (defaut : CSTL_TLS_CERT_PATH) ;
+///   CSTL_GATEWAY_TLS_SERVER_NAME  nom attendu dans le certificat (defaut : localhost) ;
+///   CSTL_GATEWAY_CLIENT_CERT_PATH / CSTL_GATEWAY_CLIENT_KEY_PATH  si l'authentification
+///                                 mutuelle est exigee.
+pub struct GatewayTls {
+    pub config: std::sync::Arc<rustls::ClientConfig>,
+    pub server_name: String,
+}
+
+impl GatewayTls {
+    pub fn from_env() -> Result<Option<Self>, String> {
+        let Ok(cert) = std::env::var("CSTL_TLS_CERT_PATH") else { return Ok(None) };
+        let read = |var: &str, path: &str| std::fs::read(path).map_err(|e| format!("lecture de {var}='{path}' impossible : {e}"));
+        let ca_var = if std::env::var("CSTL_GATEWAY_TLS_CA_PATH").is_ok() { "CSTL_GATEWAY_TLS_CA_PATH" } else { "CSTL_TLS_CERT_PATH" };
+        let trust = read(ca_var, &std::env::var(ca_var).unwrap_or(cert))?;
+        let client = match (std::env::var("CSTL_GATEWAY_CLIENT_CERT_PATH"), std::env::var("CSTL_GATEWAY_CLIENT_KEY_PATH")) {
+            (Ok(c), Ok(k)) => Some((read("CSTL_GATEWAY_CLIENT_CERT_PATH", &c)?, read("CSTL_GATEWAY_CLIENT_KEY_PATH", &k)?)),
+            _ => None,
+        };
+        let config = super::tls::client_config(
+            &trust,
+            client.as_ref().map(|c| c.0.as_slice()),
+            client.as_ref().map(|c| c.1.as_slice()),
+        )?;
+        let server_name = std::env::var("CSTL_GATEWAY_TLS_SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+        Ok(Some(GatewayTls { config, server_name }))
+    }
+}
+
+async fn exchange<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(mut sock: S, wire: &str) -> Result<String, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    sock.write_all(wire.as_bytes()).await.map_err(|e| e.to_string())?;
+    sock.flush().await.map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        let n = match sock.read(&mut chunk).await {
+            Ok(n) => n,
+            // Un pair TLS qui ferme sans close_notify, apres une reponse complete.
+            Err(_) if buf.windows(9).any(|w| w == b"---END---") => 0,
+            Err(e) => return Err(e.to_string()),
+        };
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        if buf.windows(9).any(|w| w == b"---END---") {
+            break;
+        }
+        if buf.len() > 8 * 1024 * 1024 {
+            return Err("reponse trop grande (> 8 Mio)".to_string());
+        }
+    }
+    String::from_utf8(buf).map_err(|_| "reponse non UTF-8".to_string())
 }
 
 #[cfg(test)]

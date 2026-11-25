@@ -545,8 +545,14 @@ cstl-a2a-proxy --listen 127.0.0.1:9100 --upstream http://127.0.0.1:9000/a2a \
   and sends nothing. Rules are written as usual:
   `RELATION [type=PERFORM, subject=<caller>, object=a2a.billing.SendMessage,
   modality=MUST_NOT]`.
-- **Limits:** one JSON-RPC call per request (no batch). The proxy controls
-  which method is called on which agent, not the message content.
+- **Batches** (2026-11-25): a JSON-RPC batch carries one token per call, in
+  order, comma-separated in the same header (`cstl_a2a.call_batch(agent,
+  url, "billing", [("GetTask", {...}), ("SendMessage", {...})])`). It is all
+  or nothing: every token is checked before any is used, all must belong to
+  the same agent, and one refused token refuses the whole batch. At most 50
+  calls.
+- **Limit:** the proxy controls which method is called on which agent, not
+  the message content.
 
 Live test: `sdk/python/test_a2a_proxy_live.py`. A test A2A agent records
 every call it receives, which proves that refused calls never reach it.
@@ -575,8 +581,15 @@ as JSON and returns the answer as JSON:
   (a `"`, a newline, spaces at either end, `---END---`) is refused with
   HTTP 400 and the reason, instead of being altered. Unknown fields are
   refused too.
-- Limits (v1): the TCP listener must be plain (not TLS); every request
-  comes from 127.0.0.1, so they share one per-IP rate limit.
+- **TLS listener** (2026-11-25): when `CSTL_TLS_CERT_PATH` is set, the
+  gateway connects in TLS. It trusts `CSTL_GATEWAY_TLS_CA_PATH` (by
+  default the server certificate itself), expects the name
+  `CSTL_GATEWAY_TLS_SERVER_NAME` (default `localhost`), and presents
+  `CSTL_GATEWAY_CLIENT_CERT_PATH` / `CSTL_GATEWAY_CLIENT_KEY_PATH` when the
+  server requires mutual authentication. Live test:
+  `test_json_gateway_relays_to_a_mutual_tls_listener`.
+- Limit: every request comes from 127.0.0.1, so they share one per-IP rate
+  limit.
 
 Live test: `sdk/python/test_json_gateway_live.py`. It uses a client that
 speaks only JSON (standard library HTTP plus signing): a forbidden action is

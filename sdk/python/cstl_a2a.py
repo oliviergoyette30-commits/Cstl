@@ -122,6 +122,28 @@ def call(agent, url, target, method, params, *, version="1.0", request_id=1, tim
         return e.code, dict(e.headers), e.read()
 
 
+def call_batch(agent, url, target, calls, *, version="1.0", timeout=60):
+    """Lot JSON-RPC (2026-11-25) : `calls` = [(methode, params), ...]. Un jeton
+    par appel, dans l'ordre, dans le meme en-tete (separes par des virgules).
+    Si UN appel est refuse par le serveur CSTL, ActionDenied est leve et rien
+    n'est envoye ; si le proxy refuse UN jeton, il refuse tout le lot."""
+    tokens = [agent.authorize(action_for(target, m)) for m, _ in calls]
+    body = json.dumps([{"jsonrpc": "2.0", "id": i + 1, "method": m, "params": p}
+                       for i, (m, p) in enumerate(calls)]).encode()
+    headers = {"Content-Type": "application/json", HEADER: ",".join(encode_token(t) for t in tokens)}
+    if version:
+        headers["A2A-Version"] = version
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+MAX_BATCH = 50
+
+
 # -- Proxy ----------------------------------------------------------------------
 def make_handler(upstream, target, guard, public_url):
     from urllib.parse import urlsplit
@@ -176,26 +198,38 @@ def make_handler(upstream, target, guard, public_url):
                 msg = json.loads(body)
             except ValueError:
                 return self._send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Invalid JSON payload"}})
-            if not isinstance(msg, dict) or not isinstance(msg.get("method"), str):
+            # Lot JSON-RPC (2026-11-25) : un jeton par appel, dans l'ordre ; tout
+            # ou rien -- un seul jeton refuse et l'agent ne recoit aucun appel.
+            calls = msg if isinstance(msg, list) else [msg]
+            if (not calls or len(calls) > MAX_BATCH
+                    or not all(isinstance(c, dict) and isinstance(c.get("method"), str) for c in calls)):
                 return self._send(400, {"jsonrpc": "2.0", "id": None, "error": {
-                    "code": -32600, "message": "Request payload validation error (un seul appel JSON-RPC a la fois)"}})
-            mid = msg.get("id")
+                    "code": -32600, "message": f"Request payload validation error (1 a {MAX_BATCH} appels JSON-RPC)"}})
+            mid = calls[0].get("id") if len(calls) == 1 else None
             raw = self.headers.get(HEADER)
             if not raw:
                 return self._deny(401, mid, "no_token", f"en-tete {HEADER} absent")
             from cstl_guard import Unauthorized
             try:
-                token = decode_token(raw)
+                tokens = [decode_token(t.strip()) for t in raw.split(",")]
             except Exception:  # noqa: BLE001
                 return self._deny(403, mid, "bad_token", "jeton illisible")
+            if len(tokens) != len(calls):
+                return self._deny(403, mid, "token_count", f"{len(calls)} appels, {len(tokens)} jetons")
+            if len({t.agent for t in tokens}) != 1:
+                return self._deny(403, mid, "mixed_agents", "tous les jetons d'un lot doivent etre du meme agent")
             try:
-                action = action_for(target, msg["method"])
+                actions = [action_for(target, c["method"]) for c in calls]
             except ValueError as e:
                 return self._deny(403, mid, "bad_method", str(e))
             try:
-                guard.run(token, action, lambda: None)      # signature, action, temps, usage unique
+                for t, a in zip(tokens, actions):
+                    guard.check(t, a)                       # tout verifier avant de rien consommer
+                for t, a in zip(tokens, actions):
+                    guard.run(t, a, lambda: None)           # signature, action, temps, usage unique
             except Unauthorized as e:
-                return self._deny(403, mid, e.reason, f"action demandee {action}, jeton pour {token.action}")
+                return self._deny(403, mid, e.reason, "lot refuse en entier")
+            token = tokens[0]
             headers = {k: v for k, v in self.headers.items()
                        if k.lower() not in ("host", "content-length", HEADER.lower(), AGENT_HEADER.lower(), "connection")}
             headers[AGENT_HEADER] = token.agent

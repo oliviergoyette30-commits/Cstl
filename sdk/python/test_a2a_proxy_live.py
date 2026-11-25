@@ -47,6 +47,18 @@ class FakeA2A(BaseHTTPRequestHandler):
 
     def do_POST(self):
         msg = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if isinstance(msg, list):                      # lot JSON-RPC
+            out = []
+            for c in msg:
+                CALLS.append((c["method"], self.headers.get("X-CSTL-Agent"), self.headers.get("X-CSTL-Authorization")))
+                out.append({"jsonrpc": "2.0", "id": c["id"], "result": {"ok": c["method"]}})
+            data = json.dumps(out).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         CALLS.append((msg["method"], self.headers.get("X-CSTL-Agent"), self.headers.get("X-CSTL-Authorization")))
         if msg["method"] == "SendStreamingMessage":
             self.send_response(200)
@@ -188,3 +200,41 @@ def test_refused_calls_never_reach_the_agent(env, monkeypatch):
     assert status == 403 and r["error"]["data"][0]["reason"] == "CSTL_ALREADY_USED"
 
     assert CALLS == [("GetTask", eve.name, None)]          # seul l'appel autorise est arrive
+
+
+def test_batch_needs_one_token_per_call_and_is_all_or_nothing(env, monkeypatch):
+    import cstl_a2a
+    m, owner = make_agent(env, monkeypatch, f"owner_{uuid.uuid4().hex[:6]}")
+    _, bob = make_agent(env, monkeypatch, f"bob_{uuid.uuid4().hex[:6]}")
+    CALLS.clear()
+    status, _, body = cstl_a2a.call_batch(bob, env["url"], "billing", [("GetTask", {"id": "t1"}), ("SendMessage", SEND)])
+    assert status == 200 and [r["result"]["ok"] for r in json.loads(body)] == ["GetTask", "SendMessage"]
+    assert CALLS == [("GetTask", bob.name, None), ("SendMessage", bob.name, None)]
+
+    batch = [{"jsonrpc": "2.0", "id": 1, "method": "GetTask", "params": {}},
+             {"jsonrpc": "2.0", "id": 2, "method": "CancelTask", "params": {}}]
+    t_get = cstl_a2a.encode_token(bob.authorize(cstl_a2a.action_for("billing", "GetTask")))
+    t_get2 = cstl_a2a.encode_token(bob.authorize(cstl_a2a.action_for("billing", "GetTask")))
+    CALLS.clear()
+    # Un jeton par appel : il en manque un.
+    status, r = post(env["url"], batch, {"X-CSTL-Authorization": t_get})
+    assert status == 403 and r["error"]["data"][0]["reason"] == "CSTL_TOKEN_COUNT"
+    # Le second jeton est pour GetTask, pas CancelTask : tout le lot est refuse,
+    # et le premier jeton n'est pas consomme (tout est verifie avant).
+    status, r = post(env["url"], batch, {"X-CSTL-Authorization": f"{t_get},{t_get2}"})
+    assert status == 403 and r["error"]["data"][0]["reason"] == "CSTL_WRONG_ACTION"
+    # Le meme jeton deux fois dans le lot : refuse.
+    status, r = post(env["url"], [batch[0], batch[0]], {"X-CSTL-Authorization": f"{t_get},{t_get}"})
+    assert status == 403 and r["error"]["data"][0]["reason"] == "CSTL_ALREADY_USED"
+    # Jetons de deux agents differents : refuse.
+    _, eve = make_agent(env, monkeypatch, f"eve_{uuid.uuid4().hex[:6]}")
+    t_eve = cstl_a2a.encode_token(eve.authorize(cstl_a2a.action_for("billing", "GetTask")))
+    status, r = post(env["url"], [batch[0], batch[0]], {"X-CSTL-Authorization": f"{t_get2},{t_eve}"})
+    assert status == 403 and r["error"]["data"][0]["reason"] == "CSTL_MIXED_AGENTS"
+    assert CALLS == [], "aucun appel d'un lot refuse n'arrive"
+
+    # Une methode interdite dans le lot : le client leve ActionDenied et n'envoie rien.
+    owner.send_relations("server", [{"type": "PERFORM", "subject": bob.name, "object": "a2a.billing.CancelTask", "modality": "MUST_NOT"}])
+    with pytest.raises(m.ActionDenied):
+        cstl_a2a.call_batch(bob, env["url"], "billing", [("GetTask", {}), ("CancelTask", {})])
+    assert CALLS == []

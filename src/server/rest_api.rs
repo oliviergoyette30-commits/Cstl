@@ -560,10 +560,6 @@ async fn json_message(Json(msg): Json<serde_json::Value>) -> impl IntoResponse {
         Ok(w) => w,
         Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "message_refuse", "detail": e}))),
     };
-    if std::env::var("CSTL_TLS_CERT_PATH").is_ok() {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "tls_non_gere",
-            "detail": "l'entree JSON v1 relaie vers le listener TCP en clair ; il est en TLS"})));
-    }
     let port = std::env::var("CSTL_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5050u16);
     match json_gateway::relay(&wire, port).await {
         Ok(text) => (StatusCode::OK, Json(json_gateway::wire_to_json(&text))),

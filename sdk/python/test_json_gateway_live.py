@@ -132,3 +132,75 @@ def test_values_the_wire_cannot_carry_are_refused_before_sending(server):
         assert status == 400 and r["error"] == "message_refuse", r
     status, r = post({**a.message("inform"), "extra": "x"})
     assert status == 400 and "champ inconnu" in r["detail"]
+
+
+def _pki(d: Path):
+    """CA jetable, certificat serveur (localhost) et certificat client, par openssl."""
+    def run(*a):
+        subprocess.run(["openssl", *a], cwd=d, check=True, capture_output=True)
+    run("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-days", "2",
+        "-subj", "/CN=cstl-test-ca", "-keyout", "ca.key", "-out", "ca.pem")
+    (d / "server.ext").write_text("subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n")
+    (d / "client.ext").write_text("extendedKeyUsage=clientAuth\n")
+    for name, cn in (("server", "localhost"), ("client", "json-gateway")):
+        run("req", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-subj", f"/CN={cn}",
+            "-keyout", f"{name}.key", "-out", f"{name}.csr")
+        run("x509", "-req", "-in", f"{name}.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial", "-days", "2",
+            "-extfile", f"{name}.ext", "-out", f"{name}.pem")
+        # rustls lit PKCS#8 : convertir la cle.
+        run("pkcs8", "-topk8", "-nocrypt", "-in", f"{name}.key", "-out", f"{name}.p8")
+
+
+def test_json_gateway_relays_to_a_mutual_tls_listener():
+    """Listener TCP en TLS avec authentification mutuelle (2026-11-25) : l'entree
+    JSON s'y connecte avec la CA et son propre certificat client. Sans
+    certificat client, le serveur refuse la poignee de main."""
+    import shutil
+    if not BINARY.exists() or not shutil.which("openssl"):
+        pytest.skip("cstl_parser et openssl requis")
+    work = Path(tempfile.mkdtemp(prefix="cstl_json_tls_"))
+    _pki(work)
+    port, rest = 5757, 8787
+    env = {**os.environ, "CSTL_PORT": str(port), "CSTL_REST_PORT": str(rest), "CSTL_KB_VERIFY": "off",
+           "CSTL_TLS_CERT_PATH": str(work / "server.pem"), "CSTL_TLS_KEY_PATH": str(work / "server.p8"),
+           "CSTL_TLS_REQUIRE_MUTUAL_AUTH": "true", "CSTL_TLS_CLIENT_CA_PATH": str(work / "ca.pem"),
+           "CSTL_GATEWAY_TLS_CA_PATH": str(work / "ca.pem"),
+           "CSTL_GATEWAY_CLIENT_CERT_PATH": str(work / "client.pem"),
+           "CSTL_GATEWAY_CLIENT_KEY_PATH": str(work / "client.p8")}
+    env.pop("CSTL_DEV_MODE", None)
+    proc = subprocess.Popen([str(BINARY)], cwd=work, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(120):
+            try:
+                socket.create_connection(("127.0.0.1", rest), timeout=0.5).close()
+                break
+            except OSError:
+                time.sleep(0.25)
+        a = JsonAgent(f"tls_{uuid.uuid4().hex[:8]}")
+
+        def send(msg):
+            req = urllib.request.Request(f"http://127.0.0.1:{rest}/v1/message", data=json.dumps(msg).encode(),
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        status, r = send(a.message("agent_register", name=a.name, capabilities="communication"))
+        assert status == 200 and r["intent"]["purpose"] == "agent_register_ack", r
+        status, r = send(a.message("action_request", action="read_logs", request_id=uuid.uuid4().hex))
+        assert status == 200 and r["intent"]["decision"] == "allowed", r
+
+        # Un client TCP sans certificat : le serveur TLS refuse la connexion.
+        import ssl
+        ctx = ssl.create_default_context(cafile=str(work / "ca.pem"))
+        with pytest.raises((ssl.SSLError, ConnectionResetError, OSError)):
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as raw:
+                with ctx.wrap_socket(raw, server_hostname="localhost") as s:
+                    s.sendall(b"#!CSTL v5.0.0 MODE=A\n---END---\n")
+                    if not s.recv(10):
+                        raise ConnectionResetError("ferme")
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
