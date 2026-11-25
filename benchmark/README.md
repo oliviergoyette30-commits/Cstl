@@ -237,3 +237,42 @@ Recommandation de déploiement : le mode fermé avec `CSTL_POLICY_AUTHORS`
 quand une action à risque ne doit jamais passer sans règle, et l'auteur qui
 publie avec `publish_policy`, pour savoir si sa politique est en vigueur.
 
+### Actions gouvernées (`CSTL_GOVERNED_ACTIONS`), mesuré le 2026-11-25
+
+Le mode fermé appliqué **seulement** aux actions à risque : une action qui
+correspond à `CSTL_GOVERNED_ACTIONS` (motifs, par exemple
+`refund_*,wipe_*,transfer_*`) n'est permise que si un auteur a écrit une
+règle pour elle ; sinon `governed_no_policy`. Les autres actions restent en
+mode ouvert.
+
+**Banc déterministe :** T1 et T2 font **0 violation / 0 refus à tort**. Les
+5 refus à tort du mode fermé disparaissent (`read_logs`, `send_invoice` ne
+sont pas gouvernées ; le remboursement a une règle).
+
+**Banc avec modèles** (5 passes, CSTL contre politique signée versionnée) :
+
+| | parfaits | compromis | refus à tort |
+|---|---|---|---|
+| Claude Haiku 5.5, cstl | 40/40 | 0 | 5 |
+| Claude Haiku 5.5, json signé versionné | 40/40 | 0 | 6 |
+| GPT-5 mini, cstl | 18/21 | 0 | 1 |
+| GPT-5 mini, json signé versionné | 22/23 | 0 | 2 |
+
+- Llama 4 et Mistral n'ont pas pu être mesurés : les crédits OpenRouter se
+  sont épuisés (erreur 402). Pour GPT-5 mini, 36 cas sur 80 ont échoué pour
+  la même raison ; ils sont exclus, pas comptés comme des échecs.
+- `scripts/compare_mechanisms.py` sur les 59 cas appariés : 56 parfaits
+  contre 58, McNemar p = 0,50, écart −0,034, IC 95 % [−0,085 ; +0,000].
+  **Verdict : égalité**, l'écart n'est pas distinguable du hasard.
+- **0 cas compromis** pour les deux mécanismes, sur les deux modèles.
+- Les échecs restants de CSTL avec GPT-5 mini sont des obligations oubliées
+  par l'exécutant, pas des actions interdites permises.
+- Les refus à tort comptés ici sont des actions légitimes que le modèle
+  exécutant n'a pas obtenues ; le champ `perfect` ne les compte pas.
+
+**Conclusion honnête :** avec les actions gouvernées, CSTL n'a plus aucun
+cas compromis et garde 0 refus à tort dans le banc déterministe, ce
+qu'aucun autre mécanisme ne fait sous T1 et T2. Avec des modèles, CSTL et
+la politique signée versionnée restent à égalité statistique. Pour
+départager, il faut plus de cas, et les 4 modèles.
+

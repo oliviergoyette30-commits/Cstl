@@ -104,8 +104,11 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      déterministe. Aucun défaut ne gagne partout. Le défaut reste ouvert ;
      le mode fermé est recommandé avec `CSTL_POLICY_AUTHORS` pour les
      actions à risque ;
-   - piste : un mode fermé limité aux actions qu'un auteur déclare
-     « gouvernées », pour garder 0 refus à tort sur les autres ;
+   - **fait :** actions gouvernées (`CSTL_GOVERNED_ACTIONS`) : banc
+     déterministe 0 violation / 0 refus à tort sous T1 et T2 ; banc avec
+     modèles (Haiku, GPT-5 mini ; 5 passes) : 0 cas compromis, égalité
+     statistique avec la politique signée versionnée (56 contre 58 sur 59,
+     p = 0,50). Llama et Mistral restent à mesurer (crédits épuisés) ;
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
    - questions plus dures ;
