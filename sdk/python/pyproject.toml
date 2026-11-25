@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cstl"
+version = "0.1.0"
+description = "Controle des agents IA : autorisation signee, politique, audit infalsifiable (client du serveur CSTL)"
+readme = "README_PAQUET.md"
+requires-python = ">=3.10"
+license = {text = "Voir le depot"}
+dependencies = ["cryptography>=42"]
+
+[project.optional-dependencies]
+anthropic = ["anthropic"]
+
+[project.scripts]
+cstl-demo = "cstl_demo:main"
+cstl-mcp-proxy = "cstl_mcp_proxy:cli"
+cstl-mcp-server = "cstl_mcp_server:cli"
+cstl-witness = "cstl_witness:main"
+
+[tool.setuptools]
+py-modules = ["cstl_client", "cstl_compact", "cstl_formes", "cstl_guard", "cstl_llm_agent",
+              "cstl_signing", "cstl_mcp_proxy", "cstl_mcp_server", "cstl_witness", "cstl_demo"]

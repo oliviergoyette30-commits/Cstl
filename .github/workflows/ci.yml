@@ -123,7 +123,15 @@ jobs:
       # Graphify. Avant le 2026-11-17 l'agent n'avait jamais ete execute contre
       # le serveur (enregistrement rejete, messages en parse_error).
       - name: Agent LLM contre le vrai serveur
-        run: python3 -m pytest -q sdk/python/test_llm_agent_live.py sdk/python/test_strict_mode_live.py sdk/python/test_action_authorization_live.py sdk/python/test_mandatory_authorization_live.py sdk/python/test_witness_rollback_live.py sdk/python/test_secure_defaults_live.py
+        run: python3 -m pytest -q sdk/python/test_llm_agent_live.py sdk/python/test_strict_mode_live.py sdk/python/test_action_authorization_live.py sdk/python/test_mandatory_authorization_live.py sdk/python/test_witness_rollback_live.py sdk/python/test_secure_defaults_live.py sdk/python/test_json_gateway_live.py sdk/python/test_mcp_proxy_live.py sdk/python/test_demo_live.py
+
+      # Paquet Python (2026-11-25) : la roue se construit, s'installe dans un
+      # environnement vierge, et la demonstration passe 7/7 depuis le paquet.
+      - name: Paquet Python installe + cstl-demo
+        run: |
+          python3 -m venv /tmp/cstl_pkg
+          /tmp/cstl_pkg/bin/pip install ./sdk/python
+          cd /tmp && CSTL_BINARY=$GITHUB_WORKSPACE/target/debug/cstl_parser /tmp/cstl_pkg/bin/cstl-demo
 
       # Etaient #[ignore] avec un chemin absolu d'une autre machine : jamais
       # executes. Prouvent que Python signe ce que Rust verifie, et inversement.

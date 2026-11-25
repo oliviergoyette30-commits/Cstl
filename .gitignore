@@ -30,3 +30,8 @@ scripts/llm_agent_eval_stub.json
 scripts/llm_relay_fidelity_stub.json
 scripts/unknown_benchmark.lock
 scripts/real_data_results.lock
+
+# Paquet Python (2026-11-25)
+sdk/python/build/
+sdk/python/*.egg-info/
+dist/

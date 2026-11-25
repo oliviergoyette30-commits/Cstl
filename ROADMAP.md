@@ -58,9 +58,14 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
 égal avec 3 exemples (46 contre 47).
 
 1. **Utilisable par n'importe qui :**
-   - **fait le 2026-11-25 :** entrée JSON `POST /v1/message` ;
-   - à faire : paquet `pip install`, binaires du serveur, démo de 10 minutes,
-     spécification v1 figée et tests de conformité.
+   - **fait le 2026-11-25 :**
+     - entrée JSON `POST /v1/message` ;
+     - paquet Python `cstl` (roue testée dans un environnement vierge) ;
+     - démo `cstl-demo` (7 vérifications, environ 2 s) ;
+     - workflow des binaires Linux, macOS et Windows (pas encore lancé sur
+       GitHub) ;
+   - à faire : publication (PyPI, release), spécification v1 figée et tests
+     de conformité.
 2. **Brancher les écosystèmes :**
    - **fait le 2026-11-25 :** proxy MCP devant tout serveur MCP
      (`cstl_mcp_proxy.py`, fermé par défaut, jetons vérifiés) ;

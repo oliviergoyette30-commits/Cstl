@@ -9,6 +9,33 @@ actual run against the real code in this repo (2026-10-29) -- not invented.
 If you want the full feature writeup first, read `README.md`. If you just
 want to see it work, keep reading here.
 
+## Fastest — the whole control layer in one command (~2 s)
+
+```bash
+cargo build --bin cstl_parser
+pip install ./sdk/python        # the "cstl" package: SDK + 4 commands
+cstl-demo                       # or: python3 sdk/python/cstl_demo.py
+```
+
+`cstl-demo` runs against the real server, in a temporary folder that it
+deletes afterwards:
+1. two agents register with their keys, and a policy is written;
+2. an allowed action gets a server-signed token, which the executing system
+   checks itself;
+3. a forbidden action is denied, with its rule;
+4. an amount cap applies;
+5. a forged, mismatched, missing or reused token is refused;
+6. another key cannot speak for the agent;
+7. after one SQLite row of the audit is edited by hand, the server refuses
+   to restart and says why.
+
+It prints `Tout est conforme : 7/7.` Live test: `sdk/python/test_demo_live.py`.
+
+The other installed commands are `cstl-mcp-proxy`, `cstl-mcp-server` and
+`cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
+wheel, are built by `.github/workflows/release.yml` (on a `v*` tag or by
+hand). Publishing them is a human decision.
+
 ## Option 0 — you have NO code execution at all (a chat-window AI)
 
 This is for you if you are reading this because a human pasted it into your

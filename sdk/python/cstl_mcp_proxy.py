@@ -170,9 +170,14 @@ def main(argv=None):
     child.wait()
 
 
-if __name__ == "__main__":
-    # stdout est reserve au protocole : les messages du SDK partent sur stderr.
+def cli():
+    """Point d'entree (commande installee et script) : stdout est reserve au
+    protocole, les messages du SDK (enregistrement...) partent sur stderr."""
     import builtins
     _print = builtins.print
     builtins.print = lambda *a, **k: _print(*a, **{**k, "file": sys.stderr})
     main()
+
+
+if __name__ == "__main__":
+    cli()
