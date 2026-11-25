@@ -776,7 +776,16 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     super::action_authorization::DefaultPolicy::Allow => "allow",
                                     super::action_authorization::DefaultPolicy::Deny => "deny",
                                 },
-                                if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) },
+                                {
+                                    // Actions gouvernees (2026-11-25) : refusees sans regle
+                                    // d'un auteur ; l'agent doit le savoir pour ne pas les tenter.
+                                    let g = super::action_authorization::GovernedActions::from_env();
+                                    let mut extra = if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) };
+                                    if !g.patterns().is_empty() {
+                                        extra.push_str(&format!(", governed={}", wire_text(&g.patterns().join(" "))));
+                                    }
+                                    extra
+                                },
                             );
                             for (decision, list) in [("required", &policy.required), ("permitted", &policy.permitted), ("forbidden", &policy.forbidden)] {
                                 for e in list {
@@ -853,15 +862,20 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     Vec::new()
                                 });
                             }
-                            let d = super::action_authorization::decide(
-                                &sender,
+                            // Actions gouvernees (2026-11-25) : sans regle d'un auteur, refus.
+                            let d = super::action_authorization::govern(
+                                super::action_authorization::decide(
+                                    &sender,
+                                    action.as_deref(),
+                                    identity_proven,
+                                    sender_registered,
+                                    &rules,
+                                    super::action_authorization::DefaultPolicy::from_env(),
+                                    &authors,
+                                    &req_ctx,
+                                ),
                                 action.as_deref(),
-                                identity_proven,
-                                sender_registered,
-                                &rules,
-                                super::action_authorization::DefaultPolicy::from_env(),
-                                &authors,
-                                &req_ctx,
+                                &super::action_authorization::GovernedActions::from_env(),
                             );
                             if let (true, Some(a), Some(amt)) = (d.allowed, action.as_deref(), amount.flatten()) {
                                 let audit_hash = crate::server::audit::canonical_hash(&payload);

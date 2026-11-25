@@ -97,6 +97,55 @@ impl PolicyAuthors {
     }
 }
 
+/// Actions GOUVERNEES (2026-11-25, `CSTL_GOVERNED_ACTIONS`, noms exacts ou
+/// `prefixe*`, separes par des virgules). Une action gouvernee n'est permise
+/// que si un auteur de politique a ecrit AU MOINS UNE regle pour elle (pour
+/// cet agent), qu'elle s'applique ou non ; s'il en existe, la decision reste
+/// celle de `decide`. Sans regle : refus `governed_no_policy`.
+///
+/// Pourquoi (scripts/competition_benchmark.py, Llama 4 et Mistral) : quand
+/// la politique de l'auteur n'arrive pas (rien d'ecrit, ou message refuse
+/// pour contradiction), un serveur ouvert par defaut laissait passer un
+/// remboursement de 2500. Le mode ferme global corrigeait ca, mais refusait
+/// 5 actions legitimes jamais mentionnees (benchmark/). La liste est fixee a
+/// l'INSTALLATION, pas dans la politique : un auteur qui n'ecrit rien ne
+/// peut pas la vider. Une regle d'un non-auteur (initie) ne compte pas.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GovernedActions(Vec<String>);
+
+impl GovernedActions {
+    pub fn from_env() -> Self {
+        Self::parse(std::env::var("CSTL_GOVERNED_ACTIONS").ok().as_deref())
+    }
+
+    pub fn parse(value: Option<&str>) -> Self {
+        GovernedActions(value.unwrap_or("").split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+    }
+
+    pub fn includes(&self, action: &str) -> bool {
+        self.0.iter().any(|p| match p.strip_suffix('*') {
+            Some(prefix) => action.starts_with(prefix),
+            None => p == action,
+        })
+    }
+
+    pub fn patterns(&self) -> &[String] {
+        &self.0
+    }
+}
+
+/// Applique la regle des actions gouvernees a une decision de `decide`.
+/// Aucune regle comptee pour l'action = ni regle qui a tranche, ni regle
+/// dont les conditions ne s'appliquent pas.
+pub fn govern(d: Decision, action: Option<&str>, governed: &GovernedActions) -> Decision {
+    match action {
+        Some(a) if d.allowed && d.rule.is_none() && d.not_applicable == 0 && governed.includes(a) => {
+            Decision { allowed: false, reason: "governed_no_policy", ..d }
+        }
+        _ => d,
+    }
+}
+
 /// Conditions d'une regle (2026-11-21), lues dans les attributs de sa
 /// RELATION et VERIFIEES par le serveur (avant, seule la raison suivait la
 /// regle : "interdit de rembourser sans accord" ne pouvait etre applique que
@@ -627,6 +676,32 @@ mod tests {
     fn with(r: Rule, attrs: &[(&str, &str)]) -> Rule {
         let m = attrs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         Rule { conditions: Conditions::from_attrs(&m), ..r }
+    }
+
+    #[test]
+    fn governed_action_needs_a_rule_from_an_author() {
+        let g = GovernedActions::parse(Some("refund_*, wipe_db"));
+        assert!(g.includes("refund_order") && g.includes("wipe_db") && !g.includes("read_logs"));
+        let only = PolicyAuthors::parse(Some("owner"));
+        let run = |h: &[Rule], action: &str, amount: Option<f64>| {
+            let ctx = RequestContext { amount, ..now() };
+            govern(decide("bot", Some(action), true, true, h, DefaultPolicy::Allow, &only, &ctx), Some(action), &g)
+        };
+        // Aucune regle : gouvernee -> refus ; non gouvernee -> permise.
+        assert_eq!(run(&[], "refund_order", Some(2500.0)).reason, "governed_no_policy");
+        assert!(run(&[], "read_logs", None).allowed);
+        // Une regle d'auteur existe mais ne s'applique pas (sous la limite) : permise.
+        let limit = vec![with(rel("bot", "refund_order", "MUST_NOT"), &[("amount_above", "100")])];
+        assert!(run(&limit, "refund_order", Some(50.0)).allowed);
+        assert!(!run(&limit, "refund_order", Some(2500.0)).allowed);
+        // Permission explicite : permise. Regle d'un non-auteur (initie) : ne compte pas.
+        assert!(run(&[rel("bot", "wipe_db", "MAY")], "wipe_db", None).allowed);
+        let insider = vec![by(false, rel("bot", "wipe_db", "MAY"))];
+        assert_eq!(run(&insider, "wipe_db", None).reason, "governed_no_policy");
+        // Sans liste : rien ne change.
+        let none = GovernedActions::default();
+        assert!(govern(decide("bot", Some("refund_order"), true, true, &[], DefaultPolicy::Allow, &only, &now()),
+                       Some("refund_order"), &none).allowed);
     }
 
     #[test]

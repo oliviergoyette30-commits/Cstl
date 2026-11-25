@@ -167,7 +167,7 @@ def classic(mech, legit, items, author):
 
 # -- Le vrai serveur CSTL ------------------------------------------------------
 class Cstl:
-    def __init__(self, binary, default="allow"):
+    def __init__(self, binary, default="allow", governed=""):
         self.work = Path(tempfile.mkdtemp(prefix="cstl_bench_"))
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
@@ -178,7 +178,9 @@ class Cstl:
                # de debit par IP (protection reelle du serveur) est relevee ici.
                "CSTL_RATE_LIMIT_PER_IP_PER_MIN": "100000",
                # Politique par defaut quand aucune regle ne s'applique (allow ou deny).
-               "CSTL_ACTION_DEFAULT": default}
+               "CSTL_ACTION_DEFAULT": default,
+               # Actions gouvernees (2026-11-25) : sans regle d'un auteur, refus.
+               "CSTL_GOVERNED_ACTIONS": governed}
         env.pop("CSTL_DEV_MODE", None)
         self.proc = subprocess.Popen([str(binary)], cwd=self.work, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(240):
@@ -277,13 +279,14 @@ def main():
     ap.add_argument("--cases", default=str(HERE / "cases"))
     ap.add_argument("--binary", default=str(REPO / "target" / "debug" / "cstl_parser"))
     ap.add_argument("--out", default=str(HERE / "results.json"))
+    ap.add_argument("--governed", default="", help="CSTL_GOVERNED_ACTIONS du serveur (ex. refund_*,wipe_*)")
     ap.add_argument("--cstl-default", choices=("allow", "deny"), default="allow",
                     help="politique par defaut du serveur CSTL (CSTL_ACTION_DEFAULT) ; la bonne reponse ne change pas")
     args = ap.parse_args()
     cases = [json.loads(p.read_text()) for p in sorted(Path(args.cases).glob("*.json"))]
     if not Path(args.binary).exists():
         raise SystemExit("cargo build --bin cstl_parser d'abord")
-    srv = Cstl(args.binary, args.cstl_default)
+    srv = Cstl(args.binary, args.cstl_default, args.governed)
     author, mallory = Signer(), Signer()
     rows, mismatch = [], []
     try:
