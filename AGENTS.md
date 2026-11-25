@@ -13,7 +13,7 @@ want to see it work, keep reading here.
 
 ```bash
 cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 5 commands
+pip install ./sdk/python        # the "cstl" package: SDK + 6 commands
 cstl-demo                       # or: python3 sdk/python/cstl_demo.py
 ```
 
@@ -32,7 +32,7 @@ deletes afterwards:
 It prints `Tout est conforme : 7/7.` Live test: `sdk/python/test_demo_live.py`.
 
 The other installed commands are `cstl-mcp-proxy`, `cstl-a2a-proxy`,
-`cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
+`cstl-gate`, `cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
 wheel, are built by `.github/workflows/release.yml` (on a `v*` tag or by
 hand). Publishing them is a human decision.
 
@@ -431,6 +431,68 @@ the reason and the rule.
 Live test: `sdk/python/test_mcp_proxy_live.py`. A test MCP server records
 every tool it actually runs, so the test proves that a forbidden tool is
 never run, not only that the client sees a refusal.
+
+**The gate that executes: SQL, shell, HTTP.** A token makes an action
+mandatory only if the system that runs it demands one. So a gate is only
+mandatory if **it alone** holds the privilege: the database password, the
+API key, the right to run the command. `sdk/python/cstl_gate.py`
+(`cstl-gate`) is that service.
+
+```bash
+cstl-gate --config gate.json --server-key cstl_adn.db.server_key.pub --listen 127.0.0.1:9300
+```
+
+It runs only **named operations** described in its config file. The agent
+never supplies SQL, a command or a URL:
+
+```json
+{"databases": {"billing": {"driver": "sqlite", "path": "billing.db"},
+               "pg": {"driver": "postgres", "dsn": "host=/run/pg dbname=app user=gate"}},
+ "operations": {
+   "refund_order": {"type": "sql", "db": "billing", "amount_param": "amount",
+                    "sql": "UPDATE orders SET refunded = :amount WHERE id = :order_id",
+                    "params": {"order_id": "int", "amount": "num"}},
+   "backup": {"type": "shell", "argv": ["/usr/bin/pg_dump", "-f", "/backups/{name}.sql", "app"],
+              "params": {"name": "word"}},
+   "notify": {"type": "http", "url": "https://chat.example/hook", "json": {"text": "{message}"},
+              "headers": {"Authorization": "env:CHAT_TOKEN"}, "params": {"message": "text"}}}}
+```
+
+- The agent calls `cstl_gate.call(agent, url, "refund_order", {"order_id":
+  42, "amount": 80}, amount=80)`. This gets the token, then sends `POST
+  /v1/run` with the token in `X-CSTL-Authorization`.
+- **Before anything runs**, the gate checks the token itself
+  (`CstlGuard`):
+  - its signature under the server key;
+  - the operation's `action`;
+  - the allowed `agents`, if the operation lists them;
+  - the amount, which must equal the declared `amount_param`;
+  - its time window, and that it was never used.
+- **Then it validates every parameter** against its type: `int`, `num`,
+  `bool`, `word`, `text`, `{"enum": [...]}` or `{"regex": "..."}`. A
+  missing, extra or mistyped parameter is refused.
+- **Otherwise nothing runs.** The answer is 401 (no token), 403 (token
+  refused), 400 (bad parameter) or 404 (unknown operation).
+- **How each type runs:**
+  - **SQL:** `:name` placeholders, always bound. SQLite goes through
+    `sqlite3`. PostgreSQL goes through `psql`, where `:name` becomes
+    `:'name'` and psql does the quoting, so no Python driver is needed.
+  - **Shell:** an argument list, run with no shell, so a value can neither
+    add an argument nor chain a command.
+  - **HTTP:** `env:NAME` secrets come from the gate's environment, never
+    from the file or the agent.
+- `GET /v1/operations` lists the operations.
+- **Limit:** the gate only protects what it alone can do. Removing the
+  same access from the agent is part of the setup.
+
+Live test: `sdk/python/test_gate_live.py`. It uses a real SQLite database
+and a real throwaway PostgreSQL (skipped if not installed). It checks:
+- wrong amount, wrong operation, missing token and reused token, with the
+  database left unchanged;
+- SQL and shell injection attempts refused, and a hostile text stored
+  as-is in PostgreSQL, with the table intact;
+- the HTTP secret coming from the gate;
+- an operation restricted to other agents.
 
 **In front of any A2A agent.** `sdk/python/cstl_a2a.py` (`cstl-a2a-proxy`)
 sits in front of an existing A2A agent (Agent2Agent 1.0, JSON-RPC over

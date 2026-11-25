@@ -17,6 +17,7 @@ Commandes installées :
 | `cstl-demo` | démonstration complète contre le vrai serveur |
 | `cstl-mcp-proxy -- <serveur MCP>` | CSTL devant n'importe quel serveur MCP |
 | `cstl-a2a-proxy --upstream <url> --name <agent> --server-key <.pub>` | CSTL devant un agent A2A |
+| `cstl-gate --config gate.json --server-key <.pub>` | la garde qui exécute : SQL, shell, HTTP |
 | `cstl-mcp-server` | les outils CSTL pour un client MCP |
 | `cstl-witness` | témoin externe de l'audit (retour en arrière) |
 

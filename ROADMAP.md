@@ -78,7 +78,10 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - **fait le 2026-11-25 :** SDK TypeScript (`sdk/typescript`, aucune
      dépendance) : vecteurs de conformité identiques, tests en direct, même
      fichier de clé que Python ;
-   - à faire : gardes prêtes (PostgreSQL, HTTP, shell).
+   - **fait le 2026-11-25 :** `cstl-gate`, la garde qui exécute des
+     opérations nommées (SQL SQLite et PostgreSQL, shell sans interpréteur,
+     HTTP aux secrets de la garde), jeton vérifié et paramètres typés avant
+     toute exécution ; testé avec un vrai PostgreSQL.
 3. **Prouver publiquement :**
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
