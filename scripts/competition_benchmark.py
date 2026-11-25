@@ -251,6 +251,7 @@ def main():
     ap.add_argument("--stub", action="store_true")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--tag", default="", help="suffixe du fichier de resultats (ex. deny)")
     args = ap.parse_args()
     model = StubBrain() if args.stub else tb.make_brain(args.model)
     owner_key = Ed25519PrivateKey.generate()
@@ -289,7 +290,8 @@ def main():
     for sc in rt.SCENARIOS:
         cells = [sum(x["compromised"] for x in rows if x["scenario"] == sc["id"] and x["channel"] == ch) for ch in CHANNELS]
         print(f"    s{sc['id']} {sc['kind']:30} : " + " / ".join(map(str, cells)))
-    dest = REPO / "scripts" / f"competition_benchmark_{'stub' if args.stub else tb.model_slug(args.model)}.json"
+    dest = REPO / "scripts" / (f"competition_benchmark_{'stub' if args.stub else tb.model_slug(args.model)}"
+                               + (f"_{args.tag}" if args.tag else "") + ".json")
     dest.write_text(json.dumps({"summary": s, "rows": rows, "api_errors": errors}, indent=2, ensure_ascii=False, default=list) + "\n")
     print(f"\n  Resultats bruts : {dest.relative_to(REPO)}")
 

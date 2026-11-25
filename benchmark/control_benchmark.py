@@ -167,7 +167,7 @@ def classic(mech, legit, items, author):
 
 # -- Le vrai serveur CSTL ------------------------------------------------------
 class Cstl:
-    def __init__(self, binary):
+    def __init__(self, binary, default="allow"):
         self.work = Path(tempfile.mkdtemp(prefix="cstl_bench_"))
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
@@ -176,7 +176,9 @@ class Cstl:
                "CSTL_POLICY_AUTHORS": "author_*",
                # Le banc ouvre beaucoup de connexions depuis 127.0.0.1 : la limite
                # de debit par IP (protection reelle du serveur) est relevee ici.
-               "CSTL_RATE_LIMIT_PER_IP_PER_MIN": "100000"}
+               "CSTL_RATE_LIMIT_PER_IP_PER_MIN": "100000",
+               # Politique par defaut quand aucune regle ne s'applique (allow ou deny).
+               "CSTL_ACTION_DEFAULT": default}
         env.pop("CSTL_DEV_MODE", None)
         self.proc = subprocess.Popen([str(binary)], cwd=self.work, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(240):
@@ -275,11 +277,13 @@ def main():
     ap.add_argument("--cases", default=str(HERE / "cases"))
     ap.add_argument("--binary", default=str(REPO / "target" / "debug" / "cstl_parser"))
     ap.add_argument("--out", default=str(HERE / "results.json"))
+    ap.add_argument("--cstl-default", choices=("allow", "deny"), default="allow",
+                    help="politique par defaut du serveur CSTL (CSTL_ACTION_DEFAULT) ; la bonne reponse ne change pas")
     args = ap.parse_args()
     cases = [json.loads(p.read_text()) for p in sorted(Path(args.cases).glob("*.json"))]
     if not Path(args.binary).exists():
         raise SystemExit("cargo build --bin cstl_parser d'abord")
-    srv = Cstl(args.binary)
+    srv = Cstl(args.binary, args.cstl_default)
     author, mallory = Signer(), Signer()
     rows, mismatch = [], []
     try:
@@ -307,7 +311,10 @@ def main():
     finally:
         srv.stop()
 
-    if mismatch:
+    if mismatch and args.cstl_default == "deny":
+        print(f"Mode ferme : sur la politique legitime, le serveur differe de la bonne reponse dans {len(mismatch)} cas "
+              "(actions sans permission explicite refusees).")
+    elif mismatch:
         print("ATTENTION : l'evaluateur differe de la couche 9 sur la politique legitime :")
         for m in mismatch:
             print("  ", m)
@@ -330,7 +337,7 @@ def main():
     Path(args.out).write_text(json.dumps({"cases": len(cases), "evaluator_mismatches": mismatch, "rows": rows},
                                          indent=1, ensure_ascii=False) + "\n")
     print(f"Resultats bruts : {Path(args.out).relative_to(REPO) if Path(args.out).is_relative_to(REPO) else args.out}")
-    return 1 if mismatch else 0
+    return 1 if mismatch and args.cstl_default == "allow" else 0
 
 
 if __name__ == "__main__":
