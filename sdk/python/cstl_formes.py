@@ -26,7 +26,7 @@ l'identique.
 
 Les autres types sont couverts par les formes de cstl_compact : evenements et
 journaux, plans et taches, tables -> arbre ; objets irreguliers, donnees
-geographiques -> objets_json ; regles et faits -> symboles, lignes, complet ;
+geographiques -> strict ; regles et faits -> symboles, lignes, complet ;
 texte long -> blocs |N. Les medias ne se transmettent que par reference.
 """
 import datetime as _dt

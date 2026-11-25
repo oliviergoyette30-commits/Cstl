@@ -681,7 +681,11 @@ def test_polymorphic_cstl_picks_the_most_reliable_form_for_the_task():
     assert choose_format(policy, "ecrire")[0] == "complet"
     assert choose_format(policy, "lire")[0] in ("lignes", "symboles")
     assert choose_format(table, "lire")[0] == "arbre_n" and choose_format(table, "ecrire")[0] == "arbre_n"
-    assert choose_format(config, "ecrire")[0] == "objets_json"
+    assert choose_format(config, "ecrire")[0] == "strict"
+    text = encode_auto(config, "ecrire")
+    assert text.startswith("#cstl strict\n") and decode_auto(text) == config
+    # Les textes ecrits sous l'ancien nom restent lus.
+    assert decode_auto(text.replace("#cstl strict", "#cstl objets_json", 1)) == config
     assert choose_format(table)[0] in ("arbre", "arbre_ids")          # entre machines : la moins chere
     for d in (policy, table, config, [1, 2], "texte", None, {}):
         for task in (None, "lire", "ecrire"):

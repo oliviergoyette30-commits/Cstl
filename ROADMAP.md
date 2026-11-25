@@ -443,7 +443,11 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       seul exemple : `^@@`, colonnes séparées par des virgules, `nom:valeur`.
     - Conclusion : sur des données irrégulières, l'écriture par un modèle
       reste le point faible.
-  - **Forme « objets_json »** pour les données irrégulières (2026-11-24) :
+  - **Forme « strict »** (ancien nom « objets_json », renommée le
+    2026-11-25) pour les données irrégulières. C'est la forme d'écriture des
+    modèles **jusqu'à ce qu'ils soient entraînés** sur les formes CSTL plus
+    compactes. Elle ressemble à un sous-ensemble du YAML, sans ses pièges ;
+    `#cstl objets_json` reste lu. Mesures (2026-11-24) :
     clés sans guillemets, indentation, ni accolades ni virgules, mais chaque
     valeur écrite comme en JSON.
     - Écriture des 12 réponses d'API réelles : **48/48** sur GPT-5 mini,

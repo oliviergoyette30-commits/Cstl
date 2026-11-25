@@ -1619,7 +1619,14 @@ def decode_tree_indented(text, lenient=False, warnings=None):
 _TOKEN_RE = re.compile(r" ?[A-Za-z]+| ?\d{1,3}|[^\sA-Za-z\d]+|\s+")
 
 FORMS_RELATIONS = ("complet", "lignes", "tableau", "symboles")
-FORMS_DOCUMENT = ("arbre", "arbre_n", "arbre_ids", "objets", "objets_json")
+# « strict » (2026-11-25, ancien nom « objets_json ») : la structure CSTL
+# indentee « cle: valeur », chaque valeur ecrite en JSON. C'est la forme que
+# les modeles ecrivent sans erreur aujourd'hui (48/48 sur donnees reelles),
+# parce qu'ils connaissent deja les valeurs JSON. Elle reste la forme d'ecriture
+# des modeles jusqu'a ce qu'ils soient entraines sur les formes CSTL plus
+# compactes (arbre, relationnel, mixte) ; elle ressemble a un sous-ensemble du
+# YAML, sans ses pieges (no -> false, 1.10 -> 1.1). `#cstl objets_json` reste lu.
+FORMS_DOCUMENT = ("arbre", "arbre_n", "arbre_ids", "objets", "strict")
 
 # FIABILITE MESUREE (2026-11-24) de chaque forme, par sorte de donnees et par
 # tache, quand un MODELE lit ou ecrit : (reussites, essais), sur les memes
@@ -1653,7 +1660,7 @@ RELIABILITY = {
     # relationnel : 40/48 (v1 mesuree ; v2 36/48 mesuree, 40/48 relue avec le
     # lecteur qui accepte les cles a espaces). Echecs restants : du contenu
     # (champs inventes ou omis, elements manquants), pas de la syntaxe.
-    ("irregulier", "ecrire"): {"objets_json": (48, 48), "relationnel": (40, 48), "mixte": (37, 48),
+    ("irregulier", "ecrire"): {"strict": (48, 48), "relationnel": (40, 48), "mixte": (37, 48),
                                "objets": (29, 48), "arbre_n": (25, 48)},
     ("irregulier", "lire"): {"arbre": (75 * 7 - 6, 75 * 7), "arbre_n": (75 * 7 - 8, 75 * 7)},
 }
@@ -1692,7 +1699,7 @@ _ENCODERS = {
     "arbre_n": lambda d: encode_tree_indented(d, counts="line"),
     "arbre_ids": encode_tree,
     "objets": lambda d: encode_objects(d),
-    "objets_json": lambda d: encode_objects_json(d),
+    "strict": lambda d: encode_objects_json(d),
 }
 _DECODERS = {
     "complet": _decode_full,
@@ -1700,7 +1707,8 @@ _DECODERS = {
     "arbre": decode_tree_indented, "arbre_n": decode_tree_indented,
     "arbre_ids": decode_tree,
     "objets": lambda t: decode_objects(t),
-    "objets_json": lambda t: decode_objects_json(t),
+    "strict": lambda t: decode_objects_json(t),
+    "objets_json": lambda t: decode_objects_json(t),   # ancien nom de « strict »
 }
 
 
@@ -1849,7 +1857,7 @@ def _osimple(v):
 def encode_objects(data, json_values=False):
     """Document JSON -> CSTL forme « objets ». Sans perte (decode_objects).
 
-    json_values=True (forme « objets_json », 2026-11-24) : la meme structure
+    json_values=True (forme « strict », ex-« objets_json », 2026-11-24) : la meme structure
     (indentation, cles sans guillemets, ni accolades ni virgules), mais chaque
     valeur ecrite EXACTEMENT comme en JSON ("texte", 27, false, null, [..]).
     Les modeles ecrivent les valeurs JSON sans erreur ; les regles de
@@ -1934,8 +1942,18 @@ def encode_objects(data, json_values=False):
     return "\n".join(lines)
 
 
+def encode_strict(data):
+    """CSTL strict : alias de encode_objects_json."""
+    return encode_objects_json(data)
+
+
+def decode_strict(text):
+    """CSTL strict : alias de decode_objects_json."""
+    return decode_objects_json(text)
+
+
 def encode_objects_json(data):
-    """Forme « objets_json » : voir encode_objects(json_values=True)."""
+    """Forme « strict » (ex-« objets_json ») : voir encode_objects(json_values=True)."""
     return encode_objects(data, json_values=True)
 
 
