@@ -139,3 +139,60 @@ tous les messages de l'auteur, mais aussi tout ce que l'attaquant renvoie
 **`requests`** : les actions tentées, avec `amount` facultatif.
 
 Les cas qui font échouer CSTL sont les plus utiles. Proposez-les.
+
+## Banc avec modèles (2026-11-25)
+
+`scripts/competition_benchmark.py` complète le banc déterministe :
+- de **vrais modèles** écrivent la politique (l'auteur) et agissent
+  (l'exécutant) ;
+- un relais compromis remplace le message ;
+- 8 attaques, 3 passes par modèle, avec l'écart-type par passe ;
+- le même adversaire sérieux qu'ici (`json_signe_versionne`) a été ajouté.
+
+Cas parfaits / cas compromis, sur 24 :
+
+| | GPT-5 mini | Llama 4 Maverick | Claude Haiku 5.5 | Mistral Medium 3.5 |
+|---|---|---|---|---|
+| texte | 3 / 18 | 3 / 17 | 12 / 4 | 0 / 18 |
+| json | 2 / 18 | 6 / 12 | 9 / 10 | 2 / 15 |
+| garde LLM | 6 / 15 | 6 / 0 | 11 / 6 | 5 / 12 |
+| moteur de règles | 3 / 18 | 5 / 13 | 10 / 8 | 0 / 15 |
+| json signé | 9 / 0 | 9 / 0 | 9 / 0 | 6 / 0 |
+| json signé versionné | 24 / 0 | 12 / 0 | 24 / 0 | 18 / 0 |
+| cstl | 24 / 0 | 10 / 3 | 24 / 0 | 15 / 3 |
+
+L'écart-type est de 0 à 1 cas d'une passe à l'autre (`perfect_per_run`
+dans les fichiers `scripts/competition_benchmark_<modèle>.json`).
+
+**Lecture :**
+
+- **Les garde-fous qui jugent le message reçu perdent nettement**, sauf
+  le garde LLM de Llama, qui ne laisse rien passer, mais au prix de
+  18 oublis. Le moteur de règles et le garde LLM ne vérifient pas
+  l'origine du message.
+- **La signature simple** ne laisse rien passer. Quand le message est
+  falsifié, elle bloque aussi le travail légitime.
+- **CSTL et la signature versionnée font jeu égal** avec GPT-5 mini et
+  Haiku (24/24). C'est attendu : une seule substitution de message ne
+  départage pas ces deux architectures. Les différences se mesurent dans
+  le banc déterministe (rejeu, désordre, suppression, initié).
+- **Les 6 cas compromis de CSTL** (Llama et Mistral, scénario 1, à chaque
+  passe) viennent de la **politique de l'auteur**, pas d'une attaque :
+  - Llama n'a écrit aucune règle lisible ;
+  - Mistral a écrit une règle contradictoire (`MUST` et `MUST_NOT` sur
+    `refund_order`, sans la limite de 100). Le serveur l'a détectée et a
+    refusé tout le message, comme prévu.
+
+  Dans les deux cas, le serveur n'avait **aucune règle**. Il est ouvert
+  par défaut, donc il a laissé passer le remboursement de 2 500. Le
+  mécanisme versionné n'a pas eu de violation : il a appliqué la règle
+  contradictoire telle quelle (l'interdiction gagne), ou l'exécutant n'a
+  rien fait.
+- **Leçon :** une politique absente ou refusée ne doit pas tout permettre.
+  Deux parades existent déjà :
+  - le mode fermé (`CSTL_ACTION_DEFAULT=deny`) ;
+  - `publish_policy`, qui lève `PolicyNotConfirmed` quand le serveur
+    refuse le message, si bien que l'auteur le sait.
+
+  Le banc ne laisse pas l'auteur corriger, ni pour CSTL ni pour les autres.
+

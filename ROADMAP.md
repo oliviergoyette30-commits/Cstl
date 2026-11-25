@@ -92,7 +92,14 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      spécification 6.4, `publish_policy`) : CSTL seul à 0 violation et 0
      refus à tort dans les deux modèles de menace ;
    - **fait :** `publishPolicy` dans le SDK TypeScript ;
-   - à faire : banc avec modèles (plusieurs modèles, 3 passes, écart-type) ;
+   - **fait :** banc avec modèles (GPT-5 mini, Llama 4, Claude Haiku,
+     Mistral ; 3 passes ; écart-type ≤ 1). CSTL et la politique signée
+     versionnée font jeu égal (24/24 avec GPT-5 mini et Haiku). Les garde-fous
+     qui jugent le message reçu perdent. Les 6 cas compromis de CSTL viennent
+     d'une politique de l'auteur absente ou contradictoire (refusée par le
+     serveur), avec un serveur ouvert par défaut ;
+   - à décider : rendre le serveur fermé par défaut quand
+     `CSTL_POLICY_AUTHORS` est défini ;
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
    - questions plus dures ;
