@@ -47,7 +47,7 @@ check it, `policy_query`, audit and errors.
   Python and Rust produce the same bytes and the same verdicts.
 - **Server test:** `conformance/run_server_conformance.py --port 5050
   --server-key cstl_adn.db.server_key.pub` is a black-box tester written
-  from the spec alone, without the SDK. This repo's server passes 16/16.
+  from the spec alone, without the SDK. This repo's server passes 18/18.
 
 ## From TypeScript / Node.js
 
@@ -693,6 +693,54 @@ startup is refused. If the history is empty, the database was deleted or
 reset: the server logs a warning and starts over, signed from `seq=0`.
 Set `CSTL_SERVER_PUBLIC_KEY=<hex>` to pin the key, so that a swapped key
 file is caught too. Tests: `tests/audit_integrity_test.rs`.
+
+**Revoking a stolen agent key.** A key that leaked must stop working at
+once, and the thief must not be able to keep the name. Spec section 5.5.
+
+```python
+owner.revoke_key("agent_support", reason="key leaked")   # a policy author, any agent
+bot.revoke_key()                                          # or the agent itself, its own key
+owner.enroll_key("agent_support", new_public_key_hex)     # then the agent registers again
+```
+
+- From then on, every message signed with that key is refused
+  (`signature_rejected`, `reason=key_revoked`), including a new
+  `agent_register`.
+- **Rules, facts, roles, schemas and tree commits signed by that key no
+  longer count**, even the ones written before the revocation, since nobody
+  knows when the key was stolen.
+- The usual rotation proof does not help a thief: it is signed by the old
+  key, which the thief also has. A revoked name comes back only with a new
+  key enrolled by a policy author (`key_enroll`, used once). Otherwise:
+  `reason=key_revoked_enrollment_required`. A revoked key cannot be
+  enrolled.
+- The request carries `policy_seq`, like a policy (the SDK adds it). Only the
+  agent itself, for its current key, or a policy author may revoke.
+- TypeScript: `revokeKey`, `enrollKey`. Live test:
+  `sdk/python/test_revocation_live.py`. A thief holding the key, and even a
+  valid rotation proof, is refused.
+
+**Emergency stop.** It wins over every rule. Spec section 7.4.
+
+```python
+owner.emergency_stop("all", reason="incident")      # or "agent:<name>", "action:refund_*"
+owner.emergency_stop("action:refund_*", on=False)   # lift it
+```
+
+- While a stop covers a request, `action_request` answers `decision=denied,
+  reason=emergency_stop, rule=<scope>`, whatever the rules say, and no
+  amount is counted. `agent.policy()["emergency_stop"]` lists the stops that
+  concern the agent.
+- Only a policy author (`CSTL_POLICY_AUTHORS`) may set or lift a stop.
+  `policy_seq` is required, so an old "off" message that is replayed or
+  delayed is refused (`stale_policy`).
+- **Operator switch:** `touch cstl_adn.db.emergency_stop`, next to the
+  server key (or `CSTL_EMERGENCY_STOP_FILE`), stops everything, with
+  `rule=operator`. No message can lift it, not even one signed with a
+  stolen author key. Only removing the file does.
+- **Limit:** a token already issued stays valid until it expires
+  (`CSTL_AUTHZ_TTL_SECS`, 60 s by default). Lower that TTL when a stop must
+  bite faster.
 
 **Changing the server key.** Run `cargo run --bin cstl_parser --
 --rotate-server-key` with the server stopped. It first verifies the

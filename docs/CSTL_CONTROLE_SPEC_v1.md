@@ -14,7 +14,7 @@ Preuves que ce texte suffit :
   (`tests/conformance_vectors_test.rs`) trouvent les mêmes octets et les
   mêmes verdicts.
 - `conformance/run_server_conformance.py` : un testeur de serveur écrit à
-  partir de ce texte seul, sans le SDK. Le serveur de ce dépôt passe 16/16.
+  partir de ce texte seul, sans le SDK. Le serveur de ce dépôt passe 18/18.
 
 En cas de désaccord entre ce texte et ces tests, c'est un bug à signaler.
 
@@ -152,6 +152,41 @@ enregistrée. Sinon le serveur répond `purpose=signature_rejected`, avec une
 Un nouvel `agent_register` avec une autre clé DOIT porter en plus
 `rotation_signature`, faite par l'**ancienne** clé sur les mêmes octets
 canoniques. Sinon il est refusé.
+
+### 5.5 Révocation d'une clé (ajouté le 2026-11-25)
+
+```
+INTENT_PAYLOAD [purpose=key_revoke, sender=<qui>, receiver=server, agent=<nom>, public_key=<hex>, reason=..., policy_seq=<n>, signature=...]
+```
+
+- `agent` vaut par défaut l'expéditeur ; `public_key` vaut par défaut la
+  clé enregistrée de `agent`.
+- Accepté si l'expéditeur prouve son identité (section 5.2), porte
+  `policy_seq` (section 6.4), et :
+  - c'est l'agent lui-même, et `public_key` est sa clé actuelle ;
+  - ou c'est un auteur de politique (`CSTL_POLICY_AUTHORS`), pour n'importe
+    quel agent.
+- **Effet, définitif :** un message dont `META.public_key` est révoquée, ou
+  dont l'expéditeur a une clé enregistrée révoquée, est refusé
+  (`signature_rejected`, `reason=key_revoked`), y compris `agent_register`.
+  Une règle, un fait, un rôle, un schéma ou un engagement d'arbre signé par
+  cette clé ne compte plus, **même s'il a été écrit avant la révocation** :
+  on ne sait pas depuis quand la clé est compromise.
+- **Retour de l'agent :** la preuve de rotation (section 5.4) par une clé
+  révoquée ne vaut rien, puisqu'un voleur l'a aussi. Un auteur de
+  politique inscrit la nouvelle clé :
+  `INTENT_PAYLOAD [purpose=key_enroll, agent=<nom>, public_key=<nouvelle>, policy_seq=<n>, ...]`.
+  Le prochain `agent_register` de ce nom avec exactement cette clé passe,
+  une seule fois. Sinon `agent_register_rejected`,
+  `reason=key_revoked_enrollment_required`. Une clé révoquée ne peut pas
+  être inscrite.
+- **Réponse :** `purpose=key_revoked` (avec `agent`, `public_key`,
+  `already_revoked`) ou `purpose=key_enrolled`, suivie d'un bloc `AUDIT`.
+  Un refus : `purpose=control_denied, request=<purpose>, reason=...`
+  (`signature_required`, `policy_seq_required`, `not_authorized`,
+  `unknown_agent`, `invalid_agent`, `invalid_public_key`, `key_revoked`).
+- **Limite :** un jeton déjà délivré à la clé révoquée reste valable
+  jusqu'à son expiration (`CSTL_AUTHZ_TTL_SECS`, 60 s par défaut).
 
 ## 6. Règles
 
@@ -316,6 +351,33 @@ Vecteurs : `conformance/vectors.json`, section `token`. Implémentations :
 `cstl_guard.CstlGuard` (Python) et `server_key::verify_authorization`
 (Rust). Côté Rust, l'usage unique est à la charge de l'appelant.
 
+### 7.4 Arrêt d'urgence (ajouté le 2026-11-25)
+
+```
+INTENT_PAYLOAD [purpose=emergency_stop, sender=<auteur>, receiver=server, scope=all|agent:<nom>|action:<motif>, state=on|off, reason=..., policy_seq=<n>, signature=...]
+```
+
+- Seul un auteur de politique prouvé peut poser ou lever un arrêt. Sans
+  `CSTL_POLICY_AUTHORS`, il est refusé (`reason=policy_authors_required`).
+- `action:<motif>` : un nom exact ou `prefixe*`. `scope` vaut `all` par
+  défaut, `state` vaut `on`.
+- Tant qu'un arrêt couvre une demande, `action_request` répond
+  `decision=denied, reason=emergency_stop, rule=<scope>`, **quelles que
+  soient les règles**, et aucun montant n'est compté.
+- `policy_seq` est obligatoire : un vieux message « off » rejoué ou
+  retardé est refusé (`stale_policy`).
+- **Arrêt de l'opérateur :** si le fichier `<base>.emergency_stop` existe
+  (à côté de `<base>.server_key`, ou `CSTL_EMERGENCY_STOP_FILE`), tout est
+  arrêté, avec `rule=operator`. Aucun message ne le lève, même signé par
+  un auteur : seul l'opérateur de la machine retire le fichier. C'est le
+  recours si une clé d'auteur est volée.
+- La politique effective (section 8) porte `emergency_stop=<portées>` quand
+  un arrêt concerne l'agent.
+- **Réponse :** `purpose=emergency_stop_set, scope=..., state=...`, suivie
+  d'un bloc `AUDIT` ; un refus : `purpose=control_denied` (section 5.5).
+- **Limite :** comme pour la révocation, un jeton déjà délivré reste
+  valable jusqu'à son expiration.
+
 ## 8. Politique effective
 
 ```
@@ -325,7 +387,8 @@ INTENT_PAYLOAD [purpose=policy_query, sender=<agent>, receiver=server, request_i
 **Réponse :** `INTENT_PAYLOAD [purpose=policy, ...]`, avec :
 - les nombres `required`, `permitted`, `forbidden` et `ignored` ;
 - `authors_enforced` ;
-- `default`.
+- `default` ;
+- `governed` et `emergency_stop`, quand il y en a.
 
 Elle est suivie d'un bloc `POLICY_RULE [action, decision, modality,
 author, reason, ...]` par règle en vigueur. Une règle ignorée (auteur sans
@@ -366,6 +429,7 @@ Toutes ces réponses portent `META [status=error]`, et aucune n'est auditée :
 | `connection_timeout` | rien de complet reçu à temps |
 | `stale_policy` | `policy_seq` pas plus récent que le dernier accepté (section 6.4) |
 | `policy_seq_invalid` / `policy_seq_requires_signature` | section 6.4 |
+| `control_denied` | révocation, inscription de clé ou arrêt d'urgence refusé (sections 5.5 et 7.4) |
 
 ## 11. Ce qui est figé en v1
 

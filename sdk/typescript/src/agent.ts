@@ -32,6 +32,13 @@ export class PolicyNotConfirmed extends Error {
   }
 }
 
+/** Revocation, inscription de cle ou arret d'urgence refuse par le serveur. */
+export class ControlDenied extends Error {
+  constructor(public readonly request: string, public readonly reason: string, public readonly response?: Response) {
+    super(`${request} refuse : ${reason}`);
+  }
+}
+
 /** Message signe d'un recu (specification controle v1, section 6.4). */
 export function receiptMessage(sender: string, policySeq: string, requestHash: string, auditHash: string): Buffer {
   return Buffer.from(`cstl-receipt-v1\nsender=${sender}\npolicy_seq=${policySeq}\nrequest_hash=${requestHash}\naudit_hash=${auditHash}`, "utf8");
@@ -186,6 +193,32 @@ export class CstlAgent {
       last = [r.meta.status === "error" ? (r.intent.purpose ?? "refuse") : "recu absent ou invalide", r];
     }
     throw new PolicyNotConfirmed(...last);
+  }
+
+  private async control(purpose: string, fields: Record<string, string | undefined>): Promise<Fields> {
+    const intent: Fields = { policy_seq: this.nextSeq() };
+    for (const [k, v] of Object.entries(fields)) if (v !== undefined) intent[k] = v;
+    const r = await this.send(purpose, [], intent);
+    const done: Record<string, string> = { key_revoke: "key_revoked", key_enroll: "key_enrolled", emergency_stop: "emergency_stop_set" };
+    if (r.intent.purpose !== done[purpose]) {
+      throw new ControlDenied(purpose, r.intent.reason ?? r.intent.purpose ?? "refuse", r);
+    }
+    return r.intent;
+  }
+
+  /** Revoque une cle pour toujours (par defaut la cle actuelle de cet agent). Un auteur de politique peut revoquer celle de tout agent. */
+  revokeKey(opts: { agent?: string; publicKey?: string; reason?: string } = {}): Promise<Fields> {
+    return this.control("key_revoke", { agent: opts.agent, public_key: opts.publicKey, reason: opts.reason });
+  }
+
+  /** Auteur de politique : autorise `agent`, dont la cle est revoquee, a se reenregistrer avec `publicKey`. */
+  enrollKey(agent: string, publicKey: string): Promise<Fields> {
+    return this.control("key_enroll", { agent, public_key: publicKey });
+  }
+
+  /** Auteur de politique : arrete (on) ou relance (off) les actions ; scope "all", "agent:<nom>" ou "action:<motif>". */
+  emergencyStop(scope = "all", on = true, reason?: string): Promise<Fields> {
+    return this.control("emergency_stop", { scope, state: on ? "on" : "off", reason });
   }
 
   /** Politique effective (section 8) : resume et regles. */

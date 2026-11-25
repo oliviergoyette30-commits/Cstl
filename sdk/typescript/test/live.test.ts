@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
-import { CstlAgent, CstlGuard, ActionDenied, Unauthorized, PolicyNotConfirmed, sendRaw, render, toResponse, verifyReceipt } from "../src/index.js";
+import { CstlAgent, CstlGuard, ActionDenied, Unauthorized, PolicyNotConfirmed, ControlDenied, sendRaw, render, toResponse, verifyReceipt } from "../src/index.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 const binary = join(repo, "target", "debug", "cstl_parser");
@@ -117,4 +117,26 @@ test("publishPolicy : recu signe verifie, message plus ancien refuse", { skip },
   assert.equal(r.intent.purpose, "stale_policy");
   assert.equal(verifyReceipt(r, old, serverKey), null);
   assert.equal((await bot.requestAction("wipe_db")).allowed, false);
+});
+
+test("revocation d'une cle volee et arret d'urgence", { skip }, async () => {
+  const owner = agent(`owner_${uid()}`), bot = agent(`bot_${uid()}`), other = agent(`bot_${uid()}`);
+  assert.ok(await owner.register());
+  assert.ok(await bot.register());
+  assert.ok(await other.register());
+
+  await owner.emergencyStop("action:refund_*", true, "fraude");
+  assert.equal((await bot.requestAction("refund_order", 5)).response.intent.reason, "emergency_stop");
+  assert.equal((await bot.requestAction("read_logs")).allowed, true);
+  await assert.rejects(bot.emergencyStop("action:refund_*", false), (e: ControlDenied) => e.reason === "not_authorized");
+  await owner.emergencyStop("action:refund_*", false);
+  assert.equal((await bot.requestAction("refund_order", 5)).allowed, true);
+
+  await assert.rejects(bot.revokeKey({ agent: other.name }), (e: ControlDenied) => e.reason === "not_authorized");
+  const r = await owner.revokeKey({ agent: bot.name, reason: "volee" });
+  assert.equal(r.public_key, bot.publicKey);
+  const after = await bot.requestAction("read_logs");
+  assert.equal(after.allowed, false);
+  assert.equal(after.response.intent.reason, "key_revoked");
+  assert.equal((await other.requestAction("read_logs")).allowed, true);
 });

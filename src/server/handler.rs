@@ -105,10 +105,11 @@ fn why_not_authorized(
     row: &crate::adn_store::DeonticRuleRow,
     authors: &super::action_authorization::PolicyAuthors,
     reg: &crate::agent_discovery::AgentRegistry,
+    revoked: &std::collections::HashSet<String>,
 ) -> Option<&'static str> {
     let is_author = row.author.as_deref().is_some_and(|a| authors.includes(a));
     let proven = match (&row.author, &row.signer_key) {
-        (Some(author), Some(key)) => reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
+        (Some(author), Some(key)) => key_in_force(reg, revoked, author, key),
         _ => false,
     };
     if !is_author {
@@ -118,6 +119,30 @@ fn why_not_authorized(
     } else {
         None
     }
+}
+
+/// `key` est la cle ENREGISTREE de `name`, et n'est pas revoquee
+/// (2026-11-25) : une cle revoquee ne prouve plus rien, meme pour les
+/// messages qu'elle a signes avant sa revocation (on ne sait pas depuis quand
+/// elle est compromise).
+fn key_in_force(
+    reg: &crate::agent_discovery::AgentRegistry,
+    revoked: &std::collections::HashSet<String>,
+    name: &str,
+    key: &str,
+) -> bool {
+    !revoked.contains("*")
+        && !revoked.contains(&key.to_ascii_lowercase())
+        && reg.agents.iter().any(|a| a.name == name && a.public_key.as_deref() == Some(key))
+}
+
+async fn revoked_keys(ctx: &ServerContext) -> std::collections::HashSet<String> {
+    ctx.adn_store.lock().await.revoked_keys().unwrap_or_else(|e| {
+        // Illisible : on ne peut pas savoir quelles cles sont revoquees. Aucune
+        // cle n'est alors tenue pour valide (prudence).
+        error!("[Handler] revoked_keys failed: {}", e);
+        std::iter::once("*".to_string()).collect()
+    })
 }
 
 /// Regles deontiques persistees, avec leur auteur, leur raison et leurs
@@ -134,10 +159,11 @@ async fn load_policy_rules(
             Vec::new()
         })
     };
+    let revoked = revoked_keys(ctx).await;
     let reg = ctx.agent_registry.read().await;
     rows.into_iter()
         .map(|r| {
-            let why_ignored = why_not_authorized(&r, authors, &reg);
+            let why_ignored = why_not_authorized(&r, authors, &reg, &revoked);
             super::action_authorization::Rule {
                 conditions: super::action_authorization::Conditions::from_attrs(&r.attrs),
                 subject: r.subject,
@@ -171,12 +197,13 @@ async fn load_request_context(
             Vec::new()
         })
     };
+    let revoked = revoked_keys(ctx).await;
     let reg = ctx.agent_registry.read().await;
     let mut out = super::action_authorization::RequestContext::now();
     out.amount = amount;
     let enforced = matches!(authors, super::action_authorization::PolicyAuthors::Only(_));
     for r in rows {
-        if enforced && why_not_authorized(&r, authors, &reg).is_some() {
+        if enforced && why_not_authorized(&r, authors, &reg, &revoked).is_some() {
             continue;
         }
         if r.predicate == "STATE" {
@@ -217,10 +244,11 @@ async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::Ha
     }
     let authors = super::action_authorization::PolicyAuthors::from_env();
     let enforced = matches!(authors, super::action_authorization::PolicyAuthors::Only(_));
+    let revoked = revoked_keys(ctx).await;
     let reg = ctx.agent_registry.read().await;
     let mut schemas: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
     for row in rows {
-        if enforced && why_not_authorized(&row, &authors, &reg).is_some() {
+        if enforced && why_not_authorized(&row, &authors, &reg, &revoked).is_some() {
             continue;
         }
         if let Ok(cols) = super::schema::columns(&row.attrs) {
@@ -250,13 +278,11 @@ async fn tree_source_violation(ctx: &ServerContext, relations: &[std::collection
                 Vec::new()
             })
         };
+        let revoked = revoked_keys(ctx).await;
         let reg = ctx.agent_registry.read().await;
         let committed = rows.iter().rev().find(|row| {
             row.author.as_deref() == Some(source.as_str())
-                && match &row.signer_key {
-                    Some(key) => reg.agents.iter().any(|a| a.name == source && a.public_key.as_ref() == Some(key)),
-                    None => false,
-                }
+                && row.signer_key.as_deref().is_some_and(|key| key_in_force(&reg, &revoked, &source, key))
         });
         let Some(commit) = committed else {
             return Some(format!("arbre {tree} : aucun engagement signe de la source {source}"));
@@ -578,6 +604,16 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         reg.agents.iter().find(|a| a.name == sig_sender).and_then(|a| a.public_key.clone())
                     };
                     let signature_required = registered_pubkey_for_sender.is_some() || ctx.require_signatures;
+                    // Revocation (2026-11-25) : une cle revoquee ne signe plus
+                    // rien -- ni message, ni enregistrement, ni rotation. Si la
+                    // cle ENREGISTREE de l'expediteur est revoquee, il ne parle
+                    // plus jusqu'a ce qu'un auteur de politique inscrive une
+                    // nouvelle cle (key_enroll). Base illisible : refus.
+                    let key_revoked = {
+                        let store = ctx.adn_store.lock().await;
+                        let revoked = |k: &Option<String>| k.as_deref().is_some_and(|k| store.is_key_revoked(k).unwrap_or(true));
+                        revoked(&embedded_pubkey) || (!is_agent_register && revoked(&registered_pubkey_for_sender))
+                    };
                     // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
                     // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
                     // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
@@ -591,7 +627,9 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // jamais une (re)inscription legitime: un agent qui fait tourner sa
                     // cle via un NOUVEL agent_register n'est jamais intercepte ici, quelle
                     // que soit l'ancienne cle enregistree.
-                    let sig_rejection: Option<&'static str> = if is_agent_register || is_arbiter_register {
+                    let sig_rejection: Option<&'static str> = if key_revoked {
+                        Some("key_revoked")
+                    } else if is_agent_register || is_arbiter_register {
                         None
                     } else {
                         match &sig_check {
@@ -761,6 +799,17 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             let rules = load_policy_rules(&ctx, &authors, &sender).await;
                             let req_ctx = load_request_context(&ctx, &authors, &sender, None).await;
                             let policy = super::action_authorization::effective_policy(&sender, &rules, &authors, &req_ctx);
+                            // Arrets d'urgence qui concernent cet agent (2026-11-25).
+                            let stops: Vec<String> = {
+                                let mut v: Vec<String> = ctx.adn_store.lock().await.emergency_stops().unwrap_or_default()
+                                    .into_iter().map(|s| s.0)
+                                    .filter(|sc| sc == "all" || sc.starts_with("action:") || *sc == format!("agent:{sender}"))
+                                    .collect();
+                                if super::emergency::operator_stop(super::emergency::stop_file(ctx.server_key.path.as_deref()).as_deref()).is_some() {
+                                    v.insert(0, "operator".to_string());
+                                }
+                                v
+                            };
                             let mut roles: Vec<&String> = req_ctx.roles.iter().collect();
                             roles.sort();
                             let roles = roles.iter().map(|r| r.as_str()).filter(|r| super::action_authorization::is_valid_action(r)).collect::<Vec<_>>().join(" ");
@@ -783,6 +832,9 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     let mut extra = if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) };
                                     if !g.patterns().is_empty() {
                                         extra.push_str(&format!(", governed={}", wire_text(&g.patterns().join(" "))));
+                                    }
+                                    if !stops.is_empty() {
+                                        extra.push_str(&format!(", emergency_stop={}", wire_text(&stops.join(" "))));
                                     }
                                     extra
                                 },
@@ -831,6 +883,128 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // STEP 2-controle (2026-11-25) : REVOCATION DES CLES et ARRET
+                    // D'URGENCE. Messages signes, avec policy_seq (deja verifie en
+                    // STEP 2-seq : un message rejoue ou plus ancien est refuse avant
+                    // d'arriver ici). Voir emergency.rs.
+                    //   key_revoke     : l'agent lui-meme (sa cle actuelle) ou un
+                    //                    auteur de politique (n'importe quel agent) ;
+                    //   key_enroll     : un auteur de politique seulement ;
+                    //   emergency_stop : un auteur de politique seulement.
+                    let control = payload.intent.get("purpose").map(String::as_str)
+                        .filter(|p| matches!(*p, "key_revoke" | "key_enroll" | "emergency_stop"))
+                        .map(str::to_string);
+                    if let Some(purpose) = control {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let authors = super::action_authorization::PolicyAuthors::from_env();
+                        let is_author = matches!(authors, super::action_authorization::PolicyAuthors::Only(_)) && authors.includes(&sender);
+                        let get = |k: &str| payload.intent.get(k).filter(|v| !v.is_empty()).cloned();
+                        let valid_name = |v: &str| super::action_authorization::is_valid_action(v);
+                        let valid_key = |v: &str| v.len() == 64 && v.chars().all(|c| c.is_ascii_hexdigit());
+                        let reason_text = get("reason");
+                        let now = chrono::Utc::now().timestamp();
+                        // Ok(champs de la reponse) ou Err(raison du refus).
+                        let outcome: Result<String, &'static str> = if !identity_proven {
+                            Err("signature_required")
+                        } else if get("policy_seq").is_none() {
+                            Err("policy_seq_required")
+                        } else if purpose == "key_revoke" {
+                            let agent = get("agent").unwrap_or_else(|| sender.clone());
+                            let agent_key = {
+                                let reg = ctx.agent_registry.read().await;
+                                reg.agents.iter().find(|a| a.name == agent).and_then(|a| a.public_key.clone())
+                            };
+                            let key = get("public_key").or(agent_key.clone());
+                            match key {
+                                _ if !valid_name(&agent) => Err("invalid_agent"),
+                                None => Err("unknown_agent"),
+                                Some(k) if !valid_key(&k) => Err("invalid_public_key"),
+                                Some(k) if !(is_author || (agent == sender && agent_key.as_deref() == Some(k.as_str()))) => {
+                                    let _ = k;
+                                    Err("not_authorized")
+                                }
+                                Some(k) => match ctx.adn_store.lock().await.revoke_key(&k, &agent, &sender, reason_text.as_deref(), now) {
+                                    Ok(fresh) => Ok(format!("agent={agent}, public_key={}, already_revoked={}", k.to_ascii_lowercase(), !fresh)),
+                                    Err(e) => { error!("[Handler] revoke_key failed: {}", e); Err("store_error") }
+                                },
+                            }
+                        } else if purpose == "key_enroll" {
+                            match (get("agent"), get("public_key")) {
+                                _ if !is_author => Err("not_authorized"),
+                                (Some(a), _) if !valid_name(&a) => Err("invalid_agent"),
+                                (Some(_), Some(k)) if !valid_key(&k) => Err("invalid_public_key"),
+                                (Some(a), Some(k)) => {
+                                    let store = ctx.adn_store.lock().await;
+                                    if store.is_key_revoked(&k).unwrap_or(true) {
+                                        Err("key_revoked")
+                                    } else if let Err(e) = store.enroll_key(&a, &k, &sender, now) {
+                                        error!("[Handler] enroll_key failed: {}", e);
+                                        Err("store_error")
+                                    } else {
+                                        Ok(format!("agent={a}, public_key={}", k.to_ascii_lowercase()))
+                                    }
+                                }
+                                _ => Err("missing_agent_or_public_key"),
+                            }
+                        } else {
+                            let scope = get("scope").unwrap_or_else(|| "all".to_string());
+                            let state = get("state").unwrap_or_else(|| "on".to_string());
+                            if !is_author {
+                                Err(if matches!(authors, super::action_authorization::PolicyAuthors::Only(_)) { "not_authorized" } else { "policy_authors_required" })
+                            } else if !super::emergency::valid_scope(&scope) {
+                                Err("invalid_scope")
+                            } else if !matches!(state.as_str(), "on" | "off") {
+                                Err("invalid_state")
+                            } else {
+                                match ctx.adn_store.lock().await.set_emergency_stop(&scope, state == "on", &sender, reason_text.as_deref(), now) {
+                                    Ok(()) => Ok(format!("scope={scope}, state={state}")),
+                                    Err(e) => { error!("[Handler] set_emergency_stop failed: {}", e); Err("store_error") }
+                                }
+                            }
+                        };
+                        let shown_sender = if valid_name(&sender) { sender.clone() } else { "invalid".to_string() };
+                        let response = match outcome {
+                            Ok(fields) => {
+                                let (entry, _) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
+                                {
+                                    let store = ctx.adn_store.lock().await;
+                                    if let Err(e) = store.save_audit_entry(&entry) {
+                                        error!("[Handler] {}: save_audit_entry failed: {}", purpose, e);
+                                    }
+                                    if let Err(e) = store.put(
+                                        &entry.hash, &raw_payload,
+                                        payload.meta.get("encoder").map(String::as_str),
+                                        payload.meta.get("produced_by").map(String::as_str),
+                                        0.5, Some(&entry.parent_hash), None, None,
+                                    ) {
+                                        error!("[Handler] {}: put failed: {}", purpose, e);
+                                    }
+                                }
+                                warn!("[Handler] {} by '{}': {}", purpose, sender, fields);
+                                let done = match purpose.as_str() { "key_revoke" => "key_revoked", "key_enroll" => "key_enrolled", _ => "emergency_stop_set" };
+                                format!(
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                     INTENT_PAYLOAD [purpose={done}, sender=server, receiver={shown_sender}, {fields}{}]\n\
+                                     AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
+                                    reason_text.as_deref().map(|r| format!(", reason={}", wire_text(r))).unwrap_or_default(),
+                                    entry.hash, entry.parent_hash, entry.seq,
+                                )
+                            }
+                            Err(why) => {
+                                warn!("[Handler] {} by '{}' refused: {}", purpose, sender, why);
+                                format!(
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                                     INTENT_PAYLOAD [purpose=control_denied, sender=server, receiver={shown_sender}, request={purpose}, reason={why}]\n---END---\n"
+                                )
+                            }
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     if payload.intent.get("purpose").map(String::as_str) == Some("action_request") {
                         let sender = payload.intent.get("sender").cloned().unwrap_or_default();
                         let action = payload.intent.get("action").cloned();
@@ -845,7 +1019,26 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let amount_raw = payload.intent.get("amount").cloned();
                         let amount = amount_raw.as_deref().map(super::action_authorization::parse_amount);
                         let mut req_ctx = load_request_context(&ctx, &authors, &sender, amount.flatten()).await;
-                        let decision = if matches!(amount, Some(None)) {
+                        // Arret d'urgence (2026-11-25) : l'emporte sur toute regle.
+                        // Fichier de l'operateur d'abord, puis arrets des auteurs.
+                        let stopped: Option<String> = match super::emergency::operator_stop(
+                            super::emergency::stop_file(ctx.server_key.path.as_deref()).as_deref(),
+                        ) {
+                            Some(_) => Some("operator".to_string()),
+                            None => {
+                                let stops = ctx.adn_store.lock().await.emergency_stops().unwrap_or_else(|e| {
+                                    error!("[Handler] emergency_stops failed: {}", e);
+                                    vec![("all".to_string(), "store_error".to_string(), None)]
+                                });
+                                super::emergency::covering(stops.iter().map(|s| s.0.as_str()), &sender, action.as_deref()).map(str::to_string)
+                            }
+                        };
+                        let decision = if let Some(scope) = stopped {
+                            super::action_authorization::Decision {
+                                allowed: false, reason: "emergency_stop", rule: Some(scope), conflict: false,
+                                superseded: false, ignored: 0, not_applicable: 0,
+                            }
+                        } else if matches!(amount, Some(None)) {
                             super::action_authorization::Decision {
                                 allowed: false, reason: "invalid_amount", rule: None, conflict: false,
                                 superseded: false, ignored: 0, not_applicable: 0,
@@ -1496,7 +1689,25 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                         reg.agents.iter().find(|a| a.name == name).and_then(|a| a.public_key.clone())
                                     };
                                     let is_rotation = matches!(&existing_pubkey, Some(old) if Some(old) != public_key.as_ref());
-                                    let rotation_rejection: Option<(&'static str, String)> = if !is_rotation {
+                                    // Cle actuelle revoquee (2026-11-25) : la preuve de
+                                    // rotation signee par l'ancienne cle ne vaut plus rien
+                                    // (un voleur l'a aussi). La nouvelle cle passe seulement
+                                    // si un auteur de politique l'a inscrite (key_enroll).
+                                    let existing_revoked = match existing_pubkey.as_deref() {
+                                        Some(k) => ctx.adn_store.lock().await.is_key_revoked(k).unwrap_or(true),
+                                        None => false,
+                                    };
+                                    let rotation_rejection: Option<(&'static str, String)> = if existing_revoked {
+                                        let enrolled = match public_key.as_deref() {
+                                            Some(k) => ctx.adn_store.lock().await.take_enrollment(&name, k).unwrap_or(false),
+                                            None => false,
+                                        };
+                                        if enrolled {
+                                            None
+                                        } else {
+                                            Some(("key_revoked_enrollment_required", "the registered key of this name is revoked -- a policy author must enroll the new key (purpose=key_enroll)".to_string()))
+                                        }
+                                    } else if !is_rotation {
                                         None
                                     } else {
                                         // unwrap() sur is_rotation: existing_pubkey est forcement Some ici.

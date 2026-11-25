@@ -406,6 +406,25 @@ impl AdnStore {
                 sender TEXT PRIMARY KEY,
                 seq INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS revoked_keys (
+                public_key TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                revoked_by TEXT NOT NULL,
+                reason TEXT,
+                at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS key_enrollments (
+                agent TEXT PRIMARY KEY,
+                public_key TEXT NOT NULL,
+                enrolled_by TEXT NOT NULL,
+                at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS emergency_stops (
+                scope TEXT PRIMARY KEY,
+                set_by TEXT NOT NULL,
+                reason TEXT,
+                at INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS agents (
                 name TEXT PRIMARY KEY,
                 version TEXT NOT NULL,
@@ -1784,6 +1803,73 @@ impl AdnStore {
     /// authentiques livres dans le desordre faisaient gagner l'ancienne
     /// regle (le serveur rangeait les regles dans l'ordre de RECEPTION).
     /// `Ok(None)` : accepte et enregistre ; `Ok(Some(dernier))` : trop ancien.
+    /// Revocation d'une cle d'agent (2026-11-25). Definitive : une cle
+    /// revoquee ne signe plus rien (aucun message, aucune rotation), et les
+    /// regles qu'elle a signees ne comptent plus. `Ok(false)` : deja revoquee.
+    pub fn revoke_key(&self, public_key: &str, agent: &str, revoked_by: &str, reason: Option<&str>, at: i64) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute(
+            "INSERT OR IGNORE INTO revoked_keys (public_key, agent, revoked_by, reason, at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![public_key.to_ascii_lowercase(), agent, revoked_by, reason, at],
+        )?;
+        Ok(n > 0)
+    }
+
+    pub fn is_key_revoked(&self, public_key: &str) -> Result<bool, rusqlite::Error> {
+        Ok(self.conn
+            .query_row("SELECT 1 FROM revoked_keys WHERE public_key = ?1", [public_key.to_ascii_lowercase()], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
+    pub fn revoked_keys(&self) -> Result<std::collections::HashSet<String>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT public_key FROM revoked_keys")?;
+        let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+        rows.collect()
+    }
+
+    /// Nouvelle cle d'un agent dont la cle est revoquee, approuvee par un
+    /// auteur de politique : le prochain `agent_register` avec EXACTEMENT
+    /// cette cle passe sans preuve de rotation (l'ancienne cle est compromise).
+    pub fn enroll_key(&self, agent: &str, public_key: &str, enrolled_by: &str, at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO key_enrollments (agent, public_key, enrolled_by, at) VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(agent) DO UPDATE SET public_key = excluded.public_key, enrolled_by = excluded.enrolled_by, at = excluded.at",
+            params![agent, public_key.to_ascii_lowercase(), enrolled_by, at],
+        )?;
+        Ok(())
+    }
+
+    /// Consomme l'inscription de `agent` si elle porte `public_key`.
+    pub fn take_enrollment(&self, agent: &str, public_key: &str) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute(
+            "DELETE FROM key_enrollments WHERE agent = ?1 AND public_key = ?2",
+            params![agent, public_key.to_ascii_lowercase()],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Arret d'urgence (2026-11-25). `scope` : `all`, `agent:<nom>` ou
+    /// `action:<motif>`. `on=false` le leve.
+    pub fn set_emergency_stop(&self, scope: &str, on: bool, set_by: &str, reason: Option<&str>, at: i64) -> Result<(), rusqlite::Error> {
+        if on {
+            self.conn.execute(
+                "INSERT INTO emergency_stops (scope, set_by, reason, at) VALUES (?1, ?2, ?3, ?4) \
+                 ON CONFLICT(scope) DO UPDATE SET set_by = excluded.set_by, reason = excluded.reason, at = excluded.at",
+                params![scope, set_by, reason, at],
+            )?;
+        } else {
+            self.conn.execute("DELETE FROM emergency_stops WHERE scope = ?1", [scope])?;
+        }
+        Ok(())
+    }
+
+    /// (scope, auteur, raison) des arrets en vigueur, du plus ancien au plus recent.
+    pub fn emergency_stops(&self) -> Result<Vec<(String, String, Option<String>)>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT scope, set_by, reason FROM emergency_stops ORDER BY at, scope")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect()
+    }
+
     pub fn advance_policy_seq(&self, sender: &str, seq: u64) -> Result<Option<u64>, rusqlite::Error> {
         let last: Option<i64> = self
             .conn
@@ -3202,6 +3288,32 @@ mod tests {
     /// policy_seq (2026-11-25) : strictement croissant par auteur, et la
     /// derniere valeur survit a un redemarrage (sinon un vieux message
     /// authentique redeviendrait acceptable apres un arret du serveur).
+    #[test]
+    fn test_revocation_enrollment_and_emergency_stop_persist() {
+        let tmp_path = std::env::temp_dir().join(format!("cstl_test_revoke_{}.db", std::process::id()));
+        let p = tmp_path.to_str().unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+        {
+            let s = AdnStore::open(p).unwrap();
+            assert!(s.revoke_key("ABCD", "bot", "owner", Some("vol"), 1).unwrap());
+            assert!(!s.revoke_key("abcd", "bot", "owner", None, 2).unwrap(), "deja revoquee");
+            s.enroll_key("bot", "EF01", "owner", 3).unwrap();
+            assert!(!s.take_enrollment("bot", "9999").unwrap(), "autre cle : refusee");
+            s.set_emergency_stop("all", true, "owner", Some("incident"), 4).unwrap();
+            s.set_emergency_stop("agent:bot", true, "owner", None, 5).unwrap();
+            s.set_emergency_stop("agent:bot", false, "owner", None, 6).unwrap();
+        }
+        {
+            let s = AdnStore::open(p).unwrap(); // redemarrage
+            assert!(s.is_key_revoked("abcd").unwrap());
+            assert!(!s.is_key_revoked("ef01").unwrap());
+            assert!(s.take_enrollment("bot", "ef01").unwrap());
+            assert!(!s.take_enrollment("bot", "ef01").unwrap(), "usage unique");
+            assert_eq!(s.emergency_stops().unwrap(), vec![("all".to_string(), "owner".to_string(), Some("incident".to_string()))]);
+        }
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
     #[test]
     fn test_policy_seq_is_strictly_increasing_per_author_and_persists() {
         let tmp_path = std::env::temp_dir().join(format!("cstl_test_policy_seq_{}.db", std::process::id()));

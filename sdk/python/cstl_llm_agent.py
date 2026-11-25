@@ -425,6 +425,14 @@ class ActionDenied(Exception):
         super().__init__(f"action '{action}' refusee : {reason}" + (f" ({rule})" if rule else ""))
 
 
+class ControlDenied(Exception):
+    """Revocation, inscription de cle ou arret d'urgence refuse par le serveur."""
+
+    def __init__(self, request: str, reason: str, response=None):
+        self.request, self.reason, self.response = request, reason, response
+        super().__init__(f"{request} refuse : {reason}")
+
+
 class PolicyNotConfirmed(Exception):
     """La politique publiee n'a pas de recu valide du serveur : elle n'est
     peut-etre pas en vigueur (message modifie, perdu, refuse ou trop ancien)."""
@@ -553,6 +561,38 @@ class CstlAgent:
                 return receipt
             last = (resp.purpose if resp.is_error else "recu absent ou invalide", resp)
         raise PolicyNotConfirmed(*last)
+
+    # -- Revocation des cles et arret d'urgence (2026-11-25) -----------------
+    def _control(self, purpose: str, fields: dict) -> dict:
+        import cstl_receipt
+        seq = cstl_receipt.next_seq(self.keyfile.with_suffix(".seq"))
+        intent = {k: str(v) for k, v in fields.items() if v is not None}
+        intent["policy_seq"] = str(seq)
+        resp = self._send_signed(purpose, "server", [], intent)
+        if resp.purpose == "control_denied" or resp.is_error:
+            raise ControlDenied(purpose, resp.fields.get("reason", resp.purpose), resp)
+        return resp.fields
+
+    def revoke_key(self, agent: Optional[str] = None, public_key: Optional[str] = None,
+                   reason: Optional[str] = None) -> dict:
+        """Revoque une cle, pour toujours : elle ne signe plus rien (messages,
+        enregistrement, rotation) et les regles qu'elle a signees ne comptent
+        plus. Sans argument : la cle actuelle de cet agent (cle volee). Un
+        auteur de politique peut revoquer celle de n'importe quel agent.
+        Leve ControlDenied si refuse."""
+        return self._control("key_revoke", {"agent": agent, "public_key": public_key, "reason": reason})
+
+    def enroll_key(self, agent: str, public_key: str) -> dict:
+        """Auteur de politique : autorise `agent`, dont la cle est revoquee, a
+        se reenregistrer avec `public_key` (une seule fois)."""
+        return self._control("key_enroll", {"agent": agent, "public_key": public_key})
+
+    def emergency_stop(self, scope: str = "all", on: bool = True, reason: Optional[str] = None) -> dict:
+        """Auteur de politique : arrete (on=True) ou relance (on=False) les
+        actions. `scope` : "all", "agent:<nom>" ou "action:<motif>"
+        ("action:refund_*"). Tant qu'il est en vigueur, toute demande couverte
+        est refusee (reason=emergency_stop), quelles que soient les regles."""
+        return self._control("emergency_stop", {"scope": scope, "state": "on" if on else "off", "reason": reason})
 
     def tell(self, receiver: str, subject: str,
              peer_message: Optional[str] = None) -> Tuple[Optional[dict], Optional[CstlResponse]]:
@@ -683,6 +723,9 @@ class CstlAgent:
         if resp.fields.get("roles"):
             out["roles"] = resp.fields["roles"].split()
         out["default"] = resp.fields.get("default", "allow")
+        # Arrets d'urgence en vigueur pour cet agent (2026-11-25) : "operator",
+        # "all", "agent:<nom>" ou "action:<motif>".
+        out["emergency_stop"] = resp.fields.get("emergency_stop", "").split()
         for block in resp.relations:
             item = {k: v for k, v in block.items() if k not in ("block", "decision")}
             if block.get("block") == "POLICY_RULE":

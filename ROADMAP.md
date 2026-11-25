@@ -114,8 +114,12 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - questions plus dures ;
    - attaques écrites par d'autres ;
    - audit de sécurité externe.
-4. **Échelle :** PostgreSQL, révocation des clés, identités standard,
-   fédération, escalade humaine et arrêt d'urgence, tableau de bord.
+4. **Échelle :** PostgreSQL, identités standard, fédération, escalade
+   humaine, tableau de bord.
+   - **fait (2026-11-25) :** révocation des clés compromises (`key_revoke`,
+     `key_enroll`) et arrêt d'urgence (`emergency_stop`, plus le fichier
+     d'arrêt de l'opérateur). Spécification sections 5.5 et 7.4, test
+     `sdk/python/test_revocation_live.py`, conformance C17 et C18.
 5. **Adoption :** nom définitif, article, 3 utilisateurs pilotes. Le format
    compact viendra quand un modèle sera entraîné sur CSTL.
 
@@ -166,8 +170,11 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
 **Produit**
 - Pas de paquet installable, pas de SDK TypeScript, pas d'adaptateur A2A
   (MCP seulement).
-- Un seul serveur sur SQLite : ni fédération entre organisations, ni
-  révocation standard des clés.
+- Un seul serveur sur SQLite, sans fédération entre organisations. La
+  révocation des clés existe (2026-11-25), mais pas encore de format
+  standard (OIDC, SPIFFE).
+- Un jeton déjà délivré reste valable jusqu'à son expiration (60 s par
+  défaut), même après une révocation ou un arrêt d'urgence.
 - Adoption nulle : c'est un prototype de recherche, pas encore un produit.
 
 ## Mesures

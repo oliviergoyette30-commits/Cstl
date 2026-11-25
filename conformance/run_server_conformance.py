@@ -287,6 +287,25 @@ def main():
         receipt_ok = False
     check("C16", "RECEIPT signe par la cle du serveur, pour les octets canoniques envoyes et le maillon d'audit", receipt_ok, rc)
 
+    # Section 5.5 : revocation de sa propre cle ; ensuite plus rien ne passe.
+    lost = Agent(c)
+    lost.send("agent_register", name=lost.name, capabilities="communication")
+    rv = first(lost.send("key_revoke", reason="perdue", policy_seq="1"), "INTENT_PAYLOAD")
+    after = first(lost.ask("read_logs"), "INTENT_PAYLOAD")
+    back = first(lost.send("agent_register", name=lost.name, capabilities="communication"), "INTENT_PAYLOAD")
+    check("C17", "key_revoke de sa propre cle -> key_revoked ; ensuite signature_rejected key_revoked, y compris agent_register",
+          rv.get("purpose") == "key_revoked" and rv.get("public_key") == pub_hex(lost.sk)
+          and after.get("purpose") == "signature_rejected" and after.get("reason") == "key_revoked"
+          and back.get("reason") == "key_revoked", (rv, after, back))
+
+    # Section 7.4 : sans auteurs de politique, personne ne pose d'arret d'urgence.
+    any_agent = Agent(c)
+    any_agent.send("agent_register", name=any_agent.name, capabilities="communication")
+    es = first(any_agent.send("emergency_stop", scope="all", state="on", policy_seq="1"), "INTENT_PAYLOAD")
+    check("C18", "emergency_stop sans CSTL_POLICY_AUTHORS -> control_denied policy_authors_required, l'action reste permise",
+          es.get("purpose") == "control_denied" and es.get("reason") == "policy_authors_required"
+          and first(any_agent.ask("read_logs"), "INTENT_PAYLOAD").get("decision") == "allowed", es)
+
     r = parse(c.send("#!CSTL v5.0.0 MODE=A\nMETA [encoder=x]\nINTENT_PAYLOAD [purpose=inform]\n---END---\n"))
     check("C13", "message incomplet -> status=error, pas d'audit",
           first(r, "META").get("status") == "error" and not first(r, "AUDIT"), r)
