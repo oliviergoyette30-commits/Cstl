@@ -20,7 +20,10 @@ await guard.run(token, "refund_order", () => refund(80), { agent: "agent_support
 ```
 
 - `CstlAgent` : `register()`, `authorize(action, amount?)`, `act(action, fn)`,
-  `requestAction()`, `sendRelations()`, `policy()`.
+  `requestAction()`, `sendRelations()`, `policy()`, et
+  `publishPolicy(relations, cleServeur)`. Cette dernière envoie avec
+  `policy_seq`, vérifie le reçu signé par le serveur pour ce message exact,
+  et lève `PolicyNotConfirmed` sans reçu valide (spécification, section 6.4).
 - `CstlGuard.run` refuse :
   - un jeton absent ou falsifié ;
   - un jeton pour une autre action, un autre agent ou un autre montant ;

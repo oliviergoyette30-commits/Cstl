@@ -83,8 +83,10 @@ Results (2026-11-25):
     last accepted one (`stale_policy`);
   - a **signed receipt** (`RECEIPT` block, spec section 6.4): the author
     checks that its exact message is in force, and republishes otherwise.
-    Python: `agent.publish_policy(relations, server_key)` raises
-    `PolicyNotConfirmed` without a valid receipt.
+    Python: `agent.publish_policy(relations, server_key)`; TypeScript:
+    `await agent.publishPolicy(relations, serverKey)`. Both raise
+    `PolicyNotConfirmed` without a valid receipt and share the sequence
+    file `~/.cstl/agent_<name>.seq`.
 - **Now:** CSTL is the only mechanism with 0 violations and 0 false
   refusals under both threat models.
 

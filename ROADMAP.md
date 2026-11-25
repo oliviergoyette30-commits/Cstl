@@ -91,8 +91,8 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      rattrapage. Corrigé le même jour (`policy_seq` et reçu signé,
      spécification 6.4, `publish_policy`) : CSTL seul à 0 violation et 0
      refus à tort dans les deux modèles de menace ;
-   - à faire : `publishPolicy` dans le SDK TypeScript ; banc avec modèles
-     (plusieurs modèles, 3 passes, écart-type) ;
+   - **fait :** `publishPolicy` dans le SDK TypeScript ;
+   - à faire : banc avec modèles (plusieurs modèles, 3 passes, écart-type) ;
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
    - questions plus dures ;

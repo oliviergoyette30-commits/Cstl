@@ -2,13 +2,13 @@
 // politique. Meme fichier de cle que le SDK Python (~/.cstl/agent_<nom>.key,
 // 32 octets bruts) : un agent garde la meme identite dans les deux langages.
 import { connect } from "node:net";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { KeyObject } from "node:crypto";
 import { render, parse, first, type Block, type Fields, type Message } from "./wire.js";
-import { generatePrivateKey, privateKeyFromRaw, publicHex, rawPrivate, signMessage } from "./signing.js";
+import { generatePrivateKey, privateKeyFromRaw, publicHex, rawPrivate, signMessage, signingBytes, verifyHex } from "./signing.js";
 import { tokenFromFields, type AuthorizationToken } from "./guard.js";
 
 export interface Response {
@@ -23,6 +23,26 @@ export class ActionDenied extends Error {
   constructor(public readonly action: string, public readonly reason: string, public readonly rule?: string) {
     super(`action '${action}' refusee : ${reason}`);
   }
+}
+
+/** La politique publiee n'a pas de recu valide : elle n'est peut-etre pas en vigueur. */
+export class PolicyNotConfirmed extends Error {
+  constructor(public readonly reason: string, public readonly response?: Response) {
+    super(`politique non confirmee : ${reason}`);
+  }
+}
+
+/** Message signe d'un recu (specification controle v1, section 6.4). */
+export function receiptMessage(sender: string, policySeq: string, requestHash: string, auditHash: string): Buffer {
+  return Buffer.from(`cstl-receipt-v1\nsender=${sender}\npolicy_seq=${policySeq}\nrequest_hash=${requestHash}\naudit_hash=${auditHash}`, "utf8");
+}
+
+/** Le recu de `r` s'il est valide pour le message `m` sous la cle du serveur, sinon null. */
+export function verifyReceipt(r: Response, m: Message, serverPublicKeyHex: string): Fields | null {
+  const rc = first(r.blocks, "RECEIPT");
+  const want = "sha256:" + createHash("sha256").update(signingBytes(m)).digest("hex");
+  if (!rc.signature || rc.sender !== m.intent.sender || rc.policy_seq !== m.intent.policy_seq || rc.request_hash !== want) return null;
+  return verifyHex(receiptMessage(rc.sender, rc.policy_seq, want, rc.audit_hash ?? ""), rc.signature, serverPublicKeyHex) ? rc : null;
 }
 
 export interface AgentOptions {
@@ -62,11 +82,13 @@ export class CstlAgent {
   private readonly host: string;
   private readonly port: number;
   private readonly timeoutMs: number;
+  private readonly seqFile: string;
 
   constructor(readonly name: string, opts: AgentOptions = {}) {
     this.host = opts.host ?? process.env.CSTL_HOST ?? "127.0.0.1";
     this.port = opts.port ?? Number(process.env.CSTL_PORT ?? 5050);
     this.timeoutMs = opts.timeoutMs ?? 30000;
+    this.seqFile = (opts.keyFile ?? join(homedir(), ".cstl", `agent_${name}.key`)).replace(/\.key$/, "") + ".seq";
     if (opts.privateKey) {
       this.key = privateKeyFromRaw(opts.privateKey);
     } else {
@@ -131,6 +153,39 @@ export class CstlAgent {
   async act<T>(action: string, fn: () => T | Promise<T>, amount?: string | number): Promise<T> {
     await this.authorize(action, amount);
     return await fn();
+  }
+
+  /** Sequence strictement croissante, partagee avec le SDK Python (meme fichier). */
+  private nextSeq(): string {
+    const last = existsSync(this.seqFile) ? BigInt(readFileSync(this.seqFile, "utf8").trim() || "0") : 0n;
+    const now = BigInt(Date.now()) * 1000n;
+    const seq = now > last ? now : last + 1n;
+    mkdirSync(join(this.seqFile, ".."), { recursive: true });
+    writeFileSync(this.seqFile, seq.toString());
+    return seq.toString();
+  }
+
+  /**
+   * Publie des regles et VERIFIE qu'elles sont en vigueur (section 6.4) : `policy_seq`
+   * croissant, puis recu signe par le serveur pour CE message exact. Sans recu valide,
+   * renvoie jusqu'a `attempts` fois, puis leve PolicyNotConfirmed. Retourne le recu.
+   */
+  async publishPolicy(relations: Fields[], serverPublicKeyHex: string, attempts = 3): Promise<Fields> {
+    let last: [string, Response?] = ["aucun essai"];
+    for (let i = 0; i < Math.max(1, attempts); i++) {
+      const m = this.message("inform", relations, { policy_seq: this.nextSeq() });
+      let r: Response;
+      try {
+        r = toResponse(await sendRaw(render(m), this.host, this.port, this.timeoutMs));
+      } catch (e) {
+        last = [`envoi impossible : ${(e as Error).message}`];
+        continue;
+      }
+      const rc = verifyReceipt(r, m, serverPublicKeyHex.trim());
+      if (rc) return rc;
+      last = [r.meta.status === "error" ? (r.intent.purpose ?? "refuse") : "recu absent ou invalide", r];
+    }
+    throw new PolicyNotConfirmed(...last);
   }
 
   /** Politique effective (section 8) : resume et regles. */

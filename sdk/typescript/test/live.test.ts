@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
-import { CstlAgent, CstlGuard, ActionDenied, Unauthorized, sendRaw, render } from "../src/index.js";
+import { CstlAgent, CstlGuard, ActionDenied, Unauthorized, PolicyNotConfirmed, sendRaw, render, toResponse, verifyReceipt } from "../src/index.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 const binary = join(repo, "target", "debug", "cstl_parser");
@@ -27,7 +27,7 @@ before(async () => {
   work = mkdtempSync(join(tmpdir(), "cstl_ts_"));
   const env: NodeJS.ProcessEnv = { ...process.env, CSTL_PORT: String(PORT), CSTL_REST_PORT: "9292", CSTL_KB_VERIFY: "off" };
   delete env.CSTL_DEV_MODE;
-  delete env.CSTL_POLICY_AUTHORS;
+  env.CSTL_POLICY_AUTHORS = "owner_*,shared_*";
   proc = spawn(binary, [], { cwd: work, env, stdio: "ignore" });
   for (let i = 0; i < 120 && !(await open()); i++) await new Promise((r) => setTimeout(r, 250));
   serverKey = readFileSync(join(work, "cstl_adn.db.server_key.pub"), "utf8").trim();
@@ -96,4 +96,25 @@ ok, r = a.request_action("read_logs")
 sys.stdout.write(r.purpose + " " + str(r.fields.get("decision")))
 `], { env: { ...process.env, HOME: work }, encoding: "utf8" });
   assert.equal(py.stdout, "action_authorization allowed", py.stderr);
+});
+
+test("publishPolicy : recu signe verifie, message plus ancien refuse", { skip }, async () => {
+  const owner = agent(`owner_${uid()}`), bot = agent(`bot_${uid()}`);
+  assert.ok(await owner.register());
+  assert.ok(await bot.register());
+  const rc = await owner.publishPolicy([{ type: "PERFORM", subject: bot.name, object: "wipe_db", modality: "MUST_NOT" }], serverKey);
+  assert.equal(rc.sender, owner.name);
+  assert.equal((await bot.requestAction("wipe_db")).allowed, false);
+
+  // Mauvaise cle de serveur : aucun recu ne se verifie.
+  const other = new CstlAgent(`x_${uid()}`, { port: PORT, keyFile: join(work, "other.key") }).publicKey;
+  await assert.rejects(owner.publishPolicy([{ type: "PERFORM", subject: bot.name, object: "read_logs", modality: "MAY" }], other, 1),
+                       PolicyNotConfirmed);
+
+  // Un message dont la sequence est plus ancienne que la derniere publiee : stale_policy.
+  const old = owner.message("inform", [{ type: "PERFORM", subject: bot.name, object: "wipe_db", modality: "MAY" }], { policy_seq: "1" });
+  const r = toResponse(await sendRaw(render(old), "127.0.0.1", PORT));
+  assert.equal(r.intent.purpose, "stale_policy");
+  assert.equal(verifyReceipt(r, old, serverKey), null);
+  assert.equal((await bot.requestAction("wipe_db")).allowed, false);
 });
