@@ -8,7 +8,7 @@ semantique sur 1/2/3/5 hops").
 CE QUE CE SCRIPT MESURE REELLEMENT, ET CE QU'IL NE MESURE PAS
 ================================================================
 
-Origine du chiffre "99.3%, 12+ hops" affiche dans README.md et
+Origine du chiffre "99.3%, 12+ hops" affiche dans docs/HISTORIQUE_README_v5_1.md et
 docs/ARCHITECTURE.md: recherche exhaustive dans ce depot ET dans les docs
 du projet (project_search) prealable a l'ecriture de ce script.
 

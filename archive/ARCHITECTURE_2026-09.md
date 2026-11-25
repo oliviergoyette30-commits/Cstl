@@ -7,7 +7,7 @@
 
 > Ce document décrit l'architecture conceptuelle. Pour le statut d'implémentation
 > détaillé et vérifié (quel fichier Rust fait quoi, ce qui est réellement câblé
-> vs designé, les limitations honnêtes), voir [`README.md`](../README.md#architecture--9-layers)
+> vs designé, les limitations honnêtes), voir [`docs/HISTORIQUE_README_v5_1.md`](../docs/HISTORIQUE_README_v5_1.md#architecture--10-layers-updated-for-v51)
 > et sa section "Honest Limitations" — ce document-ci est resynchronisé avec ces
 > deux sources au moment de la date ci-dessus, mais README.md reste la source de
 > vérité en cas de divergence future.

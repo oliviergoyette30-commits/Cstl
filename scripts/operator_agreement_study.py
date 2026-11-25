@@ -78,7 +78,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "sdk" / "python"
 
 # ---------------------------------------------------------------------------
 # Liste des operateurs officiels et leur definition courte -- transcrite
-# depuis README.md section "v5.0.0 Operators" (ligne ~231, verifiee a la
+# depuis docs/HISTORIQUE_README_v5_1.md section "v5.0.0 Operators" (ligne ~231, verifiee a la
 # main le 2026-09-05 -- ne PAS dupliquer semantic.rs::OFFICIAL_OPERATORS
 # en Rust, ceci est une aide de prompt pour un LLM externe, pas une source
 # de verite pour la validation cote serveur). Le fallback RELATE et le
@@ -137,7 +137,7 @@ OPERATOR_DEFINITIONS: dict[str, str] = {
 
 # Deontic modality (MUST/REQUIRE, MUST_NOT/FORBID) est un attribut
 # RELATION.modality separe, pas un operateur RELATION.type -- voir
-# README.md et semantic.rs::check_axiom_d. Deliberement absent de la
+# docs/HISTORIQUE_README_v5_1.md et semantic.rs::check_axiom_d. Deliberement absent de la
 # liste ci-dessus et des faits de reference : ce n'est pas le meme choix
 # que celui etudie ici (choix d'operateur), donc le melanger fausserait
 # la mesure d'accord.
