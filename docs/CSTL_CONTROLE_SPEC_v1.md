@@ -186,6 +186,24 @@ faire appliquer une obligation ni une permission.
 - Avec cette variable, seules les règles signées par ces auteurs comptent ;
   la plus prioritaire, puis la plus récente, décide.
 
+### 6.3 bis Actions gouvernées (ajouté le 2026-11-25)
+
+Un serveur PEUT être installé avec une liste d'actions **gouvernées**
+(`CSTL_GOVERNED_ACTIONS`, noms exacts ou `préfixe*`, séparés par des
+virgules). La liste est fixée à l'installation, jamais par la politique.
+
+- Une action gouvernée n'est permise que si un auteur de politique a écrit
+  **au moins une règle** pour elle (pour cet agent), qu'elle s'applique ou
+  non. S'il en existe, la décision est la décision ordinaire.
+- Sans une telle règle, la demande DOIT être refusée :
+  `decision=denied, reason=governed_no_policy`.
+- La règle d'un agent qui n'est pas auteur ne compte pas.
+- La réponse à `policy_query` porte `governed=<motifs>`.
+
+Effet : une politique absente, ou refusée par le serveur (contradiction,
+signature), ne laisse plus passer une action à risque. Les actions non
+gouvernées gardent la politique par défaut.
+
 ### 6.4 Publier une politique : ordre de l'auteur et reçu signé (ajouté le 2026-11-25)
 
 Un message de règles PEUT porter `INTENT_PAYLOAD.policy_seq=<entier>`.
