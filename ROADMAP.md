@@ -49,6 +49,31 @@ plus important au moins important :
 
 Ordre proposé : 1, puis 2, puis 3 et 4.
 
+## Plan pour devenir la couche de contrôle de référence (2026-11-25)
+
+La cible n'est pas « meilleur format que le JSON », mais la couche de
+contrôle des agents : autorisation, politique, audit. Le format arbre est un
+bonus sur les données tabulaires. Sur les données irrégulières, CSTL strict
+bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
+égal avec 3 exemples (46 contre 47).
+
+1. **Utilisable par n'importe qui :**
+   - **fait le 2026-11-25 :** entrée JSON `POST /v1/message` ;
+   - à faire : paquet `pip install`, binaires du serveur, démo de 10 minutes,
+     spécification v1 figée et tests de conformité.
+2. **Brancher les écosystèmes :** proxy MCP devant tout serveur MCP,
+   adaptateur A2A, SDK TypeScript, gardes prêtes (PostgreSQL, HTTP, shell).
+3. **Prouver publiquement :**
+   - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
+     3 passes au moins ;
+   - questions plus dures ;
+   - attaques écrites par d'autres ;
+   - audit de sécurité externe.
+4. **Échelle :** PostgreSQL, révocation des clés, identités standard,
+   fédération, escalade humaine et arrêt d'urgence, tableau de bord.
+5. **Adoption :** nom définitif, article, 3 utilisateurs pilotes. Le format
+   compact viendra quand un modèle sera entraîné sur CSTL.
+
 ## Faiblesses connues (évaluation du 2026-11-25)
 
 Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.

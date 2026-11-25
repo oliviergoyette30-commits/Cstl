@@ -27,6 +27,7 @@ pub mod validator;
 pub mod audit;
 pub mod tls;
 pub mod rest_api;
+pub mod json_gateway;
 pub mod deontic_orchestration;
 pub mod graphify_server;
 pub mod evaluated_payload;

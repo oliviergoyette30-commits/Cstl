@@ -533,6 +533,26 @@ async fn root() -> impl IntoResponse {
     Json(response)
 }
 
+/// `POST /v1/message` (2026-11-25) : entree JSON du serveur, voir
+/// `json_gateway.rs`. Le message passe par le listener TCP, donc par le meme
+/// traitement que tout message CSTL (signature, politique, audit).
+async fn json_message(Json(msg): Json<serde_json::Value>) -> impl IntoResponse {
+    use crate::server::json_gateway;
+    let wire = match json_gateway::json_to_wire(&msg) {
+        Ok(w) => w,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "message_refuse", "detail": e}))),
+    };
+    if std::env::var("CSTL_TLS_CERT_PATH").is_ok() {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "tls_non_gere",
+            "detail": "l'entree JSON v1 relaie vers le listener TCP en clair ; il est en TLS"})));
+    }
+    let port = std::env::var("CSTL_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5050u16);
+    match json_gateway::relay(&wire, port).await {
+        Ok(text) => (StatusCode::OK, Json(json_gateway::wire_to_json(&text))),
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({"error": "relais_impossible", "detail": e}))),
+    }
+}
+
 /// Create and return the REST API router
 pub fn create_router(
     adn_store: Arc<Mutex<AdnStore>>,
@@ -560,6 +580,7 @@ pub fn create_router(
         .route("/wai/stats", get(wai_stats))
         .route("/calibration/agents", get(calibration_all))
         .route("/calibration/agents/:agent_name", get(calibration_for_agent))
+        .route("/v1/message", post(json_message))
         .with_state(state)
 }
 

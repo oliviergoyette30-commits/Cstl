@@ -341,6 +341,38 @@ only be bound, by signature, to what it declared.
 Any registered agent can read a tree by its id. Live test:
 `test_tree_mode_goes_through_the_server`.
 
+**From any JSON client (no CSTL text at all).** `POST /v1/message` on the
+REST port (`CSTL_REST_PORT`, default 8000, 127.0.0.1 only) takes the message
+as JSON and returns the answer as JSON:
+
+```json
+{"version": "v5.0.0", "mode": "A",
+ "meta": {"encoder": "a1", "produced_by": "a1", "public_key": "<hex>"},
+ "intent": {"purpose": "action_request", "sender": "a1", "receiver": "server",
+            "action": "wipe_db", "request_id": "r1", "signature": "<hex>"},
+ "relations": []}
+```
+
+- The message goes through the TCP listener, so it gets exactly the same
+  processing as a CSTL text message: signature, policy, authorization,
+  audit.
+- Sign the JSON dictionary itself with `cstl_signing.signing_bytes`. The
+  server signs and checks the canonical form, not the syntax, so the
+  signature is the same.
+- The answer holds `intent` and `meta` (the first blocks), `blocks` (all of
+  them, in order) and `raw` (the exact text, which is what counts).
+- Values must be JSON strings. A value the CSTL wire cannot carry exactly
+  (a `"`, a newline, spaces at either end, `---END---`) is refused with
+  HTTP 400 and the reason, instead of being altered. Unknown fields are
+  refused too.
+- Limits (v1): the TCP listener must be plain (not TLS); every request
+  comes from 127.0.0.1, so they share one per-IP rate limit.
+
+Live test: `sdk/python/test_json_gateway_live.py`. It uses a client that
+speaks only JSON (standard library HTTP plus signing): a forbidden action is
+denied, a tampered signature is refused, an unsigned message is refused, and
+another key cannot speak for an agent.
+
 **From any MCP client.** `sdk/python/cstl_mcp_server.py` is an MCP server
 (stdio, JSON-RPC, no dependency beyond the SDK). An agent that speaks MCP
 (Claude Desktop, Claude Code, other clients) uses CSTL through tools,
