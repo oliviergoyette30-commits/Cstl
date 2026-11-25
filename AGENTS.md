@@ -36,6 +36,19 @@ The other installed commands are `cstl-mcp-proxy`, `cstl-mcp-server` and
 wheel, are built by `.github/workflows/release.yml` (on a `v*` tag or by
 hand). Publishing them is a human decision.
 
+## Writing your own client or server — the frozen spec
+
+`docs/CSTL_CONTROLE_SPEC_v1.md` (frozen 2026-11-25) is enough to write a
+compatible client or server for the control layer: wire syntax, canonical
+signing bytes, registration, `action_request`, the signed token and how to
+check it, `policy_query`, audit and errors.
+
+- **Vectors:** `conformance/vectors.json` holds exact inputs and outputs.
+  Python and Rust produce the same bytes and the same verdicts.
+- **Server test:** `conformance/run_server_conformance.py --port 5050
+  --server-key cstl_adn.db.server_key.pub` is a black-box tester written
+  from the spec alone, without the SDK. This repo's server passes 13/13.
+
 ## Option 0 — you have NO code execution at all (a chat-window AI)
 
 This is for you if you are reading this because a human pasted it into your

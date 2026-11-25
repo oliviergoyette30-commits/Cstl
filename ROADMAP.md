@@ -64,8 +64,11 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      - démo `cstl-demo` (7 vérifications, environ 2 s) ;
      - workflow des binaires Linux, macOS et Windows (pas encore lancé sur
        GitHub) ;
-   - à faire : publication (PyPI, release), spécification v1 figée et tests
-     de conformité.
+     - spécification v1 figée (`docs/CSTL_CONTROLE_SPEC_v1.md`), vecteurs
+       vérifiés en Python et en Rust, testeur de serveur boîte noire (13/13).
+       En l'écrivant, trouvé et corrigé : `verify_authorization` (Rust) ne
+       vérifiait pas le montant ;
+   - à faire : publication (PyPI, release).
 2. **Brancher les écosystèmes :**
    - **fait le 2026-11-25 :** proxy MCP devant tout serveur MCP
      (`cstl_mcp_proxy.py`, fermé par défaut, jetons vérifiés) ;

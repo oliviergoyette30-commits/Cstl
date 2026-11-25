@@ -430,17 +430,27 @@ pub enum AuthzError {
     WrongAgent,
     Expired,
     NotYetValid,
+    /// Le montant execute n'est pas celui du jeton (2026-11-25).
+    WrongAmount,
 }
 
 /// Verification cote systeme vise. `now` : secondes unix ; `skew` : tolerance
 /// d'horloge. Ne verifie PAS le rejeu : au systeme vise de refuser un
 /// `request_id` deja utilise (voir `cstl_guard.py`).
+///
+/// `executed_amount` (2026-11-25) : le montant que le systeme vise va
+/// REELLEMENT executer. Meme regle que `CstlGuard.check` : si le jeton ou
+/// l'execution porte un montant, les deux doivent exister et etre egaux
+/// (comparaison numerique). Avant, cette fonction ne regardait pas le
+/// montant : un systeme en Rust aurait execute 8000 avec un jeton de 80
+/// (trouve en ecrivant la specification de conformite v1).
 pub fn verify_authorization(
     server_public_hex: &str,
     auth: &Authorization,
     signature_hex: &str,
     expected_action: &str,
     expected_agent: Option<&str>,
+    executed_amount: Option<&str>,
     now: u64,
     skew: u64,
 ) -> Result<(), AuthzError> {
@@ -460,6 +470,13 @@ pub fn verify_authorization(
     }
     if expected_agent.is_some_and(|a| a != auth.agent) {
         return Err(AuthzError::WrongAgent);
+    }
+    if executed_amount.is_some() || auth.amount.is_some() {
+        let num = |x: Option<&str>| x.and_then(|v| v.trim().parse::<f64>().ok()).filter(|f| f.is_finite());
+        match (num(executed_amount), num(auth.amount.as_deref())) {
+            (Some(a), Some(b)) if a == b => {}
+            _ => return Err(AuthzError::WrongAmount),
+        }
     }
     if auth.issued_at > now + skew {
         return Err(AuthzError::NotYetValid);
@@ -496,7 +513,7 @@ mod tests {
         let k = ServerKey::ephemeral();
         let a = auth();
         let sig = k.sign_hex(a.message().as_bytes());
-        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", Some("bot"), 1010, 0), Ok(()));
+        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", Some("bot"), None, 1010, 0), Ok(()));
         // Toute modification d'un champ casse la signature.
         for forged in [
             Authorization { agent: "eve".into(), ..auth() },
@@ -505,7 +522,7 @@ mod tests {
             Authorization { audit_hash: "sha256:zzz".into(), ..auth() },
         ] {
             assert_eq!(
-                verify_authorization(&k.public_hex(), &forged, &sig, &forged.action, None, 1010, 0),
+                verify_authorization(&k.public_hex(), &forged, &sig, &forged.action, None, None, 1010, 0),
                 Err(AuthzError::BadSignature)
             );
         }
@@ -517,12 +534,29 @@ mod tests {
         let a = auth();
         let sig = k.sign_hex(a.message().as_bytes());
         let other = ServerKey::ephemeral().public_hex();
-        assert_eq!(verify_authorization(&other, &a, &sig, "wipe_db", None, 1010, 0), Err(AuthzError::BadSignature));
-        assert_eq!(verify_authorization("zz", &a, &sig, "wipe_db", None, 1010, 0), Err(AuthzError::BadKey));
-        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "drop_table", None, 1010, 0), Err(AuthzError::WrongAction));
-        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", Some("eve"), 1010, 0), Err(AuthzError::WrongAgent));
-        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", None, 1061, 0), Err(AuthzError::Expired));
-        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", None, 990, 5), Err(AuthzError::NotYetValid));
+        assert_eq!(verify_authorization(&other, &a, &sig, "wipe_db", None, None, 1010, 0), Err(AuthzError::BadSignature));
+        assert_eq!(verify_authorization("zz", &a, &sig, "wipe_db", None, None, 1010, 0), Err(AuthzError::BadKey));
+        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "drop_table", None, None, 1010, 0), Err(AuthzError::WrongAction));
+        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", Some("eve"), None, 1010, 0), Err(AuthzError::WrongAgent));
+        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", None, None, 1061, 0), Err(AuthzError::Expired));
+        assert_eq!(verify_authorization(&k.public_hex(), &a, &sig, "wipe_db", None, None, 990, 5), Err(AuthzError::NotYetValid));
+    }
+
+    #[test]
+    fn executed_amount_must_match_the_token() {
+        let k = ServerKey::ephemeral();
+        let a = Authorization { action: "refund_order".into(), amount: Some("80".into()), ..auth() };
+        let sig = k.sign_hex(a.message().as_bytes());
+        let v = |amt| verify_authorization(&k.public_hex(), &a, &sig, "refund_order", None, amt, 1010, 0);
+        assert_eq!(v(Some("80")), Ok(()));
+        assert_eq!(v(Some("80.0")), Ok(()));
+        assert_eq!(v(Some("8000")), Err(AuthzError::WrongAmount));
+        assert_eq!(v(None), Err(AuthzError::WrongAmount));
+        // Jeton sans montant, execution avec un montant : refuse aussi.
+        let b = auth();
+        let sig_b = k.sign_hex(b.message().as_bytes());
+        assert_eq!(verify_authorization(&k.public_hex(), &b, &sig_b, "wipe_db", None, Some("5"), 1010, 0),
+                   Err(AuthzError::WrongAmount));
     }
 
     #[test]
