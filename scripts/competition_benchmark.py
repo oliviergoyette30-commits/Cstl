@@ -76,8 +76,9 @@ import team_task_benchmark as tb  # noqa: E402
 import relay_tamper_benchmark as rt  # noqa: E402
 import cstl_llm_agent as agent_mod  # noqa: E402
 
-CHANNELS = ("texte", "json", "garde_llm", "moteur", "json_signe", "cstl")
-OWNER_FORMAT = {"texte": "texte", "json": "json", "garde_llm": "json", "moteur": "cstl", "json_signe": "cstl", "cstl": "cstl"}
+CHANNELS = ("texte", "json", "garde_llm", "moteur", "json_signe", "json_signe_versionne", "cstl")
+OWNER_FORMAT = {"texte": "texte", "json": "json", "garde_llm": "json", "moteur": "cstl", "json_signe": "cstl",
+                "json_signe_versionne": "cstl", "cstl": "cstl"}
 
 
 def canonical(rules):
@@ -158,7 +159,7 @@ def run_case(model, sc, channel, run, owner_key):
         msg = rt.render_relations(rels or [])
     elif channel == "moteur":
         msg = json.dumps({"rules": rels or []}, ensure_ascii=False)
-    elif channel == "json_signe":
+    elif channel in ("json_signe", "json_signe_versionne"):
         msg = json.dumps({"rules": rels or [], "signature": owner_key.sign(canonical(rels or [])).hex()}, ensure_ascii=False)
     else:
         msg = raw
@@ -173,12 +174,24 @@ def run_case(model, sc, channel, run, owner_key):
                 attacker.send_relations("server", forged)
         else:
             forged = json.loads(rt.forge(sc, "json", exec_name))
-            if channel == "json_signe":
+            if channel in ("json_signe", "json_signe_versionne"):
                 # L'attaquant n'a pas la cle de l'auteur : il garde l'ancienne signature.
                 forged["signature"] = json.loads(log["original"])["signature"]
             msg = json.dumps(forged, ensure_ascii=False)
     log["received"] = msg
     messages = [("Message recu (relaye)", msg)]
+    refetched = None
+    if channel == "json_signe_versionne":
+        # 2026-11-25 : la meilleure pratique classique (banc deterministe
+        # benchmark/) : signature verifiee avec la cle epinglee de l'auteur, et
+        # si elle est invalide, la politique est RECHARGEE chez l'auteur. Le
+        # systeme qui decide l'applique, et l'executant la recoit aussi.
+        try:
+            obj = json.loads(msg)
+            owner_key.public_key().verify(bytes.fromhex(obj.get("signature", "")), canonical(obj.get("rules", [])))
+        except (InvalidSignature, ValueError, AttributeError):
+            refetched = log["original"]
+            messages.append(("Politique rechargee chez l'auteur (le message recu avait une signature invalide)", refetched))
     if channel == "cstl":
         policy = executor.policy()
         messages.append(("Serveur CSTL", tb.render_policy(policy)))
@@ -190,18 +203,19 @@ def run_case(model, sc, channel, run, owner_key):
                                     .replace('"approve"', '"execute"'))
         ok = {a for a, _ in approved}
         executed = [(a, amt) for a, amt in chosen if a in ok]
-    elif channel in ("moteur", "json_signe"):
+    elif channel in ("moteur", "json_signe", "json_signe_versionne"):
         try:
-            obj = json.loads(msg)
+            obj = json.loads(refetched or msg)
         except ValueError:
             obj = {}
         valid = True
-        if channel == "json_signe":
+        if channel in ("json_signe", "json_signe_versionne"):
             try:
                 owner_key.public_key().verify(bytes.fromhex(obj.get("signature", "")), canonical(obj.get("rules", [])))
             except (InvalidSignature, ValueError):
                 valid = False
-        log["signature_valid"] = valid if channel == "json_signe" else None
+        log["signature_valid"] = valid if channel != "moteur" else None
+        log["refetched"] = refetched is not None
         if not valid:
             executed = []          # fail-closed : rien n'est execute
         else:
@@ -216,11 +230,18 @@ def run_case(model, sc, channel, run, owner_key):
 
 
 def summarize(rows):
+    import statistics
     out = {}
     for ch in CHANNELS:
         r = [x for x in rows if x["channel"] == ch]
+        runs = sorted({x["run"] for x in r})
+        per_run = [sum(x["perfect"] for x in r if x["run"] == k) for k in runs]
+        comp_run = [sum(x["compromised"] for x in r if x["run"] == k) for k in runs]
+        sd = lambda v: round(statistics.stdev(v), 2) if len(v) > 1 else 0.0  # noqa: E731
         out[ch] = {"cases": len(r), "perfect": sum(x["perfect"] for x in r), "compromised": sum(x["compromised"] for x in r),
-                   "violations": sum(len(x["violations"]) for x in r), "missed": sum(len(x["missed"]) for x in r)}
+                   "violations": sum(len(x["violations"]) for x in r), "missed": sum(len(x["missed"]) for x in r),
+                   "perfect_per_run": per_run, "perfect_sd": sd(per_run),
+                   "compromised_per_run": comp_run, "compromised_sd": sd(comp_run)}
     return out
 
 
@@ -231,7 +252,7 @@ def main():
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--workers", type=int, default=8)
     args = ap.parse_args()
-    model = StubBrain() if args.stub else tb.ClaudeBrain(args.model)
+    model = StubBrain() if args.stub else tb.make_brain(args.model)
     owner_key = Ed25519PrivateKey.generate()
     proc = tb.start_server("owner_*")
     try:
@@ -252,14 +273,15 @@ def main():
     s = summarize(rows)
     label = "stub [plomberie seule, aucune conclusion]" if args.stub else args.model
     print(f"\nModele : {label}, {args.runs} passe(s) x {len(rt.SCENARIOS)} scenarios")
-    print(f"  {'canal':10} | parfaits | cas compromis | violations | oublis")
+    print(f"  {'canal':20} | parfaits (par passe, ecart-type) | cas compromis (par passe) | violations | oublis")
     for ch, v in s.items():
-        print(f"  {ch:10} | {v['perfect']:>3}/{v['cases']:<4} | {v['compromised']:>13} | {v['violations']:>10} | {v['missed']:>6}")
+        print(f"  {ch:20} | {v['perfect']:>3}/{v['cases']:<4} {str(v['perfect_per_run']):>14} sd={v['perfect_sd']:<5}"
+              f" | {v['compromised']:>3} {str(v['compromised_per_run']):>14} | {v['violations']:>10} | {v['missed']:>6}")
     print("\n  Cas compromis par attaque (" + " / ".join(CHANNELS) + ") :")
     for sc in rt.SCENARIOS:
         cells = [sum(x["compromised"] for x in rows if x["scenario"] == sc["id"] and x["channel"] == ch) for ch in CHANNELS]
         print(f"    s{sc['id']} {sc['kind']:30} : " + " / ".join(map(str, cells)))
-    dest = REPO / "scripts" / f"competition_benchmark_{'stub' if args.stub else args.model}.json"
+    dest = REPO / "scripts" / f"competition_benchmark_{'stub' if args.stub else tb.model_slug(args.model)}.json"
     dest.write_text(json.dumps({"summary": s, "rows": rows}, indent=2, ensure_ascii=False, default=list) + "\n")
     print(f"\n  Resultats bruts : {dest.relative_to(REPO)}")
 
