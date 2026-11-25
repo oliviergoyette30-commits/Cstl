@@ -61,8 +61,11 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - **fait le 2026-11-25 :** entrée JSON `POST /v1/message` ;
    - à faire : paquet `pip install`, binaires du serveur, démo de 10 minutes,
      spécification v1 figée et tests de conformité.
-2. **Brancher les écosystèmes :** proxy MCP devant tout serveur MCP,
-   adaptateur A2A, SDK TypeScript, gardes prêtes (PostgreSQL, HTTP, shell).
+2. **Brancher les écosystèmes :**
+   - **fait le 2026-11-25 :** proxy MCP devant tout serveur MCP
+     (`cstl_mcp_proxy.py`, fermé par défaut, jetons vérifiés) ;
+   - à faire : adaptateur A2A, SDK TypeScript, gardes prêtes (PostgreSQL,
+     HTTP, shell).
 3. **Prouver publiquement :**
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;

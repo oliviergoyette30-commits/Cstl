@@ -341,6 +341,39 @@ only be bound, by signature, to what it declared.
 Any registered agent can read a tree by its id. Live test:
 `test_tree_mode_goes_through_the_server`.
 
+**In front of any MCP server.** `sdk/python/cstl_mcp_proxy.py` sits between
+an MCP client and an existing MCP server, which it starts itself.
+Everything passes through unchanged, except tool calls (`tools/call`).
+Before each one, the proxy asks the CSTL server for a signed authorization:
+`action_request`, with the tool name as the action. A denied call never
+reaches the MCP server. The client gets a tool error (`isError: true`) with
+the reason and the rule.
+
+```json
+{"mcpServers": {"files": {"command": "python3",
+   "args": ["/path/Cstl/sdk/python/cstl_mcp_proxy.py",
+            "--server-key", "/path/cstl_adn.db.server_key.pub", "--",
+            "npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+   "env": {"CSTL_AGENT": "agent_files", "CSTL_PORT": "5050"}}}}
+```
+
+- **Closed by default:** if the CSTL server is unreachable, its answer is
+  unreadable or the token is invalid, the tool is not called.
+- **With `--server-key`** (or `CSTL_SERVER_PUBLIC_KEY`), every authorization
+  must carry a token checked by `CstlGuard`: signed by that key, for this
+  tool, this agent and this amount, and never used before. A fake server
+  cannot authorize a tool. Without the key, the proxy takes the server's
+  answer on trust; use that only with a trusted local server.
+- **Options:** `--amount-arg amount` sends that tool argument as the amount
+  (rules `amount_above` / `amount_at_most`). `--prefix mcp_` asks for
+  `mcp_<tool>`.
+- **Limit:** the proxy controls which tool is called and with which amount.
+  It does not understand the other arguments.
+
+Live test: `sdk/python/test_mcp_proxy_live.py`. A test MCP server records
+every tool it actually runs, so the test proves that a forbidden tool is
+never run, not only that the client sees a refusal.
+
 **From any JSON client (no CSTL text at all).** `POST /v1/message` on the
 REST port (`CSTL_REST_PORT`, default 8000, 127.0.0.1 only) takes the message
 as JSON and returns the answer as JSON:
