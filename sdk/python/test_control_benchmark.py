@@ -23,4 +23,4 @@ def test_benchmark_runs_and_evaluator_matches_layer9(tmp_path):
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
     res = json.loads(out.read_text())
     assert res["evaluator_mismatches"] == []
-    assert len(res["rows"]) == res["cases"] * 2 * 5
+    assert len(res["rows"]) == res["cases"] * 2 * 6

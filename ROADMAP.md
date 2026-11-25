@@ -65,7 +65,7 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      - workflow des binaires Linux, macOS et Windows (pas encore lancé sur
        GitHub) ;
      - spécification v1 figée (`docs/CSTL_CONTROLE_SPEC_v1.md`), vecteurs
-       vérifiés en Python et en Rust, testeur de serveur boîte noire (14/14).
+       vérifiés en Python et en Rust, testeur de serveur boîte noire (16/16).
        En l'écrivant, trouvé et corrigé : `verify_authorization` (Rust) ne
        vérifiait pas le montant ;
    - à faire : publication (PyPI, release).
@@ -85,12 +85,14 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
 3. **Prouver publiquement :**
    - **commencé le 2026-11-25 :** banc public déterministe
      (`benchmark/control_benchmark.py`, 12 attaques en fichiers JSON
-     ouverts aux contributions, vrai serveur). Relais compromis (T1) : CSTL
-     seul à 0 violation. Canal de l'auteur compromis (T2) : CSTL 7 cas
-     compromis contre 1 pour une politique signée et versionnée. Deux
-     faiblesses mesurées : ordre de réception au lieu de l'ordre de
-     l'auteur, et pas de rattrapage d'un message refusé (réponses non
-     signées) ;
+     ouverts aux contributions, vrai serveur). Première mesure : en T2
+     (canal de l'auteur compromis), CSTL 7 cas compromis contre 1 pour une
+     politique signée et versionnée : ordre de réception, et pas de
+     rattrapage. Corrigé le même jour (`policy_seq` et reçu signé,
+     spécification 6.4, `publish_policy`) : CSTL seul à 0 violation et 0
+     refus à tort dans les deux modèles de menace ;
+   - à faire : `publishPolicy` dans le SDK TypeScript ; banc avec modèles
+     (plusieurs modèles, 3 passes, écart-type) ;
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
    - questions plus dures ;

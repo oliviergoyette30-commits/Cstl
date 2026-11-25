@@ -24,9 +24,13 @@ verifie egal a la couche 9 du serveur sur la politique legitime) :
                  version strictement croissant (rejeu et desordre refuses),
                  et sur message invalide, rechargement de la politique
                  courante chez l'auteur
-  cstl           le VRAI serveur CSTL (CSTL_POLICY_AUTHORS = l'auteur) : les
+  cstl_simple    le VRAI serveur CSTL (CSTL_POLICY_AUTHORS = l'auteur) : les
                  messages sont envoyes, signes, au serveur, et les decisions
-                 viennent de action_request
+                 viennent de action_request (usage d'avant le 2026-11-25)
+  cstl           pareil, avec `policy_seq` (le serveur refuse un message plus
+                 ancien que le dernier de l'auteur) et le RECU signe par le
+                 serveur : un message sans recu valide fait republier la
+                 politique par l'auteur (`CstlAgent.publish_policy`)
 
 Deux modeles de menace, publies tous les deux :
   T1 relais      l'attaquant controle le chemin de DISTRIBUTION de la
@@ -62,9 +66,11 @@ from cryptography.exceptions import InvalidSignature
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(REPO / "conformance"))
+sys.path.insert(0, str(REPO / "sdk" / "python"))
 import run_server_conformance as wire  # noqa: E402  (client ecrit d'apres la specification seule)
 
-MECHANISMS = ("aucun", "moteur", "signe", "signe_versionne", "cstl")
+MECHANISMS = ("aucun", "moteur", "signe", "signe_versionne", "cstl_simple", "cstl")
+CLASSIC = MECHANISMS[:4]
 
 
 # -- Politique abstraite et evaluateur -------------------------------------------
@@ -200,22 +206,41 @@ class Cstl:
         rels += [{"type": "STATE", "subject": f, "object": "true" if v else "false"} for f, v in body.get("facts", {}).items()]
         return rels
 
-    def run(self, case, threat):
+    def run(self, case, threat, receipts=True):
+        import cstl_receipt
         a = self.agents()
         author, bot, mallory = a["author"], a["bot"], a["mallory"]
-        texts = []
+        key = (self.work / "cstl_adn.db.server_key.pub").read_text().strip()
+        texts, confirmed = [], set()
+        seq = [0]
+
+        def author_msg(m):
+            seq[0] += 1
+            extra = {"policy_seq": str(seq[0])} if receipts else {}
+            return author.signed(author.message("inform", self.relations(bot.name, m), **extra))
+
         for m in case["messages"]:
-            msg = author.signed(author.message("inform", self.relations(bot.name, m), policy_version=str(len(texts) + 1)))
+            msg = author_msg(m)
             texts.append((msg, wire.render(msg)))
-        send = lambda text: self.client.send(text)  # noqa: E731
+
+        def send(text):
+            return self.client.send(text)
+
+        def send_author(i):
+            """L'auteur envoie le message i ; il garde le recu s'il est valide."""
+            msg, text = texts[i]
+            raw = send(text)
+            if receipts and cstl_receipt.verify_receipt(raw, key, author.name, msg["intent"]["policy_seq"], wire.canonical(msg)):
+                confirmed.add(i)
+
         if threat == "T1":
-            for _, t in texts:                                       # l'auteur ecrit directement au serveur
-                send(t)
+            for i in range(len(texts)):                              # l'auteur ecrit directement au serveur
+                send_author(i)
         for op in case["attack"]:
             kind = op["op"]
             if kind == "deliver":
                 if threat == "T2":
-                    send(texts[op["message"]][1])
+                    send_author(op["message"])
             elif kind == "replay":
                 send(texts[op["message"]][1])                        # copie observee, renvoyee telle quelle
             elif kind == "modify":
@@ -229,6 +254,11 @@ class Cstl:
                 send(wire.render(fake.signed(fake.message("inform", self.relations(bot.name, op)))))
             elif kind == "insider":
                 send(wire.render(mallory.signed(mallory.message("inform", self.relations(bot.name, op)))))
+        if receipts and len(confirmed) < len(texts):
+            # Un message sans recu valide : l'auteur republie toute sa
+            # politique, dans l'ordre, avec des sequences neuves.
+            for m in case["messages"]:
+                send(wire.render(author_msg(m)))
         out = []
         for rq in case["requests"]:
             i = wire.first(bot.ask(rq["action"], rq.get("amount")), "INTENT_PAYLOAD")
@@ -237,7 +267,7 @@ class Cstl:
 
     def legit(self, case):
         """Decisions du serveur sur la politique legitime (verifie l'evaluateur)."""
-        return self.run({**case, "attack": []}, "T1")
+        return self.run({**case, "attack": []}, "T1", receipts=False)
 
 
 def main():
@@ -261,13 +291,14 @@ def main():
                 mismatch.append((case["id"], expect, server_legit))
             _, items = delivered(case, author, mallory)
             got = {}
-            for mech in MECHANISMS[:-1]:
+            for mech in CLASSIC:
                 acc = classic(mech, legit_msgs, items, author)
                 got[mech] = [True] * len(expect) if acc == "all" else [False] * len(expect) if acc is None else \
                     [decide(acc, rq["action"], rq.get("amount")) for rq in case["requests"]]
             for threat in ("T1", "T2"):
                 res = dict(got)
-                res["cstl"] = srv.run(case, threat)
+                res["cstl_simple"] = srv.run(case, threat, receipts=False)
+                res["cstl"] = srv.run(case, threat, receipts=True)
                 for mech, dec in res.items():
                     rows.append({"case": case["id"], "kind": case["kind"], "threat": threat, "mechanism": mech,
                                  "requests": case["requests"], "expected": expect, "decisions": dec,
@@ -284,18 +315,18 @@ def main():
           "Cellule : violations / refus a tort (0 / 0 = juste partout).\n")
     for threat in ("T1", "T2"):
         print(f"Modele de menace {threat} ({'relais' if threat == 'T1' else 'canal de l auteur'}) :")
-        print("  " + f"{'cas':28}" + "".join(f"{m:>17}" for m in MECHANISMS))
+        print("  " + f"{'cas':28}" + "".join(f"{m:>16}" for m in MECHANISMS))
         for case in cases:
             cells = []
             for m in MECHANISMS:
                 r = next(x for x in rows if x["case"] == case["id"] and x["threat"] == threat and x["mechanism"] == m)
                 cells.append(f"{r['violations']} / {r['false_refusals']}")
-            print("  " + f"{case['id']:28}" + "".join(f"{c:>17}" for c in cells))
+            print("  " + f"{case['id']:28}" + "".join(f"{c:>16}" for c in cells))
         tot = {m: (sum(x["violations"] for x in rows if x["threat"] == threat and x["mechanism"] == m),
                    sum(x["false_refusals"] for x in rows if x["threat"] == threat and x["mechanism"] == m),
                    sum(1 for x in rows if x["threat"] == threat and x["mechanism"] == m and x["violations"])) for m in MECHANISMS}
-        print("  " + f"{'TOTAL violations / refus':28}" + "".join(f"{f'{v} / {f}':>17}" for v, f, _ in tot.values()))
-        print("  " + f"{'cas compromis':28}" + "".join(f"{c:>17}" for _, _, c in tot.values()) + "\n")
+        print("  " + f"{'TOTAL violations / refus':28}" + "".join(f"{f'{v} / {f}':>16}" for v, f, _ in tot.values()))
+        print("  " + f"{'cas compromis':28}" + "".join(f"{c:>16}" for _, _, c in tot.values()) + "\n")
     Path(args.out).write_text(json.dumps({"cases": len(cases), "evaluator_mismatches": mismatch, "rows": rows},
                                          indent=1, ensure_ascii=False) + "\n")
     print(f"Resultats bruts : {Path(args.out).relative_to(REPO) if Path(args.out).is_relative_to(REPO) else args.out}")

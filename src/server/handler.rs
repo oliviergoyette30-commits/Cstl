@@ -235,6 +235,12 @@ async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::Ha
 /// (2026-11-23, voir tree_check.rs). L'engagement retenu est le plus recent
 /// de la source, et seulement si sa signature est celle de la cle
 /// enregistree de la source : un transmetteur ne peut pas s'engager a sa place.
+/// Message signe d'un recu (2026-11-25), lignes separees par `\n`, sans `\n`
+/// final. Meme forme cote client : `cstl_receipt.receipt_message`.
+pub fn receipt_message(sender: &str, policy_seq: &str, request_hash: &str, audit_hash: &str) -> String {
+    format!("cstl-receipt-v1\nsender={sender}\npolicy_seq={policy_seq}\nrequest_hash={request_hash}\naudit_hash={audit_hash}")
+}
+
 async fn tree_source_violation(ctx: &ServerContext, relations: &[std::collections::HashMap<String, String>]) -> Option<String> {
     for (tree, source) in super::tree_check::claimed_sources(relations) {
         let rows = {
@@ -647,6 +653,34 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         );
                         send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
                         continue;
+                    }
+
+                    // STEP 2-seq (2026-11-25, banc public benchmark/, modele T2) :
+                    // ORDRE DE L'AUTEUR. Un message qui porte `policy_seq` n'est
+                    // accepte que s'il est plus recent que le dernier accepte de cet
+                    // expediteur ; sinon `stale_policy`, rien n'est stocke. Avant,
+                    // deux messages authentiques livres dans le desordre faisaient
+                    // gagner l'ancienne regle. Exige une signature valide : sinon un
+                    // tiers pourrait avancer la sequence d'un auteur et le bloquer.
+                    if let Some(raw_seq) = payload.intent.get("policy_seq") {
+                        let rejection = match (raw_seq.parse::<u64>().ok().filter(|v| *v <= i64::MAX as u64), &sig_check) {
+                            (None, _) => Some(("policy_seq_invalid".to_string(), String::new())),
+                            (Some(_), c) if *c != SignatureCheck::Valid => Some(("policy_seq_requires_signature".to_string(), String::new())),
+                            (Some(seq), _) => match ctx.adn_store.lock().await.advance_policy_seq(&sig_sender, seq) {
+                                Ok(None) => None,
+                                Ok(Some(last)) => Some(("stale_policy".to_string(), format!(", last_seq={last}"))),
+                                Err(e) => Some(("policy_seq_store_error".to_string(), format!(", detail={}", wire_text(&e.to_string())))),
+                            },
+                        };
+                        if let Some((purpose, extra)) = rejection {
+                            warn!("[Handler] policy_seq rejected for '{}': {}", sig_sender, purpose);
+                            let response = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose={purpose}, policy_seq={}{extra}]\n---END---\n",
+                                wire_text(raw_seq)
+                            );
+                            send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                            continue;
+                        }
                     }
 
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
@@ -2738,12 +2772,33 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         // reponse.
                         let routed_agent_name_for_response = agent_name.clone();
 
+                        // RECU SIGNE (2026-11-25, banc public, modele T2) : pour un
+                        // message qui porte `policy_seq`, le serveur signe ce qu'il a
+                        // accepte (expediteur, sequence, empreinte des octets
+                        // canoniques recus, maillon d'audit). L'auteur verifie ce recu
+                        // avec la cle publique du serveur : un faux accuse de reception,
+                        // ou le recu d'un message modifie en route, ne passe pas, et il
+                        // sait qu'il doit renvoyer sa politique.
+                        let receipt_line = match payload.intent.get("policy_seq") {
+                            Some(seq) => {
+                                use sha2::{Digest, Sha256};
+                                let request_hash = format!("sha256:{}", hex::encode(Sha256::digest(super::audit::signing_bytes(&payload))));
+                                let msg = receipt_message(&sig_sender, seq, &request_hash, &entry.hash);
+                                format!(
+                                    "RECEIPT [sender={}, policy_seq={}, request_hash={}, audit_hash={}, signature={}]\n",
+                                    sig_sender, seq, request_hash, entry.hash, ctx.server_key.sign_hex(msg.as_bytes())
+                                )
+                            }
+                            None => String::new(),
+                        };
+
                         // STEP 5: Build response
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\n\
                             META [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
                             INTENT_PAYLOAD [purpose=acknowledgement, sender=server, receiver={}]\n\
                             RELATION [type=received, subject={}, status=valid]\n\
+                            {}\
                             {}\
                             {}\
                             {}\
@@ -2786,6 +2841,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             execution_trace_line,
                             adn_delta_line,
                             conversation_context_line,
+                            receipt_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq

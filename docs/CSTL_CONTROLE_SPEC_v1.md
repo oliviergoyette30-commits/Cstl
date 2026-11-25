@@ -14,7 +14,7 @@ Preuves que ce texte suffit :
   (`tests/conformance_vectors_test.rs`) trouvent les mêmes octets et les
   mêmes verdicts.
 - `conformance/run_server_conformance.py` : un testeur de serveur écrit à
-  partir de ce texte seul, sans le SDK. Le serveur de ce dépôt passe 14/14.
+  partir de ce texte seul, sans le SDK. Le serveur de ce dépôt passe 16/16.
 
 En cas de désaccord entre ce texte et ces tests, c'est un bug à signaler.
 
@@ -186,6 +186,51 @@ faire appliquer une obligation ni une permission.
 - Avec cette variable, seules les règles signées par ces auteurs comptent ;
   la plus prioritaire, puis la plus récente, décide.
 
+### 6.4 Publier une politique : ordre de l'auteur et reçu signé (ajouté le 2026-11-25)
+
+Un message de règles PEUT porter `INTENT_PAYLOAD.policy_seq=<entier>`.
+Le champ est facultatif : sans lui, rien ne change.
+
+**Ordre.**
+- Le serveur DOIT refuser un message dont `policy_seq` n'est pas
+  strictement supérieur au dernier `policy_seq` accepté de cet expéditeur.
+  La réponse est `purpose=stale_policy, last_seq=<n>`, et rien n'est
+  stocké. Deux messages authentiques livrés dans le désordre ne font donc
+  pas gagner l'ancien.
+- `policy_seq` exige une signature valide (sinon
+  `policy_seq_requires_signature`). Il doit être un entier (sinon
+  `policy_seq_invalid`).
+
+**Reçu.** La réponse d'un message accepté qui porte `policy_seq` contient :
+
+```
+RECEIPT [sender=<expéditeur>, policy_seq=<n>, request_hash=sha256:<hex>, audit_hash=<hash du maillon>, signature=<128 hex>]
+```
+
+- `request_hash` est le SHA-256 des octets canoniques (section 4) du
+  message **tel que le serveur l'a reçu**.
+- `signature` est la signature Ed25519, par la clé du serveur, de :
+
+```
+cstl-receipt-v1
+sender=<sender>
+policy_seq=<policy_seq>
+request_hash=<request_hash>
+audit_hash=<audit_hash>
+```
+
+**Vérification par l'auteur.** L'auteur DOIT vérifier quatre choses :
+- la signature, sous la clé du serveur obtenue hors bande ;
+- `sender` ;
+- `policy_seq` ;
+- `request_hash`, comparé à l'empreinte de **son** message.
+
+Sans reçu valide, la politique n'est peut-être pas en vigueur : elle a pu
+être modifiée, perdue, refusée ou jugée trop ancienne. L'auteur la
+republie alors avec une nouvelle séquence. Implémentation :
+`CstlAgent.publish_policy` (Python), qui lève `PolicyNotConfirmed` après
+plusieurs essais.
+
 ## 7. Autoriser avant d'agir
 
 ### 7.1 Demande
@@ -301,6 +346,8 @@ Toutes ces réponses portent `META [status=error]`, et aucune n'est auditée :
 | `schema_rejected` | relation mal typée, quand un `SCHEMA` existe |
 | `tree_rejected` | arbre incomplet ou engagement de source non respecté |
 | `connection_timeout` | rien de complet reçu à temps |
+| `stale_policy` | `policy_seq` pas plus récent que le dernier accepté (section 6.4) |
+| `policy_seq_invalid` / `policy_seq_requires_signature` | section 6.4 |
 
 ## 11. Ce qui est figé en v1
 
@@ -308,7 +355,8 @@ Ne changeront pas sans une v2 :
 - la syntaxe des sections 2 et 3 ;
 - les octets canoniques (section 4) ;
 - les champs et l'ordre du message de jeton (`cstl-authz-v1`) ;
-- les valeurs de `purpose`, `decision` et des verdicts de jeton.
+- les valeurs de `purpose`, `decision` et des verdicts de jeton ;
+- le message du reçu (`cstl-receipt-v1`).
 
 Un serveur PEUT ajouter des blocs et des champs. Un client DOIT ignorer
 ceux qu'il ne connaît pas.
@@ -321,10 +369,11 @@ python3 conformance/run_server_conformance.py --port 5050 --server-key cstl_adn.
 
 - Lancer le serveur sans `CSTL_DEV_MODE` et sans `CSTL_POLICY_AUTHORS`.
 - Le testeur vérifie d'abord sa propre implémentation sur les vecteurs,
-  puis exécute 14 contrôles :
+  puis exécute 16 contrôles :
   - C1 à C5 : identité et règles ;
   - C6 à C9 : décisions, jetons et plafonds ;
   - C10 et C11 : audit ;
   - C12 : politique ;
   - C13 : message incomplet ;
-  - C14 : nom d'action invalide.
+  - C14 : nom d'action invalide ;
+  - C15 et C16 : ordre de l'auteur et reçu signé.

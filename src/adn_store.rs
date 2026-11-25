@@ -402,6 +402,10 @@ impl AdnStore {
                 created_at INTEGER NOT NULL,
                 UNIQUE(proposal_id, voter_id)
             );
+            CREATE TABLE IF NOT EXISTS policy_seq (
+                sender TEXT PRIMARY KEY,
+                seq INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS agents (
                 name TEXT PRIMARY KEY,
                 version TEXT NOT NULL,
@@ -1774,6 +1778,29 @@ impl AdnStore {
     /// Engagements d'une source sur un arbre (`RELATION [type=tree_commit,
     /// subject=<id d'arbre>, object=sha256:...]`), avec leur auteur, dans
     /// l'ordre (2026-11-23, voir server/tree_check.rs).
+    /// Sequence de politique d'un auteur (2026-11-25, banc public T2) : un
+    /// message signe qui porte `policy_seq` n'est accepte que s'il est PLUS
+    /// RECENT que le dernier accepte de cet expediteur. Sinon, deux messages
+    /// authentiques livres dans le desordre faisaient gagner l'ancienne
+    /// regle (le serveur rangeait les regles dans l'ordre de RECEPTION).
+    /// `Ok(None)` : accepte et enregistre ; `Ok(Some(dernier))` : trop ancien.
+    pub fn advance_policy_seq(&self, sender: &str, seq: u64) -> Result<Option<u64>, rusqlite::Error> {
+        let last: Option<i64> = self
+            .conn
+            .query_row("SELECT seq FROM policy_seq WHERE sender = ?1", [sender], |r| r.get(0))
+            .optional()?;
+        if let Some(last) = last {
+            if seq as i64 <= last {
+                return Ok(Some(last as u64));
+            }
+        }
+        self.conn.execute(
+            "INSERT INTO policy_seq (sender, seq) VALUES (?1, ?2) ON CONFLICT(sender) DO UPDATE SET seq = excluded.seq",
+            rusqlite::params![sender, seq as i64],
+        )?;
+        Ok(None)
+    }
+
     pub fn tree_commits(&self, tree: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         self.authored_relations("modality IS NULL AND predicate = 'tree_commit' AND subject = ?1", &[tree])
     }
@@ -3172,6 +3199,30 @@ mod tests {
     /// suivante. Sans ce fix, `load_agents()` n'existait pas et
     /// `AgentRegistry::new()` demarrait toujours vide a chaque
     /// `try_with_data_path`.
+    /// policy_seq (2026-11-25) : strictement croissant par auteur, et la
+    /// derniere valeur survit a un redemarrage (sinon un vieux message
+    /// authentique redeviendrait acceptable apres un arret du serveur).
+    #[test]
+    fn test_policy_seq_is_strictly_increasing_per_author_and_persists() {
+        let tmp_path = std::env::temp_dir().join(format!("cstl_test_policy_seq_{}.db", std::process::id()));
+        let p = tmp_path.to_str().unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+        {
+            let s = AdnStore::open(p).unwrap();
+            assert_eq!(s.advance_policy_seq("owner", 5).unwrap(), None);
+            assert_eq!(s.advance_policy_seq("owner", 5).unwrap(), Some(5), "egal : refuse");
+            assert_eq!(s.advance_policy_seq("owner", 3).unwrap(), Some(5), "plus ancien : refuse");
+            assert_eq!(s.advance_policy_seq("other", 1).unwrap(), None, "sequence propre a chaque auteur");
+            assert_eq!(s.advance_policy_seq("owner", 6).unwrap(), None);
+        }
+        {
+            let s = AdnStore::open(p).unwrap(); // redemarrage
+            assert_eq!(s.advance_policy_seq("owner", 6).unwrap(), Some(6));
+            assert_eq!(s.advance_policy_seq("owner", 7).unwrap(), None);
+        }
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
     #[test]
     fn test_agent_persists_across_reopen_same_file() {
         let tmp_path = std::env::temp_dir().join(format!("cstl_test_agent_persist_{}.db", std::process::id()));

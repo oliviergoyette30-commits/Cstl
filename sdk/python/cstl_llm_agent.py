@@ -425,6 +425,15 @@ class ActionDenied(Exception):
         super().__init__(f"action '{action}' refusee : {reason}" + (f" ({rule})" if rule else ""))
 
 
+class PolicyNotConfirmed(Exception):
+    """La politique publiee n'a pas de recu valide du serveur : elle n'est
+    peut-etre pas en vigueur (message modifie, perdu, refuse ou trop ancien)."""
+
+    def __init__(self, reason: str, response=None):
+        self.reason, self.response = reason, response
+        super().__init__(f"politique non confirmee : {reason}")
+
+
 class CstlAgent:
     def __init__(self, name: str, provider_name: str = "hermes",
                  host: str = "127.0.0.1", port: int = 5050, strict_history: bool = False):
@@ -510,6 +519,40 @@ class CstlAgent:
         `response.issues` (signalements sur un message accepte)."""
         extra = {"strict_deontic_history": "true"} if self.strict_history else None
         return self._send_signed(purpose, receiver, relations, extra)
+
+    def publish_policy(self, relations: list[dict], server_key: str, attempts: int = 3) -> dict:
+        """Publie des regles (2026-11-25) et VERIFIE qu'elles sont en vigueur.
+
+        Le message porte `policy_seq` (strictement croissant, garde dans
+        ~/.cstl/agent_<nom>.seq) : le serveur refuse un message plus ancien
+        que le dernier accepte de cet auteur. La reponse doit porter un recu
+        signe par le serveur (`server_key` : sa cle publique, obtenue hors
+        bande) pour CE message exact. Sans recu valide, renvoie jusqu'a
+        `attempts` fois avec une nouvelle sequence, puis leve
+        PolicyNotConfirmed. Retourne le recu."""
+        import cstl_receipt
+        from cstl_signing import signing_bytes
+        key = server_key.strip()
+        if Path(key).is_file():
+            key = Path(key).read_text().strip()
+        last = None
+        for _ in range(max(1, attempts)):
+            seq = cstl_receipt.next_seq(self.keyfile.with_suffix(".seq"))
+            intent_extra = {"policy_seq": str(seq)}
+            meta = {"encoder": ENCODER, "produced_by": ENCODER, "public_key": self.pub_key}
+            intent = {"purpose": "inform", "sender": self.name, "receiver": "server", **intent_extra}
+            canon = signing_bytes({"version": "v5.0.0", "mode": "A", "meta": meta, "intent": intent,
+                                   "relations": relations})
+            try:
+                resp = self._send_signed("inform", "server", relations, intent_extra)
+            except Exception as e:  # noqa: BLE001 -- reseau coupe : on retente
+                last = (f"envoi impossible : {e}", None)
+                continue
+            receipt = cstl_receipt.verify_receipt(resp.raw, key, self.name, seq, canon)
+            if receipt:
+                return receipt
+            last = (resp.purpose if resp.is_error else "recu absent ou invalide", resp)
+        raise PolicyNotConfirmed(*last)
 
     def tell(self, receiver: str, subject: str,
              peer_message: Optional[str] = None) -> Tuple[Optional[dict], Optional[CstlResponse]]:

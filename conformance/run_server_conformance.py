@@ -268,6 +268,25 @@ def main():
     check("C14", "nom d'action hors de [A-Za-z0-9_.-] -> denied, missing_or_invalid_action",
           i.get("decision") == "denied" and i.get("reason") == "missing_or_invalid_action", i)
 
+    rule = lambda mod: [{"type": "PERFORM", "subject": bot.name, "object": "delete_user", "modality": mod}]  # noqa: E731
+    v1 = owner.signed(owner.message("inform", rule("MAY"), policy_seq="1"))
+    v2 = owner.signed(owner.message("inform", rule("MUST_NOT"), policy_seq="2"))
+    raw2 = c.send(render(v2))
+    raw1 = c.send(render(v1))
+    i1 = first(parse(raw1), "INTENT_PAYLOAD")
+    check("C15", "policy_seq plus ancien que le dernier de l'auteur -> stale_policy, l'ancien ne gagne pas",
+          i1.get("purpose") == "stale_policy" and i1.get("last_seq") == "2"
+          and first(bot.ask("delete_user"), "INTENT_PAYLOAD").get("decision") == "denied", i1)
+    rc = first(parse(raw2), "RECEIPT")
+    want = "sha256:" + __import__("hashlib").sha256(canonical(v2)).hexdigest()
+    msg = (f"cstl-receipt-v1\nsender={owner.name}\npolicy_seq=2\nrequest_hash={want}\naudit_hash={rc.get('audit_hash')}")
+    try:
+        Ed25519PublicKey.from_public_bytes(bytes.fromhex(key)).verify(bytes.fromhex(rc.get("signature", "")), msg.encode())
+        receipt_ok = rc.get("request_hash") == want and rc.get("sender") == owner.name and rc.get("audit_hash") == first(parse(raw2), "AUDIT").get("hash")
+    except Exception:  # noqa: BLE001
+        receipt_ok = False
+    check("C16", "RECEIPT signe par la cle du serveur, pour les octets canoniques envoyes et le maillon d'audit", receipt_ok, rc)
+
     r = parse(c.send("#!CSTL v5.0.0 MODE=A\nMETA [encoder=x]\nINTENT_PAYLOAD [purpose=inform]\n---END---\n"))
     check("C13", "message incomplet -> status=error, pas d'audit",
           first(r, "META").get("status") == "error" and not first(r, "AUDIT"), r)

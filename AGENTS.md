@@ -47,7 +47,7 @@ check it, `policy_query`, audit and errors.
   Python and Rust produce the same bytes and the same verdicts.
 - **Server test:** `conformance/run_server_conformance.py --port 5050
   --server-key cstl_adn.db.server_key.pub` is a black-box tester written
-  from the spec alone, without the SDK. This repo's server passes 14/14.
+  from the spec alone, without the SDK. This repo's server passes 16/16.
 
 ## From TypeScript / Node.js
 
@@ -75,11 +75,18 @@ a rule engine on the received policy, a signed policy, and a signed policy
 with versions and refetch. The 12 attack cases are JSON files in
 `benchmark/cases/`; add your own (format in `benchmark/README.md`).
 
-Results:
-- **Compromised relay:** CSTL is the only mechanism with 0 violations.
-- **Compromised author-to-server link:** CSTL is compromised in 7 cases,
-  against 1 for the signed and versioned policy. The two causes are
-  documented in `benchmark/README.md`.
+Results (2026-11-25):
+- **First measure:** on a compromised author-to-server link, CSTL was
+  compromised in 7 cases, against 1 for the signed and versioned policy.
+- **Fixed the same day,** with two server features:
+  - `policy_seq`: the server refuses a message older than the author's
+    last accepted one (`stale_policy`);
+  - a **signed receipt** (`RECEIPT` block, spec section 6.4): the author
+    checks that its exact message is in force, and republishes otherwise.
+    Python: `agent.publish_policy(relations, server_key)` raises
+    `PolicyNotConfirmed` without a valid receipt.
+- **Now:** CSTL is the only mechanism with 0 violations and 0 false
+  refusals under both threat models.
 
 ## Option 0 — you have NO code execution at all (a chat-window AI)
 

@@ -36,7 +36,8 @@ l'affiche et sort en erreur.
 | `moteur` | moteur de règles sur la politique **reçue**, sans vérifier son origine (principe d'OPA ou de Cedar) |
 | `signe` | politique signée par l'auteur (Ed25519, clé épinglée), comme un JWT ; un message invalide fait tout refuser |
 | `signe_versionne` | la meilleure pratique classique : signature, numéro de version strictement croissant, et rechargement de la politique chez l'auteur si un message est invalide |
-| `cstl` | le vrai serveur, avec `CSTL_POLICY_AUTHORS` |
+| `cstl_simple` | le vrai serveur, avec `CSTL_POLICY_AUTHORS` : l'usage d'avant le 2026-11-25 |
+| `cstl` | pareil, avec `policy_seq` et le **reçu signé** (spécification, section 6.4) : un message sans reçu valide fait republier la politique par l'auteur (`CstlAgent.publish_policy`) |
 
 **Deux modèles de menace :**
 - **T1 relais :** l'attaquant contrôle le chemin de distribution de la
@@ -50,12 +51,12 @@ l'affiche et sort en erreur.
 
 Totaux de violations (action permise à tort) et de refus à tort :
 
-| | aucun | moteur | signe | signe_versionne | cstl |
-|---|---|---|---|---|---|
-| **T1** violations / refus à tort | 13 / 0 | 11 / 0 | 3 / 5 | 1 / 0 | **0 / 0** |
-| **T1** cas compromis | 12 | 11 | 3 | 1 | **0** |
-| **T2** violations / refus à tort | 13 / 0 | 11 / 0 | 3 / 5 | **1 / 0** | 7 / 0 |
-| **T2** cas compromis | 12 | 11 | 3 | **1** | 7 |
+| | aucun | moteur | signe | signe_versionne | cstl_simple | cstl |
+|---|---|---|---|---|---|---|
+| **T1** violations / refus à tort | 13 / 0 | 11 / 0 | 3 / 5 | 1 / 0 | 0 / 0 | **0 / 0** |
+| **T1** cas compromis | 12 | 11 | 3 | 1 | 0 | **0** |
+| **T2** violations / refus à tort | 13 / 0 | 11 / 0 | 3 / 5 | 1 / 0 | 7 / 0 | **0 / 0** |
+| **T2** cas compromis | 12 | 11 | 3 | 1 | 7 | **0** |
 
 Le détail par cas et par demande est dans `results.json`.
 
@@ -63,24 +64,39 @@ Le détail par cas et par demande est dans `results.json`.
 
 - **Le moteur de règles** applique la politique reçue : chaque modification
   passe.
-- **La simple signature** arrête les modifications. Elle laisse passer le
-  rejeu et le désordre (3 violations). Quand elle détecte une attaque, elle
-  refuse tout, y compris le travail légitime (5 refus à tort).
-- **En T1, CSTL est le seul à 0 / 0.** La révocation supprimée (cas 08)
-  trompe le meilleur mécanisme classique, mais pas CSTL : l'auteur écrit
-  directement au serveur, qui fait foi.
-- **En T2, CSTL est moins bon que `signe_versionne` (7 contre 1).** Les
-  causes sont mesurées, cas par cas :
-  1. **L'ordre :** CSTL range les règles dans l'ordre où il les **reçoit**,
-     pas dans l'ordre de l'auteur. Deux messages authentiques livrés dans le
-     désordre font gagner l'ancienne règle (cas 10).
-  2. **Le rattrapage :** un message modifié est bien refusé (la signature ne
-     correspond plus), mais la règle n'est alors jamais en vigueur, et
-     l'auteur ne le sait pas (cas 01, 02, 03, 09, 12). Les réponses du
-     serveur ne sont pas signées : sur ce canal, l'attaquant peut renvoyer
-     un faux accusé de réception.
-- **La révocation supprimée (cas 08)** n'est rattrapée par personne en T2.
-  Aucun système ne sait qu'un message qu'il n'a jamais reçu existe.
+- **La simple signature** arrête les modifications, mais pas le rejeu ni le
+  désordre (3 violations). Quand elle détecte une attaque, elle refuse tout,
+  y compris le travail légitime (5 refus à tort).
+- **La signature versionnée avec rechargement** est la meilleure pratique
+  classique. Elle ne laisse passer que la révocation supprimée (cas 08) :
+  un système qui décide ne peut pas savoir qu'un message ne lui est jamais
+  parvenu.
+- **La première mesure (`cstl_simple`)** a révélé deux faiblesses en T2
+  (7 cas compromis) :
+  1. le serveur rangeait les règles dans l'ordre de **réception**, pas dans
+     l'ordre de l'auteur (cas 10) ;
+  2. un message modifié était refusé, mais jamais rattrapé : l'auteur ne
+     savait pas que sa règle n'était pas en vigueur, car les réponses
+     n'étaient pas signées (cas 01, 02, 03, 09, 12).
+- **Corrigé le jour même** (spécification, section 6.4) :
+  - `policy_seq` : le serveur refuse un message plus ancien que le dernier
+    accepté de l'auteur ;
+  - le **reçu signé** : l'auteur sait si **son** message exact est en
+    vigueur, et le republie sinon.
+- **Avec les deux corrections, CSTL est à 0 / 0 dans les deux modèles.**
+  C'est le seul mécanisme à y arriver.
+- **Ce que le reçu change sur la révocation supprimée (cas 08) :** l'auteur
+  voit qu'il n'a pas de reçu et republie.
+- **Limite honnête :** si l'attaquant bloque la liaison de l'auteur **en
+  permanence**, la politique ne peut pas arriver, avec CSTL comme ailleurs.
+  La différence est que l'auteur le sait (`PolicyNotConfirmed`). Avec les
+  autres mécanismes, personne ne le sait.
+- **Hypothèse du banc :** comme pour le rechargement de
+  `signe_versionne`, la republication passe une fois le script de
+  l'attaquant terminé. Un mécanisme classique qui ajouterait des reçus
+  signés et une séquence ferait comme CSTL. C'est l'architecture qui
+  compte : une source signée, un serveur qui fait foi, et un retour vérifiable
+  vers l'auteur.
 
 ## Ajouter une attaque
 
