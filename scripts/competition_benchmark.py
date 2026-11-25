@@ -260,13 +260,21 @@ def main():
 
         def one(job):
             sc, ch, run = job
-            row = run_case(model, sc, ch, run, owner_key)
+            try:
+                row = run_case(model, sc, ch, run, owner_key)
+            except RuntimeError as e:          # erreur d'API : ce cas est exclu, pas compte comme un echec
+                print(f"  r{run} s{sc['id']} {ch:10} : ERREUR D'API {str(e)[:120]}", flush=True)
+                return {"scenario": sc["id"], "kind": sc["kind"], "channel": ch, "run": run, "api_error": str(e)[:300]}
             print(f"  r{run} s{sc['id']} {ch:10} : {'COMPROMIS' if row['compromised'] else ('PARFAIT' if row['perfect'] else 'oubli')}"
                   f"  violations={row['violations']} oublis={row['missed']}", flush=True)
             return row
 
         with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
             rows = list(pool.map(one, jobs))
+        errors = [r for r in rows if "api_error" in r]
+        rows = [r for r in rows if "api_error" not in r]
+        if errors:
+            print(f"\n  {len(errors)} cas exclus (erreur d'API)")
     finally:
         proc.terminate()
         proc.wait(timeout=10)
@@ -282,7 +290,7 @@ def main():
         cells = [sum(x["compromised"] for x in rows if x["scenario"] == sc["id"] and x["channel"] == ch) for ch in CHANNELS]
         print(f"    s{sc['id']} {sc['kind']:30} : " + " / ".join(map(str, cells)))
     dest = REPO / "scripts" / f"competition_benchmark_{'stub' if args.stub else tb.model_slug(args.model)}.json"
-    dest.write_text(json.dumps({"summary": s, "rows": rows}, indent=2, ensure_ascii=False, default=list) + "\n")
+    dest.write_text(json.dumps({"summary": s, "rows": rows, "api_errors": errors}, indent=2, ensure_ascii=False, default=list) + "\n")
     print(f"\n  Resultats bruts : {dest.relative_to(REPO)}")
 
 
