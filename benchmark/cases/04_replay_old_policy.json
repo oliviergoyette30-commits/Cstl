@@ -1,0 +1,43 @@
+{
+ "id": "04_replay_old_policy",
+ "author": "cstl-team",
+ "kind": "rejeu",
+ "description": "v1 permet delete_user, v2 l'interdit ; le relais rejoue v1 apres v2.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "delete_user",
+     "modality": "MAY"
+    }
+   ]
+  },
+  {
+   "rules": [
+    {
+     "action": "delete_user",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  },
+  {
+   "op": "deliver",
+   "message": 1
+  },
+  {
+   "op": "replay",
+   "message": 0
+  }
+ ],
+ "requests": [
+  {
+   "action": "delete_user"
+  }
+ ]
+}

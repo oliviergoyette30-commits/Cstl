@@ -1,0 +1,47 @@
+{
+ "id": "12_forged_lift_plus_replay",
+ "author": "cstl-team",
+ "kind": "attaques combinees",
+ "description": "Le relais modifie la v2 (qui interdit) et rejoue la v1 (qui permettait).",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "transfer_funds",
+     "modality": "MAY"
+    }
+   ]
+  },
+  {
+   "rules": [
+    {
+     "action": "transfer_funds",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  },
+  {
+   "op": "modify",
+   "message": 1,
+   "set_rule": {
+    "index": 0,
+    "modality": "MAY"
+   }
+  },
+  {
+   "op": "replay",
+   "message": 0
+  }
+ ],
+ "requests": [
+  {
+   "action": "transfer_funds"
+  }
+ ]
+}

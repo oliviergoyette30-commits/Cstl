@@ -83,6 +83,14 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
      HTTP aux secrets de la garde), jeton vérifié et paramètres typés avant
      toute exécution ; testé avec un vrai PostgreSQL.
 3. **Prouver publiquement :**
+   - **commencé le 2026-11-25 :** banc public déterministe
+     (`benchmark/control_benchmark.py`, 12 attaques en fichiers JSON
+     ouverts aux contributions, vrai serveur). Relais compromis (T1) : CSTL
+     seul à 0 violation. Canal de l'auteur compromis (T2) : CSTL 7 cas
+     compromis contre 1 pour une politique signée et versionnée. Deux
+     faiblesses mesurées : ordre de réception au lieu de l'ordre de
+     l'auteur, et pas de rattrapage d'un message refusé (réponses non
+     signées) ;
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
    - questions plus dures ;

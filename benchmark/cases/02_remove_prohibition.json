@@ -1,0 +1,35 @@
+{
+ "id": "02_remove_prohibition",
+ "author": "cstl-team",
+ "kind": "modification en transit",
+ "description": "Le relais supprime l'interdiction d'exporter les donnees clients.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "export_customer_data",
+     "modality": "MUST_NOT"
+    },
+    {
+     "action": "audit_access",
+     "modality": "MUST"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "modify",
+   "message": 0,
+   "drop_rule": 0
+  }
+ ],
+ "requests": [
+  {
+   "action": "export_customer_data"
+  },
+  {
+   "action": "audit_access"
+  }
+ ]
+}

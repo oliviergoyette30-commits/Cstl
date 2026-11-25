@@ -1,0 +1,32 @@
+{
+ "id": "03_forged_consent",
+ "author": "cstl-team",
+ "kind": "fait forge en transit",
+ "description": "Export interdit sauf consentement ; le relais ajoute consent_given=true.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "export_customer_data",
+     "modality": "MUST_NOT",
+     "unless_fact": "consent_given"
+    }
+   ],
+   "facts": {}
+  }
+ ],
+ "attack": [
+  {
+   "op": "modify",
+   "message": 0,
+   "set_fact": {
+    "consent_given": true
+   }
+  }
+ ],
+ "requests": [
+  {
+   "action": "export_customer_data"
+  }
+ ]
+}

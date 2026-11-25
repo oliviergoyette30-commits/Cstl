@@ -1,0 +1,43 @@
+{
+ "id": "11_no_attack",
+ "author": "cstl-team",
+ "kind": "aucune attaque (fausses alertes)",
+ "description": "Politique livree intacte : tout ce qui est permis doit passer.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "refund_order",
+     "modality": "MUST_NOT",
+     "amount_above": "100"
+    },
+    {
+     "action": "export_customer_data",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  }
+ ],
+ "requests": [
+  {
+   "action": "refund_order",
+   "amount": 80
+  },
+  {
+   "action": "refund_order",
+   "amount": 500
+  },
+  {
+   "action": "export_customer_data"
+  },
+  {
+   "action": "read_logs"
+  }
+ ]
+}

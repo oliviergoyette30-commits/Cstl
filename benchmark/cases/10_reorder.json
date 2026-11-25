@@ -1,0 +1,39 @@
+{
+ "id": "10_reorder",
+ "author": "cstl-team",
+ "kind": "reordonnancement",
+ "description": "v1 permet delete_user, v2 l'interdit ; le relais livre v2 puis v1 (deux messages authentiques, dans le mauvais ordre).",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "delete_user",
+     "modality": "MAY"
+    }
+   ]
+  },
+  {
+   "rules": [
+    {
+     "action": "delete_user",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 1
+  },
+  {
+   "op": "deliver",
+   "message": 0
+  }
+ ],
+ "requests": [
+  {
+   "action": "delete_user"
+  }
+ ]
+}

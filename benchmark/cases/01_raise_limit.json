@@ -1,0 +1,37 @@
+{
+ "id": "01_raise_limit",
+ "author": "cstl-team",
+ "kind": "modification en transit",
+ "description": "Le relais remplace la limite de remboursement de 100 par 10000.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "refund_order",
+     "modality": "MUST_NOT",
+     "amount_above": "100"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "modify",
+   "message": 0,
+   "set_rule": {
+    "index": 0,
+    "amount_above": "10000"
+   }
+  }
+ ],
+ "requests": [
+  {
+   "action": "refund_order",
+   "amount": 2500
+  },
+  {
+   "action": "refund_order",
+   "amount": 50
+  }
+ ]
+}

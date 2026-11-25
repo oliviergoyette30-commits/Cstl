@@ -1,0 +1,39 @@
+{
+ "id": "05_forge_author",
+ "author": "cstl-team",
+ "kind": "usurpation de l'auteur",
+ "description": "Un message signe par la cle de l'attaquant pretend venir de l'auteur et leve l'interdiction.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "wipe_db",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  },
+  {
+   "op": "forge_author",
+   "rules": [
+    {
+     "action": "wipe_db",
+     "modality": "MAY"
+    }
+   ]
+  }
+ ],
+ "requests": [
+  {
+   "action": "wipe_db"
+  },
+  {
+   "action": "read_logs"
+  }
+ ]
+}

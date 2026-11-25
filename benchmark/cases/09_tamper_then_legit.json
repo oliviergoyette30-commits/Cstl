@@ -1,0 +1,52 @@
+{
+ "id": "09_tamper_then_legit",
+ "author": "cstl-team",
+ "kind": "modification puis message honnete",
+ "description": "Le relais modifie v1 ; v2 arrive intacte. Un systeme qui refuse tout apres une attaque bloque aussi le travail legitime.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "refund_order",
+     "modality": "MUST_NOT",
+     "amount_above": "100"
+    }
+   ]
+  },
+  {
+   "rules": [
+    {
+     "action": "send_invoice",
+     "modality": "MAY"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "modify",
+   "message": 0,
+   "set_rule": {
+    "index": 0,
+    "amount_above": "10000"
+   }
+  },
+  {
+   "op": "deliver",
+   "message": 1
+  }
+ ],
+ "requests": [
+  {
+   "action": "refund_order",
+   "amount": 2500
+  },
+  {
+   "action": "refund_order",
+   "amount": 50
+  },
+  {
+   "action": "send_invoice"
+  }
+ ]
+}

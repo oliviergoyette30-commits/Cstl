@@ -1,0 +1,2746 @@
+{
+ "cases": 12,
+ "evaluator_mismatches": [],
+ "rows": [
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 1
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 1
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "01_raise_limit",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 1
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 1
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "02_remove_prohibition",
+   "kind": "modification en transit",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "audit_access"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "03_forged_consent",
+   "kind": "fait forge en transit",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "export_customer_data"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "04_replay_old_policy",
+   "kind": "rejeu",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 1
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 1
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "05_forge_author",
+   "kind": "usurpation de l'auteur",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "wipe_db"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    false,
+    true
+   ],
+   "decisions": [
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "06_insider_lift",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "07_insider_fact",
+   "kind": "initie",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "liquidate_positions"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "08_drop_revocation",
+   "kind": "suppression",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "wipe_db"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    false,
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 2
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    false,
+    true,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    false,
+    true,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    false,
+    false,
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 2
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    false,
+    true,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "09_tamper_then_legit",
+   "kind": "modification puis message honnete",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 2500
+    },
+    {
+     "action": "refund_order",
+     "amount": 50
+    },
+    {
+     "action": "send_invoice"
+    }
+   ],
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "10_reorder",
+   "kind": "reordonnancement",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "delete_user"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "violations": 2,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "violations": 2,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "11_no_attack",
+   "kind": "aucune attaque (fausses alertes)",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "refund_order",
+     "amount": 80
+    },
+    {
+     "action": "refund_order",
+     "amount": 500
+    },
+    {
+     "action": "export_customer_data"
+    },
+    {
+     "action": "read_logs"
+    }
+   ],
+   "expected": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "decisions": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T1",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T1",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T1",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T1",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T1",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T2",
+   "mechanism": "aucun",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T2",
+   "mechanism": "moteur",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T2",
+   "mechanism": "signe",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T2",
+   "mechanism": "signe_versionne",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    false
+   ],
+   "violations": 0,
+   "false_refusals": 0
+  },
+  {
+   "case": "12_forged_lift_plus_replay",
+   "kind": "attaques combinees",
+   "threat": "T2",
+   "mechanism": "cstl",
+   "requests": [
+    {
+     "action": "transfer_funds"
+    }
+   ],
+   "expected": [
+    false
+   ],
+   "decisions": [
+    true
+   ],
+   "violations": 1,
+   "false_refusals": 0
+  }
+ ]
+}

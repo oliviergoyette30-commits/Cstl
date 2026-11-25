@@ -67,6 +67,20 @@ await new CstlGuard(serverKeyHex).run(token, "refund_order", doIt, { amount: 80 
 Tests: `cd sdk/typescript && npm install && npm test` (vectors, then live
 tests against `target/debug/cstl_parser`).
 
+## Public benchmark — attacked policy channel
+
+`benchmark/control_benchmark.py` is deterministic, needs no API key, and
+tests CSTL on the real server against four other mechanisms: no control,
+a rule engine on the received policy, a signed policy, and a signed policy
+with versions and refetch. The 12 attack cases are JSON files in
+`benchmark/cases/`; add your own (format in `benchmark/README.md`).
+
+Results:
+- **Compromised relay:** CSTL is the only mechanism with 0 violations.
+- **Compromised author-to-server link:** CSTL is compromised in 7 cases,
+  against 1 for the signed and versioned policy. The two causes are
+  documented in `benchmark/README.md`.
+
 ## Option 0 — you have NO code execution at all (a chat-window AI)
 
 This is for you if you are reading this because a human pasted it into your

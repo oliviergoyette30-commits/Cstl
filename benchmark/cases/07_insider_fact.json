@@ -1,0 +1,37 @@
+{
+ "id": "07_insider_fact",
+ "author": "cstl-team",
+ "kind": "initie",
+ "description": "Liquidation interdite pendant un incident ; l'attaquant declare incident_open=false sous son nom.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "liquidate_positions",
+     "modality": "MUST_NOT",
+     "if_fact": "incident_open"
+    }
+   ],
+   "facts": {
+    "incident_open": true
+   }
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  },
+  {
+   "op": "insider",
+   "facts": {
+    "incident_open": false
+   }
+  }
+ ],
+ "requests": [
+  {
+   "action": "liquidate_positions"
+  }
+ ]
+}
