@@ -49,6 +49,57 @@ plus important au moins important :
 
 Ordre proposé : 1, puis 2, puis 3 et 4.
 
+## Faiblesses connues (évaluation du 2026-11-25)
+
+Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
+
+**Format**
+- Sur des données irrégulières, aucune forme CSTL compacte ne bat le JSON en
+  écriture : `mixte` 37/48, `relationnel` 40 à 44/48, JSON 36 à 47/48.
+  Seule la forme `strict` est plus fiable (48/48 à 1 exemple), et elle coûte
+  +7 à +18 % de tokens.
+- `strict` ressemble à un sous-ensemble du YAML : ce n'est pas une
+  invention de CSTL, seulement un choix de forme sûre.
+- Dans `strict`, la valeur inconnue s'écrit encore `{"$unknown":...}`, pas
+  `?` comme dans l'arbre indenté.
+- `relationnel` n'est pas plus court que le JSON selon l'estimateur local
+  (−11 à +39 %), seulement −6 à 0 % selon les tokenizers des fournisseurs.
+- Le tour de correction répare peu : 8 erreurs détectées sur 16 à
+  1 exemple, aucune à 3 exemples. Les modèles refont la même erreur.
+- Un tiers environ des erreurs restantes sont silencieuses (champ inventé,
+  liste vide ajoutée) : aucun lecteur ne les voit.
+- Beaucoup de formes (relations 4, documents 5, spécialisées 8). Le choix
+  automatique les cache, mais c'est plus à maintenir qu'un seul format.
+- Aucun modèle n'est entraîné sur CSTL : les formes compactes resteront
+  moins fiables en écriture tant que ce n'est pas le cas.
+
+**Mesures**
+- Souvent une seule passe, avec un bruit de ±2 à 6 points (le JSON a fait
+  42/48 puis 36/48 sur le même test).
+- Questions de lecture trop faciles : beaucoup de 36/36 partout, effet
+  plafond. Il faut des questions plus dures et des arbres de profondeur 5
+  et plus.
+- Six formes spécialisées (série, graphe, conversation, appels, matrice,
+  changements) sont sans perte mais jamais mesurées sur un modèle.
+- Le passage de DeepSeek sur les formes de relations est perdu (contenu
+  vide de l'API).
+
+**Sécurité**
+- Les comptes d'un arbre (`tree_n`) prouvent qu'il correspond à ce que
+  l'auteur annonce, pas que l'auteur dit vrai.
+- Un arbre envoyé sans `source` n'est garanti que par son expéditeur.
+- Le témoin externe reçoit les maillons de l'audit en asynchrone : ceux
+  écrits juste avant un arrêt brutal peuvent lui manquer.
+- L'autorisation reste volontaire sans garde (`CstlGuard`) dans le système
+  qui exécute l'action.
+
+**Produit**
+- Pas de paquet installable, pas de SDK TypeScript, pas d'adaptateur A2A
+  (MCP seulement).
+- Un seul serveur sur SQLite : ni fédération entre organisations, ni
+  révocation standard des clés.
+- Adoption nulle : c'est un prototype de recherche, pas encore un produit.
+
 ## Mesures
 
 - **`scripts/team_task_benchmark.py` :** une tâche d'équipe avec pièges.
