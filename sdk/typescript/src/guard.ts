@@ -1,6 +1,8 @@
 // Verification d'un jeton d'autorisation par le systeme qui execute
 // (specification controle v1, section 7.3). Equivalent de cstl_guard.CstlGuard.
 import { verifyHex, publicKeyFromHex } from "./signing.js";
+import { connect } from "node:net";
+import { randomBytes } from "node:crypto";
 
 export const AUTHZ_VERSION = "cstl-authz-v1";
 
@@ -17,7 +19,9 @@ export interface AuthorizationToken {
 
 export type Verdict =
   | "no_token" | "bad_signature" | "wrong_action" | "wrong_agent" | "wrong_amount"
-  | "not_yet_valid" | "expired" | "already_used";
+  | "not_yet_valid" | "expired" | "already_used"
+  // Verification en direct (specification 7.6) :
+  | "revoked" | "stopped" | "unknown" | "status_unavailable";
 
 export class Unauthorized extends Error {
   constructor(public readonly reason: Verdict) {
@@ -54,6 +58,8 @@ function num(x: string | number | null | undefined): number | null {
 export interface GuardOptions {
   skew?: number;
   clock?: () => number; // secondes unix
+  /** Serveur CSTL a interroger avant d'executer (purpose=token_status). */
+  online?: { host: string; port: number; timeoutMs?: number };
 }
 
 export class CstlGuard {
@@ -61,6 +67,7 @@ export class CstlGuard {
   private readonly skew: number;
   private readonly clock: () => number;
   private readonly used = new Set<string>();
+  private readonly online?: { host: string; port: number; timeoutMs?: number };
 
   /** `serverPublicKeyHex` : cle publique du serveur, obtenue HORS BANDE (<base>.server_key.pub). */
   constructor(serverPublicKeyHex: string, opts: GuardOptions = {}) {
@@ -68,6 +75,36 @@ export class CstlGuard {
     this.key = serverPublicKeyHex.trim();
     this.skew = opts.skew ?? 5;
     this.clock = opts.clock ?? (() => Date.now() / 1000);
+    this.online = opts.online;
+  }
+
+  /** Etat du jeton selon le serveur, en direct ; "status_unavailable" sans reponse signee. */
+  async liveStatus(t: AuthorizationToken): Promise<Verdict | "valid"> {
+    if (!this.online) return "valid";
+    const nonce = randomBytes(16).toString("hex");
+    const text = "#!CSTL v5.0.0 MODE=A\nMETA [encoder=cstl_guard, produced_by=cstl_guard]\n" +
+      `INTENT_PAYLOAD [purpose=token_status, sender=cstl_guard, receiver=server, audit_hash=${t.audit_hash}, nonce=${nonce}]\n---END---\n`;
+    const { host, port, timeoutMs = 5000 } = this.online;
+    const raw = await new Promise<string | null>((resolve) => {
+      let buf = "";
+      const s = connect({ host, port }, () => s.write(text));
+      s.setTimeout(timeoutMs, () => { s.destroy(); resolve(null); });
+      s.on("data", (d) => { buf += d.toString("utf8"); if (buf.includes("---END---")) { s.end(); resolve(buf); } });
+      s.on("error", () => resolve(null));
+      s.on("close", () => resolve(buf.includes("---END---") ? buf : null));
+    });
+    if (!raw) return "status_unavailable";
+    const line = raw.split("\n").find((l) => l.startsWith("INTENT_PAYLOAD ["));
+    if (!line) return "status_unavailable";
+    const f: Record<string, string> = {};
+    for (const part of line.slice("INTENT_PAYLOAD [".length).replace(/\]$/, "").split(", ")) {
+      const i = part.indexOf("=");
+      if (i > 0) f[part.slice(0, i).trim()] = part.slice(i + 1).trim();
+    }
+    if (f.purpose !== "token_status" || f.nonce !== nonce || f.audit_hash !== t.audit_hash) return "status_unavailable";
+    const msg = Buffer.from(`cstl-token-status-v1\naudit_hash=${t.audit_hash}\nstatus=${f.status}\nnonce=${nonce}\nchecked_at=${f.checked_at}`, "utf8");
+    if (!verifyHex(msg, f.signature ?? "", this.key)) return "status_unavailable";
+    return (["valid", "expired", "revoked", "stopped", "unknown"] as const).find((v) => v === f.status) ?? "status_unavailable";
   }
 
   /** Leve Unauthorized si le jeton ne permet pas `action` maintenant ; ne le consomme pas. */
@@ -91,6 +128,10 @@ export class CstlGuard {
   async run<T>(t: AuthorizationToken | null | undefined, action: string, fn: () => T | Promise<T>,
                opts: { agent?: string; amount?: string | number } = {}): Promise<T> {
     this.check(t, action, opts.agent, opts.amount);
+    if (this.online) {
+      const status = await this.liveStatus(t!);
+      if (status !== "valid") throw new Unauthorized(status);
+    }
     if (this.used.has(t!.request_id)) throw new Unauthorized("already_used");
     this.used.add(t!.request_id);
     return await fn();

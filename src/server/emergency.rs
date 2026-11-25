@@ -81,8 +81,54 @@ pub fn applies(scope: &str, agent: &str, action: Option<&str>) -> bool {
     false
 }
 
+/// Detection de comportement anormal (2026-11-25) : plus de
+/// `CSTL_ANOMALY_MAX_PER_MIN` demandes d'action d'un MEME agent en 60 s
+/// declenchent un arret d'urgence `agent:<nom>`, pose par
+/// `anomaly_detector` et persiste. Seul un auteur de politique le leve.
+pub fn anomaly_max_per_min() -> Option<usize> {
+    std::env::var("CSTL_ANOMALY_MAX_PER_MIN").ok().and_then(|v| v.parse().ok()).filter(|v: &usize| *v > 0)
+}
+
+static WINDOWS: std::sync::Mutex<Option<std::collections::HashMap<String, std::collections::VecDeque<i64>>>> =
+    std::sync::Mutex::new(None);
+
+/// Un auteur leve l'arret de `agent` : son compteur repart de zero (sinon la
+/// demande suivante le redeclencherait aussitot).
+pub fn reset_window(agent: &str) {
+    let mut guard = WINDOWS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = guard.as_mut() {
+        map.remove(agent);
+    }
+}
+
+/// Compte une demande de `agent` a `now` ; true si la limite est depassee.
+pub fn record_request(agent: &str, now: i64, max: usize) -> bool {
+    let mut guard = WINDOWS.lock().unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(Default::default);
+    let w = map.entry(agent.to_string()).or_default();
+    while w.front().is_some_and(|t| *t <= now - 60) {
+        w.pop_front();
+    }
+    w.push_back(now);
+    while w.len() > max + 1 {
+        w.pop_front();
+    }
+    w.len() > max
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn too_many_requests_in_a_minute_trip_the_detector() {
+        let a = format!("anomaly_test_{}", std::process::id());
+        for i in 0..3 {
+            assert!(!record_request(&a, 1000 + i, 3));
+        }
+        assert!(record_request(&a, 1003, 3), "4e demande en 60 s");
+        assert!(!record_request(&a, 2000, 3), "une minute plus tard : fenetre videe");
+        assert!(!record_request("someone_else", 1003, 3));
+    }
+
     use super::*;
 
     #[test]

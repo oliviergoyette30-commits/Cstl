@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
-import { CstlAgent, CstlGuard, ActionDenied, Unauthorized, PolicyNotConfirmed, ControlDenied, sendRaw, render, toResponse, verifyReceipt } from "../src/index.js";
+import { CstlAgent, CstlGuard, ActionDenied, ApprovalRequired, Unauthorized, PolicyNotConfirmed, ControlDenied, sendRaw, render, toResponse, verifyReceipt } from "../src/index.js";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 const binary = join(repo, "target", "debug", "cstl_parser");
@@ -28,6 +28,8 @@ before(async () => {
   const env: NodeJS.ProcessEnv = { ...process.env, CSTL_PORT: String(PORT), CSTL_REST_PORT: "9292", CSTL_KB_VERIFY: "off" };
   delete env.CSTL_DEV_MODE;
   env.CSTL_POLICY_AUTHORS = "owner_*,shared_*";
+  env.CSTL_APPROVERS = "human_*";
+  env.CSTL_APPROVAL_ACTIONS = "wipe_*";
   proc = spawn(binary, [], { cwd: work, env, stdio: "ignore" });
   for (let i = 0; i < 120 && !(await open()); i++) await new Promise((r) => setTimeout(r, 250));
   serverKey = readFileSync(join(work, "cstl_adn.db.server_key.pub"), "utf8").trim();
@@ -139,4 +141,20 @@ test("revocation d'une cle volee et arret d'urgence", { skip }, async () => {
   assert.equal(after.allowed, false);
   assert.equal(after.response.intent.reason, "key_revoked");
   assert.equal((await other.requestAction("read_logs")).allowed, true);
+});
+
+test("accord humain, puis jeton verifie en direct (revoque avant expiration)", { skip }, async () => {
+  const owner = agent(`owner_${uid()}`), bot = agent(`bot_${uid()}`), human = agent(`human_${uid()}`);
+  for (const a of [owner, bot, human]) assert.ok(await a.register());
+  let id = "";
+  await assert.rejects(bot.authorize("wipe_cache"), (e: ApprovalRequired) => { id = e.approvalId ?? ""; return e.reason === "approval_required"; });
+  assert.ok((await human.pendingApprovals()).some((r) => r.approval_id === id));
+  await human.approve(id, "ok");
+  const tok = await bot.authorize("wipe_cache", undefined, { approvalId: id });
+  const live = new CstlGuard(serverKey, { online: { host: "127.0.0.1", port: PORT } });
+  assert.equal(await live.liveStatus(tok), "valid");
+  await owner.revokeKey({ agent: bot.name });
+  await assert.rejects(live.run(tok, "wipe_cache", () => 1), (e: Unauthorized) => e.reason === "revoked");
+  const dead = new CstlGuard(serverKey, { online: { host: "127.0.0.1", port: 1 } });
+  assert.equal(await dead.liveStatus(tok), "status_unavailable");
 });

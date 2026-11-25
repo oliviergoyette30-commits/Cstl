@@ -209,7 +209,7 @@ def parse_response(raw: str) -> CstlResponse:
         elif block_name == "AUDIT":
             audit = kv
         elif block_name in ("RELATION", "VERIFICATION", "EMERGENCE_REPORT", "SEMANTIC_WARNING",
-                            "POLICY_RULE", "POLICY_IGNORED"):
+                            "POLICY_RULE", "POLICY_IGNORED", "APPROVAL"):
             relations.append({"block": block_name, **kv})
 
     purpose = intent.get("purpose", "")

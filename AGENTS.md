@@ -13,7 +13,7 @@ want to see it work, keep reading here.
 
 ```bash
 cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 6 commands
+pip install ./sdk/python        # the "cstl" package: SDK + 7 commands
 cstl-demo                       # or: python3 sdk/python/cstl_demo.py
 ```
 
@@ -32,7 +32,7 @@ deletes afterwards:
 It prints `Tout est conforme : 7/7.` Live test: `sdk/python/test_demo_live.py`.
 
 The other installed commands are `cstl-mcp-proxy`, `cstl-a2a-proxy`,
-`cstl-gate`, `cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
+`cstl-gate`, `cstl-approve`, `cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
 wheel, are built by `.github/workflows/release.yml` (on a `v*` tag or by
 hand). Publishing them is a human decision.
 
@@ -741,6 +741,54 @@ owner.emergency_stop("action:refund_*", on=False)   # lift it
 - **Limit:** a token already issued stays valid until it expires
   (`CSTL_AUTHZ_TTL_SECS`, 60 s by default). Lower that TTL when a stop must
   bite faster.
+
+**Human approval for risky actions.** Some actions should not run until a
+person says yes. Spec section 7.5.
+
+```bash
+CSTL_APPROVAL_ACTIONS="wipe_*,refund_*" CSTL_APPROVERS="human_*" cargo run --bin cstl_parser
+```
+
+```python
+token = bot.authorize("wipe_db", wait=300)   # waits up to 5 min for a human
+# or: catch ApprovalRequired, show e.approval_id, then authorize(..., approval_id=id)
+```
+
+```bash
+cstl-approve --agent human_alice list
+cstl-approve --agent human_alice approve <approval_id> --reason "checked"
+```
+
+- If the rules allow the action, the server answers
+  `reason=approval_required` with an `approval_id`, and sends a Telegram
+  message when Telegram is configured.
+- The approval is signed by the approver's key and audited. It is valid
+  **once**, for the same agent, action and amount, within
+  `CSTL_APPROVAL_TTL_SECS` (1 h by default).
+- The agent cannot approve itself (`self_approval`). A prohibition stays a
+  prohibition. An emergency stop wins over an approval.
+- With no approver configured, such an action is never allowed.
+
+**Live token check.** A token stays valid for up to 60 s. A revocation or
+an emergency stop must also stop the tokens already issued. Spec section
+7.6.
+
+- `CstlGuard(key, online=("127.0.0.1", 5050))` asks the server, before
+  running, whether the token still holds (`purpose=token_status`). The
+  answer is signed with the server key and carries the guard's fresh nonce.
+- The guard refuses `revoked`, `stopped`, `expired`, `unknown`, and
+  `status_unavailable` (no signed answer), so it is closed by default.
+- `CSTL_GUARD_ONLINE=host:port` turns this on in `cstl-mcp-proxy`,
+  `cstl-a2a-proxy` and `cstl-gate` without changing their config.
+
+**Abnormal behavior.** With `CSTL_ANOMALY_MAX_PER_MIN=30`, an agent that
+sends more than 30 action requests in 60 s is stopped automatically:
+`emergency_stop` on `agent:<name>`, set by `anomaly_detector`. It stays
+stopped until a policy author lifts the stop. Other agents carry on.
+
+Live test for all three: `sdk/python/test_approval_live.py`. It includes a
+fake server that answers `valid` without the real signature; the guard
+refuses it.
 
 **Changing the server key.** Run `cargo run --bin cstl_parser --
 --rotate-server-key` with the server stopped. It first verifies the

@@ -32,6 +32,13 @@ export class PolicyNotConfirmed extends Error {
   }
 }
 
+/** L'action demande l'accord signe d'un approbateur humain (specification 7.5). */
+export class ApprovalRequired extends ActionDenied {
+  constructor(action: string, reason: string, public readonly approvalId?: string) {
+    super(action, reason, "approval");
+  }
+}
+
 /** Revocation, inscription de cle ou arret d'urgence refuse par le serveur. */
 export class ControlDenied extends Error {
   constructor(public readonly request: string, public readonly reason: string, public readonly response?: Response) {
@@ -141,19 +148,50 @@ export class CstlAgent {
   }
 
   /** Demande au serveur, AVANT d'agir, si `action` est permise. */
-  async requestAction(action: string, amount?: string | number): Promise<{ allowed: boolean; response: Response }> {
+  async requestAction(action: string, amount?: string | number, approvalId?: string): Promise<{ allowed: boolean; response: Response }> {
     const intent: Fields = { action, request_id: randomUUID().replace(/-/g, "") };
     if (amount !== undefined) intent.amount = String(amount);
+    if (approvalId) intent.approval_id = approvalId;
     const response = await this.send("action_request", [], intent);
     return { allowed: response.intent.decision === "allowed", response };
   }
 
   /** Jeton signe par le serveur pour `action` (et ce montant) ; leve ActionDenied sinon. */
-  async authorize(action: string, amount?: string | number): Promise<AuthorizationToken> {
-    const { allowed, response } = await this.requestAction(action, amount);
+  async authorize(action: string, amount?: string | number,
+                  opts: { approvalId?: string; waitMs?: number; pollMs?: number } = {}): Promise<AuthorizationToken> {
+    let approvalId = opts.approvalId;
+    let { allowed, response } = await this.requestAction(action, amount, approvalId);
+    const deadline = Date.now() + (opts.waitMs ?? 0);
+    const waiting = () => ["approval_required", "approval_pending"].includes(response.intent.reason ?? "");
+    while (!allowed && waiting() && Date.now() < deadline) {
+      approvalId = response.intent.approval_id ?? approvalId;
+      await new Promise((r) => setTimeout(r, opts.pollMs ?? 2000));
+      ({ allowed, response } = await this.requestAction(action, amount, approvalId));
+    }
     const token = allowed ? tokenFromFields(response.intent) : null;
-    if (!token) throw new ActionDenied(action, response.intent.reason ?? response.intent.purpose ?? "refuse", response.intent.rule);
+    if (!token) {
+      const reason = response.intent.reason ?? response.intent.purpose ?? "refuse";
+      if (waiting()) throw new ApprovalRequired(action, reason, response.intent.approval_id ?? approvalId);
+      throw new ActionDenied(action, reason, response.intent.rule);
+    }
     return token;
+  }
+
+  /** Approbateur : demandes en attente. */
+  async pendingApprovals(): Promise<Fields[]> {
+    const r = await this.send("approval_list", [], { request_id: randomUUID().replace(/-/g, "") });
+    if (r.intent.purpose !== "approvals") throw new ControlDenied("approval_list", r.intent.reason ?? r.intent.purpose ?? "refuse", r);
+    return r.blocks.filter((b) => b.name === "APPROVAL").map((b) => b.fields);
+  }
+
+  /** Approbateur : accord signe (une demande, une fois). */
+  approve(approvalId: string, reason?: string): Promise<Fields> {
+    return this.control("approval_decision", { approval_id: approvalId, decision: "approve", reason });
+  }
+
+  /** Approbateur : refus. */
+  reject(approvalId: string, reason?: string): Promise<Fields> {
+    return this.control("approval_decision", { approval_id: approvalId, decision: "reject", reason });
   }
 
   /** Execute `fn` seulement si `action` est permise. */
@@ -199,7 +237,9 @@ export class CstlAgent {
     const intent: Fields = { policy_seq: this.nextSeq() };
     for (const [k, v] of Object.entries(fields)) if (v !== undefined) intent[k] = v;
     const r = await this.send(purpose, [], intent);
-    const done: Record<string, string> = { key_revoke: "key_revoked", key_enroll: "key_enrolled", emergency_stop: "emergency_stop_set" };
+    const done: Record<string, string> = {
+      key_revoke: "key_revoked", key_enroll: "key_enrolled", emergency_stop: "emergency_stop_set", approval_decision: "approval_recorded",
+    };
     if (r.intent.purpose !== done[purpose]) {
       throw new ControlDenied(purpose, r.intent.reason ?? r.intent.purpose ?? "refuse", r);
     }

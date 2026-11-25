@@ -148,6 +148,30 @@ pub struct DbPeerReviewSignature {
     pub reviewed_at: i64,
 }
 
+/// Demande d'accord humain (2026-11-25, voir server/approval.rs).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApprovalRow {
+    pub id: String,
+    pub agent: String,
+    pub action: String,
+    pub amount: Option<String>,
+    pub requested_at: i64,
+    /// `pending`, `approved` ou `rejected`.
+    pub status: String,
+    pub decided_by: Option<String>,
+    pub reason: Option<String>,
+    pub consumed: bool,
+}
+
+impl ApprovalRow {
+    fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Self> {
+        Ok(ApprovalRow {
+            id: r.get(0)?, agent: r.get(1)?, action: r.get(2)?, amount: r.get(3)?, requested_at: r.get(4)?,
+            status: r.get(5)?, decided_by: r.get(6)?, reason: r.get(7)?, consumed: r.get::<_, i64>(8)? != 0,
+        })
+    }
+}
+
 /// Ligne brute de `load_agents` : (name, version, capabilities, trust_score, public_key).
 /// Une regle deontique persistee et son auteur (`deontic_rules_with_authors`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -418,6 +442,25 @@ impl AdnStore {
                 public_key TEXT NOT NULL,
                 enrolled_by TEXT NOT NULL,
                 at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS approvals (
+                id TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount TEXT,
+                requested_at INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                decided_by TEXT,
+                decided_at INTEGER,
+                reason TEXT,
+                consumed INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS issued_tokens (
+                audit_hash TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                agent_key TEXT,
+                expires_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS emergency_stops (
                 scope TEXT PRIMARY KEY,
@@ -1846,6 +1889,73 @@ impl AdnStore {
             params![agent, public_key.to_ascii_lowercase()],
         )?;
         Ok(n > 0)
+    }
+
+    /// Escalade vers un humain (2026-11-25) : une demande en attente
+    /// d'accord. `amount` : le montant normalise, ou None.
+    pub fn create_approval(&self, id: &str, agent: &str, action: &str, amount: Option<&str>, at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO approvals (id, agent, action, amount, requested_at, status) VALUES (?1, ?2, ?3, ?4, ?5, 'pending')",
+            params![id, agent, action, amount, at],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT id, agent, action, amount, requested_at, status, decided_by, reason, consumed FROM approvals WHERE id = ?1",
+                [id],
+                ApprovalRow::from_row,
+            )
+            .optional()
+    }
+
+    /// Decide une demande EN ATTENTE. `Ok(false)` : pas en attente (deja
+    /// decidee, ou inconnue).
+    pub fn decide_approval(&self, id: &str, approve: bool, by: &str, reason: Option<&str>, at: i64) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute(
+            "UPDATE approvals SET status = ?2, decided_by = ?3, reason = ?4, decided_at = ?5 WHERE id = ?1 AND status = 'pending'",
+            params![id, if approve { "approved" } else { "rejected" }, by, reason, at],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Usage unique d'un accord. `Ok(false)` : deja utilise.
+    pub fn consume_approval(&self, id: &str) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute("UPDATE approvals SET consumed = 1 WHERE id = ?1 AND status = 'approved' AND consumed = 0", [id])?;
+        Ok(n > 0)
+    }
+
+    /// Demandes en attente, les plus anciennes d'abord.
+    pub fn pending_approvals(&self, since: i64, limit: usize) -> Result<Vec<ApprovalRow>, rusqlite::Error> {
+        let mut st = self.conn.prepare(
+            "SELECT id, agent, action, amount, requested_at, status, decided_by, reason, consumed FROM approvals \
+             WHERE status = 'pending' AND requested_at >= ?1 ORDER BY requested_at, id LIMIT ?2",
+        )?;
+        let rows = st.query_map(params![since, limit as i64], ApprovalRow::from_row)?;
+        rows.collect()
+    }
+
+    /// Jeton delivre (2026-11-25), pour que le systeme qui execute puisse
+    /// demander s'il vaut encore (cle revoquee, arret d'urgence).
+    pub fn record_issued_token(&self, audit_hash: &str, agent: &str, action: &str, agent_key: Option<&str>, expires_at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO issued_tokens (audit_hash, agent, action, agent_key, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![audit_hash, agent, action, agent_key, expires_at],
+        )?;
+        Ok(())
+    }
+
+    /// (agent, action, cle de l'agent, expiration) d'un jeton delivre.
+    pub fn issued_token(&self, audit_hash: &str) -> Result<Option<(String, String, Option<String>, i64)>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT agent, action, agent_key, expires_at FROM issued_tokens WHERE audit_hash = ?1",
+                [audit_hash],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()
     }
 
     /// Arret d'urgence (2026-11-25). `scope` : `all`, `agent:<nom>` ou
@@ -3288,6 +3398,23 @@ mod tests {
     /// policy_seq (2026-11-25) : strictement croissant par auteur, et la
     /// derniere valeur survit a un redemarrage (sinon un vieux message
     /// authentique redeviendrait acceptable apres un arret du serveur).
+    #[test]
+    fn test_approvals_are_decided_once_and_used_once() {
+        let s = AdnStore::open(":memory:").unwrap();
+        s.create_approval("a1", "bot", "wipe_db", None, 10).unwrap();
+        assert_eq!(s.pending_approvals(0, 10).unwrap().len(), 1);
+        assert!(!s.consume_approval("a1").unwrap(), "en attente : pas utilisable");
+        assert!(s.decide_approval("a1", true, "alice", Some("ok"), 11).unwrap());
+        assert!(!s.decide_approval("a1", false, "mallory", None, 12).unwrap(), "deja decidee");
+        let row = s.get_approval("a1").unwrap().unwrap();
+        assert_eq!((row.status.as_str(), row.decided_by.as_deref()), ("approved", Some("alice")));
+        assert!(s.consume_approval("a1").unwrap());
+        assert!(!s.consume_approval("a1").unwrap(), "usage unique");
+        assert!(s.pending_approvals(0, 10).unwrap().is_empty());
+        s.record_issued_token("sha256:x", "bot", "wipe_db", Some("ab"), 99).unwrap();
+        assert_eq!(s.issued_token("sha256:x").unwrap(), Some(("bot".into(), "wipe_db".into(), Some("ab".into()), 99)));
+    }
+
     #[test]
     fn test_revocation_enrollment_and_emergency_stop_persist() {
         let tmp_path = std::env::temp_dir().join(format!("cstl_test_revoke_{}.db", std::process::id()));

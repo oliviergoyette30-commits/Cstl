@@ -425,6 +425,16 @@ class ActionDenied(Exception):
         super().__init__(f"action '{action}' refusee : {reason}" + (f" ({rule})" if rule else ""))
 
 
+class ApprovalRequired(ActionDenied):
+    """L'action demande l'accord signe d'un approbateur humain (2026-11-25).
+    `approval_id` : a donner a l'approbateur, puis a `authorize(...,
+    approval_id=...)` une fois l'accord donne."""
+
+    def __init__(self, action: str, reason: str, approval_id: Optional[str]):
+        super().__init__(action, reason, "approval")
+        self.approval_id = approval_id
+
+
 class ControlDenied(Exception):
     """Revocation, inscription de cle ou arret d'urgence refuse par le serveur."""
 
@@ -605,7 +615,7 @@ class CstlAgent:
         return relation, self.send_relations(receiver, [relation])
 
     # -- Couche 9 : autorisation AVANT action (2026-11-20) --------------------
-    def request_action(self, action: str, amount=None) -> Tuple[bool, CstlResponse]:
+    def request_action(self, action: str, amount=None, approval_id: Optional[str] = None) -> Tuple[bool, CstlResponse]:
         """Demande au serveur, AVANT d'agir, si `action` est autorisee pour cet
         agent d'apres l'historique des obligations / interdictions. `amount` :
         montant de l'action, pour les regles `amount_above`/`amount_at_most`
@@ -617,6 +627,8 @@ class CstlAgent:
         intent = {"action": action, "request_id": uuid.uuid4().hex}
         if amount is not None:
             intent["amount"] = str(amount)
+        if approval_id:
+            intent["approval_id"] = approval_id
         resp = self._send_signed("action_request", "server", [], intent)
         return resp.fields.get("decision") == "allowed", resp
 
@@ -726,6 +738,8 @@ class CstlAgent:
         # Arrets d'urgence en vigueur pour cet agent (2026-11-25) : "operator",
         # "all", "agent:<nom>" ou "action:<motif>".
         out["emergency_stop"] = resp.fields.get("emergency_stop", "").split()
+        # Actions qui demandent l'accord signe d'un approbateur humain.
+        out["approval"] = resp.fields.get("approval", "").split()
         for block in resp.relations:
             item = {k: v for k, v in block.items() if k not in ("block", "decision")}
             if block.get("block") == "POLICY_RULE":
@@ -735,17 +749,47 @@ class CstlAgent:
                 out["ignored"].append(item)
         return out
 
-    def authorize(self, action: str, amount=None):
+    def authorize(self, action: str, amount=None, approval_id: Optional[str] = None,
+                  wait: float = 0, poll: float = 2.0):
         """Jeton d'autorisation SIGNE par le serveur pour `action` (et pour CE
         montant, s'il est donne), a presenter au systeme vise
         (`cstl_guard.CstlGuard.run`). Leve ActionDenied si l'action est
         refusee (2026-11-20 : couche 9 obligatoire)."""
         from cstl_guard import AuthorizationToken
-        allowed, resp = self.request_action(action, amount)
+        # Escalade vers un humain (2026-11-25) : `approval_id` presente un
+        # accord deja donne ; `wait` > 0 attend jusqu'a `wait` secondes qu'un
+        # approbateur decide, puis redemande avec l'accord.
+        allowed, resp = self.request_action(action, amount, approval_id)
+        deadline = time.time() + wait
+        while not allowed and resp.fields.get("reason") in ("approval_required", "approval_pending") \
+                and time.time() < deadline:
+            approval_id = resp.fields.get("approval_id") or approval_id
+            time.sleep(poll)
+            allowed, resp = self.request_action(action, amount, approval_id)
         token = AuthorizationToken.from_response(resp) if allowed else None
         if token is None:
-            raise ActionDenied(action, resp.fields.get("reason", resp.purpose), resp.fields.get("rule"))
+            reason = resp.fields.get("reason", resp.purpose)
+            if reason in ("approval_required", "approval_pending"):
+                raise ApprovalRequired(action, reason, resp.fields.get("approval_id") or approval_id)
+            raise ActionDenied(action, reason, resp.fields.get("rule"))
         return token
+
+    # -- Escalade vers un humain (2026-11-25) --------------------------------
+    def pending_approvals(self) -> list:
+        """Approbateur : demandes en attente [{approval_id, agent, action,
+        amount?, requested_at, expires_at}]. Leve ControlDenied sinon."""
+        resp = self._send_signed("approval_list", "server", [], {"request_id": uuid.uuid4().hex})
+        if resp.purpose != "approvals":
+            raise ControlDenied("approval_list", resp.fields.get("reason", resp.purpose), resp)
+        return [{k: v for k, v in b.items() if k != "block"} for b in resp.relations if b.get("block") == "APPROVAL"]
+
+    def approve(self, approval_id: str, reason: Optional[str] = None) -> dict:
+        """Approbateur : donne son accord SIGNE (une seule demande, une fois)."""
+        return self._control("approval_decision", {"approval_id": approval_id, "decision": "approve", "reason": reason})
+
+    def reject(self, approval_id: str, reason: Optional[str] = None) -> dict:
+        """Approbateur : refuse la demande."""
+        return self._control("approval_decision", {"approval_id": approval_id, "decision": "reject", "reason": reason})
 
     def act(self, action: str, func, *args, amount=None, **kwargs):
         """Execute `func` SEULEMENT si le serveur autorise `action` (pour ce

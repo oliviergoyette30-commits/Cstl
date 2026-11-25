@@ -378,6 +378,66 @@ INTENT_PAYLOAD [purpose=emergency_stop, sender=<auteur>, receiver=server, scope=
 - **Limite :** comme pour la révocation, un jeton déjà délivré reste
   valable jusqu'à son expiration.
 
+### 7.5 Accord humain (ajouté le 2026-11-25)
+
+- Une action qui correspond à `CSTL_APPROVAL_ACTIONS` (noms exacts ou
+  `prefixe*`) et que les règles permettent n'obtient pas de jeton
+  directement. La réponse est `decision=denied, reason=approval_required,
+  rule=approval, approval_id=<32 hex>`.
+- Un approbateur (`CSTL_APPROVERS`, sinon les auteurs de
+  `CSTL_POLICY_AUTHORS`) décide, signé, avec `policy_seq` :
+  `INTENT_PAYLOAD [purpose=approval_decision, approval_id=<id>, decision=approve|reject, reason=..., policy_seq=<n>, ...]`.
+  Réponse : `purpose=approval_recorded` et un bloc `AUDIT`. Refus
+  (`control_denied`) : `not_authorized`, `self_approval` (l'agent qui a
+  demandé), `approval_not_pending`, `approval_expired`, `approval_unknown`.
+- Liste des demandes en attente, pour un approbateur :
+  `purpose=approval_list` → `purpose=approvals`, un bloc
+  `APPROVAL [approval_id, agent, action, amount, requested_at, expires_at]`
+  par demande.
+- L'agent redemande avec `approval_id=<id>`. Les règles et l'arrêt
+  d'urgence sont réévalués. L'accord doit porter sur le même agent, la même
+  action et le même montant (`approval_mismatch`), être donné
+  (`approval_pending`, `approval_rejected`), dans le délai
+  `CSTL_APPROVAL_TTL_SECS` compté depuis la demande (3600 par défaut,
+  `approval_expired`), et n'avoir jamais servi (`approval_used`). Le jeton
+  porte alors `approval_id` et `approved_by`.
+- Une interdiction reste une interdiction : aucun accord n'est créé pour une
+  action que les règles refusent. Sans approbateur configuré, l'action
+  n'est jamais permise.
+
+### 7.6 État d'un jeton en direct (ajouté le 2026-11-25)
+
+Le système qui exécute peut demander si un jeton vaut **encore**, sans être
+un agent enregistré (message non signé accepté) :
+
+```
+INTENT_PAYLOAD [purpose=token_status, sender=<guard>, receiver=server, audit_hash=<jeton.audit_hash>, nonce=<8 à 128 [A-Za-z0-9_.-]>]
+```
+
+Réponse : `INTENT_PAYLOAD [purpose=token_status, audit_hash, status, nonce,
+checked_at, signature]`. `signature` est la signature Ed25519, par la clé du
+serveur, de :
+
+```
+cstl-token-status-v1
+audit_hash=<audit_hash>
+status=<status>
+nonce=<nonce>
+checked_at=<secondes unix>
+```
+
+`status` : `valid`, `expired`, `revoked` (la clé de l'agent a été
+révoquée), `stopped` (un arrêt d'urgence couvre l'agent ou l'action) ou
+`unknown`. Le système DOIT refuser tout ce qui n'est pas `valid` avec une
+signature correcte et son propre nonce, y compris une absence de réponse.
+
+### 7.7 Comportement anormal (ajouté le 2026-11-25)
+
+Avec `CSTL_ANOMALY_MAX_PER_MIN=N`, un agent qui envoie plus de `N`
+`action_request` en 60 s déclenche un arrêt d'urgence `agent:<nom>`, posé
+par `anomaly_detector` (section 7.4). Il reste en vigueur jusqu'à ce qu'un
+auteur de politique le lève ; le compteur de l'agent repart alors de zéro.
+
 ## 8. Politique effective
 
 ```
@@ -388,7 +448,7 @@ INTENT_PAYLOAD [purpose=policy_query, sender=<agent>, receiver=server, request_i
 - les nombres `required`, `permitted`, `forbidden` et `ignored` ;
 - `authors_enforced` ;
 - `default` ;
-- `governed` et `emergency_stop`, quand il y en a.
+- `governed`, `emergency_stop` et `approval`, quand il y en a.
 
 Elle est suivie d'un bloc `POLICY_RULE [action, decision, modality,
 author, reason, ...]` par règle en vigueur. Une règle ignorée (auteur sans
@@ -429,7 +489,8 @@ Toutes ces réponses portent `META [status=error]`, et aucune n'est auditée :
 | `connection_timeout` | rien de complet reçu à temps |
 | `stale_policy` | `policy_seq` pas plus récent que le dernier accepté (section 6.4) |
 | `policy_seq_invalid` / `policy_seq_requires_signature` | section 6.4 |
-| `control_denied` | révocation, inscription de clé ou arrêt d'urgence refusé (sections 5.5 et 7.4) |
+| `control_denied` | révocation, inscription de clé, arrêt d'urgence ou décision d'accord refusé (sections 5.5, 7.4 et 7.5) |
+| `token_status_rejected` | `audit_hash` ou `nonce` illisible (section 7.6) |
 
 ## 11. Ce qui est figé en v1
 

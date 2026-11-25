@@ -18,6 +18,7 @@ Commandes installées :
 | `cstl-mcp-proxy -- <serveur MCP>` | CSTL devant n'importe quel serveur MCP |
 | `cstl-a2a-proxy --upstream <url> --name <agent> --server-key <.pub>` | CSTL devant un agent A2A |
 | `cstl-gate --config gate.json --server-key <.pub>` | la garde qui exécute : SQL, shell, HTTP |
+| `cstl-approve --agent <humain> list \| approve <id> \| reject <id>` | l'accord humain pour une action à risque |
 | `cstl-mcp-server` | les outils CSTL pour un client MCP |
 | `cstl-witness` | témoin externe de l'audit (retour en arrière) |
 
