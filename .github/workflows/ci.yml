@@ -133,6 +133,18 @@ jobs:
           /tmp/cstl_pkg/bin/pip install ./sdk/python
           cd /tmp && CSTL_BINARY=$GITHUB_WORKSPACE/target/debug/cstl_parser /tmp/cstl_pkg/bin/cstl-demo
 
+      # SDK TypeScript (2026-11-25) : vecteurs de conformite, puis tests en
+      # direct contre le serveur compile plus haut.
+      - name: Installe Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: SDK TypeScript (npm test)
+        working-directory: sdk/typescript
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+
       # Etaient #[ignore] avec un chemin absolu d'une autre machine : jamais
       # executes. Prouvent que Python signe ce que Rust verifie, et inversement.
       - name: Validation croisee des signatures Rust <-> Python

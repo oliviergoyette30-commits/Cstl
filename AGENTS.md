@@ -49,6 +49,24 @@ check it, `policy_query`, audit and errors.
   --server-key cstl_adn.db.server_key.pub` is a black-box tester written
   from the spec alone, without the SDK. This repo's server passes 14/14.
 
+## From TypeScript / Node.js
+
+`sdk/typescript` is a client with no runtime dependency (Ed25519, TCP and
+HTTP come from Node 20+). It produces the conformance vectors exactly, like
+Python and Rust, and uses the same key file as the Python SDK
+(`~/.cstl/agent_<name>.key`), so an agent keeps one identity in both
+languages.
+
+```ts
+const bot = new CstlAgent("agent_support", { port: 5050 });
+await bot.register();
+const token = await bot.authorize("refund_order", 80);          // ActionDenied if refused
+await new CstlGuard(serverKeyHex).run(token, "refund_order", doIt, { amount: 80 });
+```
+
+Tests: `cd sdk/typescript && npm install && npm test` (vectors, then live
+tests against `target/debug/cstl_parser`).
+
 ## Option 0 — you have NO code execution at all (a chat-window AI)
 
 This is for you if you are reading this because a human pasted it into your

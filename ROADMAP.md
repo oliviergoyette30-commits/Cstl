@@ -75,7 +75,10 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - **fait le 2026-11-25 :** proxy A2A 1.0 (`cstl_a2a.py`) : jeton CSTL
      vérifié pour chaque appel JSON-RPC, appelant vérifié transmis à l'agent
      cible, carte d'agent republiée ;
-   - à faire : SDK TypeScript, gardes prêtes (PostgreSQL, HTTP, shell).
+   - **fait le 2026-11-25 :** SDK TypeScript (`sdk/typescript`, aucune
+     dépendance) : vecteurs de conformité identiques, tests en direct, même
+     fichier de clé que Python ;
+   - à faire : gardes prêtes (PostgreSQL, HTTP, shell).
 3. **Prouver publiquement :**
    - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
      3 passes au moins ;
