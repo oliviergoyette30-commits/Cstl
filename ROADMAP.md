@@ -114,8 +114,10 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - questions plus dures ;
    - attaques écrites par d'autres ;
    - audit de sécurité externe.
-4. **Échelle :** PostgreSQL, identités standard (OIDC, SPIFFE),
-   fédération.
+4. **Échelle :** PostgreSQL, fédération.
+   - **fait (2026-11-25) :** identités standard, OIDC à l'enregistrement
+     (RS256, ES256) et SPIFFE en TLS mutuel. Spécification 5.6 et 5.7, tests
+     `test_oidc_live.py` et `test_spiffe_live.py` ;
    - **fait (2026-11-25) :** accord humain (`CSTL_APPROVAL_ACTIONS`,
      `cstl-approve`), vérification des jetons en direct (`token_status`),
      arrêt automatique sur comportement anormal

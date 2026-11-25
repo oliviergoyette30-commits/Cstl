@@ -21,6 +21,7 @@ pub mod emergency;
 pub mod approval;
 pub mod dashboard;
 pub mod workload_identity;
+pub mod oidc;
 pub mod witness;
 pub mod arbitrage;
 pub mod castle;

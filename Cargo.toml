@@ -248,3 +248,9 @@ version = "0.14"
 # en TLS mutuel (2026-11-25, server/workload_identity.rs). Deja compile
 # comme dependance de rcgen : aucune nouvelle source.
 version = "0.18"
+
+[dependencies.ring]
+# Verification des jetons OIDC (RS256, ES256) a l'enregistrement d'un agent
+# (2026-11-25, server/oidc.rs). Deja compile comme dependance de rustls /
+# rcgen : aucune nouvelle source.
+version = "0.17"

@@ -1923,7 +1923,27 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                         let response = if name.is_empty() || public_key.is_none() {
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=missing_name_or_public_key]\n---END---\n".to_string()
                         } else {
+                            // Identite d'entreprise OIDC (2026-11-25, oidc.rs) : avec
+                            // CSTL_OIDC_ISSUER, l'enregistrement exige un jeton d'identite
+                            // du fournisseur dont le nom est celui de l'agent.
+                            let oidc_rejection = match (super::oidc::OidcConfig::from_env(), &sig_check) {
+                                (Some(cfg), SignatureCheck::Valid) => match payload.intent.get("oidc_token") {
+                                    None => Some("oidc_token_required"),
+                                    Some(t) => match cfg.jwks().await {
+                                        Ok(jwks) => super::oidc::verify(t, &name, &cfg, &jwks, chrono::Utc::now().timestamp()).err(),
+                                        Err(e) => Some(e),
+                                    },
+                                },
+                                _ => None,
+                            };
                             match &sig_check {
+                                SignatureCheck::Valid if oidc_rejection.is_some() => {
+                                    let reason = oidc_rejection.unwrap_or("oidc");
+                                    error!("[Handler] agent_register rejected for '{}': {}", name, reason);
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason={reason}]\n---END---\n"
+                                    )
+                                }
                                 SignatureCheck::Valid => {
                                     let existing_pubkey = {
                                         let reg = ctx.agent_registry.read().await;  // agent_register: lookup existant, lecture seule

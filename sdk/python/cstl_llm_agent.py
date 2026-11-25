@@ -517,12 +517,18 @@ class CstlAgent:
         )
         return self.client.send_raw(payload)
 
-    def register(self) -> bool:
-        """Enregistre l'agent (agent_register auto-signe). True si accepte."""
+    def register(self, oidc_token: Optional[str] = None) -> bool:
+        """Enregistre l'agent (agent_register auto-signe). True si accepte.
+        `oidc_token` (ou CSTL_OIDC_TOKEN) : jeton d'identite du fournisseur de
+        l'entreprise, exige quand le serveur a CSTL_OIDC_ISSUER (2026-11-25)."""
         if self.registered:
             return True
-        resp = self._send_signed("agent_register", "server", [],
-                                 {"name": self.name, "capabilities": "communication"})
+        intent = {"name": self.name, "capabilities": "communication"}
+        token = oidc_token or os.environ.get("CSTL_OIDC_TOKEN")
+        if token:
+            intent["oidc_token"] = token
+        resp = self._send_signed("agent_register", "server", [], intent)
+        self.last_register_response = resp
         self.registered = resp.purpose == "agent_register_ack"
         if self.registered:
             print(f"[{self.name}] ✅ Registered with signature validation")

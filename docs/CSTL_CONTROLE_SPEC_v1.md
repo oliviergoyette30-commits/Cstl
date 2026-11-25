@@ -188,6 +188,34 @@ INTENT_PAYLOAD [purpose=key_revoke, sender=<qui>, receiver=server, agent=<nom>, 
 - **Limite :** un jeton déjà délivré à la clé révoquée reste valable
   jusqu'à son expiration (`CSTL_AUTHZ_TTL_SECS`, 60 s par défaut).
 
+### 5.6 Identité d'entreprise OIDC (ajouté le 2026-11-25)
+
+Avec `CSTL_OIDC_ISSUER`, `agent_register` DOIT porter `oidc_token=<JWT>`.
+Le serveur vérifie, dans cet ordre :
+- la signature RS256 ou ES256 (P-256), par la clé `kid` du JWKS
+  (`CSTL_OIDC_JWKS_PATH` ou `CSTL_OIDC_JWKS_URL`). `none`, HS256 et un
+  couple algorithme/clé incohérent sont refusés ;
+- `iss` égal à `CSTL_OIDC_ISSUER` ;
+- `aud` contenant `CSTL_OIDC_AUDIENCE`, s'il est configuré ;
+- `exp` et `nbf`, avec 60 s de tolérance ;
+- la revendication `CSTL_OIDC_NAME_CLAIM` (défaut `sub`) égale au nom de
+  l'agent.
+
+Sinon : `agent_register_rejected`, `reason=oidc_token_required`,
+`oidc_signature_invalid`, `oidc_wrong_issuer`, `oidc_wrong_audience`,
+`oidc_token_expired`, `oidc_name_mismatch`, `oidc_algorithm_refused`,
+`oidc_key_unknown`, etc.
+
+### 5.7 Identité de charge de travail SPIFFE (ajouté le 2026-11-25)
+
+En TLS mutuel, avec `CSTL_SPIFFE_TRUST_DOMAIN=<domaine>`, l'identifiant
+`spiffe://<domaine>/.../<nom>` du certificat client (SAN URI) fixe le nom de
+la connexion. Tout message DOIT avoir `sender=<nom>`, sinon
+`signature_rejected` avec `reason=spiffe_identity_mismatch`. Un identifiant
+d'un autre domaine donne `spiffe_foreign_identity`. Avec
+`CSTL_SPIFFE_REQUIRED=true`, l'absence d'identifiant donne
+`spiffe_identity_required`. `token_status` en est exempté.
+
 ## 6. Règles
 
 ### 6.1 Forme

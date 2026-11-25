@@ -818,6 +818,31 @@ refreshes every 10 s. It shows:
 - revoked keys;
 - the last 100 decisions, with agent, action, amount, reason and rule.
 
+**Enterprise identity (OIDC).** With `CSTL_OIDC_ISSUER`, registering an
+agent requires an ID token from the company's identity provider. Spec
+section 5.6.
+
+```bash
+CSTL_OIDC_ISSUER=https://login.acme.com CSTL_OIDC_AUDIENCE=cstl \
+CSTL_OIDC_JWKS_URL=https://login.acme.com/.well-known/jwks.json cargo run --bin cstl_parser
+```
+
+```python
+agent.register(oidc_token=id_token)      # or CSTL_OIDC_TOKEN
+```
+
+- The server checks the RS256 or ES256 signature against the JWKS, plus
+  `iss`, `aud`, `exp` and `nbf`.
+- The `sub` claim (or `CSTL_OIDC_NAME_CLAIM`) must be the agent's name. So
+  the Ed25519 key is bound to an identity the company manages and can
+  remove.
+- `alg=none`, HS256, an unknown `kid`, a forged signature, another name, an
+  expired token and another audience are all refused, before anything is
+  registered.
+
+Live test: `sdk/python/test_oidc_live.py`. It signs tokens with RSA and EC
+keys made by the test.
+
 **Workload identity (SPIFFE).** With mutual TLS, a client certificate can
 carry a SPIFFE ID in its URI SAN: `spiffe://acme.org/ns/prod/sa/agent_support`.
 
