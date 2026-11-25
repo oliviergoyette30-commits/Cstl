@@ -69,7 +69,7 @@ def test_black_box_runner_passes_against_the_server(tmp_path):
                             "--port", "6060", "--server-key", str(tmp_path / "cstl_adn.db.server_key.pub")],
                            capture_output=True, text=True, timeout=120)
         assert r.returncode == 0, r.stdout + r.stderr
-        assert "13/13 conformes" in r.stdout
+        assert "14/14 conformes" in r.stdout
     finally:
         proc.terminate()
         proc.wait(timeout=10)

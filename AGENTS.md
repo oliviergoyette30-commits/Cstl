@@ -13,7 +13,7 @@ want to see it work, keep reading here.
 
 ```bash
 cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 4 commands
+pip install ./sdk/python        # the "cstl" package: SDK + 5 commands
 cstl-demo                       # or: python3 sdk/python/cstl_demo.py
 ```
 
@@ -31,8 +31,8 @@ deletes afterwards:
 
 It prints `Tout est conforme : 7/7.` Live test: `sdk/python/test_demo_live.py`.
 
-The other installed commands are `cstl-mcp-proxy`, `cstl-mcp-server` and
-`cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
+The other installed commands are `cstl-mcp-proxy`, `cstl-a2a-proxy`,
+`cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
 wheel, are built by `.github/workflows/release.yml` (on a `v*` tag or by
 hand). Publishing them is a human decision.
 
@@ -47,7 +47,7 @@ check it, `policy_query`, audit and errors.
   Python and Rust produce the same bytes and the same verdicts.
 - **Server test:** `conformance/run_server_conformance.py --port 5050
   --server-key cstl_adn.db.server_key.pub` is a black-box tester written
-  from the spec alone, without the SDK. This repo's server passes 13/13.
+  from the spec alone, without the SDK. This repo's server passes 14/14.
 
 ## Option 0 — you have NO code execution at all (a chat-window AI)
 
@@ -413,6 +413,40 @@ the reason and the rule.
 Live test: `sdk/python/test_mcp_proxy_live.py`. A test MCP server records
 every tool it actually runs, so the test proves that a forbidden tool is
 never run, not only that the client sees a refusal.
+
+**In front of any A2A agent.** `sdk/python/cstl_a2a.py` (`cstl-a2a-proxy`)
+sits in front of an existing A2A agent (Agent2Agent 1.0, JSON-RPC over
+HTTP). It acts as the system that executes the call.
+
+```bash
+cstl-a2a-proxy --listen 127.0.0.1:9100 --upstream http://127.0.0.1:9000/a2a \
+    --name billing --server-key cstl_adn.db.server_key.pub
+```
+
+- **Every JSON-RPC call** must carry a CSTL token in the
+  `X-CSTL-Authorization` header, for the action `a2a.<name>.<Method>`
+  (1.0 method names; 0.3 names such as `message/send` map to them).
+- **The proxy checks the token itself** with `CstlGuard`: signature under
+  the server key, action, time window, single use. Only then does it
+  forward the call, with `X-CSTL-Agent: <verified caller>`, so the target
+  knows who is calling. The token does not go further than the proxy.
+- **Otherwise the target receives nothing.** The caller gets HTTP 401 (no
+  token) or 403 (refused token), with JSON-RPC error `-32050` and
+  `CSTL_<VERDICT>` as the reason.
+- **The agent card** at `/.well-known/agent-card.json` is republished:
+  `supportedInterfaces[].url` points to the proxy, and the card requires
+  `securitySchemes.cstl` (`apiKeySecurityScheme`, that header).
+- **SSE streams** (`SendStreamingMessage`) are copied through as they come.
+- **Client:** `cstl_a2a.call(agent, url, "billing", "SendMessage", params)`
+  gets the token first. If the call is forbidden, it raises `ActionDenied`
+  and sends nothing. Rules are written as usual:
+  `RELATION [type=PERFORM, subject=<caller>, object=a2a.billing.SendMessage,
+  modality=MUST_NOT]`.
+- **Limits:** one JSON-RPC call per request (no batch). The proxy controls
+  which method is called on which agent, not the message content.
+
+Live test: `sdk/python/test_a2a_proxy_live.py`. A test A2A agent records
+every call it receives, which proves that refused calls never reach it.
 
 **From any JSON client (no CSTL text at all).** `POST /v1/message` on the
 REST port (`CSTL_REST_PORT`, default 8000, 127.0.0.1 only) takes the message

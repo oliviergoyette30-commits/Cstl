@@ -264,6 +264,10 @@ def main():
           first(r, "INTENT_PAYLOAD").get("purpose") == "policy"
           and any(x.get("action") == "wipe_db" and x.get("decision") == "forbidden" for x in rules), r)
 
+    i = first(bot.ask("a2a:billing:SendMessage"), "INTENT_PAYLOAD")
+    check("C14", "nom d'action hors de [A-Za-z0-9_.-] -> denied, missing_or_invalid_action",
+          i.get("decision") == "denied" and i.get("reason") == "missing_or_invalid_action", i)
+
     r = parse(c.send("#!CSTL v5.0.0 MODE=A\nMETA [encoder=x]\nINTENT_PAYLOAD [purpose=inform]\n---END---\n"))
     check("C13", "message incomplet -> status=error, pas d'audit",
           first(r, "META").get("status") == "error" and not first(r, "AUDIT"), r)

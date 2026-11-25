@@ -19,7 +19,8 @@ cstl-demo = "cstl_demo:main"
 cstl-mcp-proxy = "cstl_mcp_proxy:cli"
 cstl-mcp-server = "cstl_mcp_server:cli"
 cstl-witness = "cstl_witness:main"
+cstl-a2a-proxy = "cstl_a2a:main"
 
 [tool.setuptools]
 py-modules = ["cstl_client", "cstl_compact", "cstl_formes", "cstl_guard", "cstl_llm_agent",
-              "cstl_signing", "cstl_mcp_proxy", "cstl_mcp_server", "cstl_witness", "cstl_demo"]
+              "cstl_signing", "cstl_mcp_proxy", "cstl_mcp_server", "cstl_witness", "cstl_demo", "cstl_a2a"]

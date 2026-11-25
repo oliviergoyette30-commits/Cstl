@@ -14,7 +14,7 @@ Preuves que ce texte suffit :
   (`tests/conformance_vectors_test.rs`) trouvent les mêmes octets et les
   mêmes verdicts.
 - `conformance/run_server_conformance.py` : un testeur de serveur écrit à
-  partir de ce texte seul, sans le SDK. Le serveur de ce dépôt passe 13/13.
+  partir de ce texte seul, sans le SDK. Le serveur de ce dépôt passe 14/14.
 
 En cas de désaccord entre ce texte et ces tests, c'est un bug à signaler.
 
@@ -194,6 +194,10 @@ faire appliquer une obligation ni une permission.
 INTENT_PAYLOAD [purpose=action_request, sender=<agent>, receiver=server, action=<action>, request_id=<unique>, amount=<facultatif>, signature=...]
 ```
 
+`action` DOIT être fait de 1 à 128 caractères parmi `A-Z a-z 0-9 _ . -`.
+Sinon la demande est refusée (`decision=denied`,
+`reason=missing_or_invalid_action`).
+
 `request_id` DOIT être unique. Deux demandes identiques auraient le même
 contenu, et la seconde serait prise pour un renvoi.
 
@@ -317,9 +321,10 @@ python3 conformance/run_server_conformance.py --port 5050 --server-key cstl_adn.
 
 - Lancer le serveur sans `CSTL_DEV_MODE` et sans `CSTL_POLICY_AUTHORS`.
 - Le testeur vérifie d'abord sa propre implémentation sur les vecteurs,
-  puis exécute 13 contrôles :
+  puis exécute 14 contrôles :
   - C1 à C5 : identité et règles ;
   - C6 à C9 : décisions, jetons et plafonds ;
   - C10 et C11 : audit ;
   - C12 : politique ;
-  - C13 : message incomplet.
+  - C13 : message incomplet ;
+  - C14 : nom d'action invalide.
