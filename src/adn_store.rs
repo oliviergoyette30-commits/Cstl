@@ -462,6 +462,18 @@ impl AdnStore {
                 agent_key TEXT,
                 expires_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                at INTEGER NOT NULL,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount TEXT,
+                allowed INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                rule TEXT,
+                audit_hash TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_decisions_at ON decisions(at);
             CREATE TABLE IF NOT EXISTS emergency_stops (
                 scope TEXT PRIMARY KEY,
                 set_by TEXT NOT NULL,
@@ -1956,6 +1968,56 @@ impl AdnStore {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .optional()
+    }
+
+    /// Decision de la couche 9, pour le tableau de bord (2026-11-25).
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_decision(&self, at: i64, agent: &str, action: &str, amount: Option<&str>, allowed: bool,
+                           reason: &str, rule: Option<&str>, audit_hash: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO decisions (at, agent, action, amount, allowed, reason, rule, audit_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![at, agent, action, amount, allowed as i64, reason, rule, audit_hash],
+        )?;
+        Ok(())
+    }
+
+    /// Les `limit` dernieres decisions, la plus recente d'abord :
+    /// (at, agent, action, amount, allowed, reason, rule, audit_hash).
+    #[allow(clippy::type_complexity)]
+    pub fn recent_decisions(&self, limit: usize) -> Result<Vec<(i64, String, String, Option<String>, bool, String, Option<String>, Option<String>)>, rusqlite::Error> {
+        let mut st = self.conn.prepare(
+            "SELECT at, agent, action, amount, allowed, reason, rule, audit_hash FROM decisions ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = st.query_map([limit as i64], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get::<_, i64>(4)? != 0, r.get(5)?, r.get(6)?, r.get(7)?))
+        })?;
+        rows.collect()
+    }
+
+    /// (raison, nombre) des refus depuis `since`, les plus frequents d'abord,
+    /// et le nombre de decisions permises.
+    pub fn decision_counts(&self, since: i64) -> Result<(i64, Vec<(String, i64)>), rusqlite::Error> {
+        let allowed: i64 = self.conn.query_row("SELECT COUNT(*) FROM decisions WHERE at >= ?1 AND allowed = 1", [since], |r| r.get(0))?;
+        let mut st = self.conn.prepare(
+            "SELECT reason, COUNT(*) FROM decisions WHERE at >= ?1 AND allowed = 0 GROUP BY reason ORDER BY COUNT(*) DESC, reason",
+        )?;
+        let rows = st.query_map([since], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok((allowed, rows.collect::<Result<_, _>>()?))
+    }
+
+    /// (cle, agent, revoquee par, raison, date) des cles revoquees, la plus recente d'abord.
+    #[allow(clippy::type_complexity)]
+    pub fn revoked_key_list(&self, limit: usize) -> Result<Vec<(String, String, String, Option<String>, i64)>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT public_key, agent, revoked_by, reason, at FROM revoked_keys ORDER BY at DESC LIMIT ?1")?;
+        let rows = st.query_map([limit as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+        rows.collect()
+    }
+
+    /// Comme `emergency_stops`, avec la date.
+    pub fn emergency_stops_dated(&self) -> Result<Vec<(String, String, Option<String>, i64)>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT scope, set_by, reason, at FROM emergency_stops ORDER BY at, scope")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        rows.collect()
     }
 
     /// Arret d'urgence (2026-11-25). `scope` : `all`, `agent:<nom>` ou

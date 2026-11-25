@@ -790,6 +790,15 @@ Live test for all three: `sdk/python/test_approval_live.py`. It includes a
 fake server that answers `valid` without the real signature; the guard
 refuses it.
 
+**Dashboard.** `http://127.0.0.1:8000/v1/dashboard` (REST port,
+127.0.0.1 only; JSON at `/v1/dashboard.json`). It is read-only and
+refreshes every 10 s. It shows:
+- decisions allowed and denied in the last 24 h, and refusals by reason;
+- the emergency stops in force, and the operator stop;
+- pending approvals;
+- revoked keys;
+- the last 100 decisions, with agent, action, amount, reason and rule.
+
 **Changing the server key.** Run `cargo run --bin cstl_parser --
 --rotate-server-key` with the server stopped. It first verifies the
 history with the current key, then creates a new key. The handover is

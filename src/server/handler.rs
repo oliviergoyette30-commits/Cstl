@@ -1298,6 +1298,15 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                 error!("[Handler] action_request: put failed: {}", e);
                             }
                         }
+                        if let Some(a) = action.as_deref().filter(|a| super::action_authorization::is_valid_action(a)) {
+                            if let Err(e) = ctx.adn_store.lock().await.record_decision(
+                                chrono::Utc::now().timestamp(), &sender, a,
+                                amount.flatten().map(|x| x.to_string()).as_deref(),
+                                decision.allowed, decision.reason, decision.rule.as_deref(), &entry.hash,
+                            ) {
+                                error!("[Handler] record_decision failed: {}", e);
+                            }
+                        }
                         info!(
                             "[Handler] action_request sender={} action={:?} -> {} ({})",
                             sender, action, if decision.allowed { "allowed" } else { "denied" }, decision.reason

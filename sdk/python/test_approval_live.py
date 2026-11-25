@@ -234,3 +234,20 @@ def test_burst_of_requests_trips_an_automatic_stop_that_only_an_author_lifts(m):
         bot.emergency_stop(f"agent:{bot.name}", on=False)
     owner.emergency_stop(f"agent:{bot.name}", on=False)
     assert bot.request_action("read_logs")[0], "leve par un auteur : le compteur repart de zero"
+
+
+def test_dashboard_shows_decisions_stops_and_pending_approvals(m):
+    import json
+    import urllib.request
+    owner, bot = agent(m, "owner"), agent(m, "bot")
+    with pytest.raises(m.ApprovalRequired) as e:
+        bot.authorize("wipe_tmp")
+    owner.emergency_stop(f"agent:{bot.name}", reason="tableau")
+    bot.request_action("read_logs")
+    d = json.loads(urllib.request.urlopen("http://127.0.0.1:9696/v1/dashboard.json", timeout=10).read())
+    assert any(a["approval_id"] == e.value.approval_id for a in d["pending_approvals"])
+    assert any(s["scope"] == f"agent:{bot.name}" for s in d["emergency_stops"])
+    assert d["recent_decisions"][0]["agent"] == bot.name and d["recent_decisions"][0]["reason"] == "emergency_stop"
+    html = urllib.request.urlopen("http://127.0.0.1:9696/v1/dashboard", timeout=10).read().decode()
+    assert "tableau de bord" in html and bot.name in html
+    owner.emergency_stop(f"agent:{bot.name}", on=False)

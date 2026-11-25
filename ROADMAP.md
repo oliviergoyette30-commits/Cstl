@@ -114,8 +114,13 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - questions plus dures ;
    - attaques écrites par d'autres ;
    - audit de sécurité externe.
-4. **Échelle :** PostgreSQL, identités standard, fédération, escalade
-   humaine, tableau de bord.
+4. **Échelle :** PostgreSQL, identités standard (OIDC, SPIFFE),
+   fédération.
+   - **fait (2026-11-25) :** accord humain (`CSTL_APPROVAL_ACTIONS`,
+     `cstl-approve`), vérification des jetons en direct (`token_status`),
+     arrêt automatique sur comportement anormal
+     (`CSTL_ANOMALY_MAX_PER_MIN`), tableau de bord (`/v1/dashboard`).
+     Spécification 7.5 à 7.7, test `sdk/python/test_approval_live.py` ;
    - **fait (2026-11-25) :** révocation des clés compromises (`key_revoke`,
      `key_enroll`) et arrêt d'urgence (`emergency_stop`, plus le fichier
      d'arrêt de l'opérateur). Spécification sections 5.5 et 7.4, test
@@ -134,8 +139,8 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   +7 à +18 % de tokens.
 - `strict` ressemble à un sous-ensemble du YAML : ce n'est pas une
   invention de CSTL, seulement un choix de forme sûre.
-- Dans `strict`, la valeur inconnue s'écrit encore `{"$unknown":...}`, pas
-  `?` comme dans l'arbre indenté.
+- Corrigé le 2026-11-25 : dans `strict`, la valeur inconnue s'écrit `?` ou
+  `?{"sigma":0.3}`, comme dans l'arbre indenté.
 - `relationnel` n'est pas plus court que le JSON selon l'estimateur local
   (−11 à +39 %), seulement −6 à 0 % selon les tokenizers des fournisseurs.
 - Le tour de correction répare peu : 8 erreurs détectées sur 16 à
@@ -173,8 +178,10 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
 - Un seul serveur sur SQLite, sans fédération entre organisations. La
   révocation des clés existe (2026-11-25), mais pas encore de format
   standard (OIDC, SPIFFE).
-- Un jeton déjà délivré reste valable jusqu'à son expiration (60 s par
-  défaut), même après une révocation ou un arrêt d'urgence.
+- Sans vérification en direct (`CstlGuard(online=...)` ou
+  `CSTL_GUARD_ONLINE`), un jeton déjà délivré reste valable jusqu'à son
+  expiration (60 s par défaut), même après une révocation ou un arrêt
+  d'urgence.
 - Adoption nulle : c'est un prototype de recherche, pas encore un produit.
 
 ## Mesures

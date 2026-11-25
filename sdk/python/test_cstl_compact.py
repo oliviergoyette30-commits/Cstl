@@ -713,3 +713,20 @@ def test_objects_form_round_trips_any_json():
         assert decode_objects(encode_objects(d)) == d
     with pytest.raises(CompactError):
         decode_objects("a: 1\n   b: 2")
+
+
+def test_strict_writes_unknown_values_as_question_marks():
+    """CSTL strict (2026-11-25) : une valeur inconnue s'ecrit `?` ou
+    `?{"sigma":0.3}`, comme dans l'arbre indente, et se relit identique."""
+    import cstl_compact as c
+    data = {"patients": [{"id": "p1", "renal": c.unknown(sigma=0.3, pending="next_checkup")},
+                         {"id": "p2", "renal": None}, {"id": "p3"}],
+            "flags": [1, c.unknown(), "a"]}
+    text = c.encode_strict(data)
+    assert 'renal: ?{"sigma":0.3,"pending":"next_checkup"}' in text and "  - ?" in text
+    assert "$unknown" not in text
+    assert c.decode_strict(text) == data
+    assert c.decode_strict(c.encode_strict(c.unknown())) == c.unknown()
+    assert c.decode_strict('a: "?"') == {"a": "?"}, "le texte « ? » reste un texte"
+    with pytest.raises(c.CompactError):
+        c.decode_strict("a: ?[1]")

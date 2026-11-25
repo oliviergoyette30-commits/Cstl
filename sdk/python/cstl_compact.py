@@ -1865,7 +1865,13 @@ def encode_objects(data, json_values=False):
     sur des donnees reelles."""
     lines = []
     if json_values:
-        dumps = lambda v: json.dumps(v, ensure_ascii=False, separators=(",", ":"))  # noqa: E731
+        def dumps(v):
+            # Valeur inconnue (2026-11-25) : `?` ou `?{"sigma":0.3}`, comme dans
+            # l'arbre indente, au lieu de {"$unknown":{...}}. Jamais ambigu :
+            # aucune valeur JSON ne commence par `?`.
+            if is_unknown(v):
+                return "?" + (json.dumps(v[UNKNOWN], ensure_ascii=False, separators=(",", ":")) if v[UNKNOWN] else "")
+            return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
 
         def scalar_cell(v, ind):
             return dumps(v), []
@@ -1977,6 +1983,14 @@ def decode_objects(text, json_values=False):
         if raw and raw[0] in "[{" and not _json_values:
             raw = "".join(_raw_tokens(raw))          # [a, b] : espaces apres les virgules permis
         if _json_values:
+            if raw.startswith("?"):
+                try:
+                    details = json.loads(raw[1:]) if raw[1:].strip() else {}
+                except ValueError as e:
+                    raise CompactError(f"ligne {n} : valeur inconnue illisible : {raw[:60]!r} ({e})") from None
+                if not isinstance(details, dict):
+                    raise CompactError(f"ligne {n} : details d'une valeur inconnue : objet JSON attendu")
+                return unknown(**details)
             if _IBLOCK.match(raw):
                 pass
             else:
@@ -2083,7 +2097,7 @@ def decode_objects(text, json_values=False):
     text_body = text.strip("\n")
     if text_body.startswith("= "):
         if json_values:
-            return json.loads(text_body[2:])
+            return value_of(text_body[2:], 0, 1)
         val, j = _parse_inline(text_body[2:].strip())
         return val
     if not text_body.strip():
