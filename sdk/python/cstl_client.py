@@ -455,6 +455,23 @@ def _expand_compressed_response(raw: str, binary_path: str | None = None) -> str
 # Client
 # ---------------------------------------------------------------------------
 
+def tls_context_from_env():
+    """Contexte TLS client d'apres l'environnement, ou None (TCP en clair).
+      CSTL_TLS_CA_PATH           certificat(s) de confiance du serveur ;
+      CSTL_TLS_CLIENT_CERT_PATH  certificat client (TLS mutuel, identite SPIFFE) ;
+      CSTL_TLS_CLIENT_KEY_PATH   sa cle ;
+      CSTL_TLS_SERVER_NAME       nom attendu dans le certificat (localhost)."""
+    ca = os.environ.get("CSTL_TLS_CA_PATH")
+    if not ca:
+        return None
+    import ssl
+    ctx = ssl.create_default_context(cafile=ca)
+    cert = os.environ.get("CSTL_TLS_CLIENT_CERT_PATH")
+    if cert:
+        ctx.load_cert_chain(cert, os.environ.get("CSTL_TLS_CLIENT_KEY_PATH"))
+    return ctx
+
+
 class CstlClient:
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
                  timeout: float = 10.0, keep_alive: bool = False,
@@ -484,6 +501,11 @@ class CstlClient:
         if self.keep_alive and self._sock is not None:
             return self._sock
         sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
+        ctx = getattr(self, "ssl_context", None) or tls_context_from_env()
+        if ctx is not None:
+            # Serveur en TLS (2026-11-25) : CSTL_TLS_CA_PATH, et en TLS mutuel
+            # CSTL_TLS_CLIENT_CERT_PATH / CSTL_TLS_CLIENT_KEY_PATH.
+            sock = ctx.wrap_socket(sock, server_hostname=os.environ.get("CSTL_TLS_SERVER_NAME", "localhost"))
         if self.keep_alive:
             self._sock = sock
         self._castle_dict_json = None

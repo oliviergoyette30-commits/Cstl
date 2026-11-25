@@ -307,9 +307,20 @@ fn wire_name(v: Option<&str>) -> String {
 }
 
 pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
-    mut socket: S,
+    socket: S,
     ctx: Arc<ServerContext>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    handle_connection_as(socket, ctx, super::workload_identity::PeerIdentity::None).await
+}
+
+/// Comme `handle_connection`, avec l'identite SPIFFE du certificat client
+/// (TLS mutuel, voir workload_identity.rs).
+pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
+    mut socket: S,
+    ctx: Arc<ServerContext>,
+    peer: super::workload_identity::PeerIdentity,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let spiffe = super::workload_identity::SpiffePolicy::from_env();
     let mut buffer = vec![0u8; 8192];
     // Trouvaille mineure de l'audit multi-angle (2026-09-03): le buffer de
     // reception etait fixe a 8192 octets et jamais reassemble -- un payload
@@ -632,7 +643,12 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // jamais une (re)inscription legitime: un agent qui fait tourner sa
                     // cle via un NOUVEL agent_register n'est jamais intercepte ici, quelle
                     // que soit l'ancienne cle enregistree.
-                    let sig_rejection: Option<&'static str> = if key_revoked {
+                    // Identite de charge de travail (2026-11-25) : en TLS mutuel avec
+                    // CSTL_SPIFFE_TRUST_DOMAIN, le sender doit etre le nom du certificat.
+                    let spiffe_rejection = if is_token_status { None } else { spiffe.check(&peer, &sig_sender).err() };
+                    let sig_rejection: Option<&'static str> = if let Some(r) = spiffe_rejection {
+                        Some(r)
+                    } else if key_revoked {
                         Some("key_revoked")
                     } else if is_agent_register || is_arbiter_register || is_token_status {
                         None

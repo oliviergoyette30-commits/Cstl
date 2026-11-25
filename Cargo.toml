@@ -242,3 +242,9 @@ version = "1.4"
 # codes en dur de l'ancien stub ("MIIC...\n"). JAMAIS utilise pour un
 # certificat de production: self-signed/CA jetable, voir tls.rs.
 version = "0.14"
+
+[dependencies.x509-parser]
+# Lecture de l'identite SPIFFE (SAN URI spiffe://...) du certificat client
+# en TLS mutuel (2026-11-25, server/workload_identity.rs). Deja compile
+# comme dependance de rcgen : aucune nouvelle source.
+version = "0.18"

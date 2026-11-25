@@ -818,6 +818,26 @@ refreshes every 10 s. It shows:
 - revoked keys;
 - the last 100 decisions, with agent, action, amount, reason and rule.
 
+**Workload identity (SPIFFE).** With mutual TLS, a client certificate can
+carry a SPIFFE ID in its URI SAN: `spiffe://acme.org/ns/prod/sa/agent_support`.
+
+- With `CSTL_SPIFFE_TRUST_DOMAIN=acme.org`, the last path segment is the
+  connection's agent name. Every message on that connection must have that
+  `sender`, registration included (`spiffe_identity_mismatch` otherwise).
+- So a stolen Ed25519 key is useless from another workload.
+- A SPIFFE ID from another trust domain, or two IDs in one certificate, is
+  refused (`spiffe_foreign_identity`).
+- `CSTL_SPIFFE_REQUIRED=true` also refuses connections without a SPIFFE ID.
+- `token_status` (the guard's unsigned check) is exempt.
+- Python agents reach a TLS server with `CSTL_TLS_CA_PATH`, and in mutual
+  TLS `CSTL_TLS_CLIENT_CERT_PATH` / `CSTL_TLS_CLIENT_KEY_PATH`
+  (`CSTL_TLS_SERVER_NAME`, default `localhost`).
+- Limit: the JSON gateway presents its own certificate, so it speaks for
+  one name only. Do not combine it with SPIFFE enforcement.
+
+Live test: `sdk/python/test_spiffe_live.py`, with a real PKI made by
+openssl.
+
 **Changing the server key.** Run `cargo run --bin cstl_parser --
 --rotate-server-key` with the server stopped. It first verifies the
 history with the current key, then creates a new key. The handover is

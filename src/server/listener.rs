@@ -63,7 +63,13 @@ pub async fn accept_connections(
                     let _permit = permit; // garde le permit vivant pour toute la duree de la connexion
                     match acceptor.accept(socket).await {
                         Ok(tls_stream) => {
-                            if let Err(e) = handler::handle_connection(tls_stream, ctx).await {
+                            // Identite SPIFFE du certificat client (2026-11-25).
+                            let ids = tls_stream.get_ref().1.peer_certificates()
+                                .and_then(|c| c.first())
+                                .map(|c| super::workload_identity::spiffe_ids(c.as_ref()))
+                                .unwrap_or_default();
+                            let peer = super::workload_identity::SpiffePolicy::from_env().identify(&ids);
+                            if let Err(e) = handler::handle_connection_as(tls_stream, ctx, peer).await {
                                 eprintln!("[Server] Error handling TLS connection from {}: {}", addr, e);
                             }
                         }
