@@ -114,7 +114,10 @@ bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
    - questions plus dures ;
    - attaques écrites par d'autres ;
    - audit de sécurité externe.
-4. **Échelle :** PostgreSQL, fédération.
+4. **Échelle :** PostgreSQL (le serveur reste sur SQLite).
+   - **fait (2026-11-25) :** fédération entre serveurs par attestations
+     signées, à durée courte (spécification 5.8,
+     `test_federation_live.py`) ;
    - **fait (2026-11-25) :** identités standard, OIDC à l'enregistrement
      (RS256, ES256) et SPIFFE en TLS mutuel. Spécification 5.6 et 5.7, tests
      `test_oidc_live.py` et `test_spiffe_live.py` ;
@@ -177,9 +180,8 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
 **Produit**
 - Pas de paquet installable, pas de SDK TypeScript, pas d'adaptateur A2A
   (MCP seulement).
-- Un seul serveur sur SQLite, sans fédération entre organisations. La
-  révocation des clés existe (2026-11-25), mais pas encore de format
-  standard (OIDC, SPIFFE).
+- Le serveur reste sur SQLite (pas de PostgreSQL). La fédération entre
+  serveurs, OIDC et SPIFFE existent depuis le 2026-11-25.
 - Sans vérification en direct (`CstlGuard(online=...)` ou
   `CSTL_GUARD_ONLINE`), un jeton déjà délivré reste valable jusqu'à son
   expiration (60 s par défaut), même après une révocation ou un arrêt

@@ -216,6 +216,41 @@ d'un autre domaine donne `spiffe_foreign_identity`. Avec
 `CSTL_SPIFFE_REQUIRED=true`, l'absence d'identifiant donne
 `spiffe_identity_required`. `token_status` en est exempté.
 
+### 5.8 Fédération entre serveurs (ajouté le 2026-11-25)
+
+- **Attestation.** Un agent demande au serveur qui le connaît
+  (`CSTL_SERVER_NAME`, par exemple `acme`) :
+  `purpose=identity_assertion`, signé. Réponse :
+  `purpose=identity_assertion_issued` avec `issuer`, `agent`, `public_key`,
+  `issued_at`, `expires_at` et `signature`. La signature est faite par la
+  clé du serveur, sur :
+
+  ```
+  cstl-federation-v1
+  issuer=<issuer>
+  agent=<agent>
+  public_key=<clé enregistrée, hex minuscule>
+  issued_at=<s>
+  expires_at=<s>
+  ```
+
+  La validité est `CSTL_FEDERATION_TTL_SECS`, 3600 par défaut.
+- **Enregistrement chez le pair.** Un serveur pair qui fait confiance à
+  `acme` (`CSTL_FEDERATION_PEERS=acme:<clé publique hex>`) enregistre
+  `agent_register` sous le nom `acme.<agent>`. Le message porte
+  `federation_issuer`, `federation_agent`, `federation_public_key`,
+  `federation_issued_at`, `federation_expires_at` et
+  `federation_signature`, et il est signé par **cette** clé.
+- **Refus :** `federation_unknown_peer`, `federation_signature_invalid`,
+  `federation_name_mismatch`, `federation_key_mismatch`,
+  `federation_expired`. Un agent local ne peut pas prendre un nom
+  `acme.*` (`federation_name_reserved`).
+- **Expiration.** Une fois l'attestation expirée, les messages de
+  `acme.<agent>` sont refusés (`signature_rejected`,
+  `reason=federation_expired`) jusqu'à un nouvel enregistrement. Une clé
+  révoquée chez l'émetteur n'obtient plus d'attestation : la révocation
+  atteint le pair dans ce délai.
+
 ## 6. Règles
 
 ### 6.1 Forme

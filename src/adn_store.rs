@@ -474,6 +474,11 @@ impl AdnStore {
                 audit_hash TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_decisions_at ON decisions(at);
+            CREATE TABLE IF NOT EXISTS federated_agents (
+                name TEXT PRIMARY KEY,
+                issuer TEXT NOT NULL,
+                expires_at INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS emergency_stops (
                 scope TEXT PRIMARY KEY,
                 set_by TEXT NOT NULL,
@@ -2018,6 +2023,22 @@ impl AdnStore {
         let mut st = self.conn.prepare("SELECT scope, set_by, reason, at FROM emergency_stops ORDER BY at, scope")?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
         rows.collect()
+    }
+
+    /// Agent d'un serveur pair (2026-11-25, server/federation.rs) et
+    /// l'expiration de son attestation.
+    pub fn set_federated(&self, name: &str, issuer: &str, expires_at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO federated_agents (name, issuer, expires_at) VALUES (?1, ?2, ?3) \
+             ON CONFLICT(name) DO UPDATE SET issuer = excluded.issuer, expires_at = excluded.expires_at",
+            params![name, issuer, expires_at],
+        )?;
+        Ok(())
+    }
+
+    /// Expiration de l'attestation d'un agent federe, ou None (agent local).
+    pub fn federated_expiry(&self, name: &str) -> Result<Option<i64>, rusqlite::Error> {
+        self.conn.query_row("SELECT expires_at FROM federated_agents WHERE name = ?1", [name], |r| r.get(0)).optional()
     }
 
     /// Arret d'urgence (2026-11-25). `scope` : `all`, `agent:<nom>` ou

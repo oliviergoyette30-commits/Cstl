@@ -646,8 +646,14 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                     // Identite de charge de travail (2026-11-25) : en TLS mutuel avec
                     // CSTL_SPIFFE_TRUST_DOMAIN, le sender doit etre le nom du certificat.
                     let spiffe_rejection = if is_token_status { None } else { spiffe.check(&peer, &sig_sender).err() };
+                    // Agent federe dont l'attestation a expire (2026-11-25).
+                    let federation_expired = !is_agent_register && registered_pubkey_for_sender.is_some()
+                        && ctx.adn_store.lock().await.federated_expiry(&sig_sender).ok().flatten()
+                            .is_some_and(|exp| chrono::Utc::now().timestamp() > exp);
                     let sig_rejection: Option<&'static str> = if let Some(r) = spiffe_rejection {
                         Some(r)
+                    } else if federation_expired {
+                        Some("federation_expired")
                     } else if key_revoked {
                         Some("key_revoked")
                     } else if is_agent_register || is_arbiter_register || is_token_status {
@@ -954,6 +960,32 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                                 "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
                                  INTENT_PAYLOAD [purpose=token_status, sender=server, audit_hash={audit_hash}, status={status}, nonce={nonce}, checked_at={now}, signature={}]\n---END---\n",
                                 ctx.server_key.sign_hex(msg.as_bytes())
+                            )
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
+                    // Attestation d'identite pour un serveur pair (2026-11-25,
+                    // federation.rs) : signee par la cle de CE serveur, pour l'agent
+                    // qui la demande et sa cle enregistree, valable CSTL_FEDERATION_TTL_SECS.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("identity_assertion") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let response = if !identity_proven || !super::action_authorization::is_valid_action(&sender) || sender.contains('.') && super::federation::reserved_by_peer(&sender, &super::federation::peers()).is_some() {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=control_denied, request=identity_assertion, reason=not_authorized]\n---END---\n".to_string()
+                        } else {
+                            let issuer = super::federation::server_name();
+                            let key = registered_pubkey_for_sender.clone().unwrap_or_default().to_ascii_lowercase();
+                            let now = chrono::Utc::now().timestamp();
+                            let exp = now + super::federation::ttl_secs();
+                            let sig = ctx.server_key.sign_hex(super::federation::message(&issuer, &sender, &key, now, exp).as_bytes());
+                            format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=identity_assertion_issued, sender=server, receiver={sender}, issuer={issuer}, agent={sender}, public_key={key}, issued_at={now}, expires_at={exp}, signature={sig}]\n---END---\n"
                             )
                         };
                         send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
@@ -1926,7 +1958,31 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                             // Identite d'entreprise OIDC (2026-11-25, oidc.rs) : avec
                             // CSTL_OIDC_ISSUER, l'enregistrement exige un jeton d'identite
                             // du fournisseur dont le nom est celui de l'agent.
+                            // Federation (2026-11-25, federation.rs) : un agent d'un serveur
+                            // pair s'enregistre sous <pair>.<agent> avec l'attestation signee
+                            // de ce pair ; un agent local ne peut pas prendre ce nom.
+                            let fed_peers = super::federation::peers();
+                            let federation: Option<Result<(String, i64), &'static str>> = if fed_peers.is_empty() {
+                                None
+                            } else if let Some(issuer) = payload.intent.get("federation_issuer") {
+                                let get = |k: &str| payload.intent.get(k).map(String::as_str).unwrap_or("");
+                                let a = super::federation::Assertion {
+                                    issuer, agent: get("federation_agent"), public_key: get("federation_public_key"),
+                                    issued_at: get("federation_issued_at").parse().unwrap_or(0),
+                                    expires_at: get("federation_expires_at").parse().unwrap_or(0),
+                                    signature: get("federation_signature"),
+                                };
+                                Some(super::federation::verify(&a, &name, public_key.as_deref().unwrap_or(""), &fed_peers, chrono::Utc::now().timestamp())
+                                    .map(|exp| (issuer.clone(), exp)))
+                            } else if super::federation::reserved_by_peer(&name, &fed_peers).is_some() {
+                                Some(Err("federation_name_reserved"))
+                            } else {
+                                None
+                            };
+                            let federated_ok = matches!(federation, Some(Ok(_)));
                             let oidc_rejection = match (super::oidc::OidcConfig::from_env(), &sig_check) {
+                                _ if federated_ok => None,
+                                (_, SignatureCheck::Valid) if matches!(federation, Some(Err(_))) => federation.as_ref().and_then(|f| f.as_ref().err().copied()),
                                 (Some(cfg), SignatureCheck::Valid) => match payload.intent.get("oidc_token") {
                                     None => Some("oidc_token_required"),
                                     Some(t) => match cfg.jwks().await {
@@ -1958,7 +2014,10 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                                         Some(k) => ctx.adn_store.lock().await.is_key_revoked(k).unwrap_or(true),
                                         None => false,
                                     };
-                                    let rotation_rejection: Option<(&'static str, String)> = if existing_revoked {
+                                    let rotation_rejection: Option<(&'static str, String)> = if federated_ok {
+                                        // Le pair fait autorite sur la cle de ses agents.
+                                        None
+                                    } else if existing_revoked {
                                         let enrolled = match public_key.as_deref() {
                                             Some(k) => ctx.adn_store.lock().await.take_enrollment(&name, k).unwrap_or(false),
                                             None => false,
@@ -2017,6 +2076,11 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                                             chrono::Utc::now().timestamp(),
                                         ) {
                                             error!("[Handler] agent_register: echec persistance de '{}': {}", name, e);
+                                        }
+                                        if let Some(Ok((issuer, exp))) = &federation {
+                                            if let Err(e) = ctx.adn_store.lock().await.set_federated(&name, issuer, *exp) {
+                                                error!("[Handler] set_federated failed: {}", e);
+                                            }
                                         }
                                         ctx.agent_registry.write().await.register(card);  // agent_register: écriture
                                         if is_rotation {

@@ -818,6 +818,31 @@ refreshes every 10 s. It shows:
 - revoked keys;
 - the last 100 decisions, with agent, action, amount, reason and rule.
 
+**Federation between servers.** Two organizations, two CSTL servers.
+Spec section 5.8.
+
+```bash
+CSTL_SERVER_NAME=acme cargo run --bin cstl_parser                       # acme's server
+CSTL_FEDERATION_PEERS="acme:$(cat acme/cstl_adn.db.server_key.pub)" ... # the partner's server
+```
+
+```python
+here = bot.federated_at("partner.example", 5050)   # same key, name "acme.bot" over there
+here.authorize("read_invoices")                     # the partner's rules apply
+```
+
+- Acme's server signs an assertion: this agent has this key, valid for
+  `CSTL_FEDERATION_TTL_SECS` (1 h).
+- The partner checks it against acme's pinned public key, and registers
+  `acme.<agent>` with exactly that key.
+- Local agents cannot take `acme.*` names. A forged assertion, an assertion
+  from an unknown server, or one presented with another key is refused.
+- Once the assertion expires, the partner refuses the agent until it
+  presents a new one. A key revoked at acme gets no new assertion, so the
+  revocation reaches the partner within the TTL.
+
+Live test: `sdk/python/test_federation_live.py`, with two real servers.
+
 **Enterprise identity (OIDC).** With `CSTL_OIDC_ISSUER`, registering an
 agent requires an ID token from the company's identity provider. Spec
 section 5.6.

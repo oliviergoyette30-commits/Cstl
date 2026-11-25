@@ -780,6 +780,38 @@ class CstlAgent:
             raise ActionDenied(action, reason, resp.fields.get("rule"))
         return token
 
+    # -- Federation (2026-11-25) ----------------------------------------------
+    def identity_assertion(self) -> dict:
+        """Attestation signee par CE serveur : cet agent a cette cle. A presenter
+        a un serveur pair (`federated_at`). Leve ControlDenied sinon."""
+        resp = self._send_signed("identity_assertion", "server", [], {"request_id": uuid.uuid4().hex})
+        if resp.purpose != "identity_assertion_issued":
+            raise ControlDenied("identity_assertion", resp.fields.get("reason", resp.purpose), resp)
+        return {k: resp.fields[k] for k in ("issuer", "agent", "public_key", "issued_at", "expires_at", "signature")}
+
+    def federated_at(self, host: str, port: int, assertion: Optional[dict] = None) -> "CstlAgent":
+        """Le meme agent, avec la meme cle, aupres d'un serveur PAIR qui fait
+        confiance a ce serveur (CSTL_FEDERATION_PEERS) : il y porte le nom
+        <emetteur>.<agent> et s'y enregistre avec l'attestation. A refaire
+        avant l'expiration de l'attestation."""
+        a = assertion or self.identity_assertion()
+        other = CstlAgent.__new__(CstlAgent)
+        other.__dict__.update(self.__dict__)
+        other.name = f"{a['issuer']}.{a['agent']}"
+        other.client = type(self.client)(host=host, port=port)
+        other.registered = False
+        other.keyfile = self.keyfile.with_name(f"agent_{other.name}.key")
+        resp = other._send_signed("agent_register", "server", [], {
+            "name": other.name, "capabilities": "communication", "federation_issuer": a["issuer"],
+            "federation_agent": a["agent"], "federation_public_key": a["public_key"],
+            "federation_issued_at": a["issued_at"], "federation_expires_at": a["expires_at"],
+            "federation_signature": a["signature"]})
+        other.last_register_response = resp
+        if resp.purpose != "agent_register_ack":
+            raise ControlDenied("agent_register", resp.fields.get("reason", resp.purpose), resp)
+        other.registered = True
+        return other
+
     # -- Escalade vers un humain (2026-11-25) --------------------------------
     def pending_approvals(self) -> list:
         """Approbateur : demandes en attente [{approval_id, agent, action,
