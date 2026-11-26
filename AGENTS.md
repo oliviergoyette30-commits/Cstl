@@ -13,7 +13,7 @@ want to see it work, keep reading here.
 
 ```bash
 cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 7 commands
+pip install ./sdk/python        # the "cstl" package: SDK + 8 commands
 cstl-demo                       # or: python3 sdk/python/cstl_demo.py
 ```
 
@@ -32,7 +32,7 @@ deletes afterwards:
 It prints `Tout est conforme : 7/7.` Live test: `sdk/python/test_demo_live.py`.
 
 The other installed commands are `cstl-mcp-proxy`, `cstl-a2a-proxy`,
-`cstl-gate`, `cstl-approve`, `cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
+`cstl-gate`, `cstl-approve`, `cstl-deliberate`, `cstl-mcp-server` and `cstl-witness`. Server binaries for Linux, macOS and Windows, plus the
 wheel, are built by `.github/workflows/release.yml` (on a `v*` tag or by
 hand). Publishing them is a human decision.
 
@@ -887,6 +887,45 @@ carry a SPIFFE ID in its URI SAN: `spiffe://acme.org/ns/prod/sa/agent_support`.
 
 Live test: `sdk/python/test_spiffe_live.py`, with a real PKI made by
 openssl.
+
+**Deliberation between models (v6, draft).** Several models debate a
+question without copy-paste and without rereading the whole history. Spec:
+`docs/CSTL_DELIBERATION_v6.md`.
+
+```bash
+CSTL_POLICY_AUTHORS=moderateur CSTL_APPROVERS="human_*" CSTL_APPROVAL_ACTIONS="deliberate.*" cargo run --bin cstl_parser
+cstl-deliberate --topic lab_orders --question should_hospital_let_ai_order_lab_tests_alone \
+    --model chatgpt=openrouter:openai/gpt-5-mini --model gemini=manual --model claude=manual \
+    --server-key cstl_adn.db.server_key.pub
+```
+
+- **Points.** Every proposal becomes a numbered point (`p1`, `p2.1` for an
+  amendment). Models take a position on each point: `supports`,
+  `rejects` or `abstains`, with sigma.
+- **State.** Each call receives only the open points with all positions,
+  what closed since its last turn, and its errors. Estimated tokens: −4 %
+  on a 2-round debate, −65 % on an 8-round one, against rereading the
+  history.
+- **Checks.** Every reply is checked locally (no prose, sigma, limits). It
+  is then sent to the real server, signed by the participant, and audited.
+  An error goes back to the model, which has 2 retries. A participant that
+  keeps failing is excluded, and the others go on.
+- **Closure.** A point reaches CONSENSUS when every active participant
+  supports it with sigma ≥ 0.5. It reaches DEADLOCK when positions stall
+  with a refusal or an abstention. New points per turn, total points,
+  amendment depth and rounds are all capped.
+- **Execution.** Action points in consensus are compiled into rules signed
+  by the moderator (`publish_policy`, with a receipt), which the control
+  layer then enforces. Deadlocked action points go to a human through the
+  approval flow, and an approved point becomes a rule.
+- **Safety.** The engine refuses to start if the server has no
+  `CSTL_POLICY_AUTHORS`. Otherwise every proposal would already be a rule.
+
+Live test: `sdk/python/test_deliberation_live.py` (deterministic models). It
+covers consensus to enforced rule, deadlock to human, an E101 error fixed
+by the model, a defective participant, amendment depth, politeness loops,
+conflicting modalities and the manual mode. Not yet measured with real
+models.
 
 **Changing the server key.** Run `cargo run --bin cstl_parser --
 --rotate-server-key` with the server stopped. It first verifies the

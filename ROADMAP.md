@@ -698,3 +698,20 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   de la clé du serveur.
 - **Sécurité par défaut :** signatures obligatoires, et identité conservée
   au redémarrage (faille corrigée).
+
+## Délibération v6 (2026-11-26)
+
+- **Fait :** le moteur de délibération (`sdk/python/cstl_deliberation.py`,
+  spécification `docs/CSTL_DELIBERATION_v6.md`) :
+  - points numérotés, état au lieu de l'historique ;
+  - vérification locale, puis par le serveur, avec correction par le
+    modèle ;
+  - CONSENSUS et DEADLOCK, avec des garde-fous contre les boucles ;
+  - compilation en règles signées, escalade humaine ;
+  - mode manuel et OpenRouter ; testé avec des modèles déterministes.
+- **À faire :**
+  - le banc avec de vrais modèles : erreurs critiques, tokens, tours, contre
+    un agent seul et un débat en langage naturel ;
+  - les preuves externes pour `sigma` ;
+  - une vérification indépendante de l'état publié par le modérateur.
+

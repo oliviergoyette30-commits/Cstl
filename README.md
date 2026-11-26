@@ -23,7 +23,7 @@ record nobody can quietly rewrite.
 
 ```bash
 cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 7 commands
+pip install ./sdk/python        # the "cstl" package: SDK + 8 commands
 cstl-demo                       # prints "Tout est conforme : 7/7."
 ```
 
@@ -97,6 +97,13 @@ from any JSON client (`POST /v1/message`).
 | **Emergency stop** | It wins over every rule, for all actions, one agent or one action pattern. The operator also has a file switch that no message can lift. |
 | **Abnormal behavior** | A burst of requests stops the agent automatically. |
 | **Enforcement points** | `cstl-gate` (named SQL, shell and HTTP operations; it alone holds the credentials), `cstl-mcp-proxy` (in front of any MCP server), `cstl-a2a-proxy` (in front of any A2A 1.0 agent, batches included), and `cstl-mcp-server` (CSTL as MCP tools). |
+
+### Deliberation (v6, draft)
+| | |
+|---|---|
+| **Engine** | `cstl-deliberate`: several models debate on numbered points. Each call receives only the current state (−65 % estimated tokens on a long debate). Every reply is signed, checked by the server and audited; errors go back to the model. |
+| **Closure** | CONSENSUS or DEADLOCK computed from positions, with caps on new points, amendment depth and rounds. |
+| **Execution** | Decisions in consensus become signed rules that the control layer enforces. Deadlocks go to a human through the approval flow. |
 
 ### Audit
 | | |
