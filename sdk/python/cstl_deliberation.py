@@ -136,7 +136,9 @@ class OpenRouterModel:
             except urllib.error.HTTPError as e:
                 if e.code not in (429, 500, 502, 503, 504) or attempt == attempts - 1:
                     raise RuntimeError(f"OpenRouter {e.code} : {e.read()[:200]!r}") from None
-            except (urllib.error.URLError, TimeoutError) as e:
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError, __import__("http.client").client.HTTPException) as e:
+                # Connexion coupee pendant la lecture, reponse tronquee ou
+                # illisible (2026-11-26, banc de deliberation) : on reessaie.
                 if attempt == attempts - 1:
                     raise RuntimeError(f"OpenRouter injoignable : {e}") from None
             time.sleep(delay)
