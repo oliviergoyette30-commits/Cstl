@@ -311,14 +311,16 @@ def verdict(raw):
     return ok, p, (detail.group(1) if detail else ""), warnings
 
 
-def check(path, port=None, out=None):
+def check(path, port=None, out=None, start="chatgpt"):
     text = Path(path).read_text()
     expected = rules()
     msgs = [m for m in split_messages(text)]
     proc, port = server(port)
     rows, per_model, deontic = [], {}, {}
-    speakers = [n for n in ORDER]
-    turn = 0
+    # Ordre de parole a partir de `start` ; un message renvoye apres
+    # correction (meme expediteur que le precedent) ne fait pas avancer le tour.
+    speakers = ORDER[ORDER.index(start):] + ORDER[:ORDER.index(start)]
+    turn, previous = 0, None
     try:
         for i, m in enumerate(msgs, 1):
             a = analyse(m, expected)
@@ -326,10 +328,15 @@ def check(path, port=None, out=None):
             receiver = a["intent"].get("receiver", "?")
             if sender == "moderateur":
                 continue
+            retry = previous is not None and sender == previous
+            if retry:
+                turn -= 1
             exp_sender = speakers[turn % 3]
             exp_receivers = {speakers[(turn + 1) % 3], "moderateur", "all"}
             turn += 1
+            previous = sender
             ok_srv, purpose, detail, warns = verdict(send(port, a["text"]))
+            is_decision = receiver == "moderateur" or a["intent"].get("purpose") in ("decide", "decision")
             rels = a["relations"]
             sigmas = [r.get("sigma") for r in rels]
             bad_sigma = [s for s in sigmas if s is None or not re.fullmatch(r"(0(\.\d+)?|1(\.0+)?)", s or "")]
@@ -346,6 +353,10 @@ def check(path, port=None, out=None):
                 "operateurs officiels": not bad_ops,
                 ">= 3 relations": len(rels) >= 3 or a["intent"].get("purpose") == "ready",
                 "accord/desaccord": (a["agree"] + a["disagree"]) > 0 or a["intent"].get("purpose") == "ready",
+                # Au tour de decision : une ligne DECISION: avec un identifiant
+                # (pas une phrase), comme le demande l'amorce.
+                "decision (si demandee)": not is_decision or bool(
+                    a["decision"] and re.fullmatch(r"DECISION\s*[:=]\s*[a-z0-9_.]+(\s*\[.*\])?", a["decision"].strip())),
                 "serveur PASS": ok_srv,
             }
             notes = []
@@ -360,6 +371,10 @@ def check(path, port=None, out=None):
             if not ok_srv:
                 notes.append(f"serveur : {purpose} {detail}"[:200])
             notes += [f"avertissement : {w}"[:160] for w in warns]
+            if is_decision and not a["decision"]:
+                notes.append("aucune ligne DECISION: au tour de decision")
+            elif is_decision and not checks["decision (si demandee)"]:
+                notes.append("DECISION ecrite en phrase, pas en identifiant")
             if sender != exp_sender:
                 notes.append(f"sender {sender}, attendu {exp_sender}")
             for r in rels:
@@ -408,11 +423,12 @@ def main(argv=None):
     c.add_argument("transcript")
     c.add_argument("--port", type=int)
     c.add_argument("--out")
+    c.add_argument("--start", default="chatgpt", choices=ORDER, help="premier modele a parler dans le transcript")
     args = ap.parse_args(argv)
     if args.cmd == "kit":
         kit()
     else:
-        check(args.transcript, args.port, args.out)
+        check(args.transcript, args.port, args.out, args.start)
 
 
 if __name__ == "__main__":
