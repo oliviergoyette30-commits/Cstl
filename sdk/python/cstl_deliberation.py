@@ -204,8 +204,8 @@ def parse_reply(text: str) -> list[dict]:
         if not m:
             raise ReplyError("E_PROSE", f"ligne hors format : {ln[:80]!r} (seulement des lignes RELATION [...])")
         rels.append({k: str(v) for k, v in _attrs(m.group(1)).items()})
-    if not rels:
-        raise ReplyError("E_EMPTY", "aucune relation")
+    # Une reponse sans relation veut dire « rien a changer » : ce n'est pas
+    # une erreur (avant le 2026-11-26, E_EMPTY forcait un nouvel essai).
     return rels
 
 
@@ -215,7 +215,7 @@ class Deliberation:
     def __init__(self, topic, question, participants, models, *, host="127.0.0.1", port=5050,
                  moderator="moderateur", server_key=None, max_rounds=6, stall_rounds=2,
                  min_confidence=0.5, max_new_points=2, max_points=20, max_depth=2, max_retries=2,
-                 max_failures=2, initial_points=(), escalate=True, log=None, context=""):
+                 max_failures=2, initial_points=(), escalate=True, log=None, context="", claims=True):
         if not _NAME.match(topic):
             raise ValueError("topic : identifiant [A-Za-z0-9_.-]")
         import cstl_llm_agent as m
@@ -224,6 +224,10 @@ class Deliberation:
         # Dossier du debat (texte libre : faits, regles), donne avec les
         # instructions a chaque appel ; jamais envoye au serveur.
         self.context = context
+        # claims=False : deliberation de DECISION, seules les propositions
+        # d'action deviennent des points ; une affirmation est verifiee et
+        # auditee, mais ne garde pas le debat ouvert.
+        self.claims = claims
         self.participants = list(participants)
         self.models = dict(models)
         self.cfg = dict(max_rounds=max_rounds, stall_rounds=stall_rounds, min_confidence=min_confidence,
@@ -375,8 +379,9 @@ class Deliberation:
                     if parent.count(".") + 1 > self.cfg["max_depth"]:
                         raise ReplyError("E_DEPTH", f"amendement trop profond (au plus {self.cfg['max_depth']} niveaux) : {parent}")
                 new.append(r)
-        if len(new) > self.cfg["max_new_points"]:
-            raise ReplyError("E_LIMIT", f"{len(new)} nouvelles propositions, au plus {self.cfg['max_new_points']} par tour")
+        counted = [r for r in new if self.claims or (r.get("type") == "PERFORM" and r.get("modality") in MODALITIES)]
+        if len(counted) > self.cfg["max_new_points"]:
+            raise ReplyError("E_LIMIT", f"{len(counted)} nouvelles propositions, au plus {self.cfg['max_new_points']} par tour")
         return stances, new
 
     def _server_check(self, agent, rels):
@@ -409,7 +414,7 @@ class Deliberation:
                     rels = parse_reply(text)
                     stances, new = self._apply(agent, rels)
                     to_server = [{k: v for k, v in r.items() if k != "amends"} for r in rels]
-                    err = self._server_check(agent, to_server)
+                    err = self._server_check(agent, to_server) if to_server else None
                 except ReplyError as e:
                     err = e
             if err is None:
@@ -443,6 +448,9 @@ class Deliberation:
             if dup is not None:
                 if dup.status == "open":
                     self.stances[dup.id][agent] = ("supports", float(sig), base.get("reason"))
+                continue
+            if probe.kind == "claim" and not self.claims:
+                self.events.append((self.round, "claim_ignored", agent))
                 continue
             if len(self.points) >= self.cfg["max_points"]:
                 self.events.append((self.round, "point_limit", agent))

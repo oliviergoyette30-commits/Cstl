@@ -202,6 +202,134 @@
    "case": "fin_01",
    "condition": "nl_debate",
    "seconds": 182
+  },
+  {
+   "per_model": [
+    {
+     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+     "score": {
+      "correct": 4,
+      "critical": 0,
+      "minor": 0,
+      "undecided": 0,
+      "detail": {
+       "refund_80_eur_order_a17": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       },
+       "refund_450_eur_order_a18": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "route_ticket_to_legal_team": {
+        "truth": "MUST",
+        "got": "MUST",
+        "verdict": "correct"
+       },
+       "send_order_status_update": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       }
+      }
+     },
+     "tokens": 763,
+     "decisions": {
+      "refund_80_eur_order_a17": "MAY",
+      "refund_450_eur_order_a18": "MUST_NOT",
+      "route_ticket_to_legal_team": "MUST",
+      "send_order_status_update": "MAY"
+     }
+    },
+    {
+     "model": "baidu/ernie-5.5-flash-preview:free",
+     "score": {
+      "correct": 4,
+      "critical": 0,
+      "minor": 0,
+      "undecided": 0,
+      "detail": {
+       "refund_80_eur_order_a17": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       },
+       "refund_450_eur_order_a18": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "route_ticket_to_legal_team": {
+        "truth": "MUST",
+        "got": "MUST",
+        "verdict": "correct"
+       },
+       "send_order_status_update": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       }
+      }
+     },
+     "tokens": 459,
+     "decisions": {
+      "refund_80_eur_order_a17": "MAY",
+      "refund_450_eur_order_a18": "MUST_NOT",
+      "route_ticket_to_legal_team": "MUST",
+      "send_order_status_update": "MAY"
+     }
+    },
+    {
+     "model": "particle-ai/particle-1:free",
+     "score": {
+      "correct": 4,
+      "critical": 0,
+      "minor": 0,
+      "undecided": 0,
+      "detail": {
+       "refund_80_eur_order_a17": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       },
+       "refund_450_eur_order_a18": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "route_ticket_to_legal_team": {
+        "truth": "MUST",
+        "got": "MUST",
+        "verdict": "correct"
+       },
+       "send_order_status_update": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       }
+      }
+     },
+     "tokens": 515,
+     "decisions": {
+      "refund_80_eur_order_a17": "MAY",
+      "refund_450_eur_order_a18": "MUST_NOT",
+      "route_ticket_to_legal_team": "MUST",
+      "send_order_status_update": "MAY"
+     }
+    }
+   ],
+   "score": {
+    "correct": 4.0,
+    "critical": 0.0,
+    "minor": 0.0,
+    "undecided": 0.0
+   },
+   "tokens": 579.0,
+   "case": "fin_02",
+   "condition": "single",
+   "seconds": 13
   }
  ]
 }

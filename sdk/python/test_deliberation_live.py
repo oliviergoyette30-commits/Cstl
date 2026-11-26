@@ -37,7 +37,7 @@ def server():
     work = Path(tempfile.mkdtemp(prefix="cstl_delib_"))
     env = {**os.environ, "CSTL_PORT": str(PORT), "CSTL_REST_PORT": str(REST), "CSTL_KB_VERIFY": "off",
            "CSTL_POLICY_AUTHORS": "moderateur*", "CSTL_APPROVERS": "human_*",
-           "CSTL_APPROVAL_ACTIONS": "deliberate.*"}
+           "CSTL_APPROVAL_ACTIONS": "deliberate.*", "CSTL_RATE_LIMIT_PER_IP_PER_MIN": "100000"}
     for k in ("CSTL_DEV_MODE", "CSTL_GOVERNED_ACTIONS", "CSTL_ANOMALY_MAX_PER_MIN"):
         env.pop(k, None)
     proc = subprocess.Popen([str(BINARY)], cwd=work, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -242,3 +242,22 @@ def test_manual_mode_prints_the_state_to_paste_and_reads_the_reply(d, server):
                                port=PORT, moderator=mod, server_key=key, max_rounds=1)
     assert delib.run()["status"] == {"consensus": ["p1"]}
     assert "A COLLER DANS" in shown[0] and "deliberation CSTL" in shown[0] and "type=ASK" in shown[0]
+
+
+def test_decision_mode_ignores_claims_and_accepts_an_empty_reply(d, server):
+    """claims=False (deliberation de decision) : une affirmation ne garde pas
+    le debat ouvert ; une reponse sans relation = rien a changer, pas une
+    erreur (constate avec de vrais modeles le 2026-11-26 : 9 essais inutiles)."""
+    (a, b, c), bot, mod = names()
+    s_a = [R(f"type=PERFORM, subject={bot}, object=act_one, modality=MAY, sigma=0.8",
+             f"type=PERFORM, subject={bot}, object=act_two, modality=MUST_NOT, sigma=0.8",
+             f"type=PERFORM, subject={bot}, object=act_three, modality=MUST, sigma=0.8")]
+    s_b = [R(*[f"type=supports, subject={b}, object=p{i}, sigma=0.8" for i in (1, 2, 3)],
+             f"type=STATE, subject={b}, object=all_positions_given, sigma=0.9")]
+    s_c = ["#!CSTL v5.0.0 MODE=A\n---END---"]
+    delib, _ = make(d, server, [a, b, c], [s_a, s_b, s_c], mod, claims=False, max_new_points=3)
+    summary = delib.run()
+    assert summary["retries"] == 0 and summary["failed_turns"] == 0
+    assert set(delib.points) == {"p1", "p2", "p3"}, "l'affirmation n'est pas un point"
+    assert summary["status"] == {"deadlock": ["p1", "p2", "p3"]}, "c n'a soutenu aucun point : pas de consensus"
+    assert any(e[1] == "claim_ignored" for e in delib.events)

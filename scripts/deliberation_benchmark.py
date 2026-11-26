@@ -135,7 +135,8 @@ def run_cstl(case, models, port, key):
     with contextlib.redirect_stdout(io.StringIO()):
         d = cd.Deliberation(f"bench_{case['id']}_{int(time.time())}", case["question"], participants,
                             dict(zip(participants, models)), port=port, moderator=f"moderateur_{int(time.time() * 1000)}",
-                            server_key=key, max_rounds=4, context=context)
+                            server_key=key, max_rounds=4, context=context, claims=False,
+                            max_new_points=len(case["actions"]))
         summary = d.run()
     decisions, conflicts = {}, []
     for a in case["actions"]:
@@ -146,6 +147,7 @@ def run_cstl(case, models, port, key):
         elif len(mods) > 1:
             conflicts.append(a)
     return decisions, usage_of(models) - before, {"summary": summary, "state": d.state(), "conflicts": conflicts,
+                                                   "calls": sum(len(t["attempts"]) for t in d.turns),
                                                    "turns": d.turns}
 
 
