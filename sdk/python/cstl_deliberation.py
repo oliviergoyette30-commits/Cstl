@@ -120,7 +120,8 @@ class OpenRouterModel:
                            "messages": [{"role": "system", "content": system},
                                         {"role": "user", "content": prompt}]}).encode()
         delay = 5
-        for attempt in range(5):
+        attempts = int(os.environ.get("CSTL_OPENROUTER_ATTEMPTS", "5"))
+        for attempt in range(attempts):
             req = urllib.request.Request(self.URL, data=body, headers={
                 "Content-Type": "application/json", "Authorization": f"Bearer {self.key}",
                 "X-Title": "CSTL deliberation"})
@@ -133,13 +134,13 @@ class OpenRouterModel:
                 if content:
                     return content
             except urllib.error.HTTPError as e:
-                if e.code not in (429, 500, 502, 503, 504) or attempt == 4:
+                if e.code not in (429, 500, 502, 503, 504) or attempt == attempts - 1:
                     raise RuntimeError(f"OpenRouter {e.code} : {e.read()[:200]!r}") from None
             except (urllib.error.URLError, TimeoutError) as e:
-                if attempt == 4:
+                if attempt == attempts - 1:
                     raise RuntimeError(f"OpenRouter injoignable : {e}") from None
             time.sleep(delay)
-            delay *= 2
+            delay = min(delay * 2, 90)
         raise RuntimeError("OpenRouter : reponse vide")
 
 
@@ -214,12 +215,15 @@ class Deliberation:
     def __init__(self, topic, question, participants, models, *, host="127.0.0.1", port=5050,
                  moderator="moderateur", server_key=None, max_rounds=6, stall_rounds=2,
                  min_confidence=0.5, max_new_points=2, max_points=20, max_depth=2, max_retries=2,
-                 max_failures=2, initial_points=(), escalate=True, log=None):
+                 max_failures=2, initial_points=(), escalate=True, log=None, context=""):
         if not _NAME.match(topic):
             raise ValueError("topic : identifiant [A-Za-z0-9_.-]")
         import cstl_llm_agent as m
         self.m = m
         self.topic, self.question = topic, question
+        # Dossier du debat (texte libre : faits, regles), donne avec les
+        # instructions a chaque appel ; jamais envoye au serveur.
+        self.context = context
         self.participants = list(participants)
         self.models = dict(models)
         self.cfg = dict(max_rounds=max_rounds, stall_rounds=stall_rounds, min_confidence=min_confidence,
@@ -298,6 +302,7 @@ class Deliberation:
             "(3) sigma entre 0 et 1 sur chaque ligne ; (4) identifiants en minuscules_avec_soulignes ; "
             "(5) operateurs en majuscules : seulement ceux de l'exemple ; (6) un point est adopte quand tous le soutiennent, "
             "et le debat s'arrete quand plus rien ne bouge : ne repete pas une position inchangee."
+            + (f"\n\nDOSSIER :\n{self.context}" if self.context else "")
         )
 
     def state_message(self, agent, errors=None):
