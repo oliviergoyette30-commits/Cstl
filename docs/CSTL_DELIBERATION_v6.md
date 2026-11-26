@@ -99,7 +99,11 @@ position de chaque participant **actif**. Le proposant soutient son propre
 point. Un soutien avec `sigma < min_confidence` (0,5 par défaut) compte
 comme une abstention.
 
-- **CONSENSUS** : tous les participants actifs soutiennent le point.
+- **CONSENSUS** : tous les participants actifs soutiennent le point, et ils
+  sont au moins `quorum` (par défaut la majorité des participants inscrits,
+  et au moins 2). Depuis le 2026-11-26 : avant, un seul participant restant,
+  les autres exclus, suffisait. Sans quorum, le point finit en DEADLOCK et
+  part donc vers un humain.
 - **DEADLOCK** : les positions n'ont pas bougé pendant `stall_rounds` tours
   (2 par défaut), et il reste un refus (`stalled_with_rejections`) ou une
   abstention (`stalled_without_quorum`).
@@ -107,7 +111,8 @@ comme une abstention.
 Le débat s'arrête dès que l'une de ces conditions est vraie :
 - plus aucun point n'est ouvert (`all_points_closed`) ;
 - un tour entier n'a rien changé (`no_change_in_a_full_round`) ;
-- il reste moins de 2 participants actifs ;
+- il reste moins de `quorum` participants actifs
+  (`not_enough_active_participants`) ;
 - on a atteint `max_rounds` (6 par défaut).
 
 Les points encore ouverts passent alors en DEADLOCK.

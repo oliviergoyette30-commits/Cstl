@@ -98,7 +98,9 @@ Ce qu'on voit :
   sont exclus, un seul participant restant suffit pour un CONSENSUS
   (`stop_reason=not_enough_active_participants`, mais les 3 points sont
   marqués `consensus`). Une unanimité à un seul votant ne devrait pas
-  compter.
+  compter. **Corrigé le même jour :** un consensus exige maintenant un
+  quorum, par défaut la majorité des participants et au moins 2
+  (`test_a_lone_remaining_participant_cannot_make_a_consensus`).
 - **Pour conclure,** il faut des petits modèles fiables, payants ou locaux,
   et refaire les 14 cas.
 

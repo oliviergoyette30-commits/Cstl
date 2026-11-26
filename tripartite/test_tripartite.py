@@ -46,10 +46,12 @@ def test_checker_reports_each_typical_mistake(tmp_path):
     s, c = by[2]
     assert s == "chatgpt" and not c["aucune prose"] and c["serveur PASS"] and c["regles recopiees"]
     s, c = by[3]
-    assert not c["sigma 0-1 partout"] and not c["regles recopiees"] and c["serveur PASS"], "le serveur laisse passer sigma=1.5"
+    assert not c["sigma 0-1 partout"] and not c["regles recopiees"]
+    assert not c["serveur PASS"], "depuis le 2026-11-26, le serveur refuse sigma=1.5 (invalid_sigma)"
     s, c = by[4]
     assert not c["operateurs officiels"] and not c["serveur PASS"], "operateur invente : refuse par le serveur"
     s, c = by[5]
     assert not c["aucune prose"] and not c["accord/desaccord"]
+    assert not c["serveur PASS"], "depuis le 2026-11-26, le serveur refuse une ligne de prose (unrecognized_line)"
     report = (tmp_path / "rapport.md").read_text()
     assert "order_lab_test" in report and "MUST par claude" in report and "MUST_NOT par chatgpt" in report

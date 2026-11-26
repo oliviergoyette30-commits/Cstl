@@ -217,7 +217,7 @@ class Deliberation:
     def __init__(self, topic, question, participants, models, *, host="127.0.0.1", port=5050,
                  moderator="moderateur", server_key=None, max_rounds=6, stall_rounds=2,
                  min_confidence=0.5, max_new_points=2, max_points=20, max_depth=2, max_retries=2,
-                 max_failures=2, initial_points=(), escalate=True, log=None, context="", claims=True):
+                 max_failures=2, initial_points=(), escalate=True, log=None, context="", claims=True, quorum=None):
         if not _NAME.match(topic):
             raise ValueError("topic : identifiant [A-Za-z0-9_.-]")
         import cstl_llm_agent as m
@@ -235,6 +235,14 @@ class Deliberation:
         self.cfg = dict(max_rounds=max_rounds, stall_rounds=stall_rounds, min_confidence=min_confidence,
                         max_new_points=max_new_points, max_points=max_points, max_depth=max_depth,
                         max_retries=max_retries, max_failures=max_failures)
+        # Quorum : nombre minimal de participants actifs pour qu'une unanimite
+        # compte. Par defaut, la majorite des participants inscrits, et au moins
+        # 2 : un seul participant restant (les autres exclus) ne fait pas un
+        # consensus.
+        n = len(self.participants)
+        self.cfg["quorum"] = max(2, n // 2 + 1) if quorum is None else int(quorum)
+        if self.cfg["quorum"] < 2 or self.cfg["quorum"] > n:
+            raise ValueError(f"quorum doit etre entre 2 et {n}")
         self.server_key = server_key
         self.escalate_enabled = escalate
         self.log = log or (lambda *_: None)
@@ -477,7 +485,7 @@ class Deliberation:
             vec = self._vector(p.id)
             p.history.append(vec)
             stances = [v[1] for v in vec]
-            if self.active and all(s == "supports" for s in stances):
+            if len(self.active) >= self.cfg["quorum"] and all(s == "supports" for s in stances):
                 p.status, p.reason = "consensus", "unanimity"
                 self.events.append((self.round, "consensus", p.id))
                 changed = True
@@ -500,7 +508,7 @@ class Deliberation:
             closed = self.close_round()
             self._publish_state()
             after = (len(self.points), json.dumps({k: sorted(v.items()) for k, v in self.stances.items()}, default=str))
-            if len(self.active) < 2:
+            if len(self.active) < self.cfg["quorum"]:
                 self.stop_reason = "not_enough_active_participants"
                 break
             if self.points and not any(p.status == "open" for p in self.points.values()):
@@ -639,6 +647,8 @@ def main(argv=None):
     ap.add_argument("--port", type=int, default=int(os.environ.get("CSTL_PORT", "5050")))
     ap.add_argument("--server-key", help="cle publique du serveur (fichier .pub ou hex), pour compiler")
     ap.add_argument("--max-rounds", type=int, default=6)
+    ap.add_argument("--quorum", type=int, help="participants actifs requis pour un consensus "
+                    "(defaut : la majorite, au moins 2)")
     ap.add_argument("--out", default="deliberation.json")
     args = ap.parse_args(argv)
     models, names = {}, []
@@ -650,7 +660,7 @@ def main(argv=None):
     if key and Path(key).is_file():
         key = Path(key).read_text().strip()
     d = Deliberation(args.topic, args.question, names, models, host=args.host, port=args.port, server_key=key,
-                     max_rounds=args.max_rounds, log=lambda s: print(s, file=sys.stderr))
+                     max_rounds=args.max_rounds, quorum=args.quorum, log=lambda s: print(s, file=sys.stderr))
     summary = d.run()
     result = {"summary": summary, "state": d.state()}
     if key:

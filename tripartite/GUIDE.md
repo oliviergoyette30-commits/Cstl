@@ -97,10 +97,10 @@ port libre, et vérifie chaque message :
 | Vérification | Ce qu'elle mesure |
 |---|---|
 | début `#!CSTL`, fin `---END---` | Le cadre du message. |
-| aucune prose | Une phrase hors du format, même dans le bloc de code. Le serveur l'ignorerait en silence : le vérificateur la signale. |
+| aucune prose | Une phrase hors du format, même dans le bloc de code. Le serveur refuse le message (`unrecognized_line`), et le vérificateur la signale. |
 | règles recopiées | Les 16 lignes `(RULE)` sont toutes là, à l'identique. |
 | sender et receiver attendus | Le modèle s'est nommé correctement et écrit au bon destinataire. |
-| sigma de 0 à 1 partout | Une confiance sur chaque relation. Le serveur accepte `sigma=1.5` en silence : le vérificateur le signale. |
+| sigma de 0 à 1 partout | Une confiance sur chaque relation. Le serveur refuse `sigma=1.5` (`invalid_sigma`), et le vérificateur le signale. |
 | opérateurs officiels | Ceux de la liste, ou un prédicat en minuscules. |
 | au moins 3 relations | Le modèle apporte du contenu. |
 | accord et désaccord | Il répond aux autres avec des blocs `AGREEMENT_BLOCK` / `DISAGREEMENT_BLOCK`. |

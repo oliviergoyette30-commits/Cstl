@@ -544,7 +544,7 @@ Toutes ces réponses portent `META [status=error]`, et aucune n'est auditée :
 | `purpose` | Cause |
 |---|---|
 | `validation_error` | champ obligatoire absent ; `errors=` liste les codes `E3xx` |
-| `parse_error` | message illisible |
+| `parse_error` | message illisible. `details=` donne la catégorie : `missing_hashbang`, `malformed_header`, `missing_end_marker`, `malformed_block`, `invalid_format`, `unrecognized_line` (une ligne hors bloc qui n'est ni un bloc `NOM [...]`, ni `(RULE) ...`, ni `DECISION: ...` : de la prose, par exemple) ou `invalid_sigma` (`sigma` n'est pas un nombre entre 0 et 1) |
 | `security_rejected` | caractères ou structure dangereux |
 | `signature_rejected` | section 5.2 |
 | `schema_rejected` | relation mal typée, quand un `SCHEMA` existe |

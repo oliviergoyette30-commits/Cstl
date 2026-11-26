@@ -718,8 +718,11 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - **Essai sur petits modèles arrêté** (2026-11-26) : les petits modèles
     gratuits se trompent bien seuls, mais deux sur trois ne répondent plus
     sous CSTL v6, donc rien n'est concluant ;
-  - corriger le moteur : un CONSENSUS ne doit pas venir d'un seul
-    participant restant, après l'exclusion des autres ;
+  - **corrigé** (2026-11-26) : un CONSENSUS exige un quorum (majorité, au
+    moins 2), et ne vient donc plus d'un seul participant restant ;
+  - **corrigé** (2026-11-26) : le serveur refuse une ligne de prose hors
+    bloc (`unrecognized_line`) et un `sigma` hors de 0 à 1
+    (`invalid_sigma`) ;
   - départager sur des tâches où l'agent seul se trompe : petits modèles,
     dossiers très longs, règles implicites ;
   - les preuves externes pour `sigma` ;

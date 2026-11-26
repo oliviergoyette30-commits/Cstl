@@ -225,6 +225,26 @@ def test_refuses_to_run_without_policy_authors(d, tmp_path, monkeypatch):
         proc.wait(timeout=10)
 
 
+def test_a_lone_remaining_participant_cannot_make_a_consensus(d, server):
+    """Banc petits modeles (2026-11-26) : deux participants sur trois renvoyaient
+    des reponses vides et ont ete exclus ; le dernier avait seul conclu
+    3 consensus. Avec le quorum (majorite, au moins 2), ses points restent
+    sans consensus et partent en impasse, donc vers un humain."""
+    (a, b, c), bot, mod = names()
+    delib, _ = make(d, server, [a, b, c],
+                    [[R(f"type=PERFORM, subject={bot}, object=order_routine_tests, modality=MAY, sigma=0.9")],
+                     ["silence"], ["silence"]], mod)
+    assert delib.cfg["quorum"] == 2
+    summary = delib.run()
+    assert set(summary["excluded"]) == {b, c}
+    assert summary["stop_reason"] == "not_enough_active_participants"
+    assert "consensus" not in summary["status"]
+    assert summary["status"] == {"deadlock": ["p1"]}
+    assert delib.compile()["rules"] == [], "rien de compile sans quorum"
+    with pytest.raises(ValueError):
+        make(d, server, [a, b, c], [[], [], []], mod, quorum=1)
+
+
 def test_manual_mode_prints_the_state_to_paste_and_reads_the_reply(d, server):
     """ManualModel : le moteur affiche quoi coller dans le chatbot et lit sa
     reponse jusqu'a ---END--- (meme flux que le test tripartite, mais avec

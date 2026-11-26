@@ -67,6 +67,11 @@ trailer       ::= "---END---" ;
 - L'encodeur DOIT émettre les blocs dans l'ordre canonique ci-dessus.
 - Le parser DOIT accepter les blocs dans n'importe quel ordre après META
   (loi de Postel pour la rétrocompatibilité inter-versions).
+- Une ligne hors bloc qui n'est ni un bloc `NOM [...]`, ni `(RULE) ...`, ni
+  `DECISION: ...` (de la prose, par exemple) rend le message invalide
+  (`parse_error`, `details=unrecognized_line`, depuis le 2026-11-26). Un bloc
+  bien formé que le serveur n'interprète pas est ignoré avec un
+  avertissement, jamais sans signal.
 - META est obligatoire et doit apparaître immédiatement après le header
   aussi bien à l'encodage qu'au parsing. META en position non-initiale → W502.
 
@@ -1229,7 +1234,7 @@ détectée via un `PARENT_HASH` invalide.
 |---|---|---|---|
 | R1 | error | IDs uniques (`id=eXXX`) dans le document | ✅ vérifié |
 | R2 | warning | Version présente dans le header | ✅ vérifié |
-| R3 | warning | sigma hors [0,1] → clampé avec warning | ✅ vérifié |
+| R3 | error | sigma hors [0,1], ou non numérique → message refusé (`parse_error`, `details=invalid_sigma`). Avant le 2026-11-26 : warning seulement | ✅ câblé live (`server/parser.rs::check_sigma_range`) |
 | R4 | info | Ordre canonique des blocs recommandé | ✅ |
 | R5 | warning | Opérateur ou type d'entité hors officiels | ✅ vérifié |
 | R6 | fixed | Symboles σδτωι non redéfinissables par l'utilisateur | ✅ vérifié |

@@ -3446,6 +3446,9 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                     // Categorie fixe (jamais le contenu brut) : dit a l'IA cliente
                     // que c'est sa premiere ligne qui est en cause (2026-11-20).
                     parser::ParseError::InvalidFormat(m) if m.starts_with("malformed_header") => "malformed_header",
+                    // Memes categories fixes pour les refus du 2026-11-26.
+                    parser::ParseError::InvalidFormat(m) if m.starts_with("unrecognized_line") => "unrecognized_line",
+                    parser::ParseError::InvalidFormat(m) if m.starts_with("invalid_sigma") => "invalid_sigma",
                     parser::ParseError::InvalidFormat(_) => "invalid_format",
                     parser::ParseError::MissingEndMarker => "missing_end_marker",
                     parser::ParseError::MalformedBlock(_) => "malformed_block",
