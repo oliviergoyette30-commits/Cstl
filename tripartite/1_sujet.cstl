@@ -1,0 +1,25 @@
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=moderateur, produced_by=moderateur, turn=1, topic=ai_agent_orders_lab_tests]
+INTENT_PAYLOAD [purpose=open_debate, sender=moderateur, receiver=chatgpt, context=tripartite_debate]
+RELATION [type=ASK, subject=moderateur, object=should_hospital_let_ai_agent_order_lab_tests_alone, sigma=1.0]
+RELATION [type=STATE, subject=debate, object=three_rounds_then_decision, sigma=1.0]
+RELATION [type=STATE, subject=speaking_order, object="chatgpt then gemini then claude", sigma=1.0]
+RELATION [type=PERFORM, subject=each_participant, object=propose_conditions_and_limits, modality=MUST, sigma=1.0]
+RELATION [type=PERFORM, subject=each_participant, object=answer_the_other_two, modality=MUST, sigma=1.0]
+---END---

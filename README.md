@@ -254,6 +254,7 @@ Their history, audit notes and measurements are in
 | `benchmark/` | Public attack benchmark and its cases. |
 | `scripts/` | Model benchmarks and format measurements. |
 | `docs/` | Specifications. |
+| `tripartite/` | Manual test: ChatGPT, Gemini and Claude talking in CSTL, checked by the real server (`GUIDE.md`, in French). |
 | [`ROADMAP.md`](ROADMAP.md) | What is done, what remains, known weaknesses. |
 
 ## Tests
