@@ -720,3 +720,14 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - les preuves externes pour `sigma` ;
   - une vérification indépendante de l'état publié par le modérateur.
 
+## Publication (2026-11-26)
+
+- **Le nom `cstl` est déjà pris sur PyPI** par un portage Python de la
+  bibliothèque standard C++ : le paquet Python ne peut pas être publié sous
+  ce nom. Il est libre sur npm. Libres sur les deux : `cstl-control` et
+  `cstl-agents`. C'est à l'auteur de choisir.
+- **Prêt pour les pilotes :**
+  - le guide `docs/PILOT.md` ;
+  - le brouillon d'article `docs/ARTICLE_DRAFT.md` ;
+  - le Dockerfile (serveur et 8 commandes, données dans `/data`).
+

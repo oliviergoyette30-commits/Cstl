@@ -61,8 +61,11 @@ class Server:
         self.proc = None
 
     def start(self):
-        env = {**os.environ, "CSTL_PORT": str(self.port), "CSTL_REST_PORT": str(self.rest), "CSTL_KB_VERIFY": "off"}
-        env.pop("CSTL_DEV_MODE", None)
+        # Serveur de demonstration isole : aucune variable CSTL_* de
+        # l'environnement (auteurs de politique, TLS, OIDC... d'un vrai serveur,
+        # par exemple dans le conteneur Docker) ne change son comportement.
+        env = {k: v for k, v in os.environ.items() if not k.startswith("CSTL_")}
+        env.update({"CSTL_PORT": str(self.port), "CSTL_REST_PORT": str(self.rest), "CSTL_KB_VERIFY": "off"})
         self.log = open(self.workdir / "server.log", "a")
         self.proc = subprocess.Popen([str(self.binary)], cwd=self.workdir, env=env,
                                      stdout=self.log, stderr=subprocess.STDOUT)
