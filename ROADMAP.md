@@ -715,6 +715,11 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   le débat libre, mais 5 à 7 fois plus que l'agent seul. Délibérer n'a donc
   pas amélioré la justesse ici.
 - **À faire :**
+  - **Essai sur petits modèles arrêté** (2026-11-26) : les petits modèles
+    gratuits se trompent bien seuls, mais deux sur trois ne répondent plus
+    sous CSTL v6, donc rien n'est concluant ;
+  - corriger le moteur : un CONSENSUS ne doit pas venir d'un seul
+    participant restant, après l'exclusion des autres ;
   - départager sur des tâches où l'agent seul se trompe : petits modèles,
     dossiers très longs, règles implicites ;
   - les preuves externes pour `sigma` ;
