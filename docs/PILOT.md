@@ -19,7 +19,9 @@ Write down the rules you want in plain words, for example "refunds up to
 
 ## 2. Start the server (day 1, 15 minutes)
 
-With Docker:
+With Docker (the Dockerfile has not been built yet; registry limits blocked
+the development environment on 2026-11-26, so check that `docker build`
+works on your machine first):
 
 ```bash
 docker build -t cstl .

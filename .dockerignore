@@ -1,0 +1,12 @@
+target
+.git
+**/node_modules
+**/dist
+graphify-out
+*.db
+*.db-*
+*.server_key*
+sandbox-export
+archive
+scripts/*.json
+benchmark/deliberation/results*.json
