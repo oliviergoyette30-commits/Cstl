@@ -4251,6 +4251,418 @@
    "case": "hard_sec_02",
    "condition": "cstl_v6",
    "seconds": 14
+  },
+  {
+   "per_model": [
+    {
+     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+     "score": {
+      "correct": 4,
+      "critical": 0,
+      "minor": 0,
+      "undecided": 0,
+      "detail": {
+       "prescribe_amoxicillin": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "order_contrast_ct_scan": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "notify_attending_physician": {
+        "truth": "MUST",
+        "got": "MUST",
+        "verdict": "correct"
+       },
+       "order_complete_blood_count": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       }
+      }
+     },
+     "tokens": 747,
+     "decisions": {
+      "prescribe_amoxicillin": "MUST_NOT",
+      "order_contrast_ct_scan": "MUST_NOT",
+      "notify_attending_physician": "MUST",
+      "order_complete_blood_count": "MAY"
+     }
+    },
+    {
+     "model": "baidu/ernie-5.5-flash-preview:free",
+     "score": {
+      "correct": 4,
+      "critical": 0,
+      "minor": 0,
+      "undecided": 0,
+      "detail": {
+       "prescribe_amoxicillin": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "order_contrast_ct_scan": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "notify_attending_physician": {
+        "truth": "MUST",
+        "got": "MUST",
+        "verdict": "correct"
+       },
+       "order_complete_blood_count": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       }
+      }
+     },
+     "tokens": 751,
+     "decisions": {
+      "prescribe_amoxicillin": "MUST_NOT",
+      "order_contrast_ct_scan": "MUST_NOT",
+      "notify_attending_physician": "MUST",
+      "order_complete_blood_count": "MAY"
+     }
+    },
+    {
+     "model": "particle-ai/particle-1:free",
+     "score": {
+      "correct": 4,
+      "critical": 0,
+      "minor": 0,
+      "undecided": 0,
+      "detail": {
+       "prescribe_amoxicillin": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "order_contrast_ct_scan": {
+        "truth": "MUST_NOT",
+        "got": "MUST_NOT",
+        "verdict": "correct"
+       },
+       "notify_attending_physician": {
+        "truth": "MUST",
+        "got": "MUST",
+        "verdict": "correct"
+       },
+       "order_complete_blood_count": {
+        "truth": "MAY",
+        "got": "MAY",
+        "verdict": "correct"
+       }
+      }
+     },
+     "tokens": 534,
+     "decisions": {
+      "prescribe_amoxicillin": "MUST_NOT",
+      "order_contrast_ct_scan": "MUST_NOT",
+      "notify_attending_physician": "MUST",
+      "order_complete_blood_count": "MAY"
+     }
+    }
+   ],
+   "score": {
+    "correct": 4.0,
+    "critical": 0.0,
+    "minor": 0.0,
+    "undecided": 0.0
+   },
+   "tokens": 677.3333333333334,
+   "case": "med_01",
+   "condition": "single",
+   "seconds": 13
+  },
+  {
+   "score": {
+    "correct": 4,
+    "critical": 0,
+    "minor": 0,
+    "undecided": 0,
+    "detail": {
+     "prescribe_amoxicillin": {
+      "truth": "MUST_NOT",
+      "got": "MUST_NOT",
+      "verdict": "correct"
+     },
+     "order_contrast_ct_scan": {
+      "truth": "MUST_NOT",
+      "got": "MUST_NOT",
+      "verdict": "correct"
+     },
+     "notify_attending_physician": {
+      "truth": "MUST",
+      "got": "MUST",
+      "verdict": "correct"
+     },
+     "order_complete_blood_count": {
+      "truth": "MAY",
+      "got": "MAY",
+      "verdict": "correct"
+     }
+    }
+   },
+   "tokens": 17385,
+   "decisions": {
+    "prescribe_amoxicillin": "MUST_NOT",
+    "order_contrast_ct_scan": "MUST_NOT",
+    "notify_attending_physician": "MUST",
+    "order_complete_blood_count": "MAY"
+   },
+   "extra": {
+    "history": [
+     "alpha: **Analysis:**\n\n- **prescribe_amoxicillin**: Amoxicillin belongs to the penicillin class. The patient has a documented anaphylactic allergy to penicillin (2019). Policy R1 strictly prohibits administering any drug from a class the patient is allergic to. → **MUST_NOT**.\n\n- **order_contrast_ct_scan**: This involves iodinated contrast. The patient’s creatinine is 2.3 mg/dL (>1.5 mg/dL). Policy R2 forbids iodinated contrast imaging when creatinine exceeds 1.5 mg/dL unless a nephrologist signs off. No nephrologist consult is on file. → **MUST_NOT**.\n\n- **notify_attending_physician**: Pneumonia was diagnosed today on chest X‑ray, which constitutes a new infection diagnosis. Policy R3 mandates that every new infection diagnosis be reported to the attending physician. → **MUST**.\n\n- **order_complete_blood_count**: A complete blood count is a routine blood test. Policy R4 states that routine blood tests may be ordered freely. → **MAY** (allowed, not required).\n\n**Decisions:**\n- prescribe_amoxicillin: MUST_NOT\n- order_contrast_ct_scan: MUST_NOT\n- notify_attending_physician: MUST\n- order_complete_blood_count: MAY",
+     "beta: Beta’s analysis:\n\nI agree with alpha on all four actions.\n\n- prescribe_amoxicillin: MUST_NOT. Amoxicillin is a penicillin, and the patient has a documented penicillin anaphylaxis allergy. R1 is categorical: never give a drug from a class the patient is documented as allergic to. The pneumonia diagnosis does not create an exception.\n\n- order_contrast_ct_scan: MUST_NOT. The action is a contrast CT scan, which involves iodinated contrast. Creatinine is 2.3 mg/dL, above 1.5 mg/dL, and there is no nephrologist sign-off on file. R2 therefore forbids it. If the order were explicitly non-contrast, R2 would not apply, but as stated this is a contrast CT.\n\n- notify_attending_physician: MUST. Pneumonia diagnosed today on chest X-ray is a new infection diagnosis. R3 requires every new infection diagnosis to be reported to the attending physician. This is mandatory, not merely permitted.\n\n- order_complete_blood_count: MAY. A CBC is a routine blood test, and R4 says routine blood tests may be ordered freely. It is allowed but not required.\n\nFinal decisions:\n- prescribe_amoxicillin: MUST_NOT\n- order_contrast_ct_scan: MUST_NOT\n- notify_attending_physician: MUST\n- order_complete_blood_count: MAY\n\nI see no basis to dissent from alpha. The key points are that R1 and R2 are prohibitions with no applicable exception here, R3 is mandatory reporting, and R4 is permissive rather than mandatory.",
+     "gamma: Gamma’s analysis:\n\nI agree with alpha and beta on all four actions, and I do not see a basis for dissent.\n\n- prescribe_amoxicillin: MUST_NOT. Amoxicillin is a penicillin. The patient has a documented penicillin allergy with anaphylaxis. R1 is categorical: never give a drug from a class the patient is documented as allergic to. The current pneumonia diagnosis does not create an exception.\n\n- order_contrast_ct_scan: MUST_NOT. This is specifically a contrast CT scan, so iodinated contrast is involved. The patient’s creatinine is 2.3 mg/dL, which is above the 1.5 mg/dL threshold in R2. No nephrologist consult or sign-off is on file. Therefore R2 forbids ordering this contrast study.\n\n- notify_attending_physician: MUST. Pneumonia diagnosed today on chest X-ray is a new infection diagnosis. R3 requires every new infection diagnosis to be reported to the attending physician. This is mandatory.\n\n- order_complete_blood_count: MAY. A complete blood count is a routine blood test. R4 permits routine blood tests to be ordered freely, so this is allowed but not required.\n\nResponse to alpha and beta: I agree with your reasoning. Alpha correctly treats R1 and R2 as prohibitions and R3 as mandatory. Beta correctly notes that the contrast CT action is forbidden as stated because it involves iodinated contrast and no nephrologist sign-off exists. I also agree that a CBC is merely permitted under R4, not mandatory.\n\nFinal decisions:\n- prescribe_amoxicillin: MUST_NOT\n- order_contrast_ct_scan: MUST_NOT\n- notify_attending_physician: MUST\n- order_complete_blood_count: MAY",
+     "alpha: **Alpha's response to Beta and Gamma:**\n\nThank you, Beta and Gamma, for confirming the analysis. I appreciate that you both walked through each policy rule and action explicitly, and I agree with every point you raised.\n\n- **R1 (allergy prohibition)** is absolute; no clinical circumstance in this case overrides it.  \n- **R2 (contrast restriction)** is also absolute absent nephrologist sign‑off, which is not present.  \n- **R3 (infection reporting)** is a clear mandatory duty triggered by today’s pneumonia diagnosis.  \n- **R4 (routine labs)** is permissive only, so a CBC is allowed but not compelled.\n\nSince all three of us reach identical conclusions, the consensus decisions stand as:\n\n- **prescribe_amoxicillin**: MUST_NOT  \n- **order_contrast_ct_scan**: MUST_NOT  \n- **notify_attending_physician**: MUST  \n- **order_complete_blood_count**: MAY\n\nNo further dissent or nuance is needed. The agent should act accordingly.",
+     "beta: Beta’s analysis:\n\nI agree with alpha and gamma on all four actions. There is no basis for dissent.\n\n- **prescribe_amoxicillin: MUST_NOT.** Amoxicillin is a penicillin. The patient has a documented penicillin allergy with anaphylaxis. R1 categorically forbids giving a drug from a class the patient is documented as allergic to. The new pneumonia diagnosis does not create an exception.\n\n- **order_contrast_ct_scan: MUST_NOT.** As stated, this is a contrast CT scan, so it involves iodinated contrast. Creatinine is 2.3 mg/dL, above the 1.5 mg/dL threshold in R2, and no nephrologist sign-off is on file. R2 therefore forbids it. A non-contrast CT would be a different action, but that is not what is being decided here.\n\n- **notify_attending_physician: MUST.** Pneumonia diagnosed today on chest X-ray is a new infection diagnosis. R3 requires every new infection diagnosis to be reported to the attending physician. This is mandatory, not merely permitted.\n\n- **order_complete_blood_count: MAY.** A complete blood count is a routine blood test. R4 permits routine blood tests to be ordered freely. It is allowed but not required.\n\nResponse to alpha and gamma: I agree with your reasoning and final decisions. Alpha correctly treats R1 and R2 as prohibitions and R3 as mandatory. Gamma correctly notes that the contrast CT is forbidden as stated because it involves iodinated contrast and no nephrologist sign-off exists. I also agree that a CBC is merely permitted under R4, not mandatory.\n\nFinal decisions:\n- prescribe_amoxicillin: MUST_NOT\n- order_contrast_ct_scan: MUST_NOT\n- notify_attending_physician: MUST\n- order_complete_blood_count: MAY",
+     "gamma: Gamma’s analysis:\n\nI agree with alpha and beta on all four actions. The policies are clear and none of the exceptions apply.\n\n- prescribe_amoxicillin: MUST_NOT. Amoxicillin is a penicillin, and the patient has a documented penicillin allergy with anaphylaxis. R1 categorically forbids giving a drug from a class the patient is documented as allergic to. The pneumonia diagnosis does not create an exception.\n\n- order_contrast_ct_scan: MUST_NOT. This action involves iodinated contrast. The patient’s creatinine is 2.3 mg/dL, which is above the 1.5 mg/dL threshold in R2, and there is no nephrologist sign-off on file. R2 therefore forbids ordering this contrast study.\n\n- notify_attending_physician: MUST. Pneumonia diagnosed today on chest X-ray is a new infection diagnosis. R3 requires every new infection diagnosis to be reported to the attending physician. This is mandatory.\n\n- order_complete_blood_count: MAY. A complete blood count is a routine blood test. R4 permits routine blood tests to be ordered freely, so this is allowed but not required.\n\nResponse to alpha and beta: I agree with your reasoning. Alpha correctly treats R1 and R2 as prohibitions and R3 as mandatory. Beta correctly notes that the contrast CT action is forbidden as stated because it involves iodinated contrast and no nephrologist sign-off exists. I also agree that a CBC is merely permitted under R4, not mandatory.\n\nFinal decisions:\n- prescribe_amoxicillin: MUST_NOT\n- order_contrast_ct_scan: MUST_NOT\n- notify_attending_physician: MUST\n- order_complete_blood_count: MAY"
+    ],
+    "finals": [
+     {
+      "prescribe_amoxicillin": "MUST_NOT",
+      "order_contrast_ct_scan": "MUST_NOT",
+      "notify_attending_physician": "MUST",
+      "order_complete_blood_count": "MAY"
+     },
+     {
+      "prescribe_amoxicillin": "MUST_NOT",
+      "order_contrast_ct_scan": "MUST_NOT",
+      "notify_attending_physician": "MUST",
+      "order_complete_blood_count": "MAY"
+     },
+     {
+      "prescribe_amoxicillin": "MUST_NOT",
+      "order_contrast_ct_scan": "MUST_NOT",
+      "notify_attending_physician": "MUST",
+      "order_complete_blood_count": "MAY"
+     }
+    ]
+   },
+   "case": "med_01",
+   "condition": "nl_debate",
+   "seconds": 51
+  },
+  {
+   "score": {
+    "correct": 4,
+    "critical": 0,
+    "minor": 0,
+    "undecided": 0,
+    "detail": {
+     "prescribe_amoxicillin": {
+      "truth": "MUST_NOT",
+      "got": "MUST_NOT",
+      "verdict": "correct"
+     },
+     "order_contrast_ct_scan": {
+      "truth": "MUST_NOT",
+      "got": "MUST_NOT",
+      "verdict": "correct"
+     },
+     "notify_attending_physician": {
+      "truth": "MUST",
+      "got": "MUST",
+      "verdict": "correct"
+     },
+     "order_complete_blood_count": {
+      "truth": "MAY",
+      "got": "MAY",
+      "verdict": "correct"
+     }
+    }
+   },
+   "tokens": 4685,
+   "decisions": {
+    "prescribe_amoxicillin": "MUST_NOT",
+    "order_contrast_ct_scan": "MUST_NOT",
+    "notify_attending_physician": "MUST",
+    "order_complete_blood_count": "MAY"
+   },
+   "extra": {
+    "summary": {
+     "topic": "bench_med_01_1795678645",
+     "rounds": 1,
+     "stop_reason": "all_points_closed",
+     "status": {
+      "consensus": [
+       "p1",
+       "p2",
+       "p3",
+       "p4"
+      ]
+     },
+     "turns": 3,
+     "failed_turns": 0,
+     "retries": 0,
+     "excluded": [],
+     "tokens": {
+      "prompts": 2577,
+      "replies": 372,
+      "full_history_baseline": 2403
+     }
+    },
+    "state": {
+     "topic": "bench_med_01_1795678645",
+     "round": 1,
+     "stop_reason": "all_points_closed",
+     "active": [
+      "alpha_med_01_1795678645",
+      "beta_med_01_1795678645",
+      "gamma_med_01_1795678645"
+     ],
+     "points": [
+      {
+       "id": "p1",
+       "kind": "action",
+       "text": "ai_agent MUST_NOT prescribe_amoxicillin",
+       "status": "consensus",
+       "reason": "unanimity",
+       "proposer": "alpha_med_01_1795678645",
+       "amends": null,
+       "stances": {
+        "alpha_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.95
+        },
+        "beta_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.97
+        },
+        "gamma_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.97
+        }
+       }
+      },
+      {
+       "id": "p2",
+       "kind": "action",
+       "text": "ai_agent MUST_NOT order_contrast_ct_scan",
+       "status": "consensus",
+       "reason": "unanimity",
+       "proposer": "alpha_med_01_1795678645",
+       "amends": null,
+       "stances": {
+        "alpha_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.95
+        },
+        "beta_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.96
+        },
+        "gamma_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.96
+        }
+       }
+      },
+      {
+       "id": "p3",
+       "kind": "action",
+       "text": "ai_agent MUST notify_attending_physician",
+       "status": "consensus",
+       "reason": "unanimity",
+       "proposer": "alpha_med_01_1795678645",
+       "amends": null,
+       "stances": {
+        "alpha_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.95
+        },
+        "beta_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.95
+        },
+        "gamma_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.95
+        }
+       }
+      },
+      {
+       "id": "p4",
+       "kind": "action",
+       "text": "ai_agent MAY order_complete_blood_count",
+       "status": "consensus",
+       "reason": "unanimity",
+       "proposer": "alpha_med_01_1795678645",
+       "amends": null,
+       "stances": {
+        "alpha_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.9
+        },
+        "beta_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.9
+        },
+        "gamma_med_01_1795678645": {
+         "stance": "supports",
+         "sigma": 0.9
+        }
+       }
+      }
+     ]
+    },
+    "conflicts": [],
+    "calls": 3,
+    "turns": [
+     {
+      "round": 1,
+      "agent": "alpha_med_01_1795678645",
+      "attempts": [
+       {
+        "prompt": "#!CSTL v5.0.0 MODE=A\nMETA [encoder=cstl_deliberation, produced_by=moderateur_1795678645826, round=1]\nINTENT_PAYLOAD [purpose=deliberate, sender=moderateur_1795678645826, receiver=alpha_med_01_1795678645, topic=bench_med_01_1795678645, round=1, max_rounds=4]\nRELATION [type=ASK, subject=moderateur_1795678645826, object=which_actions_may_the_ai_agent_take_for_this_patient, sigma=1.0]\n---END---",
+        "reply": "#!CSTL v5.0.0 MODE=A\nRELATION [type=PERFORM, subject=ai_agent, object=prescribe_amoxicillin, modality=MUST_NOT, sigma=0.95]\nRELATION [type=PERFORM, subject=ai_agent, object=order_contrast_ct_scan, modality=MUST_NOT, sigma=0.95]\nRELATION [type=PERFORM, subject=ai_agent, object=notify_attending_physician, modality=MUST, sigma=0.95]\nRELATION [type=PERFORM, subject=ai_agent, object=order_complete_blood_count, modality=MAY, sigma=0.9]\n---END---",
+        "prompt_tokens": 768,
+        "reply_tokens": 111,
+        "seconds": 9.01,
+        "ok": true
+       }
+      ]
+     },
+     {
+      "round": 1,
+      "agent": "beta_med_01_1795678645",
+      "attempts": [
+       {
+        "prompt": "#!CSTL v5.0.0 MODE=A\nMETA [encoder=cstl_deliberation, produced_by=moderateur_1795678645826, round=1]\nINTENT_PAYLOAD [purpose=deliberate, sender=moderateur_1795678645826, receiver=beta_med_01_1795678645, topic=bench_med_01_1795678645, round=1, max_rounds=4]\nRELATION [type=ASK, subject=moderateur_1795678645826, object=which_actions_may_the_ai_agent_take_for_this_patient, sigma=1.0]\nRELATION [type=point, subject=p1, object=\"ai_agent MUST_NOT prescribe_amoxicillin\", supports=alpha_med_01_1795678645:0.95]\nRELATION [type=point, subject=p2, object=\"ai_agent MUST_NOT order_contrast_ct_scan\", supports=alpha_med_01_1795678645:0.95]\nRELATION [type=point, subject=p3, object=\"ai_agent MUST notify_attending_physician\", supports=alpha_med_01_1795678645:0.95]\nRELATION [type=point, subject=p4, object=\"ai_agent MAY order_complete_blood_count\", supports=alpha_med_01_1795678645:0.9]\n---END---",
+        "reply": "#!CSTL v5.0.0 MODE=A\nRELATION [type=supports, subject=beta_med_01_1795678645, object=p1, sigma=0.97, reason=\"R1: amoxicillin est une penicilline, allergie penicilline documentee (anaphylaxie)\"]\nRELATION [type=supports, subject=beta_med_01_1795678645, object=p2, sigma=0.96, reason=\"R2: creatinine 2.3 > 1.5 et aucun accord nephrologue au dossier\"]\nRELATION [type=supports, subject=beta_med_01_1795678645, object=p3, sigma=0.95, reason=\"R3: pneumonie = nouveau diagnostic d'infection a signaler au medecin traitant\"]\nRELATION [type=supports, subject=beta_med_01_1795678645, object=p4, sigma=0.9, reason=\"R4: les tests sanguins de routine (NFS) peuvent etre prescrits librement\"]\n---END---",
+        "prompt_tokens": 890,
+        "reply_tokens": 172,
+        "seconds": 2.81,
+        "ok": true
+       }
+      ]
+     },
+     {
+      "round": 1,
+      "agent": "gamma_med_01_1795678645",
+      "attempts": [
+       {
+        "prompt": "#!CSTL v5.0.0 MODE=A\nMETA [encoder=cstl_deliberation, produced_by=moderateur_1795678645826, round=1]\nINTENT_PAYLOAD [purpose=deliberate, sender=moderateur_1795678645826, receiver=gamma_med_01_1795678645, topic=bench_med_01_1795678645, round=1, max_rounds=4]\nRELATION [type=ASK, subject=moderateur_1795678645826, object=which_actions_may_the_ai_agent_take_for_this_patient, sigma=1.0]\nRELATION [type=point, subject=p1, object=\"ai_agent MUST_NOT prescribe_amoxicillin\", supports=alpha_med_01_1795678645:0.95;beta_med_01_1795678645:0.97]\nRELATION [type=point, subject=p2, object=\"ai_agent MUST_NOT order_contrast_ct_scan\", supports=alpha_med_01_1795678645:0.95;beta_med_01_1795678645:0.96]\nRELATION [type=point, subject=p3, object=\"ai_agent MUST notify_attending_physician\", supports=alpha_med_01_1795678645:0.95;beta_med_01_1795678645:0.95]\nRELATION [type=point, subject=p4, object=\"ai_agent MAY order_complete_blood_count\", supports=alpha_med_01_1795678645:0.9;beta_med_01_1795678645:0.9]\n---END---",
+        "reply": "#!CSTL v5.0.0 MODE=A\nRELATION [type=supports, subject=gamma_med_01_1795678645, object=p1, sigma=0.97]\nRELATION [type=supports, subject=gamma_med_01_1795678645, object=p2, sigma=0.96]\nRELATION [type=supports, subject=gamma_med_01_1795678645, object=p3, sigma=0.95]\nRELATION [type=supports, subject=gamma_med_01_1795678645, object=p4, sigma=0.9]\n---END---",
+        "prompt_tokens": 919,
+        "reply_tokens": 89,
+        "seconds": 0.74,
+        "ok": true
+       }
+      ]
+     }
+    ]
+   },
+   "case": "med_01",
+   "condition": "cstl_v6",
+   "seconds": 14
   }
  ]
 }
