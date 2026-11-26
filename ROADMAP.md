@@ -709,9 +709,14 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - CONSENSUS et DEADLOCK, avec des garde-fous contre les boucles ;
   - compilation en règles signées, escalade humaine ;
   - mode manuel et OpenRouter ; testé avec des modèles déterministes.
+- **Mesuré (2026-11-26, `benchmark/deliberation/README.md`)** : 26 cas, dont
+  6 adverses, avec 3 modèles gratuits. Aucune erreur, que ce soit pour l'agent
+  seul, le débat libre ou CSTL v6. CSTL v6 coûte 4 fois moins de tokens que
+  le débat libre, mais 5 à 7 fois plus que l'agent seul. Délibérer n'a donc
+  pas amélioré la justesse ici.
 - **À faire :**
-  - le banc avec de vrais modèles : erreurs critiques, tokens, tours, contre
-    un agent seul et un débat en langage naturel ;
+  - départager sur des tâches où l'agent seul se trompe : petits modèles,
+    dossiers très longs, règles implicites ;
   - les preuves externes pour `sigma` ;
   - une vérification indépendante de l'état publié par le modérateur.
 
