@@ -780,7 +780,12 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - le serveur CSTL restait en vie quand `cstl cloud` était arrêté
     (SIGTERM) : l'arrêt est maintenant propagé.
 - **Ajouté ensuite :**
-  - de vraies actions GitHub gardées (issues) ;
+  - de vraies actions GitHub gardées (issues). **Essayé contre le vrai
+    GitHub le même jour,** sur un dépôt d'essai, avec un jeton limité aux
+    issues :
+    - création d'une issue et commentaire, permis : exécutés ;
+    - fermeture, interdite et appelée directement : refusée, et GitHub n'a
+      pas été appelé ; l'issue est restée ouverte ;
   - `--compact-results` dans le proxy MCP. Le point « convertisseur » de la
     section suivante est donc **fait** pour le proxy ; la mesure en tokens
     réels reste à faire.
