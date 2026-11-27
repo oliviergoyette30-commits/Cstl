@@ -61,6 +61,60 @@ SESSION_TTL = 24 * 3600
 MAX_SESSIONS = 1000
 
 
+DEMO_TOOLS = [
+    {"name": "demo_list_repos",
+     "description": "DEMONSTRATION (faux depots, faux paiements) : etat actuel, ce qui a vraiment ete execute.",
+     "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "demo_delete_repo",
+     "description": "DEMONSTRATION : supprime un depot (faux). Protege par CSTL : l'outil exige lui-meme un jeton "
+                    "signe pour l'action delete_repo, meme sans appel prealable a cstl_authorize.",
+     "inputSchema": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}},
+    {"name": "demo_send_payment",
+     "description": "DEMONSTRATION : envoie un paiement (faux). Protege par CSTL : l'outil exige lui-meme un jeton "
+                    "signe pour l'action send_payment et CE montant.",
+     "inputSchema": {"type": "object", "required": ["amount", "to"], "properties": {
+         "amount": {"type": "number"}, "to": {"type": "string"}}}},
+]
+
+
+class Demo:
+    """Outils de demonstration du VRAI controle (CSTL_DEMO_TOOLS=1) : leurs
+    actions (sur de faux depots et paiements, en memoire) sont protegees par
+    `@guarded` -- elles ne s'executent qu'avec un jeton signe par le serveur
+    et verifie ici, que le modele ait demande l'autorisation ou non."""
+
+    def __init__(self):
+        import cstl_connect
+        self.repos = ["site-web", "api", "prod-db"]
+        self.payments = []
+        conn = cstl_connect.Connector()
+        self.ActionDenied = cstl_connect.ActionDenied
+
+        @conn.guarded("delete_repo")
+        def delete_repo(name):
+            if name not in self.repos:
+                return f"depot inconnu : {name}"
+            self.repos.remove(name)
+            return f"depot {name} SUPPRIME (execute apres verification du jeton signe)"
+
+        @conn.guarded("send_payment", amount_arg="amount")
+        def send_payment(amount, to):
+            self.payments.append({"amount": amount, "to": to})
+            return f"paiement de {amount} a {to} ENVOYE (execute apres verification du jeton signe)"
+
+        self.delete_repo, self.send_payment = delete_repo, send_payment
+
+    def call(self, name, args):
+        if name == "demo_list_repos":
+            return json.dumps({"depots": self.repos, "paiements_executes": self.payments}, ensure_ascii=False)
+        try:
+            if name == "demo_delete_repo":
+                return self.delete_repo(str(args["name"]))
+            return self.send_payment(args["amount"], str(args["to"]))
+        except self.ActionDenied as e:
+            raise RuntimeError(f"REFUSE par CSTL, rien n'a ete execute : {e}") from None
+
+
 class Remote:
     def __init__(self, token, origins=DEFAULT_ORIGINS):
         if not token or len(token) < 32:
@@ -69,6 +123,7 @@ class Remote:
         self.token = token.encode()
         self.origins = set(origins)
         self.bridge = local.Bridge()
+        self.demo = Demo() if os.environ.get("CSTL_DEMO_TOOLS") == "1" else None
         self.lock = threading.Lock()                     # un seul agent CSTL : appels en serie
         self.sessions = {}
 
@@ -118,6 +173,21 @@ class Remote:
                 "payer...), appelez cstl_authorize et n'agissez que si allowed=true. cstl_policy donne vos "
                 "obligations et interdictions.")
             return reply, version
+        if self.demo is not None and msg.get("method") in ("tools/list", "tools/call"):
+            mid, params = msg.get("id"), msg.get("params") or {}
+            if msg["method"] == "tools/list":
+                with self.lock:
+                    reply = local.handle(self.bridge, msg)
+                reply["result"]["tools"] = reply["result"]["tools"] + DEMO_TOOLS
+                return reply, None
+            if params.get("name") in {t["name"] for t in DEMO_TOOLS}:
+                with self.lock:
+                    try:
+                        text, err = self.demo.call(params["name"], params.get("arguments") or {}), False
+                    except Exception as e:  # noqa: BLE001 -- rendu au modele
+                        text, err = str(e), True
+                return {"jsonrpc": "2.0", "id": mid,
+                        "result": {"content": [{"type": "text", "text": text}], "isError": err}}, None
         with self.lock:
             return local.handle(self.bridge, msg), None
 
@@ -146,7 +216,13 @@ def make_handler(remote):
             self._send(status, {"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}})
 
         def _guard(self):
-            """Origine, puis jeton. True si la requete peut continuer."""
+            """Chemin, origine, puis jeton. True si la requete peut continuer.
+            Hors de /mcp : 404 (et non 401), sinon un client croit a de
+            l'OAuth (claude.ai sondait /.well-known/oauth-*)."""
+            p = self.path.split("?")[0]
+            if p != "/mcp" and not p.startswith("/mcp/"):
+                self._send(404, {"error": "introuvable"})
+                return False
             origin = self.headers.get("Origin")
             if origin and origin not in remote.origins:
                 self._err(403, -32000, "origine refusee")

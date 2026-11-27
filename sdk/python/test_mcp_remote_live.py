@@ -171,7 +171,7 @@ def test_cloud_mode_one_container(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.startswith("CSTL_")}
     env.update({"HOME": str(tmp_path / "home"), "CSTL_BINARY": str(BINARY), "CSTL_DATA": str(tmp_path / "data"),
                 "CSTL_PORT": "5889", "CSTL_REST_PORT": "8889", "PORT": str(port), "CSTL_MCP_TOKEN": token,
-                "CSTL_MCP_AGENT": "agent_claude",
+                "CSTL_MCP_AGENT": "agent_claude", "CSTL_DEMO_TOOLS": "1",
                 "CSTL_POLICY": 'agent_claude MUST_NOT delete_repo "irreversible"\\nagent_claude MAY read_issues'})
     log = tmp_path / "cloud.log"
     p = subprocess.Popen([sys.executable, str(SDK / "cstl_cli.py"), "cloud"], cwd=tmp_path, env=env,
@@ -189,6 +189,25 @@ def test_cloud_mode_one_container(tmp_path):
         out = json.loads(r["result"]["content"][0]["text"])
         assert out["allowed"] is False and out["reason"] == "forbidden", out
         assert "politique publiee : 2 relation(s) par owner_ops" in log.read_text()
+
+        # Le VRAI controle : Claude appelle directement l'outil, sans
+        # cstl_authorize ; l'outil exige lui-meme le jeton signe.
+        def tool(i, tool_name, **args):
+            st, _, r = post(url, {"jsonrpc": "2.0", "id": i, "method": "tools/call",
+                                  "params": {"name": tool_name, "arguments": args}}, {"Mcp-Session-Id": sid})
+            assert st == 200, r
+            return r["result"]
+        st, _, r = post(url, {"jsonrpc": "2.0", "id": 9, "method": "tools/list"}, {"Mcp-Session-Id": sid})
+        assert {"demo_delete_repo", "demo_send_payment", "demo_list_repos"} <= {t["name"] for t in r["result"]["tools"]}
+        r = tool(10, "demo_delete_repo", name="prod-db")
+        assert r["isError"] and "REFUSE par CSTL" in r["content"][0]["text"]
+        r = tool(11, "demo_send_payment", amount=30, to="alice")
+        assert not r["isError"] and "ENVOYE" in r["content"][0]["text"], r
+        state = json.loads(tool(12, "demo_list_repos")["content"][0]["text"])
+        assert state == {"depots": ["site-web", "api", "prod-db"], "paiements_executes": [{"amount": 30, "to": "alice"}]}
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/.well-known/oauth-protected-resource", timeout=10)
+        assert e.value.code == 404, "pas de 401 hors de /mcp : claude.ai ne doit pas croire a de l'OAuth"
         assert token not in log.read_text()
     finally:
         p.terminate()

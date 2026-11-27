@@ -760,6 +760,30 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - **fait** (2026-11-27) : une vérification indépendante de l'état publié par
     le modérateur (`verify_state`) ;
 
+## À faire : convertisseur de tokens et offre commerciale (2026-11-27)
+
+- **Convertisseur dans le proxy MCP.** Transformer automatiquement le JSON
+  des résultats d'outils en arbre indenté avant qu'il arrive au modèle,
+  sans perte (vérifié sur 30 000 documents), sans rien changer au serveur
+  MCP ni au client.
+  - Mesurer le gain réel sur de vrais résultats d'outils MCP : fichiers,
+    GitHub, bases de données, API. On a mesuré −39 % sur les données
+    imbriquées et −8 à −13 % sur les données riches en objets.
+  - Mesurer aussi que le modèle comprend aussi bien les résultats
+    convertis.
+  - Ne convertir que lorsque c'est plus court, sinon laisser le JSON.
+- **Offre commerciale, à valider avant de construire plus.**
+  - Le code est sous Apache 2.0 : ce qui se vend, c'est le service. Une
+    passerelle hébergée réunirait le contrôle des actions et la conversion
+    des tokens, contre un abonnement ou un pourcentage des tokens
+    économisés.
+  - Modèle « open core » : la base reste libre, et les fonctions pour
+    entreprises sont payantes (tableau de bord avancé, PostgreSQL,
+    authentification d'entreprise, support).
+  - D'abord trouver 3 personnes prêtes à payer, puis mesurer leurs propres
+    données.
+  - Conseil juridique et fiscal à prendre auprès d'un professionnel.
+
 ## Publication (2026-11-26)
 
 - **Le nom `cstl` est déjà pris sur PyPI** par un portage Python de la
