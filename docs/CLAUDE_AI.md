@@ -234,3 +234,25 @@ limité aux issues de ce dépôt :
 | `github_list_issues` ensuite | lecture | la #1 est toujours ouverte |
 
 Le jeton GitHub n'a jamais quitté le serveur.
+
+## 10. Avant un vrai usage (revue d'attaque du 2026-11-27)
+
+La revue complète est dans `docs/RED_TEAM_2026-11-27.md`. Aucune attaque n'a
+permis une action interdite. Mais ce déploiement d'essai a deux limites à
+lever avant un vrai usage :
+
+- **L'audit doit survivre.** Sur l'offre gratuite de Render, la base et
+  l'audit repartent de zéro à chaque redémarrage. Il faut :
+  - un disque persistant monté sur `/data` ;
+  - de préférence le témoin externe (`cstl-witness`), sur une autre machine.
+- **La clé de l'auteur ne doit pas être sur le serveur.** En mode cloud,
+  `CSTL_POLICY` fait signer la politique par une clé créée dans le même
+  conteneur que le connecteur. Pour un vrai usage, l'auteur publie depuis
+  sa propre machine (`cstl policy apply`) vers un serveur CSTL que lui seul
+  peut joindre.
+
+Les réglages par défaut sont maintenant plus prudents :
+- outils de démonstration coupés (`CSTL_DEMO_TOOLS=0`) ;
+- outils d'écriture de relations coupés (`CSTL_MCP_SEND_TOOLS=1` pour les
+  activer) ;
+- au plus 600 requêtes et 60 ouvertures de session par minute.

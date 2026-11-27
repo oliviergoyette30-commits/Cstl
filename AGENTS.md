@@ -712,6 +712,12 @@ claude.ai custom connectors and any HTTP MCP client.
 - **Step by step:** `docs/CLAUDE_AI.md`.
 - **Limits:** no OAuth (the URL is the secret), one CSTL identity per
   server.
+- **After the attack review (2026-11-27, `docs/RED_TEAM_2026-11-27.md`):**
+  - 600 requests and 60 new sessions per minute, then 429
+    (`CSTL_MCP_RATE_PER_MIN`, `CSTL_MCP_INIT_PER_MIN`);
+  - the tools that write relations (`cstl_send_compact`,
+    `cstl_send_relations`) are off unless `CSTL_MCP_SEND_TOOLS=1`;
+  - demo tools are off in `render.yaml`.
 
 Live test: `sdk/python/test_mcp_remote_live.py`.
 

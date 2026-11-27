@@ -13,9 +13,10 @@ services:
       - key: CSTL_MCP_AGENT
         value: agent_claude
       # Outils de demonstration du vrai controle (faux depots et paiements,
-      # proteges par @guarded) : retirez cette ligne pour un vrai usage.
+      # proteges par @guarded) : "1" pour les montrer, "0" en usage reel.
+      # Coupes par defaut depuis la revue d'attaque du 2026-11-27.
       - key: CSTL_DEMO_TOOLS
-        value: "1"
+        value: "0"
       # Vraies actions GitHub (facultatif) : un jeton a grain fin limite a UN
       # depot, permission Issues en lecture et ecriture. A remplir dans Render
       # (Environment) ; sans les deux, les outils GitHub n'existent pas.

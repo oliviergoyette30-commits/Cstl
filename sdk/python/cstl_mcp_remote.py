@@ -59,6 +59,27 @@ DEFAULT_ORIGINS = ("https://claude.ai", "https://claude.com")
 MAX_BODY = 1 << 20
 SESSION_TTL = 24 * 3600
 MAX_SESSIONS = 1000
+SEND_TOOLS = {"cstl_send_compact", "cstl_send_relations"}
+
+
+class RateLimit:
+    """Fenetre glissante d'une minute (2026-11-27, revue d'attaque : 400
+    requetes passaient en 1,1 s, et 1 100 sessions creees d'affilee
+    faisaient expirer la session d'un utilisateur legitime)."""
+
+    def __init__(self, per_min):
+        import collections
+        self.per_min, self.hits, self.lock = per_min, collections.deque(), threading.Lock()
+
+    def allow(self):
+        now = time.time()
+        with self.lock:
+            while self.hits and now - self.hits[0] > 60:
+                self.hits.popleft()
+            if len(self.hits) >= self.per_min:
+                return False
+            self.hits.append(now)
+            return True
 
 
 DEMO_TOOLS = [
@@ -219,6 +240,12 @@ class Remote:
         if os.environ.get("CSTL_GITHUB_TOKEN") and os.environ.get("CSTL_GITHUB_REPO"):
             self.extras.append(GitHub(os.environ["CSTL_GITHUB_TOKEN"], os.environ["CSTL_GITHUB_REPO"]))
         self.lock = threading.Lock()                     # un seul agent CSTL : appels en serie
+        self.rate = RateLimit(int(os.environ.get("CSTL_MCP_RATE_PER_MIN", "600")))
+        self.init_rate = RateLimit(int(os.environ.get("CSTL_MCP_INIT_PER_MIN", "60")))
+        # Outils qui ECRIVENT des relations au nom de l'agent : coupes par defaut
+        # (revue d'attaque : une IA compromise s'en servait pour remplir l'audit
+        # de regles sans autorite, ignorees mais stockees). CSTL_MCP_SEND_TOOLS=1.
+        self.send_tools = os.environ.get("CSTL_MCP_SEND_TOOLS") == "1"
         self.sessions = {}
 
     def authorized(self, path, header):
@@ -257,6 +284,19 @@ class Remote:
             return self.sessions.pop(sid, None) is not None
 
     def answer(self, msg):
+        if not self.send_tools and msg.get("method") in ("tools/list", "tools/call"):
+            name = (msg.get("params") or {}).get("name")
+            if msg["method"] == "tools/call" and name in SEND_TOOLS:
+                return {"jsonrpc": "2.0", "id": msg.get("id"), "result": {"content": [{"type": "text", "text":
+                        f"outil {name} desactive sur ce serveur (CSTL_MCP_SEND_TOOLS=1 pour l'activer)"}],
+                        "isError": True}}, None
+            if msg["method"] == "tools/list":
+                reply, v = self._answer(msg)
+                reply["result"]["tools"] = [t for t in reply["result"]["tools"] if t["name"] not in SEND_TOOLS]
+                return reply, v
+        return self._answer(msg)
+
+    def _answer(self, msg):
         if msg.get("method") == "initialize":
             asked = (msg.get("params") or {}).get("protocolVersion")
             version = asked if asked in SUPPORTED_VERSIONS else SUPPORTED_VERSIONS[0]
@@ -350,6 +390,10 @@ def make_handler(remote):
                 return self._err(400, -32700, "JSON illisible")
             if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
                 return self._err(400, -32600, "un seul message JSON-RPC 2.0 est attendu")
+            limiter = remote.init_rate if msg.get("method") == "initialize" else remote.rate
+            if not limiter.allow():
+                return self._send(429, {"jsonrpc": "2.0", "id": msg.get("id"), "error": {
+                    "code": -32000, "message": "trop de requetes, reessayez dans une minute"}}, {"Retry-After": "60"})
             if msg.get("method") == "initialize":
                 reply, version = remote.answer(msg)
                 sid = remote.new_session(version)
