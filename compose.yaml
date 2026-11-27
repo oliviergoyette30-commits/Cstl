@@ -1,0 +1,39 @@
+# CSTL, cle en main, avec Docker :
+#
+#   docker compose up -d                                        # construit et demarre le serveur
+#   docker compose exec -T cstl cstl policy apply - < policy.cstl   # publie votre politique
+#   docker compose exec cstl cstl agent add agent_support
+#   docker compose exec cstl cstl check agent_support refund_order --amount 80
+#   docker compose exec cstl cstl status
+#   docker compose exec cstl cstl demo                          # 7 verifications, "7/7"
+#
+# Une politique d'exemple : `cstl init` (avec le paquet Python), ou
+# sdk/python/cstl_cli.py (EXAMPLE_POLICY). Changez l'auteur avec
+# CSTL_OWNER=mon_auteur docker compose up -d.
+#
+# - Les donnees (base, cle du serveur, audit) sont dans le volume cstl-data,
+#   les cles des agents crees dans le conteneur dans cstl-keys : gardez-les.
+# - Le port 5050 n'est publie que sur 127.0.0.1. Pour l'ouvrir au reseau,
+#   ajoutez TLS (CSTL_TLS_CERT_PATH, CSTL_TLS_KEY_PATH) avant de changer l'adresse.
+# - Le tableau de bord (port 8000) n'ecoute que dans le conteneur :
+#   docker compose exec cstl python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/v1/dashboard.json').read().decode())"
+services:
+  cstl:
+    build: .
+    image: cstl:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5050:5050"
+    environment:
+      CSTL_OWNER: ${CSTL_OWNER:-owner_ops}
+      CSTL_POLICY_AUTHORS: ${CSTL_OWNER:-owner_ops}
+      CSTL_DATA: /data
+      CSTL_APPROVERS: ${CSTL_APPROVERS:-}
+      CSTL_APPROVAL_ACTIONS: ${CSTL_APPROVAL_ACTIONS:-}
+    volumes:
+      - cstl-data:/data
+      - cstl-keys:/root/.cstl
+
+volumes:
+  cstl-data:
+  cstl-keys:

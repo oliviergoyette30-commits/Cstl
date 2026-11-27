@@ -19,16 +19,12 @@ Write down the rules you want in plain words, for example "refunds up to
 
 ## 2. Start the server (day 1, 15 minutes)
 
-With Docker (built and checked on 2026-11-27: a 246 MB image, and
-`cstl-demo` inside it passes 7/7):
+With Docker:
 
 ```bash
-docker build -t cstl .
-docker run -d --name cstl -p 5050:5050 -v cstl-data:/data \
-    -e CSTL_POLICY_AUTHORS=owner_ops \
-    -e CSTL_APPROVAL_ACTIONS="refund_*" -e CSTL_APPROVERS="human_*" cstl
-docker exec cstl cat /data/cstl_adn.db.server_key.pub    # the server public key
-docker exec -it cstl cstl-demo                           # 7 checks, "Tout est conforme : 7/7."
+CSTL_APPROVAL_ACTIONS="refund_*" CSTL_APPROVERS="human_*" docker compose up -d
+docker compose exec cstl cstl demo          # 7 checks, "Tout est conforme : 7/7."
+docker compose exec cstl cstl status        # reachable, server public key, authors enforced
 ```
 
 Without Docker:
@@ -36,25 +32,30 @@ Without Docker:
 ```bash
 cargo build --release --bin cstl_parser
 pip install ./sdk/python
-CSTL_POLICY_AUTHORS=owner_ops ./target/release/cstl_parser
+cstl init                                   # cstl.json, the author's key, an example policy.cstl
+cstl serve                                  # data in ./cstl-data
 ```
 
-Keep the `/data` volume, or the folder you started from. It holds the audit
-and the server key.
+Keep the `cstl-data` volume (Docker) or folder. It holds the audit and the
+server key. The server public key, for your gates, is printed by
+`cstl status`.
 
 ## 3. Write the rules (day 1)
 
-The policy author, here `owner_ops`, signs the rules with its own key:
+Write the rules in `policy.cstl`, one per line, then publish them. The
+author (`owner_ops` by default) signs them, and the command checks the
+server's signed receipt:
 
-```python
-from cstl_llm_agent import CstlAgent
-owner = CstlAgent("owner_ops", "none", port=5050); owner.register()
-owner.publish_policy([
-    {"type": "PERFORM", "subject": "agent_support", "object": "refund_order",
-     "modality": "MAY", "amount_at_most": "100"},
-    {"type": "PERFORM", "subject": "agent_support", "object": "refund_order",
-     "modality": "MUST_NOT", "if_fact": "incident_open", "reason": "no refunds during an incident"},
-], server_key=open("server_key.pub").read())
+```
+agent_support MAY refund_order <=100
+agent_support MUST_NOT refund_order if:incident_open "no refunds during an incident"
+```
+
+```bash
+cstl policy apply policy.cstl                                   # without Docker
+docker compose exec -T cstl cstl policy apply - < policy.cstl   # with Docker
+cstl agent add agent_support
+cstl check agent_support refund_order --amount 80               # what the server decides
 ```
 
 `AGENTS.md`, section "Conditions the server enforces", lists every
@@ -80,19 +81,20 @@ stop then also stops the tokens already issued.
 
 ## 5. Run for two to four weeks
 
-Watch the dashboard. It runs on the server machine, on 127.0.0.1: use
-`docker run --network host` on Linux, or `docker exec`.
+Watch the dashboard. It listens on 127.0.0.1 of the server machine (inside
+the container with Docker: read it with `docker compose exec`, see
+`compose.yaml`).
 
 ```
 http://127.0.0.1:8000/v1/dashboard
 ```
 
 Keep these at hand:
-- `cstl-approve --agent human_alice list | approve <id> | reject <id>` for
+- `cstl approve --agent human_alice list | approve <id> | reject <id>` for
   human approvals;
-- `owner.emergency_stop("all")`, or `touch /data/cstl_adn.db.emergency_stop`,
-  to stop everything;
-- `owner.revoke_key("agent_support")` if a key leaks.
+- `cstl stop all` (and `cstl stop all --off`), or
+  `touch cstl-data/cstl_adn.db.emergency_stop`, to stop everything;
+- `cstl revoke agent_support` if a key leaks.
 
 ## 6. What to measure
 

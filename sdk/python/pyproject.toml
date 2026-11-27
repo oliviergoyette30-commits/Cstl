@@ -15,6 +15,7 @@ dependencies = ["cryptography>=42"]
 anthropic = ["anthropic"]
 
 [project.scripts]
+cstl = "cstl_cli:cli"
 cstl-demo = "cstl_demo:main"
 cstl-mcp-proxy = "cstl_mcp_proxy:cli"
 cstl-mcp-server = "cstl_mcp_server:cli"
@@ -25,5 +26,5 @@ cstl-approve = "cstl_approve:cli"
 cstl-deliberate = "cstl_deliberation:cli"
 
 [tool.setuptools]
-py-modules = ["cstl_approve", "cstl_client", "cstl_deliberation", "cstl_compact", "cstl_formes", "cstl_guard", "cstl_llm_agent",
+py-modules = ["cstl_approve", "cstl_cli", "cstl_client", "cstl_deliberation", "cstl_compact", "cstl_formes", "cstl_guard", "cstl_llm_agent",
               "cstl_signing", "cstl_mcp_proxy", "cstl_mcp_server", "cstl_witness", "cstl_demo", "cstl_a2a", "cstl_gate", "cstl_receipt"]
