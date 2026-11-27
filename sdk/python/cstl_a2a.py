@@ -145,6 +145,46 @@ MAX_BATCH = 50
 
 
 # -- Proxy ----------------------------------------------------------------------
+def check_calls(guard, target, header_value, calls):
+    """Verifie les jetons d'une requete A2A (un appel ou un lot), comme le
+    proxy et le middleware embarque (`cstl_connect.A2AGuard`).
+
+    Retourne (statut HTTP, verdict, detail, agent appelant) : 200 si tout
+    passe, 401 sans jeton, 403 sinon. Tout ou rien : chaque jeton est verifie
+    avant qu'aucun ne soit consomme ; un seul refus refuse le lot entier."""
+    if not header_value:
+        return 401, "no_token", f"en-tete {HEADER} absent", None
+    from cstl_guard import Unauthorized
+    try:
+        tokens = [decode_token(t.strip()) for t in header_value.split(",")]
+    except Exception:  # noqa: BLE001
+        return 403, "bad_token", "jeton illisible", None
+    if len(tokens) != len(calls):
+        return 403, "token_count", f"{len(calls)} appels, {len(tokens)} jetons", None
+    if len({t.agent for t in tokens}) != 1:
+        return 403, "mixed_agents", "tous les jetons d'un lot doivent etre du meme agent", None
+    try:
+        actions = [action_for(target, c["method"]) for c in calls]
+    except ValueError as e:
+        return 403, "bad_method", str(e), None
+    try:
+        for t, a in zip(tokens, actions):
+            guard.check(t, a)                       # tout verifier avant de rien consommer
+        for t, a in zip(tokens, actions):
+            guard.run(t, a, lambda: None)           # signature, action, temps, usage unique
+    except Unauthorized as e:
+        return 403, e.reason, "lot refuse en entier", None
+    return 200, "ok", "", tokens[0].agent
+
+
+def deny_body(mid, verdict, detail=""):
+    """Corps JSON-RPC d'un refus CSTL (code -32050, raison CSTL_<VERDICT>)."""
+    return {"jsonrpc": "2.0", "id": mid, "error": {
+        "code": ERROR_CODE, "message": f"Refuse par CSTL : {verdict}",
+        "data": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": f"CSTL_{verdict.upper()}",
+                  "domain": "cstl", "metadata": {"detail": detail[:200]}}]}}
+
+
 def make_handler(upstream, target, guard, public_url):
     from urllib.parse import urlsplit
     u = urlsplit(upstream)
@@ -167,10 +207,7 @@ def make_handler(upstream, target, guard, public_url):
             self.wfile.write(data)
 
         def _deny(self, status, mid, verdict, detail=""):
-            self._send(status, {"jsonrpc": "2.0", "id": mid, "error": {
-                "code": ERROR_CODE, "message": f"Refuse par CSTL : {verdict}",
-                "data": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": f"CSTL_{verdict.upper()}",
-                          "domain": "cstl", "metadata": {"detail": detail[:200]}}]}},
+            self._send(status, deny_body(mid, verdict, detail),
                 {"WWW-Authenticate": f'ApiKey header="{HEADER}"'} if status == 401 else None)
 
         def do_GET(self):
@@ -206,33 +243,12 @@ def make_handler(upstream, target, guard, public_url):
                 return self._send(400, {"jsonrpc": "2.0", "id": None, "error": {
                     "code": -32600, "message": f"Request payload validation error (1 a {MAX_BATCH} appels JSON-RPC)"}})
             mid = calls[0].get("id") if len(calls) == 1 else None
-            raw = self.headers.get(HEADER)
-            if not raw:
-                return self._deny(401, mid, "no_token", f"en-tete {HEADER} absent")
-            from cstl_guard import Unauthorized
-            try:
-                tokens = [decode_token(t.strip()) for t in raw.split(",")]
-            except Exception:  # noqa: BLE001
-                return self._deny(403, mid, "bad_token", "jeton illisible")
-            if len(tokens) != len(calls):
-                return self._deny(403, mid, "token_count", f"{len(calls)} appels, {len(tokens)} jetons")
-            if len({t.agent for t in tokens}) != 1:
-                return self._deny(403, mid, "mixed_agents", "tous les jetons d'un lot doivent etre du meme agent")
-            try:
-                actions = [action_for(target, c["method"]) for c in calls]
-            except ValueError as e:
-                return self._deny(403, mid, "bad_method", str(e))
-            try:
-                for t, a in zip(tokens, actions):
-                    guard.check(t, a)                       # tout verifier avant de rien consommer
-                for t, a in zip(tokens, actions):
-                    guard.run(t, a, lambda: None)           # signature, action, temps, usage unique
-            except Unauthorized as e:
-                return self._deny(403, mid, e.reason, "lot refuse en entier")
-            token = tokens[0]
+            status, verdict, detail, caller = check_calls(guard, target, self.headers.get(HEADER), calls)
+            if status != 200:
+                return self._deny(status, mid, verdict, detail)
             headers = {k: v for k, v in self.headers.items()
                        if k.lower() not in ("host", "content-length", HEADER.lower(), AGENT_HEADER.lower(), "connection")}
-            headers[AGENT_HEADER] = token.agent
+            headers[AGENT_HEADER] = caller
             req = urllib.request.Request(upstream, data=body, headers=headers, method="POST")
             try:
                 resp = urllib.request.urlopen(req, timeout=300)
