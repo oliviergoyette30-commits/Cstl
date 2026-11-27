@@ -64,7 +64,7 @@ def remote():
     subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=localhost",
                     "-addext", "subjectAltName=DNS:localhost", "-keyout", str(work / "k.pem"),
                     "-out", str(work / "c.pem")], check=True, capture_output=True)
-    menv = {**env, "CSTL_AGENT": "agent_claude", "CSTL_MCP_TOKEN": TOKEN}
+    menv = {**env, "CSTL_AGENT": "agent_claude", "CSTL_MCP_TOKEN": TOKEN, "CSTL_MCP_SEND_TOOLS": "1"}
     logs = [work / "mcp.log", work / "mcps.log"]
     p1 = subprocess.Popen([sys.executable, str(SDK / "cstl_mcp_remote.py"), "--listen", f"127.0.0.1:{MCP}"],
                           env=menv, stdout=subprocess.DEVNULL, stderr=open(logs[0], "w"))
@@ -171,7 +171,7 @@ def test_cloud_mode_one_container(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.startswith("CSTL_")}
     env.update({"HOME": str(tmp_path / "home"), "CSTL_BINARY": str(BINARY), "CSTL_DATA": str(tmp_path / "data"),
                 "CSTL_PORT": "5889", "CSTL_REST_PORT": "8889", "PORT": str(port), "CSTL_MCP_TOKEN": token,
-                "CSTL_MCP_AGENT": "agent_claude", "CSTL_DEMO_TOOLS": "1",
+                "CSTL_MCP_AGENT": "agent_claude", "CSTL_DEMO_TOOLS": "1", "CSTL_MCP_INIT_PER_MIN": "3",
                 "CSTL_POLICY": 'agent_claude MUST_NOT delete_repo "irreversible"\\nagent_claude MAY read_issues'})
     log = tmp_path / "cloud.log"
     p = subprocess.Popen([sys.executable, str(SDK / "cstl_cli.py"), "cloud"], cwd=tmp_path, env=env,
@@ -205,6 +205,17 @@ def test_cloud_mode_one_container(tmp_path):
         assert not r["isError"] and "ENVOYE" in r["content"][0]["text"], r
         state = json.loads(tool(12, "demo_list_repos")["content"][0]["text"])
         assert state == {"depots": ["site-web", "api", "prod-db"], "paiements_executes": [{"amount": 30, "to": "alice"}]}
+        # Revue d'attaque (2026-11-27) : outils d'ecriture coupes par defaut,
+        # et ouverture de sessions limitee (ici 3 par minute).
+        st, _, lst = post(url, {"jsonrpc": "2.0", "id": 13, "method": "tools/list"}, {"Mcp-Session-Id": sid})
+        names = {t["name"] for t in lst["result"]["tools"]}
+        assert "cstl_send_relations" not in names and "cstl_send_compact" not in names and "cstl_authorize" in names
+        r = tool(14, "cstl_send_relations", relations=[{"type": "PERFORM", "subject": "agent_claude",
+                                                         "object": "delete_repo", "modality": "MAY"}])
+        assert r["isError"] and "desactive" in r["content"][0]["text"]
+        hello = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}}
+        codes = [post(url, hello)[0] for _ in range(3)]
+        assert codes == [200, 200, 429], codes
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(f"http://127.0.0.1:{port}/.well-known/oauth-protected-resource", timeout=10)
         assert e.value.code == 404, "pas de 401 hors de /mcp : claude.ai ne doit pas croire a de l'OAuth"

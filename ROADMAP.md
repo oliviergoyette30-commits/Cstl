@@ -790,6 +790,23 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
     section suivante est donc **fait** pour le proxy ; la mesure en tokens
     réels reste à faire.
 
+## Revue d'attaque (2026-11-27, `docs/RED_TEAM_2026-11-27.md`)
+
+- **En direct et sur une copie locale, aucune attaque n'a permis une action
+  interdite.** Attaques tentées :
+  - règles et rôle que l'IA s'attribue elle-même ;
+  - pièges sur les montants ;
+  - jeton, origine et sessions ;
+  - requêtes malformées et injections.
+- **Corrigé :**
+  - limite de débit et de sessions du serveur MCP distant ;
+  - outils d'écriture de relations coupés par défaut ;
+  - refus clair, avant signature, d'une valeur que le fil ne porte pas ;
+  - démonstration coupée dans `render.yaml`.
+- **À faire pour un vrai usage :**
+  - audit persistant (disque et témoin) ;
+  - clé de l'auteur hors du serveur.
+
 ## À faire : convertisseur de tokens et offre commerciale (2026-11-27)
 
 - **Convertisseur dans le proxy MCP.** Transformer automatiquement le JSON

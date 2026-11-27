@@ -417,6 +417,24 @@ from cstl_client import CstlClient, CstlResponse  # noqa: E402
 ENCODER = "CstlLlmAgent"
 
 
+WIRE_FORBIDDEN = ('"', "[", "]", "\n", "\r", "\x00")
+
+
+def check_wire_values(intent, relations):
+    """Avant de signer (2026-11-27, revue d'attaque) : une valeur que le fil
+    CSTL ne peut pas porter exactement (guillemet, crochet, saut de ligne,
+    `---END---`, espaces aux bords) est refusee ICI, avec le champ en cause.
+    Avant, elle partait quand meme : le serveur relisait autre chose que ce
+    qui avait ete signe et repondait `signature_rejected`, un message
+    trompeur. (Le mode arbre, lui, encode ces valeurs en base64.)"""
+    for where, kv in [("INTENT_PAYLOAD", intent)] + [(f"RELATION {i + 1}", r) for i, r in enumerate(relations)]:
+        for k, v in kv.items():
+            s = str(v)
+            if any(c in s for c in WIRE_FORBIDDEN) or "---END---" in s or s != s.strip():
+                raise ValueError(f"{where}, champ {k!r} : valeur que le fil CSTL ne peut pas porter exactement "
+                                 "(guillemet, crochet, saut de ligne, ---END--- ou espaces aux bords)")
+
+
 class ActionDenied(Exception):
     """Action refusee par le serveur CSTL (CstlAgent.act)."""
 
@@ -507,6 +525,7 @@ class CstlAgent:
         valeurs brutes)."""
         meta = {"encoder": ENCODER, "produced_by": ENCODER, "public_key": self.pub_key}
         intent = {"purpose": purpose, "sender": self.name, "receiver": receiver, **(extra_intent or {})}
+        check_wire_values(intent, relations)
         signature = sign_intent(self.priv_bytes, self.pub_key, version="v5.0.0", mode="A",
                                 meta=meta, intent=intent, relations=relations)
         payload = self.client.build_payload(
