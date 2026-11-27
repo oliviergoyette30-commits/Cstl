@@ -1,8 +1,7 @@
 # CSTL : le serveur de controle et les commandes du SDK Python, dans une image.
 #
-# NON ENCORE CONSTRUITE (2026-11-26) : les registres d'images (Docker Hub,
-# public.ecr.aws) refusaient l'environnement de developpement (429, limite de
-# donnees). A verifier par `docker build -t cstl .` sur une autre machine.
+# Construite et verifiee le 2026-11-27 : image de 246 Mo, serveur demarre,
+# `docker exec cstl cstl-demo` -> "Tout est conforme : 7/7."
 #
 #   docker build -t cstl .
 #   docker run -d --name cstl -p 5050:5050 -v cstl-data:/data \

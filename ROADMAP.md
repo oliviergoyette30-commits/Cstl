@@ -738,5 +738,12 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
 - **Prêt pour les pilotes :**
   - le guide `docs/PILOT.md` ;
   - le brouillon d'article `docs/ARTICLE_DRAFT.md` ;
-  - le Dockerfile (serveur et 8 commandes, données dans `/data`).
+  - le Dockerfile (serveur et 8 commandes, données dans `/data`) ; image construite et vérifiée le 2026-11-27
+    (246 Mo, `cstl-demo` 7/7 dans le conteneur).
+- **Banc contre de vrais outils (OPA avec paquets signés, Cedar) : pas fait
+  ici.** Télécharger et lancer leurs binaires a été refusé dans
+  l'environnement de développement. À faire sur une machine où on peut les
+  installer.
+- **Licence : à choisir par l'auteur** (aucun fichier `LICENSE` pour
+  l'instant ; sans licence, personne n'a le droit de réutiliser le code).
 
