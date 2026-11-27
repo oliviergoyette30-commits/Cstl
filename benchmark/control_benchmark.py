@@ -280,6 +280,7 @@ def main():
     ap.add_argument("--binary", default=str(REPO / "target" / "debug" / "cstl_parser"))
     ap.add_argument("--out", default=str(HERE / "results.json"))
     ap.add_argument("--governed", default="", help="CSTL_GOVERNED_ACTIONS du serveur (ex. refund_*,wipe_*)")
+    ap.add_argument("--opa", help="binaire OPA : ajoute le VRAI OPA, paquets non signes (opa) et signes (opa_signe)")
     ap.add_argument("--cstl-default", choices=("allow", "deny"), default="allow",
                     help="politique par defaut du serveur CSTL (CSTL_ACTION_DEFAULT) ; la bonne reponse ne change pas")
     args = ap.parse_args()
@@ -287,6 +288,13 @@ def main():
     if not Path(args.binary).exists():
         raise SystemExit("cargo build --bin cstl_parser d'abord")
     srv = Cstl(args.binary, args.cstl_default, args.governed)
+    mechanisms = list(MECHANISMS)
+    opa = None
+    if args.opa:
+        import opa_runner
+        opa = opa_runner.Opa(args.opa)
+        mechanisms = list(CLASSIC) + ["opa", "opa_signe"] + [m for m in MECHANISMS if m not in CLASSIC]
+        print(f"OPA reel : {opa.version}")
     author, mallory = Signer(), Signer()
     rows, mismatch = [], []
     try:
@@ -302,6 +310,11 @@ def main():
                 acc = classic(mech, legit_msgs, items, author)
                 got[mech] = [True] * len(expect) if acc == "all" else [False] * len(expect) if acc is None else \
                     [decide(acc, rq["action"], rq.get("amount")) for rq in case["requests"]]
+            if opa is not None:
+                if opa.legit(case) != expect:
+                    mismatch.append((case["id"] + " (OPA)", expect, opa.legit(case)))
+                got["opa"] = opa.run(case, False, apply_change)
+                got["opa_signe"] = opa.run(case, True, apply_change)
             for threat in ("T1", "T2"):
                 res = dict(got)
                 res["cstl_simple"] = srv.run(case, threat, receipts=False)
@@ -313,6 +326,8 @@ def main():
                                  "false_refusals": sum(e and not d for d, e in zip(dec, expect))})
     finally:
         srv.stop()
+        if opa is not None:
+            opa.close()
 
     if mismatch and args.cstl_default == "deny":
         print(f"Mode ferme : sur la politique legitime, le serveur differe de la bonne reponse dans {len(mismatch)} cas "
@@ -325,19 +340,20 @@ def main():
           "Cellule : violations / refus a tort (0 / 0 = juste partout).\n")
     for threat in ("T1", "T2"):
         print(f"Modele de menace {threat} ({'relais' if threat == 'T1' else 'canal de l auteur'}) :")
-        print("  " + f"{'cas':28}" + "".join(f"{m:>16}" for m in MECHANISMS))
+        print("  " + f"{'cas':28}" + "".join(f"{m:>16}" for m in mechanisms))
         for case in cases:
             cells = []
-            for m in MECHANISMS:
+            for m in mechanisms:
                 r = next(x for x in rows if x["case"] == case["id"] and x["threat"] == threat and x["mechanism"] == m)
                 cells.append(f"{r['violations']} / {r['false_refusals']}")
             print("  " + f"{case['id']:28}" + "".join(f"{c:>16}" for c in cells))
         tot = {m: (sum(x["violations"] for x in rows if x["threat"] == threat and x["mechanism"] == m),
                    sum(x["false_refusals"] for x in rows if x["threat"] == threat and x["mechanism"] == m),
-                   sum(1 for x in rows if x["threat"] == threat and x["mechanism"] == m and x["violations"])) for m in MECHANISMS}
+                   sum(1 for x in rows if x["threat"] == threat and x["mechanism"] == m and x["violations"])) for m in mechanisms}
         print("  " + f"{'TOTAL violations / refus':28}" + "".join(f"{f'{v} / {f}':>16}" for v, f, _ in tot.values()))
         print("  " + f"{'cas compromis':28}" + "".join(f"{c:>16}" for _, _, c in tot.values()) + "\n")
-    Path(args.out).write_text(json.dumps({"cases": len(cases), "evaluator_mismatches": mismatch, "rows": rows},
+    Path(args.out).write_text(json.dumps({"cases": len(cases), "evaluator_mismatches": mismatch,
+                                          "opa_version": opa.version if opa else None, "rows": rows},
                                          indent=1, ensure_ascii=False) + "\n")
     print(f"Resultats bruts : {Path(args.out).relative_to(REPO) if Path(args.out).is_relative_to(REPO) else args.out}")
     return 1 if mismatch and args.cstl_default == "allow" else 0

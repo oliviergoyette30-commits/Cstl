@@ -342,13 +342,25 @@ are committed next to it.
 
 **Attacked policy channel, deterministic** (`benchmark/control_benchmark.py`):
 - 12 attack cases, 20 requests;
-- 5 other mechanisms: no control, a rule engine, a signed policy, a signed
-  and versioned policy, and simplified CSTL.
+- the other mechanisms: no control, a rule engine, a signed policy, a
+  signed and versioned policy, and **the real OPA 1.23.0** (`--opa`), with
+  unsigned and with signed bundles (`opa build --signing-key`, verified by
+  OPA: the practice the OPA project recommends).
 
-| Violations / false refusals | no control | signed | signed + versioned | **CSTL** |
-|---|---|---|---|---|
-| Relay compromised (T1) | 13 / 0 | 3 / 5 | 1 / 0 | **0 / 0** |
-| Author link compromised (T2) | 13 / 0 | 3 / 5 | 1 / 0 | **0 / 0** |
+| Violations / false refusals | no control | OPA | OPA, signed bundles | signed + versioned | **CSTL** |
+|---|---|---|---|---|---|
+| Relay compromised (T1) | 13 / 0 | 10 / 0 | 4 / 2 | 1 / 0 | **0 / 0** |
+| Author link compromised (T2) | 13 / 0 | 10 / 0 | 4 / 2 | 1 / 0 | **0 / 0** |
+| Compromised cases (of 12) | 12 | 10 | 4 | 1 | **0** |
+
+OPA's signature check works: a modified bundle, or one signed with another
+key, is refused. But OPA does not protect the order: a replayed old signed
+bundle is activated again, a dropped bundle leaves the old policy in force,
+and bundles delivered out of order end on the last delivery. CSTL closes
+these with `policy_seq` and the signed receipt. Cedar is not in the table:
+it evaluates policies but does not distribute or verify them (that role is
+a cloud service, Amazon Verified Permissions, which cannot be tested here).
+Details: [`benchmark/README.md`](benchmark/README.md).
 
 **With real models** (`scripts/competition_benchmark.py`, GPT-5 mini,
 Llama 4, Claude Haiku 5.5, Mistral):

@@ -298,6 +298,20 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - Piste : remplacer les compresseurs maison par zstd avec un
     dictionnaire entraîné, qui vaudrait aussi pour les agents JSON.
 
+- **Banc public contre le vrai OPA** (2026-11-27, OPA 1.23.0,
+  `benchmark/opa_runner.py`, `benchmark/results_opa.json`). Mêmes 12
+  attaques ; paquets construits par `opa build`, signés RS256, vérifiés par
+  le vrai `opa run`.
+  - OPA sans signature : 10 cas compromis. OPA avec paquets signés : 4 cas
+    compromis (4 violations, 2 refus à tort). CSTL : 0.
+  - La signature d'OPA refuse bien un paquet modifié ou signé par une autre
+    clé. Elle ne protège pas l'ordre : rejeu d'un vieux paquet signé,
+    paquet supprimé, désordre.
+  - Cedar n'est pas mesuré : c'est un évaluateur sans distribution ni
+    vérification de la politique (rôle d'un service cloud).
+  - Reste à faire : d'autres attaques écrites par d'autres que nous, et une
+    passerelle MCP du marché.
+
 - **`scripts/tree_compression_benchmark.py` : l'arbre indenté compressé**
   (2026-11-27, question d'Olivier). Le banc précédent ne mesurait que le
   format du fil. Ici, les données elles-mêmes, relues identiques, et chaque
