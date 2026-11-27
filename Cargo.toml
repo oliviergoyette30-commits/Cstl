@@ -4,6 +4,7 @@ version = "5.0.0"
 edition = "2021"
 description = "CSTL v5.0.0 — Rust TCP-native agentic server (parser, validator, audit chain, KB verification)"
 authors = ["Olivier Goyette"]
+license = "Apache-2.0"
 
 [lib]
 name = "cstl_parser"

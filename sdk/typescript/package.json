@@ -2,6 +2,7 @@
   "name": "cstl",
   "version": "0.1.0",
   "description": "Controle des agents IA (client du serveur CSTL) : identite Ed25519, autorisation signee avant d'agir, verification des jetons. Aucune dependance.",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",

@@ -744,6 +744,5 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   ici.** Télécharger et lancer leurs binaires a été refusé dans
   l'environnement de développement. À faire sur une machine où on peut les
   installer.
-- **Licence : à choisir par l'auteur** (aucun fichier `LICENSE` pour
-  l'instant ; sans licence, personne n'a le droit de réutiliser le code).
+- **Licence : Apache 2.0** (choisie le 2026-11-27, fichier `LICENSE`).
 

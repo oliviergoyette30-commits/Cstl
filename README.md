@@ -231,8 +231,6 @@ The full list, with each behavior explained, is in [`AGENTS.md`](AGENTS.md).
   (see above).
 - Nothing is published yet (PyPI, npm, binaries). The release workflow has
   never run.
-- There is no LICENSE file yet. The intended license is Apache 2.0, to be
-  confirmed by the author.
 - There are no external users yet.
 
 ## Older modules (still in the code, secondary)
@@ -275,5 +273,4 @@ cd sdk/typescript && npm install && npm test           # TypeScript
 
 ## License
 
-Intended: Apache 2.0, by Olivier Goyette. See the limitation above: the
-LICENSE file is not in the repository yet.
+Apache License 2.0, by Olivier Goyette. See [LICENSE](LICENSE).
