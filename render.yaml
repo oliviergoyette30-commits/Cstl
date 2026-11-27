@@ -16,8 +16,18 @@ services:
       # proteges par @guarded) : retirez cette ligne pour un vrai usage.
       - key: CSTL_DEMO_TOOLS
         value: "1"
+      # Vraies actions GitHub (facultatif) : un jeton a grain fin limite a UN
+      # depot, permission Issues en lecture et ecriture. A remplir dans Render
+      # (Environment) ; sans les deux, les outils GitHub n'existent pas.
+      - key: CSTL_GITHUB_TOKEN
+        sync: false
+      - key: CSTL_GITHUB_REPO
+        sync: false
       - key: CSTL_POLICY
         value: |
           agent_claude MAY read_issues
           agent_claude MUST_NOT delete_repo "irreversible"
           agent_claude MUST_NOT send_payment >50 "above 50: a human decides"
+          agent_claude MAY github_create_issue
+          agent_claude MAY github_comment
+          agent_claude MUST_NOT github_close_issue "a human closes issues"

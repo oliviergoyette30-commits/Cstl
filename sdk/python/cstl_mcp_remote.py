@@ -83,8 +83,11 @@ class Demo:
     `@guarded` -- elles ne s'executent qu'avec un jeton signe par le serveur
     et verifie ici, que le modele ait demande l'autorisation ou non."""
 
+    tools = None   # renseigne apres la definition (DEMO_TOOLS)
+
     def __init__(self):
         import cstl_connect
+        self.tools = DEMO_TOOLS
         self.repos = ["site-web", "api", "prod-db"]
         self.payments = []
         conn = cstl_connect.Connector()
@@ -115,6 +118,93 @@ class Demo:
             raise RuntimeError(f"REFUSE par CSTL, rien n'a ete execute : {e}") from None
 
 
+GITHUB_TOOLS = [
+    {"name": "github_list_issues",
+     "description": "Issues ouvertes du depot GitHub configure (lecture, sans controle).",
+     "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "github_create_issue",
+     "description": "Cree une issue dans le depot GitHub configure. Protege par CSTL (action github_create_issue) : "
+                    "l'outil exige un jeton signe par le serveur CSTL avant d'appeler GitHub.",
+     "inputSchema": {"type": "object", "required": ["title"], "properties": {
+         "title": {"type": "string"}, "body": {"type": "string"}}}},
+    {"name": "github_comment",
+     "description": "Commente une issue. Protege par CSTL (action github_comment).",
+     "inputSchema": {"type": "object", "required": ["number", "body"], "properties": {
+         "number": {"type": "integer"}, "body": {"type": "string"}}}},
+    {"name": "github_close_issue",
+     "description": "Ferme une issue. Protege par CSTL (action github_close_issue).",
+     "inputSchema": {"type": "object", "required": ["number"], "properties": {"number": {"type": "integer"}}}},
+]
+
+
+class GitHub:
+    """De VRAIES actions sur GitHub (CSTL_GITHUB_TOKEN + CSTL_GITHUB_REPO).
+    Le jeton GitHub reste dans ce serveur : le modele ne le voit jamais, et
+    ne peut ecrire sur GitHub QUE par ces outils, chacun protege par
+    `@guarded` (jeton signe du serveur CSTL exige). C'est le principe de la
+    garde : elle seule detient le privilege. Utilisez un jeton a grain fin,
+    limite a UN depot et aux issues."""
+
+    def __init__(self, token, repo, api=None):
+        import re
+        import cstl_connect
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise SystemExit(f"CSTL_GITHUB_REPO invalide : {repo!r} (attendu proprietaire/depot)")
+        self.tools = GITHUB_TOOLS
+        self.token, self.repo = token, repo
+        self.api = (api or os.environ.get("CSTL_GITHUB_API") or "https://api.github.com").rstrip("/")
+        conn = cstl_connect.Connector()
+        self.ActionDenied = cstl_connect.ActionDenied
+
+        @conn.guarded("github_create_issue")
+        def create(title, body=""):
+            r = self._req("POST", f"/repos/{self.repo}/issues", {"title": title, "body": body})
+            return f"issue #{r['number']} creee : {r.get('html_url', '')}"
+
+        @conn.guarded("github_comment")
+        def comment(number, body):
+            self._req("POST", f"/repos/{self.repo}/issues/{int(number)}/comments", {"body": body})
+            return f"commentaire ajoute a l'issue #{int(number)}"
+
+        @conn.guarded("github_close_issue")
+        def close(number):
+            self._req("PATCH", f"/repos/{self.repo}/issues/{int(number)}", {"state": "closed"})
+            return f"issue #{int(number)} fermee"
+
+        self.create, self.comment, self.close = create, comment, close
+
+    def _req(self, method, path, body=None):
+        import urllib.error
+        import urllib.request
+        req = urllib.request.Request(self.api + path, method=method,
+                                     data=None if body is None else json.dumps(body).encode(),
+                                     headers={"Authorization": f"Bearer {self.token}",
+                                              "Accept": "application/vnd.github+json",
+                                              "X-GitHub-Api-Version": "2022-11-28",
+                                              "User-Agent": "cstl-mcp-remote",
+                                              "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                raw = r.read()
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"GitHub a refuse ({e.code}) : {e.read()[:200].decode(errors='replace')}") from None
+        return json.loads(raw) if raw else {}
+
+    def call(self, name, args):
+        if name == "github_list_issues":
+            issues = self._req("GET", f"/repos/{self.repo}/issues?state=open&per_page=30")
+            return json.dumps([{"number": i["number"], "title": i["title"], "user": i["user"]["login"]}
+                               for i in issues if "pull_request" not in i], ensure_ascii=False)
+        try:
+            if name == "github_create_issue":
+                return self.create(str(args["title"]), str(args.get("body", "")))
+            if name == "github_comment":
+                return self.comment(int(args["number"]), str(args["body"]))
+            return self.close(int(args["number"]))
+        except self.ActionDenied as e:
+            raise RuntimeError(f"REFUSE par CSTL, GitHub n'a pas ete appele : {e}") from None
+
+
 class Remote:
     def __init__(self, token, origins=DEFAULT_ORIGINS):
         if not token or len(token) < 32:
@@ -123,7 +213,11 @@ class Remote:
         self.token = token.encode()
         self.origins = set(origins)
         self.bridge = local.Bridge()
-        self.demo = Demo() if os.environ.get("CSTL_DEMO_TOOLS") == "1" else None
+        self.extras = []                                 # groupes d'outils proteges par @guarded
+        if os.environ.get("CSTL_DEMO_TOOLS") == "1":
+            self.extras.append(Demo())
+        if os.environ.get("CSTL_GITHUB_TOKEN") and os.environ.get("CSTL_GITHUB_REPO"):
+            self.extras.append(GitHub(os.environ["CSTL_GITHUB_TOKEN"], os.environ["CSTL_GITHUB_REPO"]))
         self.lock = threading.Lock()                     # un seul agent CSTL : appels en serie
         self.sessions = {}
 
@@ -173,17 +267,18 @@ class Remote:
                 "payer...), appelez cstl_authorize et n'agissez que si allowed=true. cstl_policy donne vos "
                 "obligations et interdictions.")
             return reply, version
-        if self.demo is not None and msg.get("method") in ("tools/list", "tools/call"):
+        if self.extras and msg.get("method") in ("tools/list", "tools/call"):
             mid, params = msg.get("id"), msg.get("params") or {}
             if msg["method"] == "tools/list":
                 with self.lock:
                     reply = local.handle(self.bridge, msg)
-                reply["result"]["tools"] = reply["result"]["tools"] + DEMO_TOOLS
+                reply["result"]["tools"] = reply["result"]["tools"] + [t for x in self.extras for t in x.tools]
                 return reply, None
-            if params.get("name") in {t["name"] for t in DEMO_TOOLS}:
+            owner = next((x for x in self.extras if params.get("name") in {t["name"] for t in x.tools}), None)
+            if owner is not None:
                 with self.lock:
                     try:
-                        text, err = self.demo.call(params["name"], params.get("arguments") or {}), False
+                        text, err = owner.call(params["name"], params.get("arguments") or {}), False
                     except Exception as e:  # noqa: BLE001 -- rendu au modele
                         text, err = str(e), True
                 return {"jsonrpc": "2.0", "id": mid,

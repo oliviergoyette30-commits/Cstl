@@ -166,6 +166,40 @@ def check_arguments(schema, tool, arguments):
     return None
 
 
+LEGEND = ("[CSTL arbre indente, sans perte : « @liste[N]^parent: colonnes » declare une liste ; une ligne par "
+          "element ; enfants indentes sous leur parent ; champ=valeur si present]\n")
+
+
+def compact_result(result, min_gain=0.10):
+    """`--compact-results` (2026-11-27) : dans le resultat d'un outil, chaque
+    texte qui est un document JSON (objet ou liste) devient un arbre indente
+    CSTL -- SEULEMENT si la relecture redonne exactement le meme JSON et si le
+    texte (legende comprise) est au moins `min_gain` plus court. Sinon le
+    texte reste tel quel. Renvoie (resultat, caracteres economises).
+    `structuredContent`, s'il existe, n'est pas touche."""
+    import cstl_compact
+    content = result.get("content") if isinstance(result, dict) else None
+    if not isinstance(content, list):
+        return result, 0
+    out, saved = [], 0
+    for item in content:
+        text = item.get("text") if isinstance(item, dict) and item.get("type") == "text" else None
+        if isinstance(text, str) and text.lstrip()[:1] in ("{", "["):
+            try:
+                data = json.loads(text)
+                tree = cstl_compact.encode_tree_indented(data) if isinstance(data, (dict, list)) else None
+                same = tree is not None and cstl_compact.decode_tree_indented(tree) == data
+            except Exception:  # noqa: BLE001 -- pas convertible : on laisse le texte
+                same = False
+            if same:
+                candidate = LEGEND + tree
+                if len(candidate) <= len(text) * (1 - min_gain):
+                    saved += len(text) - len(candidate)
+                    item = {**item, "text": candidate}
+        out.append(item)
+    return {**result, "content": out}, saved
+
+
 def denial(mid, tool, reason, rule):
     text = f"Refuse par CSTL : outil {tool!r}, raison {reason}" + (f", regle {rule}" if rule else "")
     return {"jsonrpc": "2.0", "id": mid, "result": {"content": [{"type": "text", "text": text}], "isError": True}}
@@ -178,6 +212,8 @@ def main(argv=None):
     ap.add_argument("--prefix", default="", help="prefixe des actions demandees")
     ap.add_argument("--amount-arg", default=None, help="argument d'outil qui porte le montant")
     ap.add_argument("--args-schema", default=None, help="fichier JSON qui borne les arguments de chaque outil")
+    ap.add_argument("--compact-results", action="store_true",
+                    help="resultats d'outils en JSON -> arbre indente CSTL, sans perte, si plus court")
     ap.add_argument("command", nargs=argparse.REMAINDER, help="-- commande du serveur MCP")
     args = ap.parse_args(argv)
     cmd = args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -202,10 +238,35 @@ def main(argv=None):
             sys.stdout.write(line.rstrip("\n") + "\n")
             sys.stdout.flush()
 
+    calls = set()                       # id des tools/call en cours (pour --compact-results)
+    calls_lock = threading.Lock()
+
+    def compact_line(line):
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            return line
+        msgs = msg if isinstance(msg, list) else [msg]
+        changed = False
+        for i, m in enumerate(msgs):
+            if not isinstance(m, dict) or "result" not in m:
+                continue
+            with calls_lock:
+                if m.get("id") not in calls:
+                    continue
+                calls.discard(m.get("id"))
+            new, saved = compact_result(m["result"])
+            if saved:
+                msgs[i] = {**m, "result": new}
+                changed = True
+        if not changed:
+            return line
+        return json.dumps(msgs if isinstance(msg, list) else msgs[0], ensure_ascii=False)
+
     def pump():
         for line in child.stdout:
             if line.strip():
-                emit(line)
+                emit(compact_line(line) if args.compact_results else line)
 
     threading.Thread(target=pump, daemon=True).start()
 
@@ -226,6 +287,9 @@ def main(argv=None):
             return None
         ok, reason, rule = gate.decide(tool, params.get("arguments"))
         if ok:
+            if args.compact_results and "id" in msg:
+                with calls_lock:
+                    calls.add(msg["id"])
             return msg
         if "id" in msg:
             emit(denial(msg["id"], tool, reason, rule))
