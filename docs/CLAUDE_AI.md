@@ -220,4 +220,17 @@ Le jeton GitHub reste sur le serveur : Claude ne le voit jamais, et ne peut
 
 Test en direct : `test_github_tools_reach_github_only_with_a_signed_token`
 (dans `sdk/python/test_mcp_remote_live.py`), contre une fausse API GitHub
-qui note chaque appel. Le test n'a pas été fait contre le vrai GitHub.
+qui note chaque appel.
+
+**Essayé contre le vrai GitHub le 2026-11-27.** Le serveur tournait sur
+Render, et le dépôt d'essai était `cstl-essai`, avec un jeton à grain fin
+limité aux issues de ce dépôt :
+
+| Action | Règle | Résultat |
+|---|---|---|
+| `github_create_issue` « Essai CSTL » | `MAY` | **exécuté** : issue #1 créée sur GitHub |
+| `github_comment` sur la #1, depuis claude.ai sur un téléphone | `MAY` | **exécuté** : commentaire ajouté |
+| `github_close_issue` sur la #1, appelé directement, sans `cstl_authorize` | `MUST_NOT` | **refusé**, GitHub n'a pas été appelé |
+| `github_list_issues` ensuite | lecture | la #1 est toujours ouverte |
+
+Le jeton GitHub n'a jamais quitté le serveur.
