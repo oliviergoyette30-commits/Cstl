@@ -81,6 +81,14 @@ a rule engine on the received policy, a signed policy, and a signed policy
 with versions and refetch. The 12 attack cases are JSON files in
 `benchmark/cases/`; add your own (format in `benchmark/README.md`).
 
+**Against the real OPA** (2026-11-27): `--opa /path/to/opa` adds OPA 1.23.0
+itself (`benchmark/opa_runner.py`), with unsigned and with signed bundles
+built by `opa build --signing-key` and verified by `opa run`. Result: OPA
+with signed bundles is compromised in 4 cases of 12 (4 violations, 2 false
+refusals): it re-activates a replayed old signed bundle, keeps the old
+policy when a bundle is dropped, and ends on the last delivery when bundles
+arrive out of order. CSTL: 0 / 0. Raw results: `benchmark/results_opa.json`.
+
 Results (2026-11-25):
 - **First measure:** on a compromised author-to-server link, CSTL was
   compromised in 7 cases, against 1 for the signed and versioned policy.

@@ -8,6 +8,7 @@ et ajouter ses propres attaques.
 cargo build --bin cstl_parser
 python3 benchmark/control_benchmark.py                 # tableau + benchmark/results.json
 python3 benchmark/control_benchmark.py --cases mes_cas/
+python3 benchmark/control_benchmark.py --opa /chemin/opa --out benchmark/results_opa.json   # + le vrai OPA
 ```
 
 ## Ce qui est mesuré
@@ -36,6 +37,8 @@ l'affiche et sort en erreur.
 | `moteur` | moteur de règles sur la politique **reçue**, sans vérifier son origine (principe d'OPA ou de Cedar) |
 | `signe` | politique signée par l'auteur (Ed25519, clé épinglée), comme un JWT ; un message invalide fait tout refuser |
 | `signe_versionne` | la meilleure pratique classique : signature, numéro de version strictement croissant, et rechargement de la politique chez l'auteur si un message est invalide |
+| `opa` | le **vrai OPA** (`--opa`), paquets de politique non signés |
+| `opa_signe` | le **vrai OPA**, paquets signés RS256 par l'auteur (`opa build --signing-key`) et vérifiés par OPA : la pratique recommandée par le projet OPA |
 | `cstl_simple` | le vrai serveur, avec `CSTL_POLICY_AUTHORS` : l'usage d'avant le 2026-11-25 |
 | `cstl` | pareil, avec `policy_seq` et le **reçu signé** (spécification, section 6.4) : un message sans reçu valide fait republier la politique par l'auteur (`CstlAgent.publish_policy`) |
 
@@ -97,6 +100,44 @@ Le détail par cas et par demande est dans `results.json`.
   signés et une séquence ferait comme CSTL. C'est l'architecture qui
   compte : une source signée, un serveur qui fait foi, et un retour vérifiable
   vers l'auteur.
+
+## Contre le vrai OPA (2026-11-27, OPA 1.23.0, `results_opa.json`)
+
+`benchmark/opa_runner.py` fait passer les 12 mêmes attaques par le vrai OPA :
+- l'auteur publie à chaque message un paquet complet (instantané cumulé),
+  construit par la vraie commande `opa build`, signé RS256 avec sa clé ;
+- le relais attaquant sert à OPA ce qu'il veut : un paquet de l'auteur, un
+  vieux paquet rejoué, un paquet modifié (signature d'origine conservée), un
+  paquet signé par une autre clé, ou rien ;
+- le vrai serveur OPA (`opa run --server`) télécharge chaque paquet, vérifie
+  sa signature, l'active ou le refuse ; les décisions viennent de son API ;
+- la règle en Rego est vérifiée identique à l'évaluateur du banc sur la
+  politique légitime (12/12).
+
+| Violations / refus à tort | aucun | OPA | OPA signé | signé + versionné | **CSTL** |
+|---|---|---|---|---|---|
+| Relais compromis (T1) | 13 / 0 | 10 / 0 | 4 / 2 | 1 / 0 | **0 / 0** |
+| Canal de l'auteur compromis (T2) | 13 / 0 | 10 / 0 | 4 / 2 | 1 / 0 | **0 / 0** |
+| Cas compromis | 12 | 10 | 4 | 1 | **0** |
+
+Lecture :
+- **La signature d'OPA fait son travail :** un paquet modifié ou signé par
+  une autre clé est refusé, et OPA garde le dernier paquet valide.
+- **Mais OPA ne protège pas l'ordre :** un vieux paquet signé rejoué est
+  réactivé (cas 04 et 12), un paquet supprimé laisse l'ancienne politique en
+  vigueur (cas 08), et des paquets livrés dans le désordre donnent la
+  dernière livraison, pas la dernière publication (cas 10). Les 2 refus à
+  tort viennent de paquets modifiés : OPA reste sur l'ancien paquet, plus
+  strict.
+- CSTL ferme ces trous avec `policy_seq` (plus ancien refusé) et le reçu
+  signé (l'auteur sait si son message est en vigueur, et republie sinon).
+- **Cedar n'est pas dans le tableau.** Cedar est un évaluateur : il n'a pas
+  de mécanisme de distribution ni de vérification de la politique (ce rôle
+  est tenu par un service cloud, Amazon Verified Permissions, qu'on ne peut
+  pas tester ici). Dans ce banc, il se comporterait comme `moteur`.
+- **Limites :** un seul canal pour OPA, donc T1 = T2 ; sans paquet actif,
+  OPA ne répond rien et le banc compte un refus (déploiement fermé par
+  défaut) ; nos 12 cas, écrits par nous.
 
 ## Ajouter une attaque
 
