@@ -180,6 +180,7 @@ deterministic Rust code.
 | **Abnormal behavior** | A burst of requests stops the agent automatically. |
 | **Enforcement points** | `cstl-gate` (named SQL, shell and HTTP operations; it alone holds the credentials), `cstl-mcp-proxy` (in front of any MCP server), `cstl-a2a-proxy` (in front of any A2A 1.0 agent, batches included), and `cstl-mcp-server` (CSTL as MCP tools). |
 | **Connector for claude.ai** | `cstl mcp-remote`: the same MCP tools over HTTPS (Streamable HTTP), for claude.ai custom connectors (web and mobile), with a secret token in the URL. Step by step: [`docs/CLAUDE_AI.md`](docs/CLAUDE_AI.md). |
+| **Fewer tokens for tool results** | `cstl mcp-proxy --compact-results`: JSON tool results reach the model as the CSTL indented tree, lossless, only when shorter. −44 % characters on real API responses returned as indented JSON, −77 % on nested data (`scripts/tool_result_compaction.py`). |
 | **Built-in connector** | For your own MCP server or A2A agent (`cstl_connect`): `@guarded("refund_order", amount_arg="amount")` on an MCP tool, or `A2AGuard(app, name="billing")` around an ASGI A2A app. Same checks as the proxies, in the same process, closed by default. |
 
 ### Deliberation (v6, draft)

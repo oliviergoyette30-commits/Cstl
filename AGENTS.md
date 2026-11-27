@@ -520,6 +520,19 @@ the reason and the rule.
   never runs. A badly written schema stops the proxy at start.
 - **Limit:** the schema checks top-level arguments only. Without it, the
   proxy controls which tool is called and with which amount, nothing else.
+- **Fewer tokens** (2026-11-27): `--compact-results` rewrites each tool
+  result that is a JSON document into the CSTL indented tree, with a
+  one-line legend. It does so only when the tree reads back to exactly the
+  same JSON, and is at least 10 % shorter; otherwise the text is left
+  as-is. `structuredContent` is not touched. Measured by
+  `scripts/tool_result_compaction.py`, in characters:
+
+  | Tool result | Before | After |
+  |---|---|---|
+  | Real API responses, indented JSON | 50,716 | 28,231 (−44 %) |
+  | Real API responses, compact JSON | 31,652 | 28,910 (−9 %; 3 of 12 converted) |
+  | Nested data, indented JSON | 114,266 | 25,829 (−77 %) |
+  | Nested data, compact JSON | 50,262 | 25,829 (−49 %) |
 
 Live test: `sdk/python/test_mcp_proxy_live.py`. A test MCP server records
 every tool it actually runs, so the test proves that a forbidden tool is

@@ -1,0 +1,386 @@
+[
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "style": "compact",
+  "before": 3555,
+  "after": 2878,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "style": "indente",
+  "before": 6200,
+  "after": 2878,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "style": "compact",
+  "before": 3181,
+  "after": 2466,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "style": "indente",
+  "before": 5292,
+  "after": 2466,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "style": "compact",
+  "before": 8062,
+  "after": 6712,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "style": "indente",
+  "before": 13933,
+  "after": 6712,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "style": "compact",
+  "before": 1258,
+  "after": 1258,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "style": "indente",
+  "before": 1584,
+  "after": 1278,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "style": "compact",
+  "before": 1610,
+  "after": 1610,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "style": "indente",
+  "before": 2061,
+  "after": 1532,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "style": "compact",
+  "before": 668,
+  "after": 668,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "style": "indente",
+  "before": 859,
+  "after": 738,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "style": "compact",
+  "before": 575,
+  "after": 575,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "style": "indente",
+  "before": 736,
+  "after": 736,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "style": "compact",
+  "before": 2722,
+  "after": 2722,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "style": "indente",
+  "before": 3682,
+  "after": 2564,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "style": "compact",
+  "before": 2632,
+  "after": 2632,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "style": "indente",
+  "before": 3605,
+  "after": 2466,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "style": "compact",
+  "before": 2510,
+  "after": 2510,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "style": "indente",
+  "before": 3445,
+  "after": 2358,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "style": "compact",
+  "before": 1245,
+  "after": 1245,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "style": "indente",
+  "before": 2269,
+  "after": 1210,
+  "converted": true
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "style": "compact",
+  "before": 3634,
+  "after": 3634,
+  "converted": false
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "style": "indente",
+  "before": 7050,
+  "after": 3293,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "style": "compact",
+  "before": 1817,
+  "after": 1021,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "style": "indente",
+  "before": 4123,
+  "after": 1021,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "style": "compact",
+  "before": 1626,
+  "after": 934,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "style": "indente",
+  "before": 3694,
+  "after": 934,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "style": "compact",
+  "before": 5008,
+  "after": 2359,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "style": "indente",
+  "before": 11475,
+  "after": 2359,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "style": "compact",
+  "before": 4790,
+  "after": 2301,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "style": "indente",
+  "before": 10758,
+  "after": 2301,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "style": "compact",
+  "before": 964,
+  "after": 712,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "style": "indente",
+  "before": 2118,
+  "after": 712,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "style": "compact",
+  "before": 1275,
+  "after": 864,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "style": "indente",
+  "before": 2815,
+  "after": 864,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "style": "compact",
+  "before": 2032,
+  "after": 1201,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "style": "indente",
+  "before": 4421,
+  "after": 1201,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "style": "compact",
+  "before": 4352,
+  "after": 2345,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "style": "indente",
+  "before": 9617,
+  "after": 2345,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "style": "compact",
+  "before": 3976,
+  "after": 2066,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "style": "indente",
+  "before": 9212,
+  "after": 2066,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "style": "compact",
+  "before": 4080,
+  "after": 2118,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "style": "indente",
+  "before": 9443,
+  "after": 2118,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "style": "compact",
+  "before": 11010,
+  "after": 5360,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "style": "indente",
+  "before": 25280,
+  "after": 5360,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "style": "compact",
+  "before": 9332,
+  "after": 4548,
+  "converted": true
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "style": "indente",
+  "before": 21310,
+  "after": 4548,
+  "converted": true
+ }
+]

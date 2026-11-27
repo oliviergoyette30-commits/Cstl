@@ -41,7 +41,12 @@ for line in sys.stdin:
         r = {"tools": TOOLS}
     elif m["method"] == "tools/call":
         log.write(json.dumps(m["params"]) + "\n"); log.flush()
-        r = {"content": [{"type": "text", "text": "fait : " + m["params"]["name"]}]}
+        if m["params"]["name"] == "list_orders":
+            orders = [{"id": i, "client": "c%d" % (i % 3), "lines": [{"item": "gpu", "qty": 2}, {"item": "lic", "qty": 1}]}
+                      for i in range(15)]
+            r = {"content": [{"type": "text", "text": json.dumps({"orders": orders}, indent=2)}]}
+        else:
+            r = {"content": [{"type": "text", "text": "fait : " + m["params"]["name"]}]}
     else:
         print(json.dumps({"jsonrpc": "2.0", "id": m["id"], "error": {"code": -32601, "message": "?"}}), flush=True)
         continue
@@ -194,3 +199,23 @@ def test_a_badly_written_args_schema_stops_the_proxy_at_start(cstl):
                        env={**os.environ, "CSTL_AGENT": "x", "CSTL_PORT": str(PORT)}, capture_output=True, text=True,
                        timeout=30)
     assert p.returncode != 0 and "mal ecrit" in p.stderr
+
+
+def test_compact_results_are_lossless_and_shorter(cstl):
+    """--compact-results (2026-11-27) : un resultat d'outil en JSON arrive au
+    client en arbre indente CSTL, plus court, et se relit exactement en ce
+    JSON ; un resultat qui n'est pas du JSON passe tel quel."""
+    import cstl_compact
+    key = (cstl / "cstl_adn.db.server_key.pub").read_text().strip()
+    s = Session(cstl, f"proxy_{uuid.uuid4().hex[:6]}", ["--server-key", key, "--compact-results"])
+    try:
+        text = s.call("list_orders")["content"][0]["text"]
+        assert text.startswith("[CSTL arbre indente"), text[:80]
+        tree = text.split("\n", 1)[1]
+        data = cstl_compact.decode_tree_indented(tree)
+        assert len(data["orders"]) == 15 and data["orders"][4]["lines"][1] == {"item": "lic", "qty": 1}
+        original = json.dumps(data, indent=2)
+        assert len(text) < 0.5 * len(original), (len(text), len(original))
+        assert s.call("read_logs")["content"][0]["text"] == "fait : read_logs", "un texte simple n'est pas touche"
+    finally:
+        s.close()

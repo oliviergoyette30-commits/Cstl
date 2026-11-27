@@ -760,6 +760,31 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - **fait** (2026-11-27) : une vérification indépendante de l'état publié par
     le modérateur (`verify_state`) ;
 
+## Premier essai réel dans claude.ai (2026-11-27)
+
+- **Le serveur CSTL tourne sur Render.** Il est construit depuis
+  `render.yaml` en 4 min 27 s, sur l'offre gratuite. Le connecteur est
+  ajouté dans claude.ai depuis un téléphone.
+- **Claude, dans claude.ai, demande l'autorisation, et le serveur
+  décide :**
+  - `delete_repo` refusé ;
+  - `send_payment` de 30 autorisé, avec un jeton signé ;
+  - `send_payment` de 200 refusé.
+- **Vrai contrôle.** Appelés **directement**, sans demande, les outils
+  gardés (`demo_delete_repo`, `demo_send_payment` de 200) ont refusé
+  d'eux-mêmes. L'état final le confirme : `prod-db` existe toujours, et un
+  seul paiement est passé.
+- **Corrigé le même jour :**
+  - le 401 sur les adresses inconnues faisait croire à claude.ai que le
+    serveur utilisait OAuth : c'est maintenant un 404 ;
+  - le serveur CSTL restait en vie quand `cstl cloud` était arrêté
+    (SIGTERM) : l'arrêt est maintenant propagé.
+- **Ajouté ensuite :**
+  - de vraies actions GitHub gardées (issues) ;
+  - `--compact-results` dans le proxy MCP. Le point « convertisseur » de la
+    section suivante est donc **fait** pour le proxy ; la mesure en tokens
+    réels reste à faire.
+
 ## À faire : convertisseur de tokens et offre commerciale (2026-11-27)
 
 - **Convertisseur dans le proxy MCP.** Transformer automatiquement le JSON

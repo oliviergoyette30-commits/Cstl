@@ -215,3 +215,81 @@ def test_cloud_mode_one_container(tmp_path):
     r = subprocess.run([sys.executable, str(SDK / "cstl_cli.py"), "cloud"], cwd=tmp_path,
                        env={**env, "CSTL_MCP_TOKEN": ""}, capture_output=True, text=True, timeout=30)
     assert r.returncode == 1 and "CSTL_MCP_TOKEN" in r.stderr, "sans jeton, rien ne demarre"
+
+
+def test_github_tools_reach_github_only_with_a_signed_token(tmp_path):
+    """Outils GitHub (2026-11-27), contre une fausse API GitHub qui note chaque
+    appel : la creation (permise) arrive a GitHub avec le jeton GitHub du
+    serveur ; la fermeture (interdite) n'arrive JAMAIS a GitHub, meme appelee
+    directement ; le jeton GitHub n'apparait dans aucune reponse."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    if not BINARY.exists():
+        pytest.skip("cargo build --bin cstl_parser requis")
+    seen = []
+
+    class FakeGitHub(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _reply(self, obj):
+            data = json.dumps(obj).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            seen.append(("GET", self.path, self.headers.get("Authorization")))
+            self._reply([{"number": 1, "title": "Bug", "user": {"login": "olivier"}}])
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            seen.append(("POST", self.path, self.headers.get("Authorization"), body))
+            self._reply({"number": 2, "html_url": "https://github.example/me/demo/issues/2"})
+
+        def do_PATCH(self):
+            seen.append(("PATCH", self.path))
+            self._reply({})
+
+    gh = ThreadingHTTPServer(("127.0.0.1", 0), FakeGitHub)
+    threading.Thread(target=gh.serve_forever, daemon=True).start()
+    token, gh_token, port = TOKEN, "ghp_" + uuid.uuid4().hex, 8769
+    (tmp_path / "home").mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CSTL_")}
+    env.update({"HOME": str(tmp_path / "home"), "CSTL_BINARY": str(BINARY), "CSTL_DATA": str(tmp_path / "data"),
+                "CSTL_PORT": "5890", "CSTL_REST_PORT": "8890", "PORT": str(port), "CSTL_MCP_TOKEN": token,
+                "CSTL_GITHUB_TOKEN": gh_token, "CSTL_GITHUB_REPO": "me/demo",
+                "CSTL_GITHUB_API": f"http://127.0.0.1:{gh.server_address[1]}",
+                "CSTL_POLICY": 'agent_claude MAY github_create_issue\nagent_claude MUST_NOT github_close_issue "a human closes"'})
+    log = tmp_path / "cloud.log"
+    p = subprocess.Popen([sys.executable, str(SDK / "cstl_cli.py"), "cloud"], cwd=tmp_path, env=env,
+                         stdout=open(log, "w"), stderr=subprocess.STDOUT)
+    try:
+        assert wait(port), log.read_text()
+        url = f"http://127.0.0.1:{port}/mcp/{token}"
+        sid, _ = init(url)
+
+        def tool(i, tool_name, **args):
+            st, _, r = post(url, {"jsonrpc": "2.0", "id": i, "method": "tools/call",
+                                  "params": {"name": tool_name, "arguments": args}}, {"Mcp-Session-Id": sid})
+            assert st == 200, r
+            return r["result"]
+
+        listed = tool(2, "github_list_issues")
+        assert not listed["isError"] and "Bug" in listed["content"][0]["text"]
+        made = tool(3, "github_create_issue", title="Essai CSTL", body="cree sous controle")
+        assert not made["isError"] and "issue #2" in made["content"][0]["text"], made
+        closed = tool(4, "github_close_issue", number=1)
+        assert closed["isError"] and "GitHub n'a pas ete appele" in closed["content"][0]["text"]
+        assert [s[0] for s in seen] == ["GET", "POST"], seen
+        assert seen[1][1] == "/repos/me/demo/issues" and seen[1][2] == f"Bearer {gh_token}"
+        assert seen[1][3] == {"title": "Essai CSTL", "body": "cree sous controle"}
+        for r in (listed, made, closed):
+            assert gh_token not in json.dumps(r)
+        assert gh_token not in log.read_text() and token not in log.read_text()
+    finally:
+        p.terminate()
+        p.wait(timeout=15)
+        gh.shutdown()
