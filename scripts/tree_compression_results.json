@@ -1,0 +1,1422 @@
+[
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "format": "json",
+  "brut": 1817,
+  "gzip": 410,
+  "zstd": 398,
+  "brotli": 343,
+  "zstd_dict": 197
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "format": "json_indent",
+  "brut": 4123,
+  "gzip": 483,
+  "zstd": 463,
+  "brotli": 401,
+  "zstd_dict": 210
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "format": "toon",
+  "brut": 2099,
+  "gzip": 450,
+  "zstd": 425,
+  "brotli": 377,
+  "zstd_dict": 217
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "format": "arbre",
+  "brut": 851,
+  "gzip": 357,
+  "zstd": 362,
+  "brotli": 313,
+  "zstd_dict": 162
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "format": "arbre_n",
+  "brut": 893,
+  "gzip": 365,
+  "zstd": 371,
+  "brotli": 319,
+  "zstd_dict": 174
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_1",
+  "format": "strict",
+  "brut": 2518,
+  "gzip": 417,
+  "zstd": 398,
+  "brotli": 347,
+  "zstd_dict": 201
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "format": "json",
+  "brut": 1626,
+  "gzip": 390,
+  "zstd": 385,
+  "brotli": 330,
+  "zstd_dict": 179
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "format": "json_indent",
+  "brut": 3694,
+  "gzip": 460,
+  "zstd": 442,
+  "brotli": 383,
+  "zstd_dict": 199
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "format": "toon",
+  "brut": 1835,
+  "gzip": 425,
+  "zstd": 409,
+  "brotli": 366,
+  "zstd_dict": 194
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "format": "arbre",
+  "brut": 764,
+  "gzip": 336,
+  "zstd": 341,
+  "brotli": 296,
+  "zstd_dict": 142
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "format": "arbre_n",
+  "brut": 800,
+  "gzip": 345,
+  "zstd": 350,
+  "brotli": 306,
+  "zstd_dict": 156
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_8_2",
+  "format": "strict",
+  "brut": 2250,
+  "gzip": 395,
+  "zstd": 378,
+  "brotli": 337,
+  "zstd_dict": 177
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "format": "json",
+  "brut": 5008,
+  "gzip": 771,
+  "zstd": 730,
+  "brotli": 641,
+  "zstd_dict": 476
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "format": "json_indent",
+  "brut": 11475,
+  "gzip": 890,
+  "zstd": 827,
+  "brotli": 730,
+  "zstd_dict": 520
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "format": "toon",
+  "brut": 6009,
+  "gzip": 831,
+  "zstd": 771,
+  "brotli": 713,
+  "zstd_dict": 533
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "format": "arbre",
+  "brut": 2189,
+  "gzip": 644,
+  "zstd": 633,
+  "brotli": 566,
+  "zstd_dict": 392
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "format": "arbre_n",
+  "brut": 2323,
+  "gzip": 688,
+  "zstd": 664,
+  "brotli": 595,
+  "zstd_dict": 425
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_1",
+  "format": "strict",
+  "brut": 6969,
+  "gzip": 772,
+  "zstd": 727,
+  "brotli": 644,
+  "zstd_dict": 499
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "format": "json",
+  "brut": 4790,
+  "gzip": 760,
+  "zstd": 720,
+  "brotli": 625,
+  "zstd_dict": 461
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "format": "json_indent",
+  "brut": 10758,
+  "gzip": 878,
+  "zstd": 813,
+  "brotli": 718,
+  "zstd_dict": 514
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "format": "toon",
+  "brut": 5476,
+  "gzip": 810,
+  "zstd": 766,
+  "brotli": 685,
+  "zstd_dict": 514
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "format": "arbre",
+  "brut": 2131,
+  "gzip": 644,
+  "zstd": 628,
+  "brotli": 567,
+  "zstd_dict": 376
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "format": "arbre_n",
+  "brut": 2250,
+  "gzip": 663,
+  "zstd": 651,
+  "brotli": 581,
+  "zstd_dict": 416
+ },
+ {
+  "group": "imbrique",
+  "doc": "commandes_24_2",
+  "format": "strict",
+  "brut": 6595,
+  "gzip": 764,
+  "zstd": 715,
+  "brotli": 640,
+  "zstd_dict": 477
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "format": "json",
+  "brut": 964,
+  "gzip": 284,
+  "zstd": 276,
+  "brotli": 238,
+  "zstd_dict": 97
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "format": "json_indent",
+  "brut": 2118,
+  "gzip": 340,
+  "zstd": 323,
+  "brotli": 281,
+  "zstd_dict": 124
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "format": "toon",
+  "brut": 1120,
+  "gzip": 321,
+  "zstd": 311,
+  "brotli": 267,
+  "zstd_dict": 113
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "format": "arbre",
+  "brut": 542,
+  "gzip": 259,
+  "zstd": 255,
+  "brotli": 228,
+  "zstd_dict": 90
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "format": "arbre_n",
+  "brut": 555,
+  "gzip": 260,
+  "zstd": 259,
+  "brotli": 212,
+  "zstd_dict": 97
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_1",
+  "format": "strict",
+  "brut": 1386,
+  "gzip": 291,
+  "zstd": 279,
+  "brotli": 242,
+  "zstd_dict": 101
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "format": "json",
+  "brut": 1275,
+  "gzip": 308,
+  "zstd": 293,
+  "brotli": 258,
+  "zstd_dict": 126
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "format": "json_indent",
+  "brut": 2815,
+  "gzip": 368,
+  "zstd": 348,
+  "brotli": 313,
+  "zstd_dict": 138
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "format": "toon",
+  "brut": 1684,
+  "gzip": 346,
+  "zstd": 328,
+  "brotli": 285,
+  "zstd_dict": 127
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "format": "arbre",
+  "brut": 694,
+  "gzip": 281,
+  "zstd": 276,
+  "brotli": 235,
+  "zstd_dict": 103
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "format": "arbre_n",
+  "brut": 707,
+  "gzip": 286,
+  "zstd": 277,
+  "brotli": 231,
+  "zstd_dict": 111
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_8_2",
+  "format": "strict",
+  "brut": 1863,
+  "gzip": 315,
+  "zstd": 304,
+  "brotli": 263,
+  "zstd_dict": 126
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "format": "json",
+  "brut": 2032,
+  "gzip": 418,
+  "zstd": 383,
+  "brotli": 332,
+  "zstd_dict": 178
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "format": "json_indent",
+  "brut": 4421,
+  "gzip": 489,
+  "zstd": 449,
+  "brotli": 395,
+  "zstd_dict": 220
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "format": "toon",
+  "brut": 2351,
+  "gzip": 472,
+  "zstd": 441,
+  "brotli": 372,
+  "zstd_dict": 212
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "format": "arbre",
+  "brut": 1031,
+  "gzip": 371,
+  "zstd": 364,
+  "brotli": 307,
+  "zstd_dict": 169
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "format": "arbre_n",
+  "brut": 1071,
+  "gzip": 379,
+  "zstd": 376,
+  "brotli": 314,
+  "zstd_dict": 171
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_1",
+  "format": "strict",
+  "brut": 2883,
+  "gzip": 430,
+  "zstd": 390,
+  "brotli": 347,
+  "zstd_dict": 192
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "format": "json",
+  "brut": 4352,
+  "gzip": 620,
+  "zstd": 575,
+  "brotli": 504,
+  "zstd_dict": 333
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "format": "json_indent",
+  "brut": 9617,
+  "gzip": 711,
+  "zstd": 668,
+  "brotli": 580,
+  "zstd_dict": 411
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "format": "toon",
+  "brut": 5444,
+  "gzip": 710,
+  "zstd": 672,
+  "brotli": 581,
+  "zstd_dict": 396
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "format": "arbre",
+  "brut": 2175,
+  "gzip": 551,
+  "zstd": 537,
+  "brotli": 471,
+  "zstd_dict": 296
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "format": "arbre_n",
+  "brut": 2232,
+  "gzip": 567,
+  "zstd": 552,
+  "brotli": 476,
+  "zstd_dict": 324
+ },
+ {
+  "group": "imbrique",
+  "doc": "organisation_24_2",
+  "format": "strict",
+  "brut": 6398,
+  "gzip": 642,
+  "zstd": 599,
+  "brotli": 520,
+  "zstd_dict": 362
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "format": "json",
+  "brut": 3976,
+  "gzip": 614,
+  "zstd": 567,
+  "brotli": 532,
+  "zstd_dict": 315
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "format": "json_indent",
+  "brut": 9212,
+  "gzip": 706,
+  "zstd": 665,
+  "brotli": 602,
+  "zstd_dict": 384
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "format": "toon",
+  "brut": 5308,
+  "gzip": 684,
+  "zstd": 635,
+  "brotli": 590,
+  "zstd_dict": 367
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "format": "arbre",
+  "brut": 1896,
+  "gzip": 543,
+  "zstd": 499,
+  "brotli": 452,
+  "zstd_dict": 283
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "format": "arbre_n",
+  "brut": 1968,
+  "gzip": 557,
+  "zstd": 511,
+  "brotli": 467,
+  "zstd_dict": 292
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_1",
+  "format": "strict",
+  "brut": 5930,
+  "gzip": 622,
+  "zstd": 560,
+  "brotli": 538,
+  "zstd_dict": 338
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "format": "json",
+  "brut": 4080,
+  "gzip": 618,
+  "zstd": 560,
+  "brotli": 529,
+  "zstd_dict": 326
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "format": "json_indent",
+  "brut": 9443,
+  "gzip": 706,
+  "zstd": 654,
+  "brotli": 600,
+  "zstd_dict": 398
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "format": "toon",
+  "brut": 5041,
+  "gzip": 714,
+  "zstd": 666,
+  "brotli": 608,
+  "zstd_dict": 390
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "format": "arbre",
+  "brut": 1948,
+  "gzip": 545,
+  "zstd": 498,
+  "brotli": 460,
+  "zstd_dict": 280
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "format": "arbre_n",
+  "brut": 2023,
+  "gzip": 570,
+  "zstd": 519,
+  "brotli": 483,
+  "zstd_dict": 290
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_8_2",
+  "format": "strict",
+  "brut": 6075,
+  "gzip": 636,
+  "zstd": 572,
+  "brotli": 538,
+  "zstd_dict": 356
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "format": "json",
+  "brut": 11010,
+  "gzip": 1194,
+  "zstd": 1083,
+  "brotli": 1010,
+  "zstd_dict": 818
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "format": "json_indent",
+  "brut": 25280,
+  "gzip": 1349,
+  "zstd": 1228,
+  "brotli": 1140,
+  "zstd_dict": 958
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "format": "toon",
+  "brut": 12941,
+  "gzip": 1392,
+  "zstd": 1280,
+  "brotli": 1206,
+  "zstd_dict": 970
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "format": "arbre",
+  "brut": 5190,
+  "gzip": 1057,
+  "zstd": 972,
+  "brotli": 901,
+  "zstd_dict": 690
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "format": "arbre_n",
+  "brut": 5410,
+  "gzip": 1125,
+  "zstd": 1031,
+  "brotli": 944,
+  "zstd_dict": 747
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_1",
+  "format": "strict",
+  "brut": 16315,
+  "gzip": 1227,
+  "zstd": 1100,
+  "brotli": 1043,
+  "zstd_dict": 854
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "format": "json",
+  "brut": 9332,
+  "gzip": 1037,
+  "zstd": 946,
+  "brotli": 882,
+  "zstd_dict": 696
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "format": "json_indent",
+  "brut": 21310,
+  "gzip": 1169,
+  "zstd": 1084,
+  "brotli": 995,
+  "zstd_dict": 801
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "format": "toon",
+  "brut": 10937,
+  "gzip": 1245,
+  "zstd": 1135,
+  "brotli": 1079,
+  "zstd_dict": 834
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "format": "arbre",
+  "brut": 4378,
+  "gzip": 919,
+  "zstd": 851,
+  "brotli": 785,
+  "zstd_dict": 595
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "format": "arbre_n",
+  "brut": 4574,
+  "gzip": 985,
+  "zstd": 903,
+  "brotli": 820,
+  "zstd_dict": 638
+ },
+ {
+  "group": "imbrique",
+  "doc": "contrats_24_2",
+  "format": "strict",
+  "brut": 13710,
+  "gzip": 1062,
+  "zstd": 959,
+  "brotli": 899,
+  "zstd_dict": 735
+ },
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "format": "json",
+  "brut": 3555,
+  "gzip": 865,
+  "zstd": 851,
+  "brotli": 737,
+  "zstd_dict": 592
+ },
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "format": "json_indent",
+  "brut": 6200,
+  "gzip": 962,
+  "zstd": 929,
+  "brotli": 810,
+  "zstd_dict": 679
+ },
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "format": "arbre",
+  "brut": 2708,
+  "gzip": 839,
+  "zstd": 841,
+  "brotli": 729,
+  "zstd_dict": 578
+ },
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "format": "arbre_n",
+  "brut": 2704,
+  "gzip": 836,
+  "zstd": 839,
+  "brotli": 725,
+  "zstd_dict": 580
+ },
+ {
+  "group": "reel",
+  "doc": "crates_rand",
+  "format": "strict",
+  "brut": 4041,
+  "gzip": 881,
+  "zstd": 867,
+  "brotli": 757,
+  "zstd_dict": 616
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "format": "json",
+  "brut": 3181,
+  "gzip": 711,
+  "zstd": 703,
+  "brotli": 584,
+  "zstd_dict": 460
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "format": "json_indent",
+  "brut": 5292,
+  "gzip": 789,
+  "zstd": 757,
+  "brotli": 642,
+  "zstd_dict": 533
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "format": "toon",
+  "brut": 3331,
+  "gzip": 708,
+  "zstd": 693,
+  "brotli": 591,
+  "zstd_dict": 587
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "format": "arbre",
+  "brut": 2296,
+  "gzip": 691,
+  "zstd": 691,
+  "brotli": 578,
+  "zstd_dict": 411
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "format": "arbre_n",
+  "brut": 2292,
+  "gzip": 688,
+  "zstd": 687,
+  "brotli": 577,
+  "zstd_dict": 410
+ },
+ {
+  "group": "reel",
+  "doc": "crates_serde",
+  "format": "strict",
+  "brut": 3602,
+  "gzip": 714,
+  "zstd": 699,
+  "brotli": 591,
+  "zstd_dict": 518
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "format": "json",
+  "brut": 8062,
+  "gzip": 1063,
+  "zstd": 1012,
+  "brotli": 845,
+  "zstd_dict": 763
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "format": "json_indent",
+  "brut": 13933,
+  "gzip": 1201,
+  "zstd": 1092,
+  "brotli": 934,
+  "zstd_dict": 821
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "format": "arbre",
+  "brut": 6542,
+  "gzip": 1018,
+  "zstd": 985,
+  "brotli": 828,
+  "zstd_dict": 723
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "format": "arbre_n",
+  "brut": 6538,
+  "gzip": 1014,
+  "zstd": 977,
+  "brotli": 824,
+  "zstd_dict": 791
+ },
+ {
+  "group": "reel",
+  "doc": "crates_tokio",
+  "format": "strict",
+  "brut": 8803,
+  "gzip": 1078,
+  "zstd": 1020,
+  "brotli": 863,
+  "zstd_dict": 769
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "format": "json",
+  "brut": 1258,
+  "gzip": 717,
+  "zstd": 721,
+  "brotli": 633,
+  "zstd_dict": 564
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "format": "json_indent",
+  "brut": 1584,
+  "gzip": 761,
+  "zstd": 761,
+  "brotli": 674,
+  "zstd_dict": 664
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "format": "toon",
+  "brut": 1194,
+  "gzip": 709,
+  "zstd": 713,
+  "brotli": 632,
+  "zstd_dict": 543
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "format": "arbre",
+  "brut": 1108,
+  "gzip": 698,
+  "zstd": 705,
+  "brotli": 610,
+  "zstd_dict": 638
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "format": "arbre_n",
+  "brut": 1110,
+  "gzip": 699,
+  "zstd": 705,
+  "brotli": 607,
+  "zstd_dict": 638
+ },
+ {
+  "group": "reel",
+  "doc": "npm_axios",
+  "format": "strict",
+  "brut": 1266,
+  "gzip": 712,
+  "zstd": 718,
+  "brotli": 636,
+  "zstd_dict": 539
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "format": "json",
+  "brut": 1610,
+  "gzip": 765,
+  "zstd": 778,
+  "brotli": 694,
+  "zstd_dict": 614
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "format": "json_indent",
+  "brut": 2061,
+  "gzip": 814,
+  "zstd": 822,
+  "brotli": 734,
+  "zstd_dict": 730
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "format": "toon",
+  "brut": 1461,
+  "gzip": 747,
+  "zstd": 765,
+  "brotli": 685,
+  "zstd_dict": 582
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "format": "arbre",
+  "brut": 1362,
+  "gzip": 735,
+  "zstd": 752,
+  "brotli": 674,
+  "zstd_dict": 700
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "format": "arbre_n",
+  "brut": 1364,
+  "gzip": 734,
+  "zstd": 750,
+  "brotli": 665,
+  "zstd_dict": 698
+ },
+ {
+  "group": "reel",
+  "doc": "npm_express",
+  "format": "strict",
+  "brut": 1635,
+  "gzip": 762,
+  "zstd": 778,
+  "brotli": 696,
+  "zstd_dict": 614
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "format": "json",
+  "brut": 668,
+  "gzip": 423,
+  "zstd": 431,
+  "brotli": 379,
+  "zstd_dict": 268
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "format": "json_indent",
+  "brut": 859,
+  "gzip": 459,
+  "zstd": 463,
+  "brotli": 409,
+  "zstd_dict": 361
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "format": "toon",
+  "brut": 594,
+  "gzip": 411,
+  "zstd": 411,
+  "brotli": 366,
+  "zstd_dict": 261
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "format": "arbre",
+  "brut": 568,
+  "gzip": 406,
+  "zstd": 405,
+  "brotli": 355,
+  "zstd_dict": 338
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "format": "arbre_n",
+  "brut": 570,
+  "gzip": 407,
+  "zstd": 406,
+  "brotli": 356,
+  "zstd_dict": 338
+ },
+ {
+  "group": "reel",
+  "doc": "npm_lodash",
+  "format": "strict",
+  "brut": 667,
+  "gzip": 422,
+  "zstd": 424,
+  "brotli": 392,
+  "zstd_dict": 304
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "format": "json",
+  "brut": 575,
+  "gzip": 386,
+  "zstd": 390,
+  "brotli": 324,
+  "zstd_dict": 245
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "format": "json_indent",
+  "brut": 736,
+  "gzip": 421,
+  "zstd": 424,
+  "brotli": 356,
+  "zstd_dict": 308
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "format": "toon",
+  "brut": 521,
+  "gzip": 374,
+  "zstd": 376,
+  "brotli": 326,
+  "zstd_dict": 198
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "format": "arbre",
+  "brut": 494,
+  "gzip": 369,
+  "zstd": 370,
+  "brotli": 318,
+  "zstd_dict": 208
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "format": "arbre_n",
+  "brut": 496,
+  "gzip": 369,
+  "zstd": 368,
+  "brotli": 322,
+  "zstd_dict": 207
+ },
+ {
+  "group": "reel",
+  "doc": "npm_react",
+  "format": "strict",
+  "brut": 571,
+  "gzip": 385,
+  "zstd": 383,
+  "brotli": 333,
+  "zstd_dict": 254
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "format": "json",
+  "brut": 2722,
+  "gzip": 1096,
+  "zstd": 1105,
+  "brotli": 921,
+  "zstd_dict": 677
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "format": "json_indent",
+  "brut": 3682,
+  "gzip": 1179,
+  "zstd": 1168,
+  "brotli": 989,
+  "zstd_dict": 937
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "format": "toon",
+  "brut": 2590,
+  "gzip": 1122,
+  "zstd": 1125,
+  "brotli": 955,
+  "zstd_dict": 683
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "format": "arbre",
+  "brut": 2394,
+  "gzip": 1091,
+  "zstd": 1094,
+  "brotli": 922,
+  "zstd_dict": 725
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "format": "arbre_n",
+  "brut": 2396,
+  "gzip": 1092,
+  "zstd": 1094,
+  "brotli": 918,
+  "zstd_dict": 728
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_django",
+  "format": "strict",
+  "brut": 2953,
+  "gzip": 1107,
+  "zstd": 1109,
+  "brotli": 928,
+  "zstd_dict": 934
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "format": "json",
+  "brut": 2632,
+  "gzip": 1093,
+  "zstd": 1095,
+  "brotli": 905,
+  "zstd_dict": 668
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "format": "json_indent",
+  "brut": 3605,
+  "gzip": 1178,
+  "zstd": 1168,
+  "brotli": 976,
+  "zstd_dict": 915
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "format": "toon",
+  "brut": 2485,
+  "gzip": 1115,
+  "zstd": 1113,
+  "brotli": 930,
+  "zstd_dict": 678
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "format": "arbre",
+  "brut": 2296,
+  "gzip": 1084,
+  "zstd": 1087,
+  "brotli": 901,
+  "zstd_dict": 712
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "format": "arbre_n",
+  "brut": 2298,
+  "gzip": 1085,
+  "zstd": 1088,
+  "brotli": 892,
+  "zstd_dict": 714
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_flask",
+  "format": "strict",
+  "brut": 2860,
+  "gzip": 1103,
+  "zstd": 1095,
+  "brotli": 925,
+  "zstd_dict": 969
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "format": "json",
+  "brut": 2510,
+  "gzip": 1019,
+  "zstd": 1026,
+  "brotli": 845,
+  "zstd_dict": 619
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "format": "json_indent",
+  "brut": 3445,
+  "gzip": 1093,
+  "zstd": 1094,
+  "brotli": 913,
+  "zstd_dict": 856
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "format": "toon",
+  "brut": 2362,
+  "gzip": 1042,
+  "zstd": 1044,
+  "brotli": 885,
+  "zstd_dict": 613
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "format": "arbre",
+  "brut": 2188,
+  "gzip": 1011,
+  "zstd": 1020,
+  "brotli": 846,
+  "zstd_dict": 665
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "format": "arbre_n",
+  "brut": 2190,
+  "gzip": 1013,
+  "zstd": 1020,
+  "brotli": 842,
+  "zstd_dict": 669
+ },
+ {
+  "group": "reel",
+  "doc": "pypi_requests",
+  "format": "strict",
+  "brut": 2729,
+  "gzip": 1023,
+  "zstd": 1025,
+  "brotli": 870,
+  "zstd_dict": 878
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "format": "json",
+  "brut": 1245,
+  "gzip": 372,
+  "zstd": 373,
+  "brotli": 316,
+  "zstd_dict": 317
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "format": "json_indent",
+  "brut": 2269,
+  "gzip": 440,
+  "zstd": 439,
+  "brotli": 382,
+  "zstd_dict": 383
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "format": "toon",
+  "brut": 1492,
+  "gzip": 408,
+  "zstd": 417,
+  "brotli": 363,
+  "zstd_dict": 368
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "format": "arbre",
+  "brut": 1040,
+  "gzip": 357,
+  "zstd": 358,
+  "brotli": 311,
+  "zstd_dict": 326
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "format": "arbre_n",
+  "brut": 1045,
+  "gzip": 362,
+  "zstd": 364,
+  "brotli": 316,
+  "zstd_dict": 329
+ },
+ {
+  "group": "reel",
+  "doc": "wd_adams",
+  "format": "strict",
+  "brut": 1612,
+  "gzip": 391,
+  "zstd": 395,
+  "brotli": 342,
+  "zstd_dict": 353
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "format": "json",
+  "brut": 3635,
+  "gzip": 634,
+  "zstd": 632,
+  "brotli": 532,
+  "zstd_dict": 565
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "format": "json_indent",
+  "brut": 7051,
+  "gzip": 738,
+  "zstd": 724,
+  "brotli": 625,
+  "zstd_dict": 651
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "format": "toon",
+  "brut": 4078,
+  "gzip": 672,
+  "zstd": 665,
+  "brotli": 587,
+  "zstd_dict": 613
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "format": "arbre",
+  "brut": 3124,
+  "gzip": 617,
+  "zstd": 614,
+  "brotli": 527,
+  "zstd_dict": 571
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "format": "arbre_n",
+  "brut": 3129,
+  "gzip": 622,
+  "zstd": 619,
+  "brotli": 538,
+  "zstd_dict": 576
+ },
+ {
+  "group": "reel",
+  "doc": "wd_paris",
+  "format": "strict",
+  "brut": 4987,
+  "gzip": 656,
+  "zstd": 648,
+  "brotli": 557,
+  "zstd_dict": 600
+ }
+]

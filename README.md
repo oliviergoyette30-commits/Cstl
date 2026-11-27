@@ -269,7 +269,30 @@ Measured on the same 16 real messages (`scripts/compression_benchmark.py`):
 - Uncompressed, the CSTL wire format is 7 % smaller than compact JSON, but
   3 % larger after gzip.
 
-So **compression is not a reason to use CSTL**. The old compression modules
+**The indented tree, compressed** (`scripts/tree_compression_benchmark.py`,
+2026-11-27): the data themselves, not wire messages. Totals in bytes, every
+form read back identical and every compression checked.
+
+| | raw | gzip -9 | zstd -19 | brotli -11 | zstd + trained dictionary |
+|---|---|---|---|---|---|
+| Nested data, JSON compact (12 docs) | 50,262 | 7,424 | 6,916 | 6,224 | 4,202 |
+| Nested data, indented tree | 23,789 | 6,507 | 6,216 | 5,581 | **3,578** |
+| | **−53 %** | **−12 %** | **−10 %** | **−10 %** | **−15 %** |
+| Real API responses, JSON compact (12 docs) | 31,653 | 9,144 | 9,117 | 7,715 | 6,352 |
+| Real API responses, indented tree | 26,120 | 8,916 | 8,922 | 7,599 | 6,595 |
+| | −17 % | −2 % | −2 % | −2 % | +4 % |
+
+- On nested, tabular data, the indented tree **stays 10 to 15 % smaller
+  than JSON after every compressor**. It removes repetition (field names
+  written once, no ids, no brackets) that compressors only partly recover.
+- On irregular real data, the gain almost disappears once compressed, and
+  zstd with a dictionary does slightly better on JSON. That dictionary was
+  trained on only 11 very different documents, so this point is weak.
+- TOON and JSON indented are larger than compact JSON after compression;
+  strict costs 0 to 5 % more.
+
+So **compression alone is not a reason to use CSTL**, except for nested
+tabular data in the indented tree. The old compression modules
 stay in the code, opt-in, and are not part of the control layer. Earlier
 figures for them (such as a "63.81 % compression ratio") are superseded by
 these measurements on real messages.
