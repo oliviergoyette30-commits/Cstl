@@ -15,17 +15,52 @@ record nobody can quietly rewrite.
 > written for you: commands you can run right now, with real outputs.
 
 > *Les relations sont plus importantes que l'information.* —
-> [Principes fondateurs](PRINCIPES.md)
+> [Principes fondateurs](docs/PRINCIPES.md)
 
 ---
 
-## Try it in two minutes
+## Get started
+
+**With Docker** (nothing else to install):
 
 ```bash
-cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 8 commands
-cstl-demo                       # prints "Tout est conforme : 7/7."
+docker compose up -d                                           # builds and starts the server
+docker compose exec cstl cstl demo                             # 7 checks: "Tout est conforme : 7/7."
+docker compose exec -T cstl cstl policy apply - < policy.cstl  # your rules (example below)
+docker compose exec cstl cstl agent add agent_support
+docker compose exec cstl cstl check agent_support refund_order --amount 80
 ```
+
+**Without Docker** (Rust and Python 3.10+):
+
+```bash
+cargo build --release --bin cstl_parser
+pip install ./sdk/python
+cstl init                                  # cstl.json, the policy author's key, an example policy.cstl
+cstl serve                                 # in another terminal; data in ./cstl-data
+cstl policy apply policy.cstl              # signed, and confirmed by a receipt from the server
+cstl agent add agent_support
+cstl check agent_support refund_order --amount 80     # AUTORISE
+cstl check agent_support refund_order --amount 500    # REFUSE, with the rule
+```
+
+A policy file is compact CSTL, one rule per line:
+
+```
+agent_support MAY refund_order <=100
+agent_support MUST_NOT refund_order >100 "above 100: a human decides"
+agent_support MUST_NOT wipe_db "production data"
+```
+
+Everything goes through one command, `cstl`:
+
+| Command | What it does |
+|---|---|
+| `cstl init` / `cstl serve` / `cstl status` | Set up, start, check the server. |
+| `cstl policy apply <file>` / `cstl policy show <agent>` | Publish the rules; see what the server will decide for an agent. |
+| `cstl agent add <name>` / `cstl check <agent> <action>` | Create an agent's key; ask for an authorization as that agent. |
+| `cstl stop [all\|agent:X\|action:Y] [--off]` / `cstl revoke <agent>` | Emergency stop; revoke a stolen key. |
+| `cstl approve`, `cstl gate`, `cstl mcp-proxy`, `cstl a2a-proxy`, `cstl mcp-server`, `cstl witness`, `cstl deliberate`, `cstl demo` | Human approvals, enforcement points, witness, deliberation, demo. |
 
 The demo runs against the real server, in a temporary folder:
 - two agents register;
@@ -362,7 +397,7 @@ a free debate and 700 for a single agent.
   - Python: `sdk/python`, the `cstl` package;
   - TypeScript: `sdk/typescript`, Node 20+, no runtime dependency;
   - Rust: the server crate itself.
-- [`CSTL_SPEC_v5_0.md`](CSTL_SPEC_v5_0.md) is the original language
+- [`docs/CSTL_SPEC_v5_0.md`](docs/CSTL_SPEC_v5_0.md) is the original language
   specification (modalities, uncertainty, provenance).
 
 ## Main settings
@@ -426,7 +461,7 @@ earlier components remain:
 
 Their history, audit notes and measurements are in
 [`docs/HISTORIQUE_README_v5_1.md`](docs/HISTORIQUE_README_v5_1.md) and
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Repository map
 
@@ -439,7 +474,8 @@ Their history, audit notes and measurements are in
 | `conformance/` | Vectors and the black-box server tester. |
 | `benchmark/` | Public attack benchmark and its cases. |
 | `scripts/` | Model benchmarks and format measurements. |
-| `docs/` | Specifications. |
+| `docs/` | Specifications, architecture, pilot guide. |
+| `archive/` | Old reports, experiments and prototypes, kept for reference. Not used by the build. |
 | `tripartite/` | Manual test: ChatGPT, Gemini and Claude talking in CSTL, checked by the real server (`GUIDE.md`, in French). |
 | [`ROADMAP.md`](ROADMAP.md) | What is done, what remains, known weaknesses. |
 

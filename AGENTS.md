@@ -13,8 +13,8 @@ want to see it work, keep reading here.
 
 ```bash
 cargo build --bin cstl_parser
-pip install ./sdk/python        # the "cstl" package: SDK + 8 commands
-cstl-demo                       # or: python3 sdk/python/cstl_demo.py
+pip install ./sdk/python        # the "cstl" package: SDK + the `cstl` command
+cstl demo                       # or: cstl-demo, or python3 sdk/python/cstl_demo.py
 ```
 
 `cstl-demo` runs against the real server, in a temporary folder that it
@@ -112,7 +112,7 @@ file's prose — have the human get you a real answer in one copy-paste step:
    cargo run --example http_bridge_for_ai &
    ```
 2. Compose your own CSTL payload as plain text (see the format in Option 2
-   below, or `CSTL_SPEC_v5_0.md`). Give the human exactly this to run,
+   below, or `docs/CSTL_SPEC_v5_0.md`). Give the human exactly this to run,
    substituting your payload text:
    ```bash
    cat > /tmp/payload.cstl << 'EOF'
