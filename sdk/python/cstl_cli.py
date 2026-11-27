@@ -220,7 +220,7 @@ def cmd_status(args):
     except CliError as e:
         print(f"cle publique   inconnue : {e}")
     owner_key = key_file(cfg["owner"]).is_file()
-    print(f"auteur         {cfg['owner']} : {'cle locale presente' if owner_key else 'pas de cle locale (cstl init)'}")
+    print(f"auteur         {cfg['owner']} : {'cle locale presente' if owner_key else 'pas encore de cle locale (cstl init, ou cstl policy apply la cree)'}")
     if up and owner_key:
         a = registered(agent(cfg, cfg["owner"]))
         with contextlib.redirect_stdout(io.StringIO()):
