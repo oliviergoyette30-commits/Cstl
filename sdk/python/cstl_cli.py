@@ -13,7 +13,7 @@ cstl_cli.py -- la commande unique `cstl` (2026-11-27) : CSTL cle en main.
   cstl revoke <agent>            revoque la cle d'un agent (auteur)
 
 Les commandes existantes restent disponibles sous `cstl <nom>` : demo,
-approve, gate, mcp-proxy, mcp-server, a2a-proxy, witness, deliberate.
+approve, gate, mcp-proxy, mcp-server, mcp-remote, a2a-proxy, witness, deliberate.
 
 Configuration, par ordre de priorite : options, variables d'environnement
 (CSTL_OWNER, CSTL_HOST, CSTL_PORT, CSTL_DATA, CSTL_SERVER_PUBLIC_KEY), puis
@@ -58,6 +58,7 @@ agent_support MUST_NOT wipe_db "production data"
 PASSTHROUGH = {
     "demo": ("cstl_demo", "main"), "approve": ("cstl_approve", "cli"), "gate": ("cstl_gate", "main"),
     "mcp-proxy": ("cstl_mcp_proxy", "cli"), "mcp-server": ("cstl_mcp_server", "cli"),
+    "mcp-remote": ("cstl_mcp_remote", "cli"),
     "a2a-proxy": ("cstl_a2a", "main"), "witness": ("cstl_witness", "main"),
     "deliberate": ("cstl_deliberation", "cli"),
 }
@@ -211,6 +212,57 @@ def cmd_serve(args):
     os.execve(str(binary), [str(binary)], env)
 
 
+def cmd_cloud(args):
+    """Un seul conteneur chez un hebergeur (Render, Fly...) : serveur CSTL en
+    local, politique publiee depuis CSTL_POLICY, puis le connecteur MCP
+    distant sur le port public (PORT). Pour claude.ai : docs/CLAUDE_AI.md."""
+    import time
+    cfg = load_config(args)
+    token = os.environ.get("CSTL_MCP_TOKEN", "")
+    if len(token) < 32:
+        raise CliError("CSTL_MCP_TOKEN manquant ou trop court (32 caracteres au moins) : rien ne demarre")
+    binary = find_binary(args.binary)
+    data = Path(cfg["data"]).resolve()
+    data.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env.update({"CSTL_PORT": str(cfg["port"]), "CSTL_BIND_HOST": "127.0.0.1"})
+    env.setdefault("CSTL_POLICY_AUTHORS", cfg["owner"])
+    env.setdefault("CSTL_KB_VERIFY", "off")
+    server = __import__("subprocess").Popen([str(binary)], cwd=data, env=env)
+    for _ in range(240):
+        if reachable(cfg):
+            break
+        if server.poll() is not None:
+            raise CliError(f"le serveur CSTL s'est arrete (code {server.returncode})")
+        time.sleep(0.25)
+    else:
+        server.terminate()
+        raise CliError("le serveur CSTL ne repond pas")
+    policy = os.environ.get("CSTL_POLICY", "").replace("\\n", "\n").strip()
+    if policy:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".cstl", delete=False) as f:
+            f.write(policy + "\n")
+        try:
+            rels = read_policy(f.name)
+        finally:
+            os.unlink(f.name)
+        owner = registered(agent(cfg, cfg["owner"], create=True))
+        with contextlib.redirect_stdout(io.StringIO()):
+            owner.publish_policy(rels, server_key(cfg))
+        print(f"politique publiee : {len(rels)} relation(s) par {cfg['owner']}", flush=True)
+    os.environ["CSTL_AGENT"] = os.environ.get("CSTL_MCP_AGENT") or os.environ.get("CSTL_AGENT") or "agent_claude"
+    os.environ["CSTL_HOST"], os.environ["CSTL_PORT"] = cfg["host"], str(cfg["port"])
+    listen = f"0.0.0.0:{os.environ.get('PORT', '8765')}"
+    print(f"connecteur MCP de {os.environ['CSTL_AGENT']} sur {listen} : https://<votre-adresse>/mcp/<CSTL_MCP_TOKEN>",
+          flush=True)
+    import cstl_mcp_remote
+    try:
+        return cstl_mcp_remote.main(["--listen", listen])
+    finally:
+        server.terminate()
+
+
 def cmd_status(args):
     cfg = load_config(args)
     up = reachable(cfg)
@@ -326,6 +378,9 @@ def parser():
     p = sub.add_parser("serve", parents=[common], help="demarre le serveur")
     p.add_argument("--binary", help="chemin de cstl_parser")
     p.set_defaults(fn=cmd_serve)
+    p = sub.add_parser("cloud", parents=[common], help="hebergeur : serveur + politique (CSTL_POLICY) + connecteur MCP distant")
+    p.add_argument("--binary", help="chemin de cstl_parser")
+    p.set_defaults(fn=cmd_cloud)
     p = sub.add_parser("status", parents=[common], help="etat du serveur et de la config")
     p.add_argument("--server-key")
     p.set_defaults(fn=cmd_status)

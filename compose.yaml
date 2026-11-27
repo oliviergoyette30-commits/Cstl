@@ -34,6 +34,27 @@ services:
       - cstl-data:/data
       - cstl-keys:/root/.cstl
 
+  # Connecteur pour claude.ai (facultatif) : docs/CLAUDE_AI.md.
+  #   export CSTL_MCP_TOKEN=$(openssl rand -hex 32)       # gardez-le : il fait partie de l adresse
+  #   docker compose --profile claude up -d
+  # Puis exposez 127.0.0.1:8765 en HTTPS (Caddy, Cloudflare Tunnel).
+  mcp-remote:
+    image: cstl:local
+    profiles: ["claude"]
+    restart: unless-stopped
+    depends_on: [cstl]
+    entrypoint: ["cstl-mcp-remote", "--listen", "0.0.0.0:8765"]
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      CSTL_HOST: cstl
+      CSTL_PORT: "5050"
+      CSTL_AGENT: ${CSTL_MCP_AGENT:-agent_claude}
+      CSTL_MCP_TOKEN: ${CSTL_MCP_TOKEN:-}
+    volumes:
+      - cstl-mcp-keys:/root/.cstl
+
 volumes:
+  cstl-mcp-keys:
   cstl-data:
   cstl-keys:

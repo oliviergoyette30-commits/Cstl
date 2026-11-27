@@ -684,6 +684,24 @@ created in `~/.cstl/`), and `CSTL_HOST` / `CSTL_PORT`. Client config:
 Live test: `test_mcp_server_exposes_policy_and_authorization` in
 `sdk/python/test_action_authorization_live.py`.
 
+**Remote, for claude.ai (2026-11-27).** `sdk/python/cstl_mcp_remote.py`
+(`cstl mcp-remote`) serves the same tools over MCP Streamable HTTP, for
+claude.ai custom connectors and any HTTP MCP client.
+- **Access:** a secret token is required (`CSTL_MCP_TOKEN`, 32 characters
+  or more), in the path (`/mcp/<token>`, the URL you give claude.ai) or as
+  `Authorization: Bearer`.
+- **Refused:** a missing or wrong token (401), and a browser `Origin` other
+  than claude.ai or claude.com (403).
+- **Sessions:** `initialize` opens a session (`Mcp-Session-Id`), and the
+  protocol version is checked. The token is never written to the log.
+- **HTTPS:** use `--tls-cert` / `--tls-key`, or a reverse proxy (Caddy,
+  Cloudflare Tunnel). `compose.yaml` has a `claude` profile.
+- **Step by step:** `docs/CLAUDE_AI.md`.
+- **Limits:** no OAuth (the URL is the secret), one CSTL identity per
+  server.
+
+Live test: `sdk/python/test_mcp_remote_live.py`.
+
 **Conditions the server enforces.** A rule can carry extra attributes,
 which layer 9 checks itself (not just their text):
 
