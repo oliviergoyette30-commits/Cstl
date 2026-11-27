@@ -298,6 +298,23 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - Piste : remplacer les compresseurs maison par zstd avec un
     dictionnaire entraîné, qui vaudrait aussi pour les agents JSON.
 
+- **`scripts/tree_compression_benchmark.py` : l'arbre indenté compressé**
+  (2026-11-27, question d'Olivier). Le banc précédent ne mesurait que le
+  format du fil. Ici, les données elles-mêmes, relues identiques, et chaque
+  compression vérifiée.
+  - Données imbriquées (12 documents) : l'arbre indenté reste plus petit
+    que le JSON compact après tous les compresseurs : −12 % gzip, −10 %
+    zstd, −10 % brotli, −15 % zstd avec dictionnaire entraîné (3 578 contre
+    4 202 octets). Brut : −53 %.
+  - Réponses d'API réelles (12) : −17 % brut, mais seulement −2 % après
+    gzip, zstd ou brotli, et +4 % avec dictionnaire (entraîné sur 11
+    documents très différents : point faible).
+  - TOON et le JSON indenté sont plus gros que le JSON compact une fois
+    compressés ; strict coûte 0 à 5 % de plus.
+  - Conclusion : sur des données imbriquées et tabulaires, l'arbre indenté
+    garde un avantage après compression. Ailleurs, la compression efface
+    la différence.
+
 - **`scripts/format_short_benchmark.py` :** un format abrégé qui n'écrit
   pas ce qui est prévisible (idée d'Olivier). Il n'envoie que l'imprévisible
   : qui, quoi, quelle règle, quel montant. Un programme reconstruit le
