@@ -253,14 +253,24 @@ def cmd_cloud(args):
         print(f"politique publiee : {len(rels)} relation(s) par {cfg['owner']}", flush=True)
     os.environ["CSTL_AGENT"] = os.environ.get("CSTL_MCP_AGENT") or os.environ.get("CSTL_AGENT") or "agent_claude"
     os.environ["CSTL_HOST"], os.environ["CSTL_PORT"] = cfg["host"], str(cfg["port"])
+    os.environ.setdefault("CSTL_SERVER_PUBLIC_KEY", server_key(cfg))   # pour les outils @guarded (demo)
     listen = f"0.0.0.0:{os.environ.get('PORT', '8765')}"
     print(f"connecteur MCP de {os.environ['CSTL_AGENT']} sur {listen} : https://<votre-adresse>/mcp/<CSTL_MCP_TOKEN>",
           flush=True)
+    import signal
     import cstl_mcp_remote
+
+    def stop(*_):                       # SIGTERM de l'hebergeur : arreter aussi le serveur CSTL
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, stop)
     try:
         return cstl_mcp_remote.main(["--listen", listen])
     finally:
         server.terminate()
+        try:
+            server.wait(timeout=10)
+        except Exception:  # noqa: BLE001
+            server.kill()
 
 
 def cmd_status(args):

@@ -12,6 +12,10 @@ services:
         generateValue: true
       - key: CSTL_MCP_AGENT
         value: agent_claude
+      # Outils de demonstration du vrai controle (faux depots et paiements,
+      # proteges par @guarded) : retirez cette ligne pour un vrai usage.
+      - key: CSTL_DEMO_TOOLS
+        value: "1"
       - key: CSTL_POLICY
         value: |
           agent_claude MAY read_issues
