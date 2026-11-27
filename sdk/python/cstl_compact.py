@@ -928,7 +928,7 @@ def tree_hash(rels, tree_id):
     return "sha256:" + hashlib.sha256(body.encode()).hexdigest()
 
 
-def tree_to_relations(data, tree_id, source=None):
+def tree_to_relations(data, tree_id, source=None, nonce=None):
     """Document JSON -> relations CSTL, toutes marquees tree=<tree_id>. Les
     listes d'objets deviennent des relations (une par objet) ; le reste de la
     racine (champs simples, liste d'objets en racine, valeur seule) part dans
@@ -960,6 +960,12 @@ def tree_to_relations(data, tree_id, source=None):
         if not _NAME_OK.match(str(source)):
             raise CompactError(f"nom de source invalide : {source!r}")
         rel["tree_source"] = str(source)
+    if nonce is not None:
+        # Sel de l'engagement (2026-11-23) : sans lui, l'empreinte d'un petit
+        # document se devine en essayant les contenus plausibles.
+        if not re.fullmatch(r"[0-9a-f]{32,128}", str(nonce)):
+            raise CompactError("nonce : 32 a 128 chiffres hexadecimaux")
+        rel["tree_nonce"] = str(nonce)
     types = []
     for k, v in extra.items():
         name = _field_name(k)
@@ -1016,7 +1022,7 @@ def relations_to_tree(rels, tree_id=None):
         o = {"id": r["subject"]} if r.get("tree_id") == "1" else {}
         for k, v in r.items():
             if k in ("type", "subject", "object", "tree", "tree_id", "tree_types", "tree_kind", "tree_n", "tree_source",
-                     "block") or k.startswith(("tree_c", "tree_t")):
+                     "tree_nonce", "block") or k.startswith(("tree_c", "tree_t")):
                 continue
             o[_unfield(k)] = _get_wire(r, k, types.get(k))
         if r.get("tree_kind"):
@@ -1066,10 +1072,30 @@ _TREE2_HEAD = re.compile(r"^@([A-Za-z_][A-Za-z0-9_.]*)(?:\[(\d+)\])?(?:\^([A-Za-
 
 
 def _raw_tokens(line):
-    """Mots d'une ligne, guillemets compris (pour relire « nom=valeur »)."""
-    out, cur, quoted, i = [], [], False, 0
+    """Mots d'une ligne, guillemets compris (pour relire « nom=valeur »).
+
+    Une valeur en ligne ([...], {...}, ?{...}) peut contenir des espaces autour
+    de sa ponctuation : `{"a": 1, "b": [1, 2]}` est un seul mot (2026-11-24) --
+    du JSON pur est donc toujours une valeur en ligne valide. Un espace ailleurs
+    dans une valeur en ligne (`[hello world]`) est une erreur, pas un mot
+    recolle en silence."""
+    out, cur, quoted, depth, i = [], [], False, 0, 0
     while i < len(line):
         ch = line[i]
+        if depth and not quoted and ch.isspace():
+            prev = next((c for c in reversed(cur) if not c.isspace()), "")
+            j = i
+            while j < len(line) and line[j].isspace():
+                j += 1
+            nxt = line[j] if j < len(line) else ""
+            if prev in "[{,:" or nxt in "]},:":
+                i = j
+                continue
+            raise CompactError(f"espace dans une valeur en ligne (mettre le texte entre guillemets) : {line!r}")
+        if not quoted and ch in "[{" and (depth or not cur or cur[-1] in "=?"):
+            depth += 1
+        elif not quoted and ch in "]}" and depth:
+            depth -= 1
         if quoted:
             cur.append(ch)
             if ch == "\\" and i + 1 < len(line):
@@ -1541,6 +1567,14 @@ def decode_tree_indented(text, lenient=False, warnings=None):
         if not lenient and len(toks) < len(cols):
             raise CompactError(f"ligne {n} : {key} attend {len(cols)} valeurs")
         npos = next((j for j, t in enumerate(toks) if _is_named(t)), len(toks)) if lenient else len(cols)
+        named = {_inamed(t)[0] for t in toks[npos:] if _is_named(t)} if lenient else set()
+        if lenient and [c for c in cols[npos:] if c not in named] and warnings is not None:
+            # Colonnes manquantes acceptees, mais jamais en silence (2026-11-24) :
+            # un enfant oublie de l'indentation se lit aussi comme un parent a
+            # qui il manque des colonnes (vu dans une critique ecrite par un
+            # modele). L'avertissement nomme la ligne a verifier.
+            warnings.append(f"ligne {n} : {key} sans {', '.join(c for c in cols[npos:] if c not in named)} "
+                            "(colonnes absentes)")
         obj = {}
         fill(obj, toks, cols[:npos], n)
         (stack[-1][1].setdefault(key, []) if stack else root.setdefault(key, [])).append(obj)
@@ -1566,3 +1600,542 @@ def decode_tree_indented(text, lenient=False, warnings=None):
             raise CompactError("« @@list » : seule la liste « _ » est attendue")
         return root.get("_", [])
     return root
+
+
+# ------------------------------------------------- CSTL polymorphe (2026-11-24)
+# CSTL a plusieurs formes, chacune bonne pour un type de donnees :
+#   complet    RELATION [type=..., ...]          le format filaire du serveur
+#   lignes     REL / ROLE / FACT, une par ligne   relations, avec mots-cles
+#   tableau    ROLES[N] / FACTS[N] / RULES[N]     relations regulieres
+#   symboles   bot !refund >100, @role, fait=1    politiques : le plus court
+#   arbre      @liste^parent: colonnes, indente   documents imbriques
+#   arbre_n    le meme, avec /N en fin de ligne   documents lus par un modele
+#   arbre_ids  liste[N]#^: avec ids de parents    documents (ancienne forme)
+# Le CSTL polymorphe essaie TOUTES les formes capables de representer les
+# donnees, garde celles qui se relisent a l'identique, et prend la moins
+# chere en tokens. Le texte commence par « #cstl <forme> » : le lecteur sait
+# quelle forme lire, sans rien deviner.
+
+_TOKEN_RE = re.compile(r" ?[A-Za-z]+| ?\d{1,3}|[^\sA-Za-z\d]+|\s+")
+
+FORMS_RELATIONS = ("complet", "lignes", "tableau", "symboles")
+# « strict » (2026-11-25, ancien nom « objets_json ») : la structure CSTL
+# indentee « cle: valeur », chaque valeur ecrite en JSON. C'est la forme que
+# les modeles ecrivent sans erreur aujourd'hui (48/48 sur donnees reelles),
+# parce qu'ils connaissent deja les valeurs JSON. Elle reste la forme d'ecriture
+# des modeles jusqu'a ce qu'ils soient entraines sur les formes CSTL plus
+# compactes (arbre, relationnel, mixte) ; elle ressemble a un sous-ensemble du
+# YAML, sans ses pieges (no -> false, 1.10 -> 1.1). `#cstl objets_json` reste lu.
+FORMS_DOCUMENT = ("arbre", "arbre_n", "arbre_ids", "objets", "strict")
+
+# FIABILITE MESUREE (2026-11-24) de chaque forme, par sorte de donnees et par
+# tache, quand un MODELE lit ou ecrit : (reussites, essais), sur les memes
+# modeles et les memes donnees pour toutes les formes d'une meme ligne.
+# Sources : docs/BENCHMARK_CSTL.md, scripts/*_results / *_benchmark_*.json.
+# Une forme absente d'une ligne n'a pas ete mesuree pour cette tache : elle ne
+# sera choisie que si aucune forme mesuree ne represente les donnees.
+RELIABILITY = {
+    # 12 politiques (10 a 60 regles, roles, faits, conditions), GPT-5 mini,
+    # Claude Haiku 5.5, Llama 4 Maverick, Mistral Medium 3.5 ; lecture : toute
+    # la politique juste ; ecriture : politique exacte (format_short_benchmark,
+    # compact_writing_benchmark).
+    ("relations", "lire"): {"lignes": (26, 48), "symboles": (25, 48), "complet": (22, 48), "tableau": (18, 48)},
+    ("relations", "ecrire"): {"complet": (24, 48), "symboles": (21, 48), "lignes": (17, 48), "tableau": (15, 48)},
+    # Donnees tabulaires imbriquees : lecture sur les 4 modeles ou les deux
+    # formes d'arbre ont ete posees (Llama, Mistral, Flash-Lite, GPT-5 mini).
+    # L'arbre par ids n'a ete mesure QUE sur Gemma 4 31B (31/36 contre 36/36
+    # pour l'arbre) : ramene a la meme base que les autres par ce rapport
+    # (99/144 x 31/36 = 85/144). Ne jamais comparer des taux mesures sur des
+    # modeles differents.
+    ("tabulaire", "lire"): {"arbre_n": (108, 144), "arbre": (99, 144), "arbre_ids": (85, 144)},
+    # Ecriture stricte : arbre_n sur 10 modeles (107/120). Arbre a comptes en
+    # tete mesure sur Gemma seulement (9/12 contre 12/12 pour arbre_n) : ramene
+    # par ce rapport (107 x 9/12 = 80/120).
+    ("tabulaire", "ecrire"): {"arbre_n": (107, 120), "arbre": (80, 120)},
+    # Donnees irregulieres (12 reponses d'API reelles) : ecriture sur GPT-5
+    # mini, Claude Haiku, Llama 4, Mistral (real_data_benchmark). Lecture :
+    # arbre a egalite avec JSON, questions trop faciles (effet plafond).
+    # mixte (tables a cellules JSON) : 37/48 -- les tables ou un champ manque
+    # dans certains elements sont mal remplies (valeurs decalees).
+    # relationnel : 40/48 (v1 mesuree ; v2 36/48 mesuree, 40/48 relue avec le
+    # lecteur qui accepte les cles a espaces). Echecs restants : du contenu
+    # (champs inventes ou omis, elements manquants), pas de la syntaxe.
+    ("irregulier", "ecrire"): {"strict": (48, 48), "relationnel": (40, 48), "mixte": (37, 48),
+                               "objets": (29, 48), "arbre_n": (25, 48)},
+    ("irregulier", "lire"): {"arbre": (75 * 7 - 6, 75 * 7), "arbre_n": (75 * 7 - 8, 75 * 7)},
+}
+
+
+def estimate_tokens(text):
+    """Estimation des tokens d'un texte, proche des tokenizers BPE : mots,
+    nombres par groupes de 3 chiffres, ponctuation par suites, espaces par
+    suites. Sur les bancs d'essai, elle donne -46 % / -6 % la ou les 6
+    tokenizers mesures donnent -39 a -49 % / -8 a -13 % (arbre contre JSON)."""
+    return len(_TOKEN_RE.findall(text))
+
+
+def _is_relations(data):
+    return (isinstance(data, list) and data and all(
+        isinstance(r, dict) and all(isinstance(r.get(k), str) for k in ("type", "subject", "object"))
+        and all(isinstance(v, str) for v in r.values()) for r in data))
+
+
+def _encode_full(rels):
+    import cstl_client
+    return "".join(cstl_client._format_kv_block("RELATION", r) for r in rels).rstrip("\n")
+
+
+def _decode_full(text):
+    import cstl_client
+    return [{k: v for k, v in r.items() if k != "block"} for r in cstl_client.parse_response(text).relations]
+
+
+_ENCODERS = {
+    "complet": _encode_full,
+    "lignes": lambda r: encode(r),
+    "tableau": lambda r: encode(r, table=True),
+    "symboles": encode_symbols,
+    "arbre": lambda d: encode_tree_indented(d),
+    "arbre_n": lambda d: encode_tree_indented(d, counts="line"),
+    "arbre_ids": encode_tree,
+    "objets": lambda d: encode_objects(d),
+    "strict": lambda d: encode_objects_json(d),
+}
+_DECODERS = {
+    "complet": _decode_full,
+    "lignes": decode, "tableau": decode, "symboles": decode,
+    "arbre": decode_tree_indented, "arbre_n": decode_tree_indented,
+    "arbre_ids": decode_tree,
+    "objets": lambda t: decode_objects(t),
+    "strict": lambda t: decode_objects_json(t),
+    "objets_json": lambda t: decode_objects_json(t),   # ancien nom de « strict »
+}
+
+
+def candidates(data, forms=None):
+    """{forme: texte} pour chaque forme CSTL qui represente ces donnees SANS
+    PERTE (verifie : la forme relue redonne exactement les donnees, ordre
+    compris -- l'ordre des regles compte pour la couche 9)."""
+    pool = forms or (FORMS_RELATIONS + FORMS_DOCUMENT if _is_relations(data) else FORMS_DOCUMENT)
+    out = {}
+    for f in pool:
+        try:
+            text = _ENCODERS[f](data)
+            if _DECODERS[f](text) == data:
+                out[f] = text
+        except Exception:  # noqa: BLE001 -- une forme qui ne sait pas representer ces donnees est ecartee
+            continue
+    return out
+
+
+def data_kind(data):
+    """« relations », « tabulaire » (document dont l'arbre indente fait gagner
+    au moins 25 % de tokens estimes : listes d'objets reguliers) ou
+    « irregulier » (objets, configurations, metadonnees)."""
+    if _is_relations(data):
+        return "relations"
+    try:
+        j = estimate_tokens(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+        t = estimate_tokens(encode_tree_indented(data))
+    except CompactError:
+        return "irregulier"
+    return "tabulaire" if j and (j - t) / j >= 0.25 else "irregulier"
+
+
+def _rate(cell):
+    ok, n = cell
+    return ok / n if n else 0.0
+
+
+def choose_format(data, task=None, forms=None):
+    """La forme CSTL a utiliser pour ces donnees. Renvoie (forme, texte, detail).
+
+    task=None (entre machines) : toutes les formes sans perte sont aussi
+    fiables (decodeurs deterministes) -> la moins chere en tokens.
+    task="lire" ou "ecrire" (un MODELE lit, ou doit ecrire, ces donnees) : la
+    forme la plus FIABLE mesuree pour cette sorte de donnees et cette tache
+    (RELIABILITY) ; a fiabilite egale a 2 points pres, la moins chere. Une forme
+    non mesuree n'est retenue que si aucune forme mesuree ne convient.
+    detail = {"sorte", "tache", "fiabilite": {forme: taux}, "tokens": {forme: n}}."""
+    kind = globals()["data_kind"](data)
+    if forms is None:
+        forms = FORMS_RELATIONS + ("arbre", "arbre_n") if kind == "relations" else FORMS_DOCUMENT
+    cands = candidates(data, forms)
+    if not cands:
+        raise CompactError("aucune forme CSTL ne represente ces donnees sans perte")
+    costs = {f: estimate_tokens(t) for f, t in cands.items()}
+    order = list(_ENCODERS)
+    if task is None:
+        best = min(costs, key=lambda f: (costs[f], order.index(f)))
+        return best, cands[best], {"sorte": kind, "tache": None, "fiabilite": {}, "tokens": costs}
+    if task not in ("lire", "ecrire"):
+        raise CompactError(f"tache inconnue : {task!r} (lire ou ecrire)")
+    table = RELIABILITY.get((kind, task), {})
+    rates = {f: _rate(table[f]) for f in cands if f in table}
+    if rates:
+        top = max(rates.values())
+        pool = [f for f, r in rates.items() if r >= top - 0.02]
+    else:
+        pool = list(cands)
+    best = min(pool, key=lambda f: (costs[f], order.index(f)))
+    return best, cands[best], {"sorte": kind, "tache": task, "fiabilite": rates, "tokens": costs}
+
+
+def encode_auto(data, task=None, forms=None):
+    """CSTL polymorphe : la forme choisie par choose_format, precedee de
+    « #cstl <forme> »."""
+    form, text, _ = choose_format(data, task, forms)
+    return f"#cstl {form}\n{text}"
+
+
+def decode_auto(text, lenient=False, warnings=None):
+    """Relit un texte ecrit par encode_auto (« #cstl <forme> » en tete). Sans
+    cette ligne : arbre indente s'il commence par « @ », format complet s'il
+    contient « RELATION [ »."""
+    # Rien n'est retire apres l'en-tete : la fin du texte peut faire partie
+    # des donnees (dernier message termine par un espace, 2026-11-24).
+    m = re.match(r"\s*#cstl (\w+)\n", text)
+    body = text[m.end():] if m else text.strip()
+    if m:
+        form = m.group(1)
+    elif body.startswith("@"):
+        form = "arbre"
+    elif "RELATION [" in body:
+        form = "complet"
+    else:
+        raise CompactError("forme CSTL inconnue : il manque « #cstl <forme> »")
+    if form not in _DECODERS:
+        raise CompactError(f"forme CSTL inconnue : {form!r}")
+    if form in ("arbre", "arbre_n"):
+        return decode_tree_indented(body, lenient=lenient, warnings=warnings)
+    return _DECODERS[form](body)
+
+
+# ------------------------------------------------- forme « objets » (2026-11-24)
+# Pour les donnees IRREGULIERES riches en objets (configurations, metadonnees,
+# reponses d'API), ou l'arbre indente s'est montre difficile a ecrire pour un
+# modele (GPT-5 mini 5/12, Llama 3/12 sur 12 reponses d'API reelles) : trop de
+# regles propres (@@, ^., nom>, guillemets des objets en ligne). Ici, le moins
+# de regles possible, dans une syntaxe que les modeles connaissent (proche de
+# YAML), mais sans ses ambiguites :
+#   cle: valeur                 une valeur simple (memes regles que les cellules)
+#   cle:                        un objet : ses champs dessous, indentes de 2
+#   cle: [a,b] / {} / []        liste de valeurs, objet ou liste vides : en ligne
+#   cle:                        une liste dont un element n'est pas une valeur
+#     - valeur                    simple : un element par ligne « - » ;
+#     - cle: valeur               un objet : ses champs apres « - », puis
+#       cle2: valeur              alignes dessous
+#   cle: |N                     texte de N lignes, en bloc « | »
+#   cle: ? / ?{...}             valeur inconnue
+# Une cle hors [A-Za-z0-9_.-] s'ecrit en JSON ("docs:dev": ...). Racine : un
+# objet (ses champs), une liste (des « - ») ou « = valeur ».
+
+def _okey(k):
+    """Cle de la forme objets. Le separateur est « : » suivi d'un espace (ou
+    la fin de ligne), comme en YAML : une cle peut contenir « : » (lint:fix,
+    docs:dev), cas frequent dans les vraies API, que les modeles n'entourent
+    pas de guillemets. Entre guillemets seulement si elle est vide, contient
+    « : » suivi d'un espace ou un retour a la ligne, finit par « : », commence
+    par « - », « \" », « ? », « = » ou un espace, ou finit par un espace."""
+    if (not k or ": " in k or "\n" in k or "\r" in k or k.endswith(":") or k[0] in "-\"?= \t"
+            or k[-1] in " \t" or "#" in k):
+        return json.dumps(k, ensure_ascii=False)
+    return k
+
+
+def _osimple(v):
+    """Valeur ecrite sur la ligne de sa cle (sinon : None, en bloc dessous)."""
+    if isinstance(v, dict):
+        return "{}" if not v else (_inline(v) if is_unknown(v) else None)
+    if isinstance(v, list):
+        if not v:
+            return "[]"
+        return _inline(v) if all(_iscalar_out(x) is not None or isinstance(x, str) for x in v) else None
+    return None
+
+
+def encode_objects(data, json_values=False):
+    """Document JSON -> CSTL forme « objets ». Sans perte (decode_objects).
+
+    json_values=True (forme « strict », ex-« objets_json », 2026-11-24) : la meme structure
+    (indentation, cles sans guillemets, ni accolades ni virgules), mais chaque
+    valeur ecrite EXACTEMENT comme en JSON ("texte", 27, false, null, [..]).
+    Les modeles ecrivent les valeurs JSON sans erreur ; les regles de
+    guillemets propres a CSTL etaient la premiere source d'echecs d'ecriture
+    sur des donnees reelles."""
+    lines = []
+    if json_values:
+        def dumps(v):
+            # Valeur inconnue (2026-11-25) : `?` ou `?{"sigma":0.3}`, comme dans
+            # l'arbre indente, au lieu de {"$unknown":{...}}. Jamais ambigu :
+            # aucune valeur JSON ne commence par `?`.
+            if is_unknown(v):
+                return "?" + (json.dumps(v[UNKNOWN], ensure_ascii=False, separators=(",", ":")) if v[UNKNOWN] else "")
+            return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+        def scalar_cell(v, ind):
+            return dumps(v), []
+    else:
+        dumps = None
+
+    def scalar_cell_cstl(v, ind):
+        blocks = []
+        cell = _icell(v, blocks)
+        return cell, [ind + "  " + ("| " + t if t else "|") for part in blocks for t in part]
+
+    if not json_values:
+        scalar_cell = scalar_cell_cstl
+
+    def simple_of(v):
+        if json_values:
+            if isinstance(v, dict) and v and not is_unknown(v):
+                return None
+            if isinstance(v, list) and v and not all(not isinstance(x, (dict, list)) for x in v):
+                return None
+            return dumps(v) if isinstance(v, (dict, list)) else None
+        return _osimple(v)
+
+    def field(k, v, ind):
+        simple = simple_of(v)
+        if simple is not None:
+            lines.append(f"{ind}{_okey(k)}: {simple}")
+        elif isinstance(v, dict):
+            lines.append(f"{ind}{_okey(k)}:")
+            obj(v, ind + "  ")
+        elif isinstance(v, list):
+            lines.append(f"{ind}{_okey(k)}:")
+            items(v, ind + "  ")
+        else:
+            cell, extra = scalar_cell(v, ind)
+            lines.append(f"{ind}{_okey(k)}: {cell}")
+            lines.extend(extra)
+
+    def obj(o, ind):
+        for k, v in o.items():
+            field(k, v, ind)
+
+    def items(seq, ind):
+        for x in seq:
+            if isinstance(x, dict) and x and not is_unknown(x):
+                first = True
+                for k, v in x.items():
+                    if first:
+                        before = len(lines)
+                        field(k, v, ind + "  ")
+                        lines[before] = ind + "- " + lines[before][len(ind) + 2:]
+                        first = False
+                    else:
+                        field(k, v, ind + "  ")
+            elif isinstance(x, list) and x and simple_of(x) is None:
+                lines.append(f"{ind}-")
+                items(x, ind + "  ")
+            else:
+                simple = simple_of(x) if isinstance(x, (dict, list)) else None
+                if simple is not None:
+                    lines.append(f"{ind}- {simple}")
+                else:
+                    cell, extra = scalar_cell(x, ind)
+                    lines.append(f"{ind}- {cell}")
+                    lines.extend(extra)
+
+    if isinstance(data, dict) and data and not (json_values and is_unknown(data)):
+        obj(data, "")
+    elif isinstance(data, list) and data and simple_of(data) is None:
+        items(data, "")
+    else:
+        simple = simple_of(data) if isinstance(data, (dict, list)) else None
+        return "= " + (simple if simple is not None else (dumps(data) if json_values else _inline(data)))
+    return "\n".join(lines)
+
+
+def encode_strict(data):
+    """CSTL strict : alias de encode_objects_json."""
+    return encode_objects_json(data)
+
+
+def decode_strict(text):
+    """CSTL strict : alias de decode_objects_json."""
+    return decode_objects_json(text)
+
+
+def encode_objects_json(data):
+    """Forme « strict » (ex-« objets_json ») : voir encode_objects(json_values=True)."""
+    return encode_objects(data, json_values=True)
+
+
+def decode_objects_json(text):
+    return decode_objects(text, json_values=True)
+
+
+def decode_objects(text, json_values=False):
+    """Inverse de encode_objects. Leve CompactError si une ligne ne colle pas."""
+    _json_values = json_values
+    lines = [ln for ln in text.split("\n")]
+    pos = 0
+
+    def indent(ln):
+        return len(ln) - len(ln.lstrip(" "))
+
+    def value_of(raw, ind, n):
+        """Cellule d'une ligne, plus ses lignes de bloc « | » eventuelles."""
+        nonlocal pos
+        raw = raw.strip()
+        if raw and raw[0] in "[{" and not _json_values:
+            raw = "".join(_raw_tokens(raw))          # [a, b] : espaces apres les virgules permis
+        if _json_values:
+            if raw.startswith("?"):
+                try:
+                    details = json.loads(raw[1:]) if raw[1:].strip() else {}
+                except ValueError as e:
+                    raise CompactError(f"ligne {n} : valeur inconnue illisible : {raw[:60]!r} ({e})") from None
+                if not isinstance(details, dict):
+                    raise CompactError(f"ligne {n} : details d'une valeur inconnue : objet JSON attendu")
+                return unknown(**details)
+            if _IBLOCK.match(raw):
+                pass
+            else:
+                try:
+                    return json.loads(raw)
+                except ValueError as e:
+                    raise CompactError(f"ligne {n} : valeur JSON attendue : {raw[:60]!r} ({e})") from None
+        if raw and raw[0] not in '"[{?|' and len(_raw_tokens(raw)) > 1:
+            # Valeur sans guillemets avec des espaces : toute la fin de ligne est
+            # le texte (comme en YAML). Jamais le premier mot seul en silence.
+            return raw
+        val, blk = _icell_in(raw) if raw else ("", None)
+        if blk is not None:
+            part = []
+            for _ in range(blk):
+                if pos >= len(lines):
+                    raise CompactError(f"ligne {n} : bloc « | » incomplet")
+                body = lines[pos].lstrip(" ")
+                if body == "|":
+                    part.append("")
+                elif body.startswith("| "):
+                    part.append(body[2:])
+                else:
+                    raise CompactError(f"ligne {pos + 1} : ligne de bloc « | » attendue")
+                pos += 1
+            val = "\n".join(part)
+        return val
+
+    def split_key(body, n):
+        if body.startswith('"'):
+            key, j = _parse_inline(body)
+            if not isinstance(key, str) or body[j:j + 1] != ":":
+                raise CompactError(f"ligne {n} : « cle: valeur » attendu")
+            return key, body[j + 1:]
+        m = re.match(r"(.*?):(?: |$)", body)
+        if not m or not m.group(1) or m.group(1)[0] in "-\"?= \t":
+            raise CompactError(f"ligne {n} : « cle: valeur » attendu : {body!r}")
+        return m.group(1), body[m.end():]
+
+    def skip_blank():
+        nonlocal pos
+        while pos < len(lines) and not lines[pos].strip():
+            pos += 1
+
+    def block(ind):
+        """Bloc a l'indentation ind : objet (cle:) ou liste (- )."""
+        skip_blank()
+        if pos >= len(lines) or indent(lines[pos]) != ind:
+            raise CompactError(f"ligne {pos + 1} : bloc indente de {ind} espaces attendu")
+        return items(ind) if lines[pos].lstrip(" ").startswith("-") else obj(ind)
+
+    def obj(ind, first_body=None):
+        nonlocal pos
+        out = {}
+        while True:
+            if first_body is not None:
+                body, n, first_body = first_body, pos, None
+            else:
+                skip_blank()
+                if pos >= len(lines) or indent(lines[pos]) < ind:
+                    return out
+                if indent(lines[pos]) > ind:
+                    raise CompactError(f"ligne {pos + 1} : indentation inattendue")
+                body = lines[pos][ind:]
+                if body.startswith("-"):
+                    return out
+                pos += 1
+                n = pos
+            key, rest = split_key(body, n)
+            if key in out:
+                raise CompactError(f"ligne {n} : cle en double {key!r}")
+            if rest.strip():
+                out[key] = value_of(rest, ind, n)
+            else:
+                out[key] = block(ind + 2)
+
+    def items(ind):
+        nonlocal pos
+        out = []
+        while True:
+            skip_blank()
+            if pos >= len(lines) or indent(lines[pos]) != ind or not lines[pos][ind:].startswith("-"):
+                if pos < len(lines) and lines[pos].strip() and indent(lines[pos]) > ind:
+                    raise CompactError(f"ligne {pos + 1} : indentation inattendue")
+                return out
+            body = lines[pos][ind + 1:]
+            pos += 1
+            n = pos
+            if not body.strip():
+                out.append(block(ind + 2))
+            elif not body.startswith(" "):
+                raise CompactError(f"ligne {n} : « - » suivi d'un espace attendu")
+            else:
+                body = body[1:]
+                # Un champ « cle: valeur » ; une valeur simple non entre guillemets
+                # ne contient jamais d'espace, donc jamais « : ».
+                looks_field = (body.startswith('"') and re.match(r'"(?:[^"\\]|\\.)*":', body)) or \
+                    (body[0] not in '"[{?' and re.match(r"[^ ].*?:(?: |$)", body))
+                if looks_field:
+                    out.append(obj(ind + 2, first_body=body))
+                else:
+                    out.append(value_of(body, ind, n))
+
+    text_body = text.strip("\n")
+    if text_body.startswith("= "):
+        if json_values:
+            return value_of(text_body[2:], 0, 1)
+        val, j = _parse_inline(text_body[2:].strip())
+        return val
+    if not text_body.strip():
+        return {}
+    first = text_body.lstrip(" ")
+    result = items(0) if first.startswith("-") else obj(0)
+    skip_blank()
+    if pos < len(lines):
+        raise CompactError(f"ligne {pos + 1} : texte en trop")
+    return result
+
+
+# ------------------------------------------- formes specialisees (2026-11-24)
+# serie, graphe, conversation, appels, matrice : voir cstl_formes.py. Elles
+# rejoignent le CSTL polymorphe ; une forme qui ne convient pas aux donnees
+# leve CompactError et n'est simplement pas candidate.
+_data_kind_base = data_kind
+
+
+def data_kind(data):  # noqa: F811 -- etend la version de base
+    """Sorte de donnees : relations, appels, conversation, serie, graphe,
+    matrice (quand la forme specialisee les represente sans perte), sinon
+    tabulaire ou irregulier."""
+    if _is_relations(data):
+        return "relations"
+    for form in ("changements", "appels", "conversation", "serie", "graphe", "matrice"):
+        try:
+            text = _ENCODERS[form](data)
+            if _DECODERS[form](text) == data:
+                return form
+        except Exception:  # noqa: BLE001
+            continue
+    return _data_kind_base(data)
+
+
+# Enregistrement des formes specialisees : fait par cstl_formes lui-meme (a la
+# fin de son chargement), quel que soit le module importe en premier.
+try:
+    import cstl_formes  # noqa: E402,F401
+except ImportError:      # cstl_compact seul (ex. fichier tout-en-un) : formes de base uniquement
+    pass

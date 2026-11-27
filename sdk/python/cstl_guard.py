@@ -24,6 +24,7 @@ usage unique (un request_id deja execute est refuse). Le registre d'usage
 est en memoire, ou dans un fichier SQLite (`replay_db=`) pour survivre a un
 redemarrage du systeme vise.
 """
+import os
 import sqlite3
 import threading
 import time
@@ -80,12 +81,24 @@ class AuthorizationToken:
 
 class CstlGuard:
     def __init__(self, server_public_key_hex: str, *, skew: int = 5,
-                 replay_db: Optional[str] = None, clock: Callable[[], float] = time.time):
+                 replay_db: Optional[str] = None, clock: Callable[[], float] = time.time,
+                 online: Optional[tuple] = None, online_timeout: float = 5.0):
+        """`online=(hote, port)` (2026-11-25) : avant d'executer, demander au
+        serveur CSTL si le jeton vaut ENCORE (purpose=token_status). Refus si
+        la cle de l'agent a ete revoquee (`revoked`), si un arret d'urgence le
+        couvre (`stopped`), si le serveur ne le connait pas (`unknown`) ou s'il
+        ne repond pas (`status_unavailable`, ferme par defaut). La reponse est
+        verifiee sous la cle du serveur, avec un nonce neuf."""
         try:
             self._key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(server_public_key_hex.strip()))
         except ValueError as e:
             raise ValueError(f"cle publique du serveur invalide : {e}") from e
         self.skew, self.clock = skew, clock
+        if online is None and os.environ.get("CSTL_GUARD_ONLINE"):
+            # Pour les proxys MCP/A2A et cstl-gate, sans changer leur code.
+            host, _, port = os.environ["CSTL_GUARD_ONLINE"].rpartition(":")
+            online = (host or "127.0.0.1", int(port))
+        self.online, self.online_timeout = online, online_timeout
         self._lock = threading.Lock()
         self._used: set[str] = set()
         self._db = None
@@ -124,6 +137,48 @@ class CstlGuard:
             raise Unauthorized("not_yet_valid")
         if now > token.expires_at + self.skew:
             raise Unauthorized("expired")
+        if self.online is not None:
+            status = self.live_status(token)
+            if status != "valid":
+                raise Unauthorized(status)
+
+    def live_status(self, token: AuthorizationToken) -> str:
+        """Etat du jeton selon le serveur, en direct : valid, expired, revoked,
+        stopped, unknown, ou status_unavailable (pas de reponse signee)."""
+        import secrets
+        import socket
+        nonce = secrets.token_hex(16)
+        text = ("#!CSTL v5.0.0 MODE=A\nMETA [encoder=cstl_guard, produced_by=cstl_guard]\n"
+                f"INTENT_PAYLOAD [purpose=token_status, sender=cstl_guard, receiver=server, "
+                f"audit_hash={token.audit_hash}, nonce={nonce}]\n---END---\n")
+        try:
+            with socket.create_connection(self.online, timeout=self.online_timeout) as s:
+                s.sendall(text.encode())
+                buf = b""
+                while b"---END---" not in buf:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    buf += chunk
+        except OSError:
+            return "status_unavailable"
+        fields = {}
+        for line in buf.decode(errors="replace").splitlines():
+            if line.startswith("INTENT_PAYLOAD ["):
+                for part in line[len("INTENT_PAYLOAD ["):].rstrip("]").split(", "):
+                    k, _, v = part.partition("=")
+                    fields[k.strip()] = v.strip()
+        status = fields.get("status", "")
+        msg = (f"cstl-token-status-v1\naudit_hash={token.audit_hash}\nstatus={status}\n"
+               f"nonce={nonce}\nchecked_at={fields.get('checked_at', '')}")
+        try:
+            if fields.get("purpose") != "token_status" or fields.get("nonce") != nonce \
+                    or fields.get("audit_hash") != token.audit_hash:
+                return "status_unavailable"
+            self._key.verify(bytes.fromhex(fields.get("signature", "")), msg.encode())
+        except (InvalidSignature, ValueError):
+            return "status_unavailable"
+        return status if status in ("valid", "expired", "revoked", "stopped", "unknown") else "status_unavailable"
 
     def _consume(self, token: AuthorizationToken) -> None:
         with self._lock:

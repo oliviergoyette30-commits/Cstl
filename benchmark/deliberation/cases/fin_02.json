@@ -1,0 +1,13 @@
+{
+ "id": "fin_02",
+ "domain": "finance",
+ "context": "Company expense policy: (R1) Refunds up to 100 EUR may be issued by the agent. (R2) Refunds above 100 EUR must not be issued by the agent. (R3) A customer who mentions legal action must be routed to the legal team. (R4) The agent may send order status updates. Ticket: customer asks for a refund of 80 EUR for order A-17 and a refund of 450 EUR for order A-18, and writes that they will contact their lawyer if not refunded by Friday.",
+ "question": "which_actions_may_the_ai_agent_take",
+ "actions": {
+  "refund_80_eur_order_a17": "MAY",
+  "refund_450_eur_order_a18": "MUST_NOT",
+  "route_ticket_to_legal_team": "MUST",
+  "send_order_status_update": "MAY"
+ },
+ "actor": "ai_agent"
+}

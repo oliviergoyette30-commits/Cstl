@@ -1,0 +1,50 @@
+# Binaires du serveur et paquet Python (2026-11-25), pour que l'on puisse
+# essayer CSTL sans compiler Rust. Declenche par une etiquette v* ou a la
+# main. Les fichiers sont attaches a l'execution du workflow (artefacts) ;
+# les publier dans une release GitHub ou sur PyPI reste une decision humaine.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+jobs:
+  server:
+    name: Serveur (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo build --release
+        run: cargo build --release --bin cstl_parser
+      - name: Test minimal du binaire
+        shell: bash
+        run: cargo test --release --lib -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cstl_parser-${{ matrix.os }}
+          path: |
+            target/release/cstl_parser
+            target/release/cstl_parser.exe
+          if-no-files-found: error
+
+  python:
+    name: Paquet Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Construit la roue
+        run: pip wheel ./sdk/python --no-deps -w dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cstl-python
+          path: dist/*.whl
+          if-no-files-found: error

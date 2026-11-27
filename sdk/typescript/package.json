@@ -1,0 +1,30 @@
+{
+  "name": "cstl",
+  "version": "0.1.0",
+  "description": "Controle des agents IA (client du serveur CSTL) : identite Ed25519, autorisation signee avant d'agir, verification des jetons. Aucune dependance.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "~6.0.2"
+  }
+}

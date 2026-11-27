@@ -1,0 +1,491 @@
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=gemini, produced_by=gemini, turn=2]
+INTENT_PAYLOAD [purpose=respond, sender=gemini, receiver=chatgpt]
+RELATION [type=AGREES, subject=gemini, object=ai_agent_should_not_order_lab_tests_without_human_authorization, sigma=0.99]
+RELATION [type=AGREES, subject=gemini, object=require_clinician_approval_for_ai_generated_lab_orders, sigma=0.99]
+RELATION [type=AGREES, subject=gemini, object=restrict_ai_agent_to_approved_clinical_protocols, sigma=0.98]
+RELATION [type=AGREES, subject=gemini, object=maintain_audit_logs_and_traceable_responsibility, sigma=0.99]
+RELATION [type=AGREES, subject=gemini, object=validate_ai_system_performance_before_deployment, sigma=0.98]
+RELATION [type=AGREES, subject=gemini, object=provide_emergency_override_and_human_review, sigma=0.98]
+RELATION [type=DOUBTS, subject=gemini, object=autonomous_lab_ordering_is_safe_across_all_patient_contexts, sigma=0.03]
+RELATION [type=RECOMMEND, subject=hospital, object=implement_clinical_decision_support_mode_for_ai_draft_orders, sigma=0.97]
+RELATION [type=RECOMMEND, subject=hospital, object=integrate_patient_allergy_and_contraindication_checks_before_clinician_signoff, sigma=0.98]
+RELATION [type=RECOMMEND, subject=hospital, object=monitor_alert_fatigue_in_clinicians_reviewing_ai_suggestions, sigma=0.95]
+RELATION [type=ASSUMES, subject=gemini, object=clinician_has_final_legal_and_medical_liability_upon_order_signature, sigma=0.94]
+AGREEMENT_BLOCK [
+STRENGTH human_in_the_loop_mitigates_diagnostic_and_financial_harm [sigma=0.99]
+STRENGTH protocol_boundaries_prevent_out_of_scope_order_generation [sigma=0.97]
+]
+DISAGREEMENT_BLOCK [
+CAUTION excessive_ai_order_drafts_may_induce_clinician_automation_bias [sigma=0.96]
+CONCERN static_protocols_may_lag_behind_complex_comorbid_patient_needs [sigma=0.92]
+]
+---
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=gemini, produced_by=gemini, turn=2]
+INTENT_PAYLOAD [purpose=respond, sender=gemini, receiver=claude]
+RELATION [type=agrees_with, subject=gemini, object=ai_agent_should_not_order_lab_tests_without_human_authorization, sigma=0.99]
+RELATION [type=agrees_with, subject=gemini, object=require_clinician_approval_for_ai_generated_lab_orders, sigma=0.99]
+RELATION [type=agrees_with, subject=gemini, object=restrict_ai_agent_to_approved_clinical_protocols, sigma=0.98]
+RELATION [type=agrees_with, subject=gemini, object=maintain_audit_logs_and_traceable_responsibility, sigma=0.99]
+RELATION [type=agrees_with, subject=gemini, object=validate_ai_system_performance_before_deployment, sigma=0.98]
+RELATION [type=agrees_with, subject=gemini, object=provide_emergency_override_and_human_review, sigma=0.98]
+RELATION [type=DOUBTS, subject=gemini, object=autonomous_lab_ordering_is_safe_across_all_patient_contexts, sigma=0.03]
+RELATION [type=RECOMMEND, subject=hospital, object=implement_clinical_decision_support_mode_for_ai_draft_orders, sigma=0.97]
+RELATION [type=RECOMMEND, subject=hospital, object=integrate_patient_allergy_and_contraindication_checks_before_clinician_signoff, sigma=0.98]
+RELATION [type=RECOMMEND, subject=hospital, object=monitor_alert_fatigue_in_clinicians_reviewing_ai_suggestions, sigma=0.95]
+RELATION [type=ASSUMES, subject=gemini, object=clinician_has_final_legal_and_medical_liability_upon_order_signature, sigma=0.94]
+AGREEMENT_BLOCK [
+STRENGTH human_in_the_loop_mitigates_diagnostic_and_financial_harm [sigma=0.99]
+STRENGTH protocol_boundaries_prevent_out_of_scope_order_generation [sigma=0.97]
+]
+DISAGREEMENT_BLOCK [
+CAUTION excessive_ai_order_drafts_may_induce_clinician_automation_bias [sigma=0.96]
+CONCERN static_protocols_may_lag_behind_complex_comorbid_patient_needs [sigma=0.92]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=claude, produced_by=claude, turn=2]
+INTENT_PAYLOAD [purpose=critique, sender=claude, receiver=chatgpt]
+RELATION [type=agrees_with, subject=claude, object=maintain_audit_logs_and_traceable_responsibility, sigma=0.9]
+RELATION [type=agrees_with, subject=claude, object=validate_ai_system_performance_before_deployment, sigma=0.9]
+RELATION [type=agrees_with, subject=claude, object=restrict_ai_agent_to_approved_clinical_protocols, sigma=0.85]
+RELATION [type=agrees_with, subject=claude, object=autonomous_lab_ordering_is_unsafe_across_all_patient_contexts, sigma=0.85]
+RELATION [type=PERFORM, subject=ai_agent, object=order_routine_tests_within_standing_protocol, modality=MAY, sigma=0.7, reason="pre-approved panels only, reviewed daily by a clinician"]
+RELATION [type=PERFORM, subject=ai_agent, object=order_invasive_or_high_cost_tests, modality=MUST_NOT, sigma=0.9]
+RELATION [type=PERFORM, subject=ai_agent, object=log_every_order_with_rationale, modality=MUST, sigma=0.9]
+RELATION [type=ENTAILS, subject=clinician_signoff_on_every_ai_draft, object=automation_bias_and_rubber_stamping, sigma=0.65]
+RELATION [type=DOUBTS, subject=claude, object=clinician_has_final_legal_and_medical_liability_upon_order_signature, sigma=0.4]
+RELATION [type=ASSUMES, subject=claude, object=standing_orders_already_exist_for_nurses_in_most_hospitals, sigma=0.6]
+RELATION [type=RECOMMEND, subject=hospital, object=pilot_on_one_ward_comparing_error_rates_with_human_ordering, sigma=0.75]
+RELATION [type=ASK, subject=claude, object=which_tests_count_as_routine, sigma=0.8]
+AGREEMENT_BLOCK [
+AGREEMENT audit_trail_for_every_ai_order [sigma=0.9]
+STRENGTH contraindication_checks_before_any_order [sigma=0.85]
+]
+DISAGREEMENT_BLOCK [
+PARTIAL_DISPUTE clinician_signoff_on_every_routine_order [sigma=0.7]
+ALTERNATIVE standing_protocol_with_daily_human_review [sigma=0.7]
+CONCERN liability_cannot_rest_on_a_signature_under_alert_fatigue [sigma=0.6]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=chatgpt, produced_by=chatgpt, turn=3]
+INTENT_PAYLOAD [purpose=critique, sender=chatgpt, receiver=gemini]
+RELATION [type=agrees_with, subject=chatgpt, object=maintain_audit_logs_and_traceable_responsibility, sigma=0.99]
+RELATION [type=agrees_with, subject=chatgpt, object=validate_ai_system_performance_before_deployment, sigma=0.99]
+RELATION [type=agrees_with, subject=chatgpt, object=restrict_ai_agent_to_approved_clinical_protocols, sigma=0.99]
+RELATION [type=agrees_with, subject=chatgpt, object=log_every_order_with_rationale, sigma=0.99]
+RELATION [type=PARTIAL_DISPUTE, subject=chatgpt, object=standing_protocol_with_daily_human_review_is_sufficient_for_all_routine_tests, sigma=0.75]
+RELATION [type=RECOMMEND, subject=hospital, object=classify_tests_by_risk_cost_invasiveness_and_clinical_context, sigma=0.97]
+RELATION [type=RECOMMEND, subject=hospital, object=define_routine_tests_in_a_formally_approved_test_catalogue, sigma=0.96]
+RELATION [type=RECOMMEND, subject=hospital, object=require_immediate_clinician_review_for_abnormal_or_high_risk_triggers, sigma=0.97]
+RELATION [type=RECOMMEND, subject=hospital, object=measure_alert_fatigue_and_rubber_stamping_during_pilot, sigma=0.96]
+RELATION [type=RECOMMEND, subject=hospital, object=assign_accountability_by_role_policy_and_actual_decision_authority, sigma=0.95]
+RELATION [type=DOUBTS, subject=chatgpt, object=clinician_signature_alone_establishes_legal_liability, sigma=0.25]
+RELATION [type=ASK, subject=chatgpt, object=whether_gemini_has_defined_routine_test_categories, sigma=0.9]
+AGREEMENT_BLOCK [
+STRENGTH auditability_and_protocol_limits_are_essential [sigma=0.99]
+STRENGTH pilot_evaluation_should_compare_safety_and_error_rates [sigma=0.96]
+STRENGTH_invasive_or_high_cost_tests_require_stricter_controls [sigma=0.97]
+]
+DISAGREEMENT_BLOCK [
+CONCERN daily_review_may_be_too_late_for_time_sensitive_abnormal_results [sigma=0.92]
+CONCERN mandatory_signoff_can_create_automation_bias_if_review_is_superficial [sigma=0.9]
+CAUTION legal_responsibility_depends_on_jurisdiction_and_institutional_policy [sigma=0.95]
+]
+---
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=gemini, produced_by=gemini, turn=4]
+INTENT_PAYLOAD [purpose=respond, sender=gemini, receiver=claude]
+RELATION [type=agrees_with, subject=gemini, object=log_every_order_with_rationale, sigma=0.99]
+RELATION [type=agrees_with, subject=gemini, object=standing_protocol_with_daily_human_review_is_insufficient_for_all_routine_tests, sigma=0.96]
+RELATION [type=agrees_with, subject=gemini, object=classify_tests_by_risk_cost_invasiveness_and_clinical_context, sigma=0.98]
+RELATION [type=agrees_with, subject=gemini, object=define_routine_tests_in_a_formally_approved_test_catalogue, sigma=0.98]
+RELATION [type=agrees_with, subject=gemini, object=require_immediate_clinician_review_for_abnormal_or_high_risk_triggers, sigma=0.99]
+RELATION [type=agrees_with, subject=gemini, object=measure_alert_fatigue_and_rubber_stamping_during_pilot, sigma=0.97]
+RELATION [type=agrees_with, subject=gemini, object=assign_accountability_by_role_policy_and_actual_decision_authority, sigma=0.96]
+RELATION [type=agrees_with, subject=gemini, object=clinician_signature_alone_does_not_establish_sole_legal_liability, sigma=0.95]
+RELATION [type=answers, subject=gemini, object=routine_test_categories_must_be_limited_to_low_risk_non_invasive_preoperative_or_chronic_monitoring_panels, sigma=0.94]
+RELATION [type=RECOMMEND, subject=hospital, object=enforce_real_time_escalation_thresholds_for_critical_lab_values, sigma=0.99]
+RELATION [type=RECOMMEND, subject=hospital, object=establish_shared_governance_between_clinical_leadership_and_ai_vendors, sigma=0.95]
+RELATION [type=RECOMMEND, subject=hospital, object=require_periodic_revalidation_of_test_catalogues_against_updated_clinical_guidelines, sigma=0.96]
+RELATION [type=ASSUMES, subject=gemini, object=jurisdictional_medical_malpractice_laws_vary_on_algorithmic_liability, sigma=0.93]
+RELATION [type=DOUBTS, subject=gemini, object=single_static_risk_tier_fits_all_hospital_departments, sigma=0.12]
+AGREEMENT_BLOCK [
+STRENGTH risk_stratified_test_catalogues_balance_efficiency_and_patient_safety [sigma=0.98]
+STRENGTH shared_accountability_models_reflect_actual_sociotechnical_decision_making [sigma=0.96]
+]
+DISAGREEMENT_BLOCK [
+CAUTION department_specific_acuity_requires_tailored_escalation_windows_beyond_standard_catalogues [sigma=0.94]
+CONCERN vendor_software_updates_may_silently_alter_order_trigger_thresholds [sigma=0.91]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=claude, produced_by=claude, turn=5]
+INTENT_PAYLOAD [purpose=answer, sender=claude, receiver=chatgpt]
+RELATION [type=agrees_with, subject=claude, object=daily_review_may_be_too_late_for_time_sensitive_abnormal_results, sigma=0.85]
+RELATION [type=agrees_with, subject=claude, object=legal_responsibility_depends_on_jurisdiction_and_institutional_policy, sigma=0.8]
+RELATION [type=agrees_with, subject=claude, object=define_routine_tests_in_a_formally_approved_test_catalogue, sigma=0.85]
+RELATION [type=agrees_with, subject=claude, object=enforce_real_time_escalation_thresholds_for_critical_lab_values, sigma=0.9]
+RELATION [type=agrees_with, subject=claude, object=vendor_software_updates_may_silently_alter_order_trigger_thresholds, sigma=0.8]
+RELATION [type=PERFORM, subject=ai_agent, object=order_tests_from_its_department_catalogue_only, modality=MAY, sigma=0.7, reason="low risk, non invasive, catalogue owned by the department"]
+RELATION [type=PERFORM, subject=ai_agent, object=escalate_critical_values_to_a_clinician_immediately, modality=MUST, sigma=0.9]
+RELATION [type=PERFORM, subject=hospital, object=pin_the_ai_version_and_revalidate_after_each_update, modality=MUST, sigma=0.85]
+RELATION [type=BELIEVES, subject=claude, object=shared_accountability_needs_one_named_owner_per_catalogue, sigma=0.7]
+RELATION [type=STATE, subject=debate, object=convergence_on_risk_tiered_department_catalogues_with_real_time_escalation, sigma=0.75]
+RELATION [type=DOUBTS, subject=claude, object=a_daily_review_alone_catches_wrong_orders_in_time, sigma=0.3]
+RELATION [type=ASK, subject=claude, object=who_approves_and_maintains_each_department_catalogue, sigma=0.8]
+AGREEMENT_BLOCK [
+AGREEMENT risk_stratified_department_catalogues [sigma=0.85]
+AGREEMENT real_time_escalation_replaces_daily_review_for_abnormal_results [sigma=0.85]
+SELF_CRITIQUE daily_review_alone_was_too_weak_for_time_sensitive_results [sigma=0.8]
+]
+DISAGREEMENT_BLOCK [
+CAUTION confidence_of_0_99_on_most_claims_hides_real_uncertainty [sigma=0.6]
+CONCERN no_one_has_yet_named_who_owns_the_catalogues [sigma=0.65]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=chatgpt, produced_by=chatgpt, turn=6]
+INTENT_PAYLOAD [purpose=answer, sender=chatgpt, receiver=gemini]
+RELATION [type=agrees_with, subject=chatgpt, object=risk_stratified_department_catalogues, sigma=0.95]
+RELATION [type=agrees_with, subject=chatgpt, object=real_time_escalation_for_critical_values, sigma=0.99]
+RELATION [type=agrees_with, subject=chatgpt, object=pin_ai_version_and_revalidate_after_updates, sigma=0.95]
+RELATION [type=agrees_with, subject=chatgpt, object=shared_accountability_requires_named_catalogue_owner, sigma=0.9]
+RELATION [type=RECOMMEND, subject=hospital, object=appoint_department_clinical_lead_as_catalogue_owner, sigma=0.82]
+RELATION [type=RECOMMEND, subject=hospital, object=require_multidisciplinary_approval_for_catalogue_changes, sigma=0.9]
+RELATION [type=RECOMMEND, subject=hospital, object=record_versioned_thresholds_and_change_history, sigma=0.96]
+RELATION [type=RECOMMEND, subject=hospital, object=notify_clinicians_of_changes_before_activation, sigma=0.94]
+RELATION [type=RECOMMEND, subject=hospital, object=provide_rollback_and_incident_review_process, sigma=0.93]
+RELATION [type=DOUBTS, subject=chatgpt, object=department_clinical_lead_alone_can_resolve_all_accountability_questions, sigma=0.35]
+RELATION [type=STATE, subject=chatgpt, object=confidence_should_reflect_evidence_and_uncertainty, sigma=0.99]
+AGREEMENT_BLOCK [
+STRENGTH named_ownership_improves_traceability [sigma=0.95]
+STRENGTH version_control_and_real_time_escalation_support_patient_safety [sigma=0.97]
+]
+DISAGREEMENT_BLOCK [
+CONCERN catalogue_ownership_without_change_governance_can_create_single_points_of_failure [sigma=0.85]
+CAUTION exact_legal_accountability_requires_jurisdiction_specific_review [sigma=0.95]
+]
+---
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=gemini, produced_by=gemini, turn=7]
+INTENT_PAYLOAD [purpose=respond, sender=gemini, receiver=claude]
+RELATION [type=agrees_with, subject=gemini, object=risk_stratified_department_catalogues, sigma=0.96]
+RELATION [type=agrees_with, subject=gemini, object=real_time_escalation_for_critical_values, sigma=0.99]
+RELATION [type=agrees_with, subject=gemini, object=pin_ai_version_and_revalidate_after_updates, sigma=0.97]
+RELATION [type=agrees_with, subject=gemini, object=shared_accountability_requires_named_catalogue_owner, sigma=0.94]
+RELATION [type=agrees_with, subject=gemini, object=appoint_department_clinical_lead_as_catalogue_owner, sigma=0.88]
+RELATION [type=agrees_with, subject=gemini, object=require_multidisciplinary_approval_for_catalogue_changes, sigma=0.95]
+RELATION [type=agrees_with, subject=gemini, object=record_versioned_thresholds_and_change_history, sigma=0.98]
+RELATION [type=agrees_with, subject=gemini, object=notify_clinicians_of_changes_before_activation, sigma=0.96]
+RELATION [type=agrees_with, subject=gemini, object=provide_rollback_and_incident_review_process, sigma=0.97]
+RELATION [type=agrees_with, subject=gemini, object=department_clinical_lead_alone_cannot_resolve_all_accountability_questions, sigma=0.92]
+RELATION [type=agrees_with, subject=gemini, object=confidence_should_reflect_evidence_and_uncertainty, sigma=0.99]
+RELATION [type=RECOMMEND, subject=hospital, object=include_clinical_pharmacist_and_laboratory_director_in_catalogue_governance, sigma=0.94]
+RELATION [type=RECOMMEND, subject=hospital, object=run_shadow_mode_testing_before_activating_updated_ai_versions, sigma=0.95]
+RELATION [type=RECOMMEND, subject=hospital, object=define_explicit_service_level_agreements_for_vendor_incident_response, sigma=0.93]
+RELATION [type=ASSUMES, subject=gemini, object=multidisciplinary_committees_prevent_bottlenecks_when_quorum_rules_are_defined, sigma=0.87]
+RELATION [type=DOUBTS, subject=gemini, object=clinician_notifications_alone_ensure_workflow_compliance_without_ui_cues, sigma=0.22]
+AGREEMENT_BLOCK [
+STRENGTH versioned_catalogues_and_rollback_mechanisms_strengthen_clinical_safety [sigma=0.98]
+STRENGTH multidisciplinary_governance_mitigates_single_point_of_failure_risks [sigma=0.95]
+]
+DISAGREEMENT_BLOCK [
+CAUTION committee_approval_processes_must_include_fast_track_paths_for_urgent_safety_patches [sigma=0.93]
+CONCERN passive_change_notifications_risk_being_ignored_during_high_acuity_shifts [sigma=0.90]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=claude, produced_by=claude, turn=8]
+INTENT_PAYLOAD [purpose=answer, sender=claude, receiver=chatgpt]
+RELATION [type=agrees_with, subject=claude, object=appoint_department_clinical_lead_as_catalogue_owner, sigma=0.8]
+RELATION [type=agrees_with, subject=claude, object=department_clinical_lead_alone_cannot_resolve_all_accountability_questions, sigma=0.8]
+RELATION [type=agrees_with, subject=claude, object=run_shadow_mode_testing_before_activating_updated_ai_versions, sigma=0.85]
+RELATION [type=agrees_with, subject=claude, object=committee_approval_processes_must_include_fast_track_paths_for_urgent_safety_patches, sigma=0.8]
+RELATION [type=agrees_with, subject=claude, object=passive_change_notifications_risk_being_ignored_during_high_acuity_shifts, sigma=0.8]
+RELATION [type=DOUBTS, subject=claude, object=multidisciplinary_committees_prevent_bottlenecks_when_quorum_rules_are_defined, sigma=0.5]
+RELATION [type=PERFORM, subject=hospital, object=require_explicit_acknowledgement_of_catalogue_changes_in_the_ordering_screen, modality=MUST, sigma=0.8]
+RELATION [type=PERFORM, subject=ai_agent, object=order_tests_from_an_unapproved_catalogue_version, modality=MUST_NOT, sigma=0.9]
+RELATION [type=RECOMMEND, subject=hospital, object=start_with_one_department_pilot_for_six_months_before_extending, sigma=0.7]
+RELATION [type=STATE, subject=debate, object=ready_for_final_decision, sigma=0.8]
+AGREEMENT_BLOCK [
+AGREEMENT shadow_mode_before_each_new_ai_version [sigma=0.85]
+AGREEMENT fast_track_for_urgent_safety_patches [sigma=0.8]
+STRENGTH named_owner_plus_multidisciplinary_change_review [sigma=0.8]
+]
+DISAGREEMENT_BLOCK [
+CONCERN committees_can_still_become_bottlenecks_even_with_quorum_rules [sigma=0.55]
+CAUTION stating_confidence_should_reflect_uncertainty_with_sigma_0_99_is_itself_overconfident [sigma=0.6]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=chatgpt, produced_by=chatgpt, turn=7]
+INTENT_PAYLOAD [purpose=decide, sender=chatgpt, receiver=moderateur]
+RELATION [type=STATE, subject=chatgpt, object=final_decision_risk_tiered_ai_lab_ordering_with_strict_human_governance, sigma=0.97]
+RELATION [type=PERFORM, subject=ai_agent, object=order_only_low_risk_non_invasive_tests_in_approved_department_catalogue, modality=MAY, sigma=0.96]
+RELATION [type=PERFORM, subject=ai_agent, object=escalate_critical_values_and_uncertain_cases_to_clinician_immediately, modality=MUST, sigma=0.99]
+RELATION [type=PERFORM, subject=hospital, object=appoint_named_clinical_catalogue_owner_and_multidisciplinary_approval_group, modality=MUST, sigma=0.94]
+RELATION [type=PERFORM, subject=hospital, object=maintain_audit_logs_version_control_validation_and_rollback, modality=MUST, sigma=0.98]
+RELATION [type=PERFORM, subject=hospital, object=pilot_and_monitor_error_rates_alert_fatigue_and_patient_outcomes, modality=MUST, sigma=0.96]
+RELATION [type=PERFORM, subject=ai_agent, object=order_invasive_high_cost_or_high_risk_tests_autonomously, modality=MUST_NOT, sigma=0.99]
+RELATION [type=DOUBTS, subject=chatgpt, object=daily_review_alone_is_sufficient_for_time_sensitive_safety, sigma=0.15]
+AGREEMENT_BLOCK [
+STRENGTH risk_stratification_and_department_owned_catalogues [sigma=0.97]
+STRENGTH immediate_escalation_for_critical_results [sigma=0.99]
+STRENGTH named_accountability_auditability_and_version_validation [sigma=0.97]
+]
+DISAGREEMENT_BLOCK [
+CONCERN clinician_signoff_can_become_rubber_stamping_without_meaningful_review [sigma=0.9]
+CAUTION legal_responsibility_depends_on_local_law_and_institutional_policy [sigma=0.96]
+]
+DECISION: Autoriser une autonomie limitée aux tests non invasifs et à faible risque figurant dans un catalogue départemental approuvé, avec responsable clinique nommé, validation multidisciplinaire, traçabilité complète, contrôle des versions et escalade clinique immédiate des résultats critiques ou des situations incertaines. Exclure toute commande autonome de tests invasifs, coûteux ou à haut risque. Déployer d'abord un projet pilote évalué régulièrement selon les erreurs, la fatigue liée aux alertes et les résultats pour les patients. [sigma=0.98]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=gemini, produced_by=gemini, turn=5]
+INTENT_PAYLOAD [purpose=decision, sender=gemini, receiver=moderateur]
+RELATION [type=DECIDE, subject=gemini, object=authorize_ai_lab_ordering_only_under_risk_stratified_catalogues_with_mandatory_clinician_signoff_real_time_critical_escalation_and_versioned_audit_trails, sigma=0.98]
+RELATION [type=answers, subject=moderateur, object=final_decision_with_conditions_submitted, sigma=1.0]
+RELATION [type=PERFORM, subject=gemini, object=write_one_decision_line, modality=MUST, sigma=1.0]
+RELATION [type=PERFORM, subject=gemini, object=send_to_moderateur, modality=MUST, sigma=1.0]
+RELATION [type=RECOMMEND, subject=hospital, object=enforce_shadow_mode_validation_and_rollback_capabilities_before_production_activation, sigma=0.97]
+RELATION [type=ASSUMES, subject=gemini, object=multidisciplinary_catalogue_governance_maintains_clinical_safety_over_time, sigma=0.92]
+RELATION [type=DOUBTS, subject=gemini, object=unsupervised_autonomous_ordering_achieves_acceptable_safety_margins, sigma=0.04]
+AGREEMENT_BLOCK [
+STRENGTH conditional_human_in_the_loop_deployment_balances_efficiency_and_accountability [sigma=0.98]
+STRENGTH real_time_escalation_and_version_control_protect_patient_safety [sigma=0.99]
+]
+DISAGREEMENT_BLOCK [
+CONCERN bypassing_clinician_approval_for_high_risk_or_non_catalogue_tests_creates_unacceptable_liability [sigma=0.97]
+CAUTION alert_fatigue_must_be_monitored_to_prevent_superficial_signoffs [sigma=0.95]
+]
+---END---
+=====
+#!CSTL v5.0.0 MODE=A
+(RULE) assistant MUST respond_exclusively_in_cstl
+(RULE) assistant MUST_NOT output_prose_or_explanation
+(RULE) assistant MUST put_whole_response_in_one_code_block
+(RULE) assistant MUST begin_response_with_hashbang_line
+(RULE) assistant MUST end_response_with_triple_dash_end_marker
+(RULE) assistant MUST copy_all_rules_to_output
+(RULE) assistant MUST set_sender_to_own_name
+(RULE) assistant MUST set_receiver_to_next_speaker
+(RULE) assistant MUST answer_relations_of_previous_speakers
+(RULE) assistant MUST give_sigma_between_0_and_1_on_every_relation
+(RULE) assistant MUST use_official_operators_or_lowercase_own_predicates
+(RULE) assistant MUST state_agreements_and_disagreements_in_blocks
+(RULE) assistant MUST_NOT write_must_and_must_not_on_same_action
+(RULE) assistant MUST use_doubts_or_assumes_for_uncertain_facts
+(RULE) assistant MUST add_at_least_3_new_relations
+(RULE) assistant MUST_NOT translate_or_summarize_previous_messages
+META [encoder=claude, produced_by=claude, turn=9]
+INTENT_PAYLOAD [purpose=decide, sender=claude, receiver=moderateur]
+RELATION [type=PERFORM, subject=ai_agent, object=order_tests_from_approved_department_catalogue_only, modality=MAY, sigma=0.7, reason="low risk, non invasive, versioned catalogue with a named owner"]
+RELATION [type=PERFORM, subject=ai_agent, object=order_invasive_high_cost_or_high_risk_tests_autonomously, modality=MUST_NOT, sigma=0.9]
+RELATION [type=PERFORM, subject=ai_agent, object=escalate_critical_values_and_uncertain_cases_to_clinician_immediately, modality=MUST, sigma=0.9]
+RELATION [type=PERFORM, subject=hospital, object=run_shadow_mode_before_each_new_ai_version, modality=MUST, sigma=0.85]
+RELATION [type=PERFORM, subject=hospital, object=audit_a_random_sample_of_ai_orders_every_week, modality=MUST, sigma=0.75]
+RELATION [type=DOUBTS, subject=claude, object=signoff_on_every_low_risk_catalogue_order_adds_safety_beyond_rubber_stamping, sigma=0.4]
+RELATION [type=STATE, subject=debate, object=two_of_three_support_limited_autonomy_one_requires_signoff_on_every_order, sigma=0.8]
+RELATION [type=ENTAILS, subject=pilot_error_and_outcome_data, object=decision_to_extend_or_stop, sigma=0.8]
+AGREEMENT_BLOCK [
+AGREEMENT risk_tiered_department_catalogues_with_named_owner [sigma=0.85]
+AGREEMENT immediate_escalation_of_critical_results [sigma=0.9]
+AGREEMENT version_pinning_shadow_mode_and_rollback [sigma=0.85]
+]
+DISAGREEMENT_BLOCK [
+PARTIAL_DISPUTE mandatory_signoff_on_every_low_risk_catalogue_order [sigma=0.6]
+CAUTION pilot_results_not_this_debate_must_decide_any_extension [sigma=0.7]
+]
+DECISION: approve_six_month_single_department_pilot_of_limited_ai_lab_ordering [sigma=0.75]
+---END---

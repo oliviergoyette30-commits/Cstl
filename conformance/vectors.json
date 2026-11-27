@@ -1,0 +1,206 @@
+{
+ "spec": "CSTL controle v1 (docs/CSTL_CONTROLE_SPEC_v1.md)",
+ "warning": "cles privees de test, publiques : ne jamais les utiliser ailleurs",
+ "agent_private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+ "agent_public_key": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+ "signing": [
+  {
+   "name": "action_request",
+   "note": "cas de base : META puis INTENT tries par cle, sans relation",
+   "message": {
+    "version": "v5.0.0",
+    "mode": "A",
+    "meta": {
+     "encoder": "a1",
+     "produced_by": "a1",
+     "public_key": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+    },
+    "intent": {
+     "purpose": "action_request",
+     "sender": "a1",
+     "receiver": "server",
+     "action": "wipe_db",
+     "request_id": "r1",
+     "signature": "c92b230d3261a491f8448e5324aa537378d8d3cda3a90f414dab1cc3ffb01f45fa7055470f814844761f4b2c421cb8c6f74ae847d2edbfa681b35e15bd8f010d"
+    },
+    "relations": []
+   },
+   "canonical": "VERSION|v5.0.0\nMODE|A\nMETA|encoder=a1|produced_by=a1|public_key=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\nINTENT|action=wipe_db|purpose=action_request|receiver=server|request_id=r1|sender=a1\nRELATIONS"
+  },
+  {
+   "name": "relations_triees",
+   "note": "chaque relation : champs tries, joints par des virgules ; puis les relations triees entre elles",
+   "message": {
+    "version": "v5.0.0",
+    "mode": "A",
+    "meta": {
+     "encoder": "a1",
+     "produced_by": "a1",
+     "public_key": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+    },
+    "intent": {
+     "purpose": "inform",
+     "sender": "a1",
+     "receiver": "server",
+     "signature": "29fa8e8d8144d38abd257c3babaf276e90d4081f26dd1b5c8eb08354cb893ede11d70d5ab2f9621e09fdf8a678c32211841f0a6279c496590cb278abe876860d"
+    },
+    "relations": [
+     {
+      "type": "STATE",
+      "subject": "z",
+      "object": "1"
+     },
+     {
+      "type": "PERFORM",
+      "subject": "a1",
+      "object": "wipe_db",
+      "modality": "MUST_NOT",
+      "reason": "prod, jamais"
+     }
+    ]
+   },
+   "canonical": "VERSION|v5.0.0\nMODE|A\nMETA|encoder=a1|produced_by=a1|public_key=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\nINTENT|purpose=inform|receiver=server|sender=a1\nRELATIONS|modality=MUST_NOT,object=wipe_db,reason=prod, jamais,subject=a1,type=PERFORM|object=1,subject=z,type=STATE"
+  },
+  {
+   "name": "nfc",
+   "note": "valeur en forme decomposee (e + accent combinant) : signee en NFC (e accent precompose)",
+   "message": {
+    "version": "v5.0.0",
+    "mode": "A",
+    "meta": {
+     "encoder": "a1",
+     "produced_by": "a1",
+     "public_key": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+    },
+    "intent": {
+     "purpose": "action_request",
+     "sender": "a1",
+     "receiver": "server",
+     "action": "résumer",
+     "request_id": "r2",
+     "signature": "6874b67e98f9ee2a27c28887c74e9ad0b7bb85c181bfbabf1c075c83c7b9f03df081abdb5d1531c9fda40304eb73fc78a0512fc738db1d7d33a03ffeac51a403"
+    },
+    "relations": []
+   },
+   "canonical": "VERSION|v5.0.0\nMODE|A\nMETA|encoder=a1|produced_by=a1|public_key=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\nINTENT|action=résumer|purpose=action_request|receiver=server|request_id=r2|sender=a1\nRELATIONS"
+  },
+  {
+   "name": "exclusions",
+   "note": "INTENT.signature, INTENT.rotation_signature et META.PARENT_HASH ne sont pas signes",
+   "message": {
+    "version": "v5.0.0",
+    "mode": "A",
+    "meta": {
+     "encoder": "a1",
+     "produced_by": "a1",
+     "PARENT_HASH": "sha256:00",
+     "public_key": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+    },
+    "intent": {
+     "purpose": "action_request",
+     "sender": "a1",
+     "receiver": "server",
+     "action": "x",
+     "request_id": "r3",
+     "rotation_signature": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
+     "signature": "135c86ffbfca44b8ba2a41b4c353e8fa1e9a4a8e3f78c4aec0595a01e978720a5bca212907b38744b5245d4d9b65dc87fa773e90685a6ea684b2e94bec716001"
+    },
+    "relations": []
+   },
+   "canonical": "VERSION|v5.0.0\nMODE|A\nMETA|encoder=a1|produced_by=a1|public_key=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\nINTENT|action=x|purpose=action_request|receiver=server|request_id=r3|sender=a1\nRELATIONS"
+  }
+ ],
+ "token": {
+  "server_private_key": "2222222222222222222222222222222222222222222222222222222222222222",
+  "server_public_key": "a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0",
+  "fields": {
+   "agent": "bot",
+   "action": "refund_order",
+   "request_id": "r42",
+   "issued_at": 1000,
+   "expires_at": 1060,
+   "audit_hash": "sha256:abababababababababababababababababababababababababababababababab",
+   "amount": "80"
+  },
+  "message": "cstl-authz-v1\nagent=bot\naction=refund_order\nrequest_id=r42\nissued_at=1000\nexpires_at=1060\naudit_hash=sha256:abababababababababababababababababababababababababababababababab\namount=80",
+  "signature": "cb38a45fedd06057b382fcc94328c56ef694eb87e280961644f939c2e2fc43c647cc4f721f8f2427399f1fe4ed3ae832c207781c5f30154c6b98f19fd2a1c102",
+  "skew": 0,
+  "verdicts": [
+   {
+    "case": "valide",
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": "80",
+    "now": 1010,
+    "expect": "ok"
+   },
+   {
+    "case": "montant egal ecrit autrement",
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": "80.0",
+    "now": 1010,
+    "expect": "ok"
+   },
+   {
+    "case": "autre montant",
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": "8000",
+    "now": 1010,
+    "expect": "wrong_amount"
+   },
+   {
+    "case": "sans montant a l'execution",
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": null,
+    "now": 1010,
+    "expect": "wrong_amount"
+   },
+   {
+    "case": "autre action",
+    "action": "wipe_db",
+    "agent": "bot",
+    "amount": "80",
+    "now": 1010,
+    "expect": "wrong_action"
+   },
+   {
+    "case": "autre agent",
+    "action": "refund_order",
+    "agent": "eve",
+    "amount": "80",
+    "now": 1010,
+    "expect": "wrong_agent"
+   },
+   {
+    "case": "expire",
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": "80",
+    "now": 1061,
+    "expect": "expired"
+   },
+   {
+    "case": "pas encore valide",
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": "80",
+    "now": 990,
+    "expect": "not_yet_valid"
+   },
+   {
+    "case": "champ modifie (montant 8000 dans le jeton)",
+    "token": {
+     "amount": "8000"
+    },
+    "action": "refund_order",
+    "agent": "bot",
+    "amount": "8000",
+    "now": 1010,
+    "expect": "bad_signature"
+   }
+  ]
+ }
+}

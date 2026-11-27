@@ -113,6 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     eprintln!("🌐 Starting REST API server on port {rest_port}...");
     eprintln!("   GET /health → health check");
+    eprintln!("   POST /v1/message → message JSON (meme traitement que le fil CSTL)");
     eprintln!("   GET /audit/{{case_id}} → audit trail JSON");
     eprintln!("   POST /audit/query → filter audit by date/entity/action");
     eprintln!("   GET /audit/stats → audit statistics");

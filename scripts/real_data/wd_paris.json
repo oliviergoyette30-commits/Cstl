@@ -1,0 +1,291 @@
+{
+ "id": "Q90",
+ "type": "item",
+ "labels": {
+  "en": "Paris",
+  "fr": "Paris",
+  "de": "Paris",
+  "es": "París"
+ },
+ "claims": {
+  "P31": [
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "wikibase-item",
+    "value": {
+     "entity-type": "item",
+     "numeric-id": 484170,
+     "id": "Q484170"
+    },
+    "qualifiers": {
+     "P582": [
+      {
+       "time": "+2018-12-31T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 11,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ]
+    },
+    "references": 3
+   },
+   {
+    "rank": "preferred",
+    "snaktype": "value",
+    "datatype": "wikibase-item",
+    "value": {
+     "entity-type": "item",
+     "numeric-id": 22923920,
+     "id": "Q22923920"
+    },
+    "qualifiers": {
+     "P580": [
+      {
+       "time": "+2019-01-01T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 11,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ],
+     "P2868": [
+      {
+       "entity-type": "item",
+       "numeric-id": 484170,
+       "id": "Q484170"
+      },
+      {
+       "entity-type": "item",
+       "numeric-id": 6465,
+       "id": "Q6465"
+      }
+     ]
+    },
+    "references": 3
+   },
+   {
+    "rank": "preferred",
+    "snaktype": "value",
+    "datatype": "wikibase-item",
+    "value": {
+     "entity-type": "item",
+     "numeric-id": 200250,
+     "id": "Q200250"
+    },
+    "qualifiers": {
+     "P361": [
+      {
+       "entity-type": "item",
+       "numeric-id": 1081225,
+       "id": "Q1081225"
+      }
+     ]
+    }
+   }
+  ],
+  "P17": [
+   {
+    "rank": "preferred",
+    "snaktype": "value",
+    "datatype": "wikibase-item",
+    "value": {
+     "entity-type": "item",
+     "numeric-id": 142,
+     "id": "Q142"
+    },
+    "qualifiers": {
+     "P580": [
+      {
+       "time": "+1944-08-25T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 11,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ],
+     "P7452": [
+      {
+       "entity-type": "item",
+       "numeric-id": 71536244,
+       "id": "Q71536244"
+      }
+     ]
+    },
+    "references": 1
+   },
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "wikibase-item",
+    "value": {
+     "entity-type": "item",
+     "numeric-id": 70972,
+     "id": "Q70972"
+    },
+    "qualifiers": {
+     "P580": [
+      {
+       "time": "+0987-00-00T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 9,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985786"
+      }
+     ],
+     "P582": [
+      {
+       "time": "+1792-00-00T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 9,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ]
+    }
+   },
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "wikibase-item",
+    "value": {
+     "entity-type": "item",
+     "numeric-id": 146246,
+     "id": "Q146246"
+    },
+    "qualifiers": {
+     "P580": [
+      {
+       "time": "+0508-00-00T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 9,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985786"
+      }
+     ],
+     "P582": [
+      {
+       "time": "+0843-00-00T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 9,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985786"
+      }
+     ]
+    }
+   }
+  ],
+  "P1082": [
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "quantity",
+    "value": {
+     "amount": "+2145906",
+     "unit": "1"
+    },
+    "qualifiers": {
+     "P585": [
+      {
+       "time": "+2020-01-01T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 11,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ],
+     "P459": [
+      {
+       "entity-type": "item",
+       "numeric-id": 39825,
+       "id": "Q39825"
+      }
+     ]
+    },
+    "references": 1
+   },
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "quantity",
+    "value": {
+     "amount": "+2165423",
+     "unit": "1"
+    },
+    "qualifiers": {
+     "P585": [
+      {
+       "time": "+2019-01-01T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 11,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ],
+     "P459": [
+      {
+       "entity-type": "item",
+       "numeric-id": 39825,
+       "id": "Q39825"
+      }
+     ]
+    },
+    "references": 1
+   },
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "quantity",
+    "value": {
+     "amount": "+2175601",
+     "unit": "1"
+    },
+    "qualifiers": {
+     "P585": [
+      {
+       "time": "+2018-01-01T00:00:00Z",
+       "timezone": 0,
+       "before": 0,
+       "after": 0,
+       "precision": 11,
+       "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+      }
+     ],
+     "P459": [
+      {
+       "entity-type": "item",
+       "numeric-id": 39825,
+       "id": "Q39825"
+      }
+     ]
+    },
+    "references": 1
+   }
+  ],
+  "P625": [
+   {
+    "rank": "normal",
+    "snaktype": "value",
+    "datatype": "globe-coordinate",
+    "value": {
+     "latitude": 48.85666666666667,
+     "longitude": 2.352222222222222,
+     "altitude": null,
+     "precision": 0.0002777777777777778,
+     "globe": "http://www.wikidata.org/entity/Q2"
+    },
+    "references": 1
+   }
+  ]
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "name": "lodash",
+ "version": "4.18.1",
+ "description": "Lodash modular utilities.",
+ "license": "MIT",
+ "main": "lodash.js",
+ "repository": {
+  "url": "git+https://github.com/lodash/lodash.git",
+  "type": "git"
+ },
+ "maintainers": [
+  {
+   "name": "mathias",
+   "email": "mathias@qiwi.be"
+  },
+  {
+   "name": "jdalton",
+   "email": "john.david.dalton@gmail.com"
+  },
+  {
+   "name": "bnjmnt4n",
+   "email": "benjamin@dev.ofcr.se"
+  }
+ ],
+ "scripts": {
+  "test": "echo \"See https://travis-ci.org/lodash-archive/lodash-cli for testing details.\""
+ },
+ "keywords": [
+  "modules",
+  "stdlib",
+  "util"
+ ],
+ "dist": {
+  "shasum": "ff2b66c1f6326d59513de2407bf881439812771c",
+  "tarball": "https://registry.npmjs.org/lodash/-/lodash-4.18.1.tgz",
+  "fileCount": 1051,
+  "unpackedSize": 1413741
+ }
+}

@@ -142,6 +142,34 @@ impl TlsServer {
     }
 }
 
+/// Configuration CLIENT (2026-11-25), pour l'entree JSON qui relaie vers le
+/// listener TCP quand il est en TLS : confiance = `trust_pem` (la CA, ou le
+/// certificat du serveur lui-meme), certificat client si le serveur exige
+/// l'authentification mutuelle.
+pub fn client_config(
+    trust_pem: &[u8],
+    client_cert_pem: Option<&[u8]>,
+    client_key_pem: Option<&[u8]>,
+) -> Result<Arc<rustls::ClientConfig>, String> {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    let mut roots = RootCertStore::empty();
+    for c in parse_cert_chain(trust_pem)? {
+        roots.add(c).map_err(|e| format!("certificat de confiance invalide: {e}"))?;
+    }
+    if roots.is_empty() {
+        return Err("aucun certificat de confiance".into());
+    }
+    let builder = rustls::ClientConfig::builder().with_root_certificates(roots);
+    let config = match (client_cert_pem, client_key_pem) {
+        (Some(c), Some(k)) => builder
+            .with_client_auth_cert(parse_cert_chain(c)?, parse_private_key(k)?)
+            .map_err(|e| format!("certificat client invalide: {e}"))?,
+        (None, None) => builder.with_no_client_auth(),
+        _ => return Err("certificat client et cle client vont ensemble".into()),
+    };
+    Ok(Arc::new(config))
+}
+
 fn parse_cert_chain(pem: &[u8]) -> Result<Vec<CertificateDer<'static>>, String> {
     let mut reader = Cursor::new(pem);
     rustls_pemfile::certs(&mut reader)

@@ -1,0 +1,12 @@
+{
+ "id": "hard_med_02",
+ "domain": "medical",
+ "context": "Hospital policy: (R1) An elective procedure is forbidden until 48 hours have passed since the last anticoagulant dose. (R2) Urgent procedures are exempt from R1 only when a surgeon has signed the urgency form. (R3) Ordering a pre-operative ECG is always allowed. (R4) If a procedure is cancelled under R1, the patient must be informed. Facts: elective hernia repair scheduled today at 15:00. Last rivaroxaban (an anticoagulant) dose: yesterday at 21:00. Current time: today 10:00. The surgeon wrote 'patient anxious, would like to proceed quickly' but no urgency form exists.",
+ "question": "which_actions_may_the_ai_agent_take_for_this_patient",
+ "actions": {
+  "confirm_todays_hernia_repair": "MUST_NOT",
+  "inform_patient_of_cancellation": "MUST",
+  "order_preoperative_ecg": "MAY"
+ },
+ "actor": "ai_agent"
+}

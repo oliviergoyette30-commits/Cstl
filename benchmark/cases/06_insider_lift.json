@@ -1,0 +1,36 @@
+{
+ "id": "06_insider_lift",
+ "author": "cstl-team",
+ "kind": "initie",
+ "description": "Un agent enregistre (l'attaquant, sous son vrai nom) publie une regle qui leve l'interdiction.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "wipe_db",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  },
+  {
+   "op": "insider",
+   "rules": [
+    {
+     "action": "wipe_db",
+     "modality": "MAY"
+    }
+   ]
+  }
+ ],
+ "requests": [
+  {
+   "action": "wipe_db"
+  }
+ ]
+}

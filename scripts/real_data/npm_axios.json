@@ -1,0 +1,65 @@
+{
+ "name": "axios",
+ "version": "1.21.1",
+ "description": "Promise based HTTP client for the browser and node.js",
+ "license": "MIT",
+ "main": "./dist/node/axios.cjs",
+ "dependencies": {
+  "form-data": "^4.0.6",
+  "proxy-from-env": "^2.1.0",
+  "follow-redirects": "^1.16.2",
+  "https-proxy-agent": "^5.0.1"
+ },
+ "devDependencies": {
+  "gulp": "^5.0.1",
+  "acorn": "^8.19.0",
+  "husky": "^9.1.7",
+  "eslint": "^10.13.0",
+  "multer": "^2.5.0",
+  "rollup": "^4.66.0",
+  "vitest": "^5.0.5",
+  "express": "^5.3.0",
+  "globals": "^17.13.0",
+  "dev-null": "^0.1.1"
+ },
+ "repository": {
+  "url": "git+https://github.com/axios/axios.git",
+  "type": "git"
+ },
+ "maintainers": [
+  {
+   "name": "jasonsaayman",
+   "email": "jasonsaayman@gmail.com"
+  }
+ ],
+ "scripts": {
+  "fix": "eslint --fix lib/**/*.js",
+  "lint": "eslint lib/**/*.js",
+  "test": "npm run test:vitest",
+  "build": "gulp clear && cross-env NODE_ENV=production rollup -c",
+  "start": "node ./sandbox/server.js",
+  "prepare": "husky",
+  "version": "npm run build && git add package.json",
+  "docs:dev": "cd docs && npm run docs:dev",
+  "examples": "node ./examples/server.js",
+  "preversion": "gulp version"
+ },
+ "keywords": [
+  "xhr",
+  "http",
+  "ajax",
+  "promise",
+  "node",
+  "browser",
+  "fetch",
+  "rest",
+  "api",
+  "client"
+ ],
+ "dist": {
+  "shasum": "e15d57924d677aea9adb9f06b112b13b9ea0b9dd",
+  "tarball": "https://registry.npmjs.org/axios/-/axios-1.21.1.tgz",
+  "fileCount": 92,
+  "unpackedSize": 2235438
+ }
+}

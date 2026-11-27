@@ -89,7 +89,7 @@ import relay_tamper_benchmark as rt  # noqa: E402
 import toon_lite  # noqa: E402
 import cstl_compact  # noqa: E402
 
-FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau", "cstl_symboles", "cstl_arbre", "cstl_indent", "cstl_indent_fin", "cstl_indent_ligne")
+FORMATS = ("json", "toon", "cstl", "cstl_compact", "cstl_tableau", "cstl_symboles", "cstl_arbre", "cstl_indent", "cstl_indent_fin", "cstl_indent_ligne", "cstl_indent_ligne2")
 KINDS = ("commandes", "organisation", "contrats")
 SIZES = (8, 24)
 SEEDS = (1, 2)
@@ -245,7 +245,7 @@ def render(fmt, data):
         return cstl_compact.encode_tree_indented(data)
     if fmt == "cstl_indent_fin":
         return cstl_compact.encode_tree_indented(data, counts="end")
-    if fmt == "cstl_indent_ligne":
+    if fmt in ("cstl_indent_ligne", "cstl_indent_ligne2"):
         return cstl_compact.encode_tree_indented(data, counts="line")
     rels = flatten(data)
     if fmt == "cstl":
@@ -264,7 +264,7 @@ def decode(fmt, text):
         return toon_lite.decode_nested(text)
     if fmt == "cstl_arbre":
         return cstl_compact.decode_tree(text)
-    if fmt in ("cstl_indent", "cstl_indent_fin", "cstl_indent_ligne"):
+    if fmt in ("cstl_indent", "cstl_indent_fin", "cstl_indent_ligne", "cstl_indent_ligne2"):
         return cstl_compact.decode_tree_indented(text)
     rels = rt.relations_in_text(text) if fmt == "cstl" else cstl_compact.decode(text)
     by_subject = {r["subject"]: r for r in rels}
@@ -317,9 +317,37 @@ NOTES = {
                           "presents dans TOUS les elements de la liste ; un autre champ s'ecrit nom=valeur, et "
                           "seulement s'il existe. Un element qui a des enfants finit sa ligne par « /N », le nombre "
                           "de ses enfants directs. Derniere ligne : « @end »."),
+    # 2026-11-24 : meme format, consigne de la regle des colonnes renforcee. Les
+    # echecs stricts d'ecriture des modeles faibles venaient d'un champ
+    # FACULTATIF mis en colonne (members attend 4 valeurs : « since »).
+    "cstl_indent_ligne2": ("Format : CSTL compact en arbre indente. En tete, une ligne par liste : « @nom^parent: "
+                           "colonnes » (^parent = liste dont ce sont les enfants). Puis l'arbre : un element par "
+                           "ligne, ses enfants en dessous, indentes de 2 espaces. Un element qui a des enfants finit "
+                           "sa ligne par « /N », le nombre de ses enfants directs. Derniere ligne : « @end ». "
+                           "REGLE DES COLONNES : avant d'ecrire l'en-tete d'une liste, regarde TOUS ses elements. "
+                           "Un champ ne devient une colonne que s'il existe dans CHACUN d'eux. Un champ qui manque "
+                           "dans au moins un element n'est JAMAIS une colonne : ecris-le « nom=valeur » en fin de "
+                           "ligne, seulement sur les elements qui l'ont."),
     "cstl_symboles": ("Format : CSTL compact aplati sans mot-cle. « <type>[N]: col... » puis une ligne par element : "
                       "id de l'element, id du parent (« - » a la racine), puis les colonnes ; « - » = absent."),
 }
+
+
+def extract_answer(raw):
+    """La DERNIERE reponse {"r1": ...} du texte (2026-11-23). Certains modeles
+    (Llama 4) recopient d'abord les donnees en JSON puis raisonnent avant de
+    repondre : prendre du premier « { » au dernier « } » melangeait donnees et
+    reponse. Renvoie (reponse, trouvee)."""
+    dec, best, i = json.JSONDecoder(), None, raw.find("{")
+    while i != -1:
+        try:
+            obj, _ = dec.raw_decode(raw, i)
+            if isinstance(obj, dict) and "r1" in obj:
+                best = obj
+        except ValueError:
+            pass
+        i = raw.find("{", i + 1)
+    return (best, True) if best is not None else ({}, False)
 
 
 def same(answer, truth):
@@ -381,26 +409,29 @@ def main():
                 raw = model.generate(prompt, max_tokens=4000)
             except RuntimeError as e:
                 return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": None, "error": str(e)[:200]}
-            a, b = raw.find("{"), raw.rfind("}")
-            try:
-                ans = json.loads(raw[a:b + 1])
-            except ValueError:
-                ans = {}
+            ans, found = extract_answer(raw)
             ok = [same(ans.get(f"r{i + 1}"), t) for i, (_, t) in enumerate(qs)]
             print(f"    {k:13} n={n:<3} s{s} {f:13} : {sum(ok)}/3", flush=True)
-            return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": ok, "raw": raw[:600]}
+            return {"kind": k, "size": n, "seed": s, "format": f, "run": run, "ok": ok, "parsed": found, "raw": raw[-3000:]}
 
         jobs = [(k, n, s, d, f, r) for r in range(args.runs) for k, n, s, d in datasets for f in formats]
-        dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension}.json"
+        dest = REPO / "scripts" / f"nested_comprehension_{args.comprehension.replace('/', '__')}.json"
         rows = [None] * len(jobs)
-        if args.resume and dest.exists():
-            old = json.loads(dest.read_text())["rows"]
-            if len(old) == len(jobs):  # meme ordre que les jobs
-                rows = [r if r.get("ok") is not None else None for r in old]
+        old = json.loads(dest.read_text())["rows"] if dest.exists() else []
+        if args.resume:
+            # Par (type, taille, graine, format, passe) : ajouter un format ne
+            # repose que ses questions, et les autres formats sont gardes.
+            done = {(r["kind"], r.get("size"), r.get("seed"), r["format"], r.get("run", 0)): r for r in old
+                    if r.get("ok") is not None and r.get("parsed", extract_answer(r.get("raw", ""))[1])}
+            rows = [done.get((k, n, s, f, run)) for k, n, s, d, f, run in jobs]
         todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "4"))) as pool:
             for i, r in zip(todo, pool.map(one, [jobs[i] for i in todo])):
                 rows[i] = r
+        # Les resultats d'autres formats deja dans le fichier sont conserves.
+        mine = {(r["kind"], r.get("size"), r.get("seed"), r["format"], r.get("run", 0)) for r in rows}
+        rows = rows + [r for r in old if (r["kind"], r.get("size"), r.get("seed"), r["format"], r.get("run", 0))
+                       not in mine]
         print(f"\n  Comprehension ({args.comprehension}) :")
         for f in formats:
             r = [x for x in rows if x["format"] == f and x["ok"] is not None]

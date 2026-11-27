@@ -256,18 +256,15 @@ def main():
                 raw = model.generate(prompt, max_tokens=4000)
             except RuntimeError as e:
                 return {"size": n, "seed": s, "format": f, "ok": None, "error": str(e)[:200]}
-            a, b = raw.find("{"), raw.rfind("}")
-            try:
-                ans = json.loads(raw[a:b + 1])
-            except ValueError:
-                ans = {}
+            ans, found = nb.extract_answer(raw)
             ok = [nb.same(ans.get(f"r{i + 1}"), t) for i, (_, t) in enumerate(qs)]
             print(f"    n={n:<3} s{s} {f:12} : {sum(ok)}/4  {['ok' if x else 'FAUX' for x in ok]}", flush=True)
-            return {"size": n, "seed": s, "format": f, "ok": ok, "raw": raw[:600]}
+            return {"size": n, "seed": s, "format": f, "ok": ok, "parsed": found, "raw": raw[-3000:]}
 
         jobs = [(n, s, d, f) for n, s, d in datasets for f in FORMATS]
         old = out.get(f"comprehension_{args.comprehension}") if args.resume else None
-        done = {(r["size"], r["seed"], r["format"]): r for r in old or [] if r.get("ok") is not None}
+        done = {(r["size"], r["seed"], r["format"]): r for r in old or []
+                if r.get("ok") is not None and r.get("parsed", nb.extract_answer(r.get("raw", ""))[1])}
         rows = [done.get((n, s, f)) for n, s, _, f in jobs]
         todo = [i for i, r in enumerate(rows) if r is None]
         with ThreadPoolExecutor(max_workers=int(os.environ.get("BENCH_WORKERS", "3"))) as pool:
@@ -280,7 +277,16 @@ def main():
             print(f"    {f:12} | {sum(per_q):>2}/{4 * len(r)} | par question : inconnu {per_q[0]}/{len(r)}, "
                   f"null {per_q[1]}/{len(r)}, pending {per_q[2]}/{len(r)}, seuil {per_q[3]}/{len(r)}")
         out[f"comprehension_{args.comprehension}"] = rows
-    out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    # Plusieurs modeles peuvent tourner en parallele : relire le fichier sous
+    # verrou et n'y remplacer que les cles de cette execution.
+    import fcntl
+    with open(out_path.with_suffix(".lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = json.loads(out_path.read_text()) if out_path.exists() else {}
+        mine = {k: v for k, v in out.items() if k == "tokens" and args.tokens
+                or k == f"comprehension_{args.comprehension}"}
+        current.update(mine)
+        out_path.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")
     print(f"\nResultats bruts : {out_path.relative_to(REPO)}")
 
 

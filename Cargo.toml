@@ -4,6 +4,7 @@ version = "5.0.0"
 edition = "2021"
 description = "CSTL v5.0.0 — Rust TCP-native agentic server (parser, validator, audit chain, KB verification)"
 authors = ["Olivier Goyette"]
+license = "Apache-2.0"
 
 [lib]
 name = "cstl_parser"
@@ -242,3 +243,15 @@ version = "1.4"
 # codes en dur de l'ancien stub ("MIIC...\n"). JAMAIS utilise pour un
 # certificat de production: self-signed/CA jetable, voir tls.rs.
 version = "0.14"
+
+[dependencies.x509-parser]
+# Lecture de l'identite SPIFFE (SAN URI spiffe://...) du certificat client
+# en TLS mutuel (2026-11-25, server/workload_identity.rs). Deja compile
+# comme dependance de rcgen : aucune nouvelle source.
+version = "0.18"
+
+[dependencies.ring]
+# Verification des jetons OIDC (RS256, ES256) a l'enregistrement d'un agent
+# (2026-11-25, server/oidc.rs). Deja compile comme dependance de rustls /
+# rcgen : aucune nouvelle source.
+version = "0.17"

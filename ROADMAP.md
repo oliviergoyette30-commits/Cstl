@@ -49,6 +49,145 @@ plus important au moins important :
 
 Ordre proposé : 1, puis 2, puis 3 et 4.
 
+## Plan pour devenir la couche de contrôle de référence (2026-11-25)
+
+La cible n'est pas « meilleur format que le JSON », mais la couche de
+contrôle des agents : autorisation, politique, audit. Le format arbre est un
+bonus sur les données tabulaires. Sur les données irrégulières, CSTL strict
+bat le JSON avec une consigne courte (48/48 contre 36 et 42/48) et fait jeu
+égal avec 3 exemples (46 contre 47).
+
+1. **Utilisable par n'importe qui :**
+   - **fait le 2026-11-25 :**
+     - entrée JSON `POST /v1/message` ;
+     - paquet Python `cstl` (roue testée dans un environnement vierge) ;
+     - démo `cstl-demo` (7 vérifications, environ 2 s) ;
+     - workflow des binaires Linux, macOS et Windows (pas encore lancé sur
+       GitHub) ;
+     - spécification v1 figée (`docs/CSTL_CONTROLE_SPEC_v1.md`), vecteurs
+       vérifiés en Python et en Rust, testeur de serveur boîte noire (16/16).
+       En l'écrivant, trouvé et corrigé : `verify_authorization` (Rust) ne
+       vérifiait pas le montant ;
+   - à faire : publication (PyPI, release).
+2. **Brancher les écosystèmes :**
+   - **fait le 2026-11-25 :** proxy MCP devant tout serveur MCP
+     (`cstl_mcp_proxy.py`, fermé par défaut, jetons vérifiés) ;
+   - **fait le 2026-11-25 :** proxy A2A 1.0 (`cstl_a2a.py`) : jeton CSTL
+     vérifié pour chaque appel JSON-RPC, appelant vérifié transmis à l'agent
+     cible, carte d'agent republiée ;
+   - **fait le 2026-11-25 :** SDK TypeScript (`sdk/typescript`, aucune
+     dépendance) : vecteurs de conformité identiques, tests en direct, même
+     fichier de clé que Python ;
+   - **fait le 2026-11-25 :** `cstl-gate`, la garde qui exécute des
+     opérations nommées (SQL SQLite et PostgreSQL, shell sans interpréteur,
+     HTTP aux secrets de la garde), jeton vérifié et paramètres typés avant
+     toute exécution ; testé avec un vrai PostgreSQL.
+3. **Prouver publiquement :**
+   - **commencé le 2026-11-25 :** banc public déterministe
+     (`benchmark/control_benchmark.py`, 12 attaques en fichiers JSON
+     ouverts aux contributions, vrai serveur). Première mesure : en T2
+     (canal de l'auteur compromis), CSTL 7 cas compromis contre 1 pour une
+     politique signée et versionnée : ordre de réception, et pas de
+     rattrapage. Corrigé le même jour (`policy_seq` et reçu signé,
+     spécification 6.4, `publish_policy`) : CSTL seul à 0 violation et 0
+     refus à tort dans les deux modèles de menace ;
+   - **fait :** `publishPolicy` dans le SDK TypeScript ;
+   - **fait :** banc avec modèles (GPT-5 mini, Llama 4, Claude Haiku,
+     Mistral ; 3 passes ; écart-type ≤ 1). CSTL et la politique signée
+     versionnée font jeu égal (24/24 avec GPT-5 mini et Haiku). Les garde-fous
+     qui jugent le message reçu perdent. Les 6 cas compromis de CSTL viennent
+     d'une politique de l'auteur absente ou contradictoire (refusée par le
+     serveur), avec un serveur ouvert par défaut ;
+   - **mesuré :** le mode fermé (`CSTL_ACTION_DEFAULT=deny`) supprime les
+     cas compromis sur tous les modèles (Llama : CSTL 13/0 contre 10/0 ;
+     Mistral : 15/0 contre 17/0), mais fait 5 refus à tort dans le banc
+     déterministe. Aucun défaut ne gagne partout. Le défaut reste ouvert ;
+     le mode fermé est recommandé avec `CSTL_POLICY_AUTHORS` pour les
+     actions à risque ;
+   - **fait :** actions gouvernées (`CSTL_GOVERNED_ACTIONS`) : banc
+     déterministe 0 violation / 0 refus à tort sous T1 et T2 ; banc avec
+     modèles (Haiku, GPT-5 mini ; 5 passes) : 0 cas compromis, égalité
+     statistique avec la politique signée versionnée (56 contre 58 sur 59,
+     p = 0,50). Llama et Mistral restent à mesurer (crédits épuisés) ;
+   - banc reproductible contre OPA/Cedar, NeMo, Llama Guard et JSON signé,
+     3 passes au moins ;
+   - questions plus dures ;
+   - attaques écrites par d'autres ;
+   - audit de sécurité externe.
+4. **Échelle :** PostgreSQL (le serveur reste sur SQLite).
+   - **fait (2026-11-25) :** fédération entre serveurs par attestations
+     signées, à durée courte (spécification 5.8,
+     `test_federation_live.py`) ;
+   - **fait (2026-11-25) :** identités standard, OIDC à l'enregistrement
+     (RS256, ES256) et SPIFFE en TLS mutuel. Spécification 5.6 et 5.7, tests
+     `test_oidc_live.py` et `test_spiffe_live.py` ;
+   - **fait (2026-11-25) :** accord humain (`CSTL_APPROVAL_ACTIONS`,
+     `cstl-approve`), vérification des jetons en direct (`token_status`),
+     arrêt automatique sur comportement anormal
+     (`CSTL_ANOMALY_MAX_PER_MIN`), tableau de bord (`/v1/dashboard`).
+     Spécification 7.5 à 7.7, test `sdk/python/test_approval_live.py` ;
+   - **fait (2026-11-25) :** révocation des clés compromises (`key_revoke`,
+     `key_enroll`) et arrêt d'urgence (`emergency_stop`, plus le fichier
+     d'arrêt de l'opérateur). Spécification sections 5.5 et 7.4, test
+     `sdk/python/test_revocation_live.py`, conformance C17 et C18.
+5. **Adoption :** nom définitif, article, 3 utilisateurs pilotes. Le format
+   compact viendra quand un modèle sera entraîné sur CSTL.
+
+## Faiblesses connues (évaluation du 2026-11-25)
+
+Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
+
+**Format**
+- Sur des données irrégulières, aucune forme CSTL compacte ne bat le JSON en
+  écriture : `mixte` 37/48, `relationnel` 40 à 44/48, JSON 36 à 47/48.
+  Seule la forme `strict` est plus fiable (48/48 à 1 exemple), et elle coûte
+  +7 à +18 % de tokens.
+- `strict` ressemble à un sous-ensemble du YAML : ce n'est pas une
+  invention de CSTL, seulement un choix de forme sûre.
+- Corrigé le 2026-11-25 : dans `strict`, la valeur inconnue s'écrit `?` ou
+  `?{"sigma":0.3}`, comme dans l'arbre indenté.
+- `relationnel` n'est pas plus court que le JSON selon l'estimateur local
+  (−11 à +39 %), seulement −6 à 0 % selon les tokenizers des fournisseurs.
+- Le tour de correction répare peu : 8 erreurs détectées sur 16 à
+  1 exemple, aucune à 3 exemples. Les modèles refont la même erreur.
+- Un tiers environ des erreurs restantes sont silencieuses (champ inventé,
+  liste vide ajoutée) : aucun lecteur ne les voit.
+- Beaucoup de formes (relations 4, documents 5, spécialisées 8). Le choix
+  automatique les cache, mais c'est plus à maintenir qu'un seul format.
+- Aucun modèle n'est entraîné sur CSTL : les formes compactes resteront
+  moins fiables en écriture tant que ce n'est pas le cas.
+
+**Mesures**
+- Souvent une seule passe, avec un bruit de ±2 à 6 points (le JSON a fait
+  42/48 puis 36/48 sur le même test).
+- Questions de lecture trop faciles : beaucoup de 36/36 partout, effet
+  plafond. Il faut des questions plus dures et des arbres de profondeur 5
+  et plus.
+- Six formes spécialisées (série, graphe, conversation, appels, matrice,
+  changements) sont sans perte mais jamais mesurées sur un modèle.
+- Le passage de DeepSeek sur les formes de relations est perdu (contenu
+  vide de l'API).
+
+**Sécurité**
+- Les comptes d'un arbre (`tree_n`) prouvent qu'il correspond à ce que
+  l'auteur annonce, pas que l'auteur dit vrai.
+- Un arbre envoyé sans `source` n'est garanti que par son expéditeur.
+- Le témoin externe reçoit les maillons de l'audit en asynchrone : ceux
+  écrits juste avant un arrêt brutal peuvent lui manquer.
+- L'autorisation reste volontaire sans garde (`CstlGuard`) dans le système
+  qui exécute l'action.
+
+**Produit**
+- Pas de paquet installable, pas de SDK TypeScript, pas d'adaptateur A2A
+  (MCP seulement).
+- Le serveur reste sur SQLite (pas de PostgreSQL). La fédération entre
+  serveurs, OIDC et SPIFFE existent depuis le 2026-11-25.
+- Sans vérification en direct (`CstlGuard(online=...)` ou
+  `CSTL_GUARD_ONLINE`), un jeton déjà délivré reste valable jusqu'à son
+  expiration (60 s par défaut), même après une révocation ou un arrêt
+  d'urgence.
+- Adoption nulle : c'est un prototype de recherche, pas encore un produit.
+
 ## Mesures
 
 - **`scripts/team_task_benchmark.py` :** une tâche d'équipe avec pièges.
@@ -416,6 +555,123 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
       TOON 4 928, XML 5 809, JSON indenté 7 604.
     - Ce qui compte est que le vide soit écrit, pas le format choisi. Entre
       formats complets, la différence est le coût.
+  - **10 modèles, 5 fournisseurs** (2026-11-23, `scripts/multi_model_summary.py`).
+    Modèles : GPT-5 mini, Claude Haiku et Sonnet 5.5, DeepSeek V4.1,
+    Qwen 3.8, Llama 4 Maverick, Mistral Medium 3.5, Gemma 4 26B et 31B,
+    Gemini 3.5 Flash-Lite.
+    - Totaux JSON / TOON / arbre indenté : lecture 315 / 319 / 312 sur 360 ;
+      écriture stricte 93 % / 88 % / 89 % ; vide qui parle 215 / 212 / 214
+      sur 240 (JSON naïf : 68).
+    - Pour les modèles forts, l'arbre indenté est à égalité avec le JSON, à
+      une question près. Les modèles faibles font des erreurs partout, et un
+      peu plus sur l'arbre indenté en lecture et en écriture.
+    - Le JSON naïf échoue sur le vide chez tous les modèles.
+    - Coût OpenRouter : 5,37 $.
+  - **Données réelles et polymorphisme** (2026-11-24, `scripts/real_data_benchmark.py`).
+    Les jeux : 12 réponses d'API publiques (PyPI, npm, crates.io, Wikidata).
+    - Tokens comptés par 6 fournisseurs : −39 à −49 % sur les données
+      tabulaires imbriquées, mais seulement −8 à −13 % sur les données
+      réelles riches en objets.
+    - Lecture : parité, mais les questions générées sont trop faciles
+      (effet plafond).
+    - Écriture par un modèle sur données réelles : nettement moins fiable
+      que JSON. GPT-5 mini 5/12 contre 12/12, Llama 3/12 contre 10/12,
+      Claude 10/12 contre 12/12.
+    - Permettre le JSON pur dans les valeurs en ligne n'aide pas (GPT-5 mini
+      6/12, Llama 3/12). Les modèles inventent de la syntaxe à partir d'un
+      seul exemple : `^@@`, colonnes séparées par des virgules, `nom:valeur`.
+    - Conclusion : sur des données irrégulières, l'écriture par un modèle
+      reste le point faible.
+  - **Forme « strict »** (ancien nom « objets_json », renommée le
+    2026-11-25) pour les données irrégulières. C'est la forme d'écriture des
+    modèles **jusqu'à ce qu'ils soient entraînés** sur les formes CSTL plus
+    compactes. Elle ressemble à un sous-ensemble du YAML, sans ses pièges ;
+    `#cstl objets_json` reste lu. Mesures (2026-11-24) :
+    clés sans guillemets, indentation, ni accolades ni virgules, mais chaque
+    valeur écrite comme en JSON.
+    - Écriture des 12 réponses d'API réelles : **48/48** sur GPT-5 mini,
+      Claude Haiku, Llama 4 et Mistral, contre 42/48 en JSON, 25/48 en arbre
+      indenté et 29/48 en forme « objets » à valeurs CSTL.
+    - Coût : +7 à +18 % de tokens face au JSON compact. On paie la fiabilité.
+    - Une seule passe : à confirmer.
+  - **Formes mixte et changements** (2026-11-24, `sdk/python/cstl_formes.py`).
+    - **mixte** : la structure d'`objets_json`, avec les listes d'objets en
+      tables à cellules JSON. Sur les données réelles, −3 à −8 % de tokens
+      face au JSON. Écriture : 37/48, contre 42 pour le JSON et 48 pour
+      `objets_json`. Les échecs viennent des tables dont certains éléments
+      n'ont pas tous les champs : le modèle décale les valeurs. Elle sert
+      donc à transmettre, pas à faire écrire un modèle.
+    - **changements** : opérations JSON Patch d'une ligne, avec `diff` et
+      `apply`.
+  - **Forme « relationnel »** (2026-11-24, `cstl_formes.py`) : un format
+    CSTL propre aux données irrégulières, pour ne pas copier le JSON.
+    - Principe : valeurs JSON ; un objet à un seul champ s'écrit en chemin
+      (`engines>node: ">=18"`) ; une table seulement si tous les éléments ont
+      exactement les mêmes champs ; `[N]` ; `?` pour l'inconnu.
+    - Coût : −6 à 0 % de tokens face au JSON compact.
+    - Écriture des 12 réponses d'API réelles (GPT-5 mini, Claude Haiku,
+      Llama 4, Mistral) :
+      - v1 (chemins `a.b`) : 40/48. Deux erreurs de conception : les vraies
+        clés contiennent des points (`2.34.0`) ; les modèles écrivent
+        plusieurs chemins vers le même objet.
+      - v2 (séparateur `>`, chemins fusionnés) : 36/48 mesurée. Trois
+        modèles échouaient sur la même clé à espace (`Release notes`),
+        écrite sans guillemets comme la consigne le dit. Le lecteur accepte
+        maintenant une clé jusqu'au premier `: ` (comme en YAML) : 40/48 en
+        relisant les mêmes réponses (pas une nouvelle mesure).
+    - Échecs restants : du contenu, pas de la syntaxe (un `id` inventé, une
+      liste vide ajoutée, des éléments omis par Llama).
+    - Conclusion : plus compact que `objets_json`, moins fiable (40 contre
+      48), à peu près égal au JSON (42). `choose_format(..., "ecrire")`
+      garde `objets_json` pour faire écrire un modèle ; entre machines, la
+      forme la moins chère l'emporte.
+  - **Plusieurs exemples et tour de correction** (2026-11-24,
+    `real_data_benchmark.py --examples N --repair`, une passe, 4 modèles,
+    12 documents réels). Le tour de correction renvoie seulement l'erreur du
+    vrai lecteur.
+
+    | Écriture | JSON | objets_json | relationnel |
+    |---|---|---|---|
+    | 1 exemple, du premier coup | 36/48 | 48/48 | 32/48 |
+    | 1 exemple + correction | 36/48 | 48/48 | 40/48 |
+    | 3 exemples, du premier coup | 47/48 | 46/48 | 44/48 |
+    | 3 exemples + correction | 47/48 | 46/48 | 44/48 |
+
+    - Avec 1 exemple, les 12 échecs du JSON sont **tous silencieux** (JSON
+      valide, contenu faux). Les 16 de `relationnel` sont **tous
+      détectés** par le lecteur, mais la correction n'en répare que 8.
+    - Trois exemples aident surtout le JSON (36 → 47). Les écarts de 1 à
+      2 points sont du bruit : le JSON avait fait 42/48 à 1 exemple lors
+      d'une passe précédente.
+    - Avec de bons exemples, aucune forme CSTL ne bat le JSON en écriture
+      sur ces données. `objets_json` reste le seul à 48/48 avec 1 exemple,
+      la consigne la plus courte. L'avantage mesuré de CSTL ici, c'est la
+      détection des erreurs, pas le score.
+  - **Cinq formes spécialisées** : `serie`, `graphe`, `conversation`,
+    `appels` et `matrice`. Sans perte, mais pas encore mesurées sur des
+    modèles.
+  - **Fiabilité des formes de relations** (4 modèles, 48 politiques) :
+    - lecture : lignes 26, symboles 25, complet 22, tableau 18 ;
+    - écriture : complet 24, symboles 21, lignes 17, tableau 15.
+  - **CSTL polymorphe** (2026-11-24) : `cstl_compact.encode_auto(data)`
+    choisit la forme de CSTL selon les données.
+    - Relations : `complet`, `lignes`, `tableau` ou `symboles`.
+    - Documents : `arbre`, `arbre_n` (avec `/N`, imposé si un modèle lit)
+      ou `arbre_ids`.
+    - Chaque forme candidate est vérifiée sans perte, ordre des règles
+      compris, et la moins chère en tokens estimés l'emporte.
+    - Le texte commence par `#cstl <forme>` ; `decode_auto` le relit.
+    - Choix observés : politiques de 30 à 60 règles → `symboles` (2,5 fois
+      moins cher que `complet`) ; 10 règles → `lignes` ; documents → `arbre`.
+    - Depuis le 2026-11-24, `choose_format(data, task)` choisit **la forme la
+      plus fiable mesurée** quand un modèle lit (`task="lire"`) ou écrit
+      (`task="ecrire"`), selon la sorte de données (relations, tabulaire,
+      irrégulier ; table `RELIABILITY`). La moins chère ne départage qu'à
+      fiabilité égale. Entre machines (`task=None`), la moins chère.
+    - Choix : politique → lignes pour lire, complet pour écrire ; données
+      tabulaires → arbre_n ; données irrégulières à écrire → objets_json.
+    - Vérifié sur 3 000 documents et 2 000 listes de relations aléatoires
+      sans perte.
   - Le mode arbre passe par le serveur : `agent.send_tree` envoie l'arbre
     en relations signées, vérifiées (`SCHEMA`) et auditées, et
     `agent.fetch_tree` le relit à l'identique (`purpose=tree_query`).
@@ -442,3 +698,51 @@ Ordre proposé : 1, puis 2, puis 3 et 4.
   de la clé du serveur.
 - **Sécurité par défaut :** signatures obligatoires, et identité conservée
   au redémarrage (faille corrigée).
+
+## Délibération v6 (2026-11-26)
+
+- **Fait :** le moteur de délibération (`sdk/python/cstl_deliberation.py`,
+  spécification `docs/CSTL_DELIBERATION_v6.md`) :
+  - points numérotés, état au lieu de l'historique ;
+  - vérification locale, puis par le serveur, avec correction par le
+    modèle ;
+  - CONSENSUS et DEADLOCK, avec des garde-fous contre les boucles ;
+  - compilation en règles signées, escalade humaine ;
+  - mode manuel et OpenRouter ; testé avec des modèles déterministes.
+- **Mesuré (2026-11-26, `benchmark/deliberation/README.md`)** : 26 cas, dont
+  6 adverses, avec 3 modèles gratuits. Aucune erreur, que ce soit pour l'agent
+  seul, le débat libre ou CSTL v6. CSTL v6 coûte 4 fois moins de tokens que
+  le débat libre, mais 5 à 7 fois plus que l'agent seul. Délibérer n'a donc
+  pas amélioré la justesse ici.
+- **À faire :**
+  - **Essai sur petits modèles arrêté** (2026-11-26) : les petits modèles
+    gratuits se trompent bien seuls, mais deux sur trois ne répondent plus
+    sous CSTL v6, donc rien n'est concluant ;
+  - **corrigé** (2026-11-26) : un CONSENSUS exige un quorum (majorité, au
+    moins 2), et ne vient donc plus d'un seul participant restant ;
+  - **corrigé** (2026-11-26) : le serveur refuse une ligne de prose hors
+    bloc (`unrecognized_line`) et un `sigma` hors de 0 à 1
+    (`invalid_sigma`) ;
+  - départager sur des tâches où l'agent seul se trompe : petits modèles,
+    dossiers très longs, règles implicites ;
+  - les preuves externes pour `sigma` ;
+  - **fait** (2026-11-27) : une vérification indépendante de l'état publié par
+    le modérateur (`verify_state`) ;
+
+## Publication (2026-11-26)
+
+- **Le nom `cstl` est déjà pris sur PyPI** par un portage Python de la
+  bibliothèque standard C++ : le paquet Python ne peut pas être publié sous
+  ce nom. Il est libre sur npm. Libres sur les deux : `cstl-control` et
+  `cstl-agents`. C'est à l'auteur de choisir.
+- **Prêt pour les pilotes :**
+  - le guide `docs/PILOT.md` ;
+  - le brouillon d'article `docs/ARTICLE_DRAFT.md` ;
+  - le Dockerfile (serveur et 8 commandes, données dans `/data`) ; image construite et vérifiée le 2026-11-27
+    (246 Mo, `cstl-demo` 7/7 dans le conteneur).
+- **Banc contre de vrais outils (OPA avec paquets signés, Cedar) : pas fait
+  ici.** Télécharger et lancer leurs binaires a été refusé dans
+  l'environnement de développement. À faire sur une machine où on peut les
+  installer.
+- **Licence : Apache 2.0** (choisie le 2026-11-27, fichier `LICENSE`).
+

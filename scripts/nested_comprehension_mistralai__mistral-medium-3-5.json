@@ -1,0 +1,2020 @@
+{
+  "rows": [
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 1562, \"r2\": 3, \"r3\": [\"o0\", \"o3\", \"o6\"]}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 1430,\n  \"r2\": 4,\n  \"r3\": [\"o0\", \"o3\", \"o6\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 1230,\n  \"r2\": 4,\n  \"r3\": [\"o0\", \"o6\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1430, \"r2\": 4, \"r3\": [\"o0\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 3207,\n  \"r2\": 1,\n  \"r3\": [\"o0\", \"o1\", \"o3\", \"o4\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 3005,\n  \"r2\": 1,\n  \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "raw": "{\"r1\": 2205, \"r2\": 2, \"r3\": [\"o0\", \"o1\", \"o2\", \"o4\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2193,\n  \"r2\": 2,\n  \"r3\": [\"o0\", \"o1\", \"o2\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 3007,\n  \"r2\": 10,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 4457,\n  \"r2\": 8,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 2847,\n  \"r2\": 8,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3059,\n  \"r2\": 8,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 295,\n  \"r2\": 10,\n  \"r3\": [\"o4\", \"o11\", \"o12\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 157,\n  \"r2\": 8,\n  \"r3\": [\"o2\", \"o4\", \"o7\", \"o11\", \"o12\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 298,\n  \"r2\": 7,\n  \"r3\": [\"o2\", \"o3\", \"o4\", \"o11\", \"o12\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 141,\n  \"r2\": 6,\n  \"r3\": [\"o12\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_35\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_25\", \"agent_19\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_24\", \"agent_16\"], \"r3\": [\"dept_2\", \"dept_5\"]}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"agent_35\", \"agent_9\"], \"r3\": [\"dept_2\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "raw": "```json\n{\n  \"r1\": 0,\n  \"r2\": [\"agent_38\", \"agent_21\"],\n  \"r3\": [\"dept_0\", \"dept_4\", \"dept_5\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 0,\n  \"r2\": [\"agent_38\", \"agent_21\"],\n  \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_2\", \"dept_3\", \"dept_4\", \"dept_5\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_5\"]}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\", \"ctr_6\"], \"r3\": \"privacy_0\"}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_6\"], \"r3\": \"privacy_0\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\"], \"r3\": \"privacy_0\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 3,\n  \"r2\": [\"ctr_3\"],\n  \"r3\": \"payment_0\"\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 2, \"r2\": [\"ctr_6\"], \"r3\": \"payment_0\"}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": 3, \"r2\": [\"ctr_4\"], \"r3\": \"payment_0\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [\"ctr_1\", \"ctr_3\", \"ctr_6\"], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_4\", \"ctr_5\", \"ctr_7\", \"ctr_8\", \"ctr_9\", \"ctr_10\", \"ctr_11\", \"ctr_12\", \"ctr_13\", \"ctr_14\", \"ctr_15\", \"ctr_16\", \"ctr_17\", \"ctr_18\", \"ctr_19\", \"ctr_20\", \"ctr_21\", \"ctr_22\", \"ctr_23\"], \"r3\": \"liability_1\"}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_1\", \"ctr_15\", \"ctr_17\", \"ctr_22\"],\n  \"r3\": \"liability_1\"\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_7\", \"ctr_12\", \"ctr_13\", \"ctr_15\", \"ctr_17\", \"ctr_22\"],\n  \"r3\": \"privacy_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_14\", \"ctr_15\", \"ctr_22\"],\n  \"r3\": \"termination_1\"\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_14\"],\n  \"r3\": \"termination_1\"\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_4\", \"ctr_6\", \"ctr_8\", \"ctr_12\", \"ctr_14\", \"ctr_15\", \"ctr_18\", \"ctr_19\", \"ctr_20\", \"ctr_21\", \"ctr_22\"],\n  \"r3\": \"termination_1\"\n}\n```",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_6\", \"ctr_8\", \"ctr_12\", \"ctr_18\", \"ctr_21\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1562, \"r2\": 3, \"r3\": [\"o0\", \"o3\", \"o6\"]}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1430,\n  \"r2\": 4,\n  \"r3\": [\"o0\", \"o3\", \"o6\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1230,\n  \"r2\": 4,\n  \"r3\": [\"o0\", \"o6\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1430, \"r2\": 4, \"r3\": [\"o0\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3207,\n  \"r2\": 1,\n  \"r3\": [\"o0\", \"o1\", \"o3\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2801,\n  \"r2\": 1,\n  \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3285, \"r2\": 2, \"r3\": [\"o0\", \"o1\", \"o2\", \"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2193,\n  \"r2\": 2,\n  \"r3\": [\"o0\", \"o1\", \"o2\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3007,\n  \"r2\": 10,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 4457,\n  \"r2\": 7,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3079,\n  \"r2\": 8,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3059,\n  \"r2\": 8,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 295,\n  \"r2\": 8,\n  \"r3\": [\"o2\", \"o4\", \"o11\", \"o12\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 157,\n  \"r2\": 8,\n  \"r3\": [\"o2\", \"o4\", \"o7\", \"o11\", \"o12\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 178, \"r2\": 7, \"r3\": [\"o2\", \"o3\", \"o4\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 142,\n  \"r2\": 7,\n  \"r3\": [\"o12\", \"o3\", \"o4\", \"o7\", \"o11\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_35\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_25\", \"agent_19\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_24\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"agent_35\", \"agent_9\"], \"r3\": [\"dept_2\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 0,\n  \"r2\": [\"agent_38\", \"agent_21\"],\n  \"r3\": [\"dept_0\", \"dept_4\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 0,\n  \"r2\": [\"agent_38\", \"agent_21\"],\n  \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_2\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_5\"]}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_6\"], \"r3\": \"privacy_0\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_6\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\", \"ctr_6\"], \"r3\": \"privacy_0\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 2, \"r2\": [\"ctr_3\"], \"r3\": \"payment_0\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_6\"],\n  \"r3\": \"payment_0\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [\"ctr_4\"], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [\"ctr_1\", \"ctr_3\", \"ctr_6\"], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_4\", \"ctr_5\", \"ctr_7\", \"ctr_8\", \"ctr_9\", \"ctr_10\", \"ctr_11\", \"ctr_12\", \"ctr_13\", \"ctr_14\", \"ctr_15\", \"ctr_16\", \"ctr_17\", \"ctr_18\", \"ctr_19\", \"ctr_20\", \"ctr_21\", \"ctr_22\", \"ctr_23\"], \"r3\": \"liability_1\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_1\", \"ctr_15\", \"ctr_17\", \"ctr_22\"],\n  \"r3\": \"liability_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_18\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_7\", \"ctr_12\", \"ctr_13\", \"ctr_15\", \"ctr_17\", \"ctr_22\"],\n  \"r3\": \"privacy_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_14\", \"ctr_15\", \"ctr_21\"],\n  \"r3\": \"termination_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_14\", \"ctr_15\", \"ctr_22\"],\n  \"r3\": \"termination_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_21\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_6\", \"ctr_8\", \"ctr_12\", \"ctr_18\", \"ctr_21\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1562, \"r2\": 3, \"r3\": [\"o0\", \"o3\", \"o6\"]}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1430,\n  \"r2\": 4,\n  \"r3\": [\"o0\", \"o3\", \"o6\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1230,\n  \"r2\": 4,\n  \"r3\": [\"o0\", \"o6\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1430, \"r2\": 4, \"r3\": [\"o0\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3207,\n  \"r2\": 1,\n  \"r3\": [\"o0\", \"o1\", \"o3\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2805,\n  \"r2\": 1,\n  \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 2205, \"r2\": 2, \"r3\": [\"o0\", \"o1\", \"o2\", \"o3\", \"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        false,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2193,\n  \"r2\": 2,\n  \"r3\": [\"o0\", \"o1\", \"o2\", \"o4\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3157,\n  \"r2\": 10,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 4479,\n  \"r2\": 7,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3079,\n  \"r2\": 8,\n  \"r3\": [\"o0\", \"o7\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3187, \"r2\": 8, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 297,\n  \"r2\": 8,\n  \"r3\": [\"o2\", \"o4\", \"o11\", \"o12\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 157,\n  \"r2\": 8,\n  \"r3\": [\"o2\", \"o4\", \"o7\", \"o11\", \"o12\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 178,\n  \"r2\": 7,\n  \"r3\": [\"o2\", \"o3\", \"o4\", \"o11\", \"o12\"]\n}\n```"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 140, \"r2\": 6, \"r3\": [\"o2\", \"o3\", \"o4\", \"o7\", \"o12\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": [\"dept_1\"]}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"agent_35\"],\n  \"r3\": [\"dept_0\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_35\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_35\", \"agent_24\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"agent_24\", \"agent_16\"],\n  \"r3\": [\"dept_2\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"agent_35\", \"agent_9\"], \"r3\": [\"dept_2\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 0,\n  \"r2\": [\"agent_38\", \"agent_21\"],\n  \"r3\": [\"dept_0\", \"dept_4\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 0,\n  \"r2\": [\"agent_38\", \"agent_21\"],\n  \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]\n}\n```"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_2\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_5\"]}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\", \"ctr_6\"], \"r3\": \"privacy_0\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_1\", \"ctr_2\"],\n  \"r3\": \"privacy_0\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_1\", \"ctr_2\"], \"r3\": \"privacy_0\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3,\n  \"r2\": [\"ctr_3\"],\n  \"r3\": \"payment_0\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 2, \"r2\": [\"ctr_6\"], \"r3\": \"payment_0\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [\"ctr_4\"], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 3, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_3\", \"ctr_4\", \"ctr_6\", \"ctr_7\"], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_1\", \"ctr_15\", \"ctr_17\", \"ctr_22\"],\n  \"r3\": \"liability_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_7\", \"ctr_13\", \"ctr_15\", \"ctr_17\", \"ctr_18\", \"ctr_20\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        false
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 1,\n  \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_2\", \"ctr_7\", \"ctr_12\", \"ctr_13\", \"ctr_15\", \"ctr_17\", \"ctr_22\"],\n  \"r3\": \"privacy_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 3,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_14\", \"ctr_15\", \"ctr_21\"],\n  \"r3\": \"termination_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_14\", \"ctr_15\", \"ctr_21\"],\n  \"r3\": \"termination_1\"\n}\n```"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_2\", \"ctr_6\", \"ctr_21\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        false,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "```json\n{\n  \"r1\": 2,\n  \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_6\", \"ctr_8\", \"ctr_12\", \"ctr_15\", \"ctr_18\", \"ctr_20\", \"ctr_21\", \"ctr_22\"],\n  \"r3\": \"termination_1\"\n}\n```"
+    }
+  ]
+}

@@ -207,7 +207,7 @@ def main():
         for f, s in summarize(rows, size).items():
             print(f"    {f:12} | {s['perm_ok']:>4}/{s['perm_total']:<6} | {s['obl_ok']:>4}/{s['cases']:<6} | "
                   f"{s['all_ok']:>4}/{s['cases']:<5} | {s['pass_k']:>3}/{s['policies']:<3} | {s['tokens_data']:>14} | {s['tokens_prompt']:>15}")
-    dest = REPO / "scripts" / f"format_short_benchmark_{'stub' if args.stub else args.model}.json"
+    dest = REPO / "scripts" / f"format_short_benchmark_{'stub' if args.stub else args.model.replace('/', '__')}.json"
     dest.write_text(json.dumps({"summary": summarize(rows), "rows": rows}, indent=2, ensure_ascii=False) + "\n")
     print(f"\n  Resultats bruts : {dest.relative_to(REPO)}")
 

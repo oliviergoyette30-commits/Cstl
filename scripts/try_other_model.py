@@ -75,10 +75,8 @@ def main():
 
     if args.test == "lecture":
         qs = nb.questions(args.kind, data, args.seed)
-        a, b = raw.find("{"), raw.rfind("}")
-        try:
-            ans = json.loads(raw[a:b + 1])
-        except ValueError:
+        ans, found = nb.extract_answer(raw)
+        if not found:
             sys.exit("Reponse illisible : JSON {\"r1\": ..., \"r2\": ..., \"r3\": ...} attendu.")
         ok = 0
         for i, (q, truth) in enumerate(qs):

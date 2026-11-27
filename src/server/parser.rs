@@ -183,6 +183,53 @@ fn record_compressed_payload(payload: &mut CstlPayload, map: HashMap<String, Str
     }
 }
 
+/// R3, rendue stricte le 2026-11-26 : `sigma` (ou `σ`) est une confiance,
+/// un nombre fini entre 0 et 1 (spec §4.1). Avant, une valeur hors bornes
+/// passait sans signal (`sigma=1.5` d'un modele, test tripartite du
+/// 2026-11-26) et pouvait fausser les calculs de confiance ou de consensus.
+/// Le message entier est refuse, avec le bloc et la valeur.
+fn check_sigma_range(payload: &CstlPayload) -> Result<(), ParseError> {
+    let maps = std::iter::once(("META", &payload.meta))
+        .chain(std::iter::once(("INTENT_PAYLOAD", &payload.intent)))
+        .chain(payload.relations.iter().map(|m| ("RELATION", m)))
+        .chain(payload.uncertainty.iter().map(|m| ("UNCERTAINTY", m)));
+    for (block, map) in maps {
+        for key in ["sigma", "σ"] {
+            if let Some(v) = map.get(key) {
+                let ok = v.trim().parse::<f64>().map(|x| x.is_finite() && (0.0..=1.0).contains(&x)).unwrap_or(false);
+                if !ok {
+                    return Err(ParseError::InvalidFormat(format!(
+                        "invalid_sigma: {} {}={}, attendu un nombre entre 0 et 1",
+                        block, key, v.chars().take(40).collect::<String>()
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Lignes de premier niveau prevues par la spec (§2) en plus des blocs
+/// "NOM [...]" reconnus plus haut : regles "(RULE) ..." et "DECISION: ...".
+fn is_spec_top_level_line(line: &str) -> bool {
+    line.starts_with("(RULE)") || line.starts_with("DECISION:") || line.starts_with("DECISION=")
+}
+
+/// "NOM [" en tete de ligne, NOM en majuscules (forme generique des blocs).
+fn generic_block_name(line: &str) -> Option<&str> {
+    let (name, rest) = line.split_once('[')?;
+    let name = name.trim_end();
+    let ok = !name.is_empty()
+        && name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    let _ = rest;
+    ok.then_some(name)
+}
+
+fn bracket_balance(line: &str) -> i64 {
+    line.matches('[').count() as i64 - line.matches(']').count() as i64
+}
+
 pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     let mut payload = CstlPayload {
         version: String::new(),
@@ -264,9 +311,22 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
     // exemple de la spec ni du depot ne l'utilise, portee volontairement
     // limitee au cas reellement documente et teste.
     let mut in_container: Option<&'static str> = None;
+    // Bloc "NOM [ ... ]" bien forme mais non interprete par ce serveur
+    // (AGREEMENT_BLOCK, ARBITRATION_*, ... de la spec) : on saute ses lignes
+    // jusqu'au crochet fermant, avec un avertissement.
+    let mut unknown_depth: i64 = 0;
 
     for line in raw.lines().skip(1) {
         let trimmed_line = line.trim();
+
+        if unknown_depth > 0 {
+            if trimmed_line == "---END---" {
+                payload.parse_warnings.push("bloc non interprete jamais ferme avant ---END---".to_string());
+                break;
+            }
+            unknown_depth += bracket_balance(trimmed_line);
+            continue;
+        }
 
         if let Some(container) = in_container {
             if trimmed_line == "]" {
@@ -572,6 +632,24 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         } else if in_block {
             current_block.push('\n');
             current_block.push_str(trimmed_line);
+        } else if trimmed_line == "---END---" {
+            break;
+        } else if let Some(name) = generic_block_name(trimmed_line) {
+            payload.parse_warnings.push(format!(
+                "bloc {} non interprete par ce serveur, ignore", name
+            ));
+            unknown_depth = bracket_balance(trimmed_line).max(0);
+        } else if !trimmed_line.is_empty() && !is_spec_top_level_line(trimmed_line) {
+            // Depuis le 2026-11-26 : une ligne hors bloc qui n'est aucune des
+            // formes de la spec (§2 : blocs, "(RULE) ...", "DECISION: ...")
+            // rejette le message. Avant, elle etait ignoree sans signal : la
+            // prose d'un modele et ses operateurs inventes ("AGREES [...]",
+            // test tripartite ChatGPT/Gemini du 2026-11-26) passaient pour
+            // un message valide dont une partie avait disparu.
+            return Err(ParseError::InvalidFormat(format!(
+                "unrecognized_line: ligne hors de tout bloc CSTL, \"{}\"",
+                trimmed_line.chars().take(80).collect::<String>()
+            )));
         }
     }
 
@@ -639,6 +717,8 @@ pub fn parse_payload(raw: &str) -> Result<CstlPayload, ParseError> {
         }
         _ => {}
     }
+
+    check_sigma_range(&payload)?;
 
     detect_disjunctive_obligation_ambiguity(&mut payload);
 
@@ -1572,5 +1652,58 @@ RELATION [type=EQUALS, subject=x, object=x]
                 other => panic!("{bad:?} doit etre refuse, obtenu {other:?}"),
             }
         }
+    }
+
+    fn doc(body: &str) -> String {
+        format!("#!CSTL v5.0.0 MODE=A\nMETA [encoder=t, produced_by=t]\n{}\n---END---", body)
+    }
+
+    #[test]
+    fn prose_outside_any_block_rejects_the_message() {
+        for bad in ["Je pense que oui, mais il faut nuancer.",
+                    "---",
+                    "Voici ma reponse :"] {
+            let raw = doc(&format!("RELATION [type=STATE, subject=a, object=b]\n{}", bad));
+            match parse_payload(&raw) {
+                Err(ParseError::InvalidFormat(m)) => assert!(m.starts_with("unrecognized_line"), "{m}"),
+                other => panic!("{bad:?} doit etre refuse, obtenu {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_well_formed_block_this_server_does_not_interpret_is_skipped_with_a_warning() {
+        let raw = doc("AGREEMENT_BLOCK [\nSTRENGTH faster_results [sigma=0.8]\n]\nRELATION [type=STATE, subject=a, object=b]");
+        let p = parse_payload(&raw).expect("bloc de la spec accepte");
+        assert_eq!(p.relations.len(), 1, "la relation apres le bloc est lue");
+        assert!(p.parse_warnings.iter().any(|w| w.contains("AGREEMENT_BLOCK")), "{:?}", p.parse_warnings);
+        let p = parse_payload(&doc("AGREES [subject=p1]")).unwrap();
+        assert!(p.parse_warnings.iter().any(|w| w.contains("AGREES")), "plus jamais ignore sans signal");
+    }
+
+    #[test]
+    fn spec_top_level_lines_and_blank_lines_are_still_accepted() {
+        let raw = doc("(RULE) assistant MUST respond_exclusively_in_cstl\n\nRELATION [type=STATE, subject=a, object=b]\nDECISION: ratify [sigma=0.9]");
+        let p = parse_payload(&raw).expect("formes de la spec acceptees");
+        assert_eq!(p.relations.len(), 1);
+        let after_end = format!("{}\nquelque chose apres la fin", doc("RELATION [type=STATE, subject=a, object=b]"));
+        assert!(parse_payload(&after_end).is_ok(), "ce qui suit ---END--- ne fait pas partie du message");
+    }
+
+    #[test]
+    fn sigma_outside_zero_one_rejects_the_message() {
+        for bad in ["1.5", "-0.1", "NaN", "inf", "haute", ""] {
+            let raw = doc(&format!("RELATION [type=STATE, subject=a, object=b, sigma={}]", bad));
+            match parse_payload(&raw) {
+                Err(ParseError::InvalidFormat(m)) => assert!(m.starts_with("invalid_sigma"), "{m}"),
+                other => panic!("sigma={bad:?} doit etre refuse, obtenu {other:?}"),
+            }
+        }
+        for ok in ["0", "1", "0.75", "1.0"] {
+            let raw = doc(&format!("RELATION [type=STATE, subject=a, object=b, sigma={}]", ok));
+            assert!(parse_payload(&raw).is_ok(), "sigma={ok} accepte");
+        }
+        let meta = "#!CSTL v5.0.0 MODE=A\nMETA [encoder=t, produced_by=t, sigma=2]\n---END---";
+        assert!(matches!(parse_payload(meta), Err(ParseError::InvalidFormat(m)) if m.contains("META")));
     }
 }

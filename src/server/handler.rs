@@ -105,10 +105,11 @@ fn why_not_authorized(
     row: &crate::adn_store::DeonticRuleRow,
     authors: &super::action_authorization::PolicyAuthors,
     reg: &crate::agent_discovery::AgentRegistry,
+    revoked: &std::collections::HashSet<String>,
 ) -> Option<&'static str> {
     let is_author = row.author.as_deref().is_some_and(|a| authors.includes(a));
     let proven = match (&row.author, &row.signer_key) {
-        (Some(author), Some(key)) => reg.agents.iter().any(|a| &a.name == author && a.public_key.as_ref() == Some(key)),
+        (Some(author), Some(key)) => key_in_force(reg, revoked, author, key),
         _ => false,
     };
     if !is_author {
@@ -118,6 +119,30 @@ fn why_not_authorized(
     } else {
         None
     }
+}
+
+/// `key` est la cle ENREGISTREE de `name`, et n'est pas revoquee
+/// (2026-11-25) : une cle revoquee ne prouve plus rien, meme pour les
+/// messages qu'elle a signes avant sa revocation (on ne sait pas depuis quand
+/// elle est compromise).
+fn key_in_force(
+    reg: &crate::agent_discovery::AgentRegistry,
+    revoked: &std::collections::HashSet<String>,
+    name: &str,
+    key: &str,
+) -> bool {
+    !revoked.contains("*")
+        && !revoked.contains(&key.to_ascii_lowercase())
+        && reg.agents.iter().any(|a| a.name == name && a.public_key.as_deref() == Some(key))
+}
+
+async fn revoked_keys(ctx: &ServerContext) -> std::collections::HashSet<String> {
+    ctx.adn_store.lock().await.revoked_keys().unwrap_or_else(|e| {
+        // Illisible : on ne peut pas savoir quelles cles sont revoquees. Aucune
+        // cle n'est alors tenue pour valide (prudence).
+        error!("[Handler] revoked_keys failed: {}", e);
+        std::iter::once("*".to_string()).collect()
+    })
 }
 
 /// Regles deontiques persistees, avec leur auteur, leur raison et leurs
@@ -134,10 +159,11 @@ async fn load_policy_rules(
             Vec::new()
         })
     };
+    let revoked = revoked_keys(ctx).await;
     let reg = ctx.agent_registry.read().await;
     rows.into_iter()
         .map(|r| {
-            let why_ignored = why_not_authorized(&r, authors, &reg);
+            let why_ignored = why_not_authorized(&r, authors, &reg, &revoked);
             super::action_authorization::Rule {
                 conditions: super::action_authorization::Conditions::from_attrs(&r.attrs),
                 subject: r.subject,
@@ -171,12 +197,13 @@ async fn load_request_context(
             Vec::new()
         })
     };
+    let revoked = revoked_keys(ctx).await;
     let reg = ctx.agent_registry.read().await;
     let mut out = super::action_authorization::RequestContext::now();
     out.amount = amount;
     let enforced = matches!(authors, super::action_authorization::PolicyAuthors::Only(_));
     for r in rows {
-        if enforced && why_not_authorized(&r, authors, &reg).is_some() {
+        if enforced && why_not_authorized(&r, authors, &reg, &revoked).is_some() {
             continue;
         }
         if r.predicate == "STATE" {
@@ -217,10 +244,11 @@ async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::Ha
     }
     let authors = super::action_authorization::PolicyAuthors::from_env();
     let enforced = matches!(authors, super::action_authorization::PolicyAuthors::Only(_));
+    let revoked = revoked_keys(ctx).await;
     let reg = ctx.agent_registry.read().await;
     let mut schemas: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
     for row in rows {
-        if enforced && why_not_authorized(&row, &authors, &reg).is_some() {
+        if enforced && why_not_authorized(&row, &authors, &reg, &revoked).is_some() {
             continue;
         }
         if let Ok(cols) = super::schema::columns(&row.attrs) {
@@ -235,6 +263,12 @@ async fn schema_violation(ctx: &ServerContext, relations: &[std::collections::Ha
 /// (2026-11-23, voir tree_check.rs). L'engagement retenu est le plus recent
 /// de la source, et seulement si sa signature est celle de la cle
 /// enregistree de la source : un transmetteur ne peut pas s'engager a sa place.
+/// Message signe d'un recu (2026-11-25), lignes separees par `\n`, sans `\n`
+/// final. Meme forme cote client : `cstl_receipt.receipt_message`.
+pub fn receipt_message(sender: &str, policy_seq: &str, request_hash: &str, audit_hash: &str) -> String {
+    format!("cstl-receipt-v1\nsender={sender}\npolicy_seq={policy_seq}\nrequest_hash={request_hash}\naudit_hash={audit_hash}")
+}
+
 async fn tree_source_violation(ctx: &ServerContext, relations: &[std::collections::HashMap<String, String>]) -> Option<String> {
     for (tree, source) in super::tree_check::claimed_sources(relations) {
         let rows = {
@@ -244,13 +278,11 @@ async fn tree_source_violation(ctx: &ServerContext, relations: &[std::collection
                 Vec::new()
             })
         };
+        let revoked = revoked_keys(ctx).await;
         let reg = ctx.agent_registry.read().await;
         let committed = rows.iter().rev().find(|row| {
             row.author.as_deref() == Some(source.as_str())
-                && match &row.signer_key {
-                    Some(key) => reg.agents.iter().any(|a| a.name == source && a.public_key.as_ref() == Some(key)),
-                    None => false,
-                }
+                && row.signer_key.as_deref().is_some_and(|key| key_in_force(&reg, &revoked, &source, key))
         });
         let Some(commit) = committed else {
             return Some(format!("arbre {tree} : aucun engagement signe de la source {source}"));
@@ -275,9 +307,20 @@ fn wire_name(v: Option<&str>) -> String {
 }
 
 pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
-    mut socket: S,
+    socket: S,
     ctx: Arc<ServerContext>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    handle_connection_as(socket, ctx, super::workload_identity::PeerIdentity::None).await
+}
+
+/// Comme `handle_connection`, avec l'identite SPIFFE du certificat client
+/// (TLS mutuel, voir workload_identity.rs).
+pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
+    mut socket: S,
+    ctx: Arc<ServerContext>,
+    peer: super::workload_identity::PeerIdentity,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let spiffe = super::workload_identity::SpiffePolicy::from_env();
     let mut buffer = vec![0u8; 8192];
     // Trouvaille mineure de l'audit multi-angle (2026-09-03): le buffer de
     // reception etait fixe a 8192 octets et jamais reassemble -- un payload
@@ -552,6 +595,11 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // comparaison embedded_pubkey vs registered_pubkey_for_sender
                     // ci-dessous n'a pas de sens ici.
                     let is_arbiter_register = payload.intent.get("purpose").map(String::as_str) == Some("arbiter_register");
+                    // token_status (2026-11-25) : demande en lecture seule du
+                    // systeme qui execute une action, souvent PAS un agent
+                    // enregistre. Exemptee de signature ; la reponse est signee
+                    // par la cle du serveur, avec le nonce du demandeur.
+                    let is_token_status = payload.intent.get("purpose").map(String::as_str) == Some("token_status");
                     // Trouvaille du 2026-09-04 (deuxieme passe, apres le durcissement de
                     // council_decision): `signing::check_signature` ne verifie QUE la
                     // coherence interne d'un message avec la cle QU'IL revendique
@@ -572,6 +620,16 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         reg.agents.iter().find(|a| a.name == sig_sender).and_then(|a| a.public_key.clone())
                     };
                     let signature_required = registered_pubkey_for_sender.is_some() || ctx.require_signatures;
+                    // Revocation (2026-11-25) : une cle revoquee ne signe plus
+                    // rien -- ni message, ni enregistrement, ni rotation. Si la
+                    // cle ENREGISTREE de l'expediteur est revoquee, il ne parle
+                    // plus jusqu'a ce qu'un auteur de politique inscrive une
+                    // nouvelle cle (key_enroll). Base illisible : refus.
+                    let key_revoked = {
+                        let store = ctx.adn_store.lock().await;
+                        let revoked = |k: &Option<String>| k.as_deref().is_some_and(|k| store.is_key_revoked(k).unwrap_or(true));
+                        revoked(&embedded_pubkey) || (!is_agent_register && revoked(&registered_pubkey_for_sender))
+                    };
                     // purpose=agent_register est delibrement EXEMPTE de ce rejet global:
                     // ce bloc court-circuit gere lui-meme son propre sig_check juste plus
                     // bas (bloc B-2), avec des messages d'erreur specifiques au contexte
@@ -585,7 +643,20 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // jamais une (re)inscription legitime: un agent qui fait tourner sa
                     // cle via un NOUVEL agent_register n'est jamais intercepte ici, quelle
                     // que soit l'ancienne cle enregistree.
-                    let sig_rejection: Option<&'static str> = if is_agent_register || is_arbiter_register {
+                    // Identite de charge de travail (2026-11-25) : en TLS mutuel avec
+                    // CSTL_SPIFFE_TRUST_DOMAIN, le sender doit etre le nom du certificat.
+                    let spiffe_rejection = if is_token_status { None } else { spiffe.check(&peer, &sig_sender).err() };
+                    // Agent federe dont l'attestation a expire (2026-11-25).
+                    let federation_expired = !is_agent_register && registered_pubkey_for_sender.is_some()
+                        && ctx.adn_store.lock().await.federated_expiry(&sig_sender).ok().flatten()
+                            .is_some_and(|exp| chrono::Utc::now().timestamp() > exp);
+                    let sig_rejection: Option<&'static str> = if let Some(r) = spiffe_rejection {
+                        Some(r)
+                    } else if federation_expired {
+                        Some("federation_expired")
+                    } else if key_revoked {
+                        Some("key_revoked")
+                    } else if is_agent_register || is_arbiter_register || is_token_status {
                         None
                     } else {
                         match &sig_check {
@@ -649,6 +720,34 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // STEP 2-seq (2026-11-25, banc public benchmark/, modele T2) :
+                    // ORDRE DE L'AUTEUR. Un message qui porte `policy_seq` n'est
+                    // accepte que s'il est plus recent que le dernier accepte de cet
+                    // expediteur ; sinon `stale_policy`, rien n'est stocke. Avant,
+                    // deux messages authentiques livres dans le desordre faisaient
+                    // gagner l'ancienne regle. Exige une signature valide : sinon un
+                    // tiers pourrait avancer la sequence d'un auteur et le bloquer.
+                    if let Some(raw_seq) = payload.intent.get("policy_seq") {
+                        let rejection = match (raw_seq.parse::<u64>().ok().filter(|v| *v <= i64::MAX as u64), &sig_check) {
+                            (None, _) => Some(("policy_seq_invalid".to_string(), String::new())),
+                            (Some(_), c) if *c != SignatureCheck::Valid => Some(("policy_seq_requires_signature".to_string(), String::new())),
+                            (Some(seq), _) => match ctx.adn_store.lock().await.advance_policy_seq(&sig_sender, seq) {
+                                Ok(None) => None,
+                                Ok(Some(last)) => Some(("stale_policy".to_string(), format!(", last_seq={last}"))),
+                                Err(e) => Some(("policy_seq_store_error".to_string(), format!(", detail={}", wire_text(&e.to_string())))),
+                            },
+                        };
+                        if let Some((purpose, extra)) = rejection {
+                            warn!("[Handler] policy_seq rejected for '{}': {}", sig_sender, purpose);
+                            let response = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose={purpose}, policy_seq={}{extra}]\n---END---\n",
+                                wire_text(raw_seq)
+                            );
+                            send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                            continue;
+                        }
+                    }
+
                     // STEP 2b: Decision du RestrictedCouncil (couche 3b, portee reduite v1)
                     // — purpose=council_decision est traite a part: ce n'est pas un
                     // nouveau fait a verifier/stocker, c'est une action sur une entree
@@ -684,7 +783,8 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
                              INTENT_PAYLOAD [purpose=tree_denied, reason=invalid_tree_id]\n---END---\n".to_string()
                         } else {
-                            let rows = ctx.adn_store.lock().await.tree_relations(&tree).unwrap_or_else(|e| {
+                            let source = payload.intent.get("source").filter(|v| !v.is_empty()).cloned();
+                            let rows = ctx.adn_store.lock().await.tree_relations_from(&tree, source.as_deref()).unwrap_or_else(|e| {
                                 error!("[Handler] tree_relations failed: {}", e);
                                 Vec::new()
                             });
@@ -726,6 +826,17 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             let rules = load_policy_rules(&ctx, &authors, &sender).await;
                             let req_ctx = load_request_context(&ctx, &authors, &sender, None).await;
                             let policy = super::action_authorization::effective_policy(&sender, &rules, &authors, &req_ctx);
+                            // Arrets d'urgence qui concernent cet agent (2026-11-25).
+                            let stops: Vec<String> = {
+                                let mut v: Vec<String> = ctx.adn_store.lock().await.emergency_stops().unwrap_or_default()
+                                    .into_iter().map(|s| s.0)
+                                    .filter(|sc| sc == "all" || sc.starts_with("action:") || *sc == format!("agent:{sender}"))
+                                    .collect();
+                                if super::emergency::operator_stop(super::emergency::stop_file(ctx.server_key.path.as_deref()).as_deref()).is_some() {
+                                    v.insert(0, "operator".to_string());
+                                }
+                                v
+                            };
                             let mut roles: Vec<&String> = req_ctx.roles.iter().collect();
                             roles.sort();
                             let roles = roles.iter().map(|r| r.as_str()).filter(|r| super::action_authorization::is_valid_action(r)).collect::<Vec<_>>().join(" ");
@@ -741,7 +852,23 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     super::action_authorization::DefaultPolicy::Allow => "allow",
                                     super::action_authorization::DefaultPolicy::Deny => "deny",
                                 },
-                                if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) },
+                                {
+                                    // Actions gouvernees (2026-11-25) : refusees sans regle
+                                    // d'un auteur ; l'agent doit le savoir pour ne pas les tenter.
+                                    let g = super::action_authorization::GovernedActions::from_env();
+                                    let mut extra = if roles.is_empty() { String::new() } else { format!(", roles={}", wire_text(&roles)) };
+                                    if !g.patterns().is_empty() {
+                                        extra.push_str(&format!(", governed={}", wire_text(&g.patterns().join(" "))));
+                                    }
+                                    if !stops.is_empty() {
+                                        extra.push_str(&format!(", emergency_stop={}", wire_text(&stops.join(" "))));
+                                    }
+                                    let approvals = super::approval::ApprovalPolicy::from_env();
+                                    if !approvals.actions.is_empty() {
+                                        extra.push_str(&format!(", approval={}", wire_text(&approvals.actions.join(" "))));
+                                    }
+                                    extra
+                                },
                             );
                             for (decision, list) in [("required", &policy.required), ("permitted", &policy.permitted), ("forbidden", &policy.forbidden)] {
                                 for e in list {
@@ -787,6 +914,277 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         continue;
                     }
 
+                    // Verification EN DIRECT d'un jeton (2026-11-25) : un jeton delivre
+                    // vaut-il encore ? Il ne vaut plus si la cle de l'agent est
+                    // revoquee ou si un arret d'urgence le couvre, meme avant son
+                    // expiration. Reponse signee :
+                    //   cstl-token-status-v1\naudit_hash=..\nstatus=..\nnonce=..\nchecked_at=..
+                    if is_token_status {
+                        let audit_hash = payload.intent.get("audit_hash").cloned().unwrap_or_default();
+                        let nonce = payload.intent.get("nonce").cloned().unwrap_or_default();
+                        let hash_ok = audit_hash.strip_prefix("sha256:").is_some_and(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()));
+                        let nonce_ok = nonce.len() >= 8 && super::action_authorization::is_valid_action(&nonce);
+                        let response = if !hash_ok || !nonce_ok {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=token_status_rejected, reason=invalid_audit_hash_or_nonce]\n---END---\n".to_string()
+                        } else {
+                            let now = chrono::Utc::now().timestamp();
+                            let status = {
+                                let store = ctx.adn_store.lock().await;
+                                match store.issued_token(&audit_hash) {
+                                    Ok(None) => "unknown",
+                                    Err(_) => "unknown",
+                                    Ok(Some(_)) if super::emergency::operator_stop(super::emergency::stop_file(ctx.server_key.path.as_deref()).as_deref()).is_some() => "stopped",
+                                    Ok(Some((agent, action, key, expires))) => {
+                                        let current = {
+                                            let reg = ctx.agent_registry.read().await;
+                                            reg.agents.iter().find(|a| a.name == agent).and_then(|a| a.public_key.clone())
+                                        };
+                                        let revoked = [key.as_deref(), current.as_deref()].into_iter().flatten()
+                                            .any(|k| store.is_key_revoked(k).unwrap_or(true));
+                                        let stops = store.emergency_stops().unwrap_or_else(|_| vec![("all".into(), String::new(), None)]);
+                                        if now > expires {
+                                            "expired"
+                                        } else if revoked {
+                                            "revoked"
+                                        } else if super::emergency::covering(stops.iter().map(|s| s.0.as_str()), &agent, Some(&action)).is_some() {
+                                            "stopped"
+                                        } else {
+                                            "valid"
+                                        }
+                                    }
+                                }
+                            };
+                            let msg = format!("cstl-token-status-v1\naudit_hash={audit_hash}\nstatus={status}\nnonce={nonce}\nchecked_at={now}");
+                            format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=token_status, sender=server, audit_hash={audit_hash}, status={status}, nonce={nonce}, checked_at={now}, signature={}]\n---END---\n",
+                                ctx.server_key.sign_hex(msg.as_bytes())
+                            )
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
+                    // Attestation d'identite pour un serveur pair (2026-11-25,
+                    // federation.rs) : signee par la cle de CE serveur, pour l'agent
+                    // qui la demande et sa cle enregistree, valable CSTL_FEDERATION_TTL_SECS.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("identity_assertion") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let response = if !identity_proven || !super::action_authorization::is_valid_action(&sender) || sender.contains('.') && super::federation::reserved_by_peer(&sender, &super::federation::peers()).is_some() {
+                            "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                             INTENT_PAYLOAD [purpose=control_denied, request=identity_assertion, reason=not_authorized]\n---END---\n".to_string()
+                        } else {
+                            let issuer = super::federation::server_name();
+                            let key = registered_pubkey_for_sender.clone().unwrap_or_default().to_ascii_lowercase();
+                            let now = chrono::Utc::now().timestamp();
+                            let exp = now + super::federation::ttl_secs();
+                            let sig = ctx.server_key.sign_hex(super::federation::message(&issuer, &sender, &key, now, exp).as_bytes());
+                            format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=identity_assertion_issued, sender=server, receiver={sender}, issuer={issuer}, agent={sender}, public_key={key}, issued_at={now}, expires_at={exp}, signature={sig}]\n---END---\n"
+                            )
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
+                    // Demandes d'accord en attente (2026-11-25, approval.rs) : pour un
+                    // approbateur seulement, signe. Lecture seule.
+                    if payload.intent.get("purpose").map(String::as_str) == Some("approval_list") {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let approvals = super::approval::ApprovalPolicy::from_env();
+                        let response = if !identity_proven || !approvals.is_approver(&sender) {
+                            format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                                 INTENT_PAYLOAD [purpose=control_denied, sender=server, receiver={}, request=approval_list, reason={}]\n---END---\n",
+                                wire_name(Some(&sender)), if identity_proven { "not_authorized" } else { "signature_required" }
+                            )
+                        } else {
+                            let since = chrono::Utc::now().timestamp() - approvals.ttl_secs;
+                            let rows = ctx.adn_store.lock().await.pending_approvals(since, 200).unwrap_or_default();
+                            let mut out = format!(
+                                "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                 INTENT_PAYLOAD [purpose=approvals, sender=server, receiver={sender}, pending={}]\n",
+                                rows.len()
+                            );
+                            for r in rows.iter().filter(|r| r.agent != sender) {
+                                out.push_str(&format!(
+                                    "APPROVAL [approval_id={}, agent={}, action={}{}, requested_at={}, expires_at={}]\n",
+                                    r.id, wire_name(Some(&r.agent)), wire_name(Some(&r.action)),
+                                    r.amount.as_deref().map(|a| format!(", amount={a}")).unwrap_or_default(),
+                                    r.requested_at, r.requested_at + approvals.ttl_secs,
+                                ));
+                            }
+                            out.push_str("---END---\n");
+                            out
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
+                    // STEP 2-controle (2026-11-25) : REVOCATION DES CLES et ARRET
+                    // D'URGENCE. Messages signes, avec policy_seq (deja verifie en
+                    // STEP 2-seq : un message rejoue ou plus ancien est refuse avant
+                    // d'arriver ici). Voir emergency.rs.
+                    //   key_revoke     : l'agent lui-meme (sa cle actuelle) ou un
+                    //                    auteur de politique (n'importe quel agent) ;
+                    //   key_enroll     : un auteur de politique seulement ;
+                    //   emergency_stop : un auteur de politique seulement.
+                    let control = payload.intent.get("purpose").map(String::as_str)
+                        .filter(|p| matches!(*p, "key_revoke" | "key_enroll" | "emergency_stop" | "approval_decision"))
+                        .map(str::to_string);
+                    if let Some(purpose) = control {
+                        let sender = payload.intent.get("sender").cloned().unwrap_or_default();
+                        let identity_proven = registered_pubkey_for_sender.is_some()
+                            && sig_check == SignatureCheck::Valid
+                            && embedded_pubkey == registered_pubkey_for_sender;
+                        let authors = super::action_authorization::PolicyAuthors::from_env();
+                        let is_author = matches!(authors, super::action_authorization::PolicyAuthors::Only(_)) && authors.includes(&sender);
+                        let get = |k: &str| payload.intent.get(k).filter(|v| !v.is_empty()).cloned();
+                        let valid_name = |v: &str| super::action_authorization::is_valid_action(v);
+                        let valid_key = |v: &str| v.len() == 64 && v.chars().all(|c| c.is_ascii_hexdigit());
+                        let reason_text = get("reason");
+                        let now = chrono::Utc::now().timestamp();
+                        // Ok(champs de la reponse) ou Err(raison du refus).
+                        let outcome: Result<String, &'static str> = if !identity_proven {
+                            Err("signature_required")
+                        } else if get("policy_seq").is_none() {
+                            Err("policy_seq_required")
+                        } else if purpose == "key_revoke" {
+                            let agent = get("agent").unwrap_or_else(|| sender.clone());
+                            let agent_key = {
+                                let reg = ctx.agent_registry.read().await;
+                                reg.agents.iter().find(|a| a.name == agent).and_then(|a| a.public_key.clone())
+                            };
+                            let key = get("public_key").or(agent_key.clone());
+                            match key {
+                                _ if !valid_name(&agent) => Err("invalid_agent"),
+                                None => Err("unknown_agent"),
+                                Some(k) if !valid_key(&k) => Err("invalid_public_key"),
+                                Some(k) if !(is_author || (agent == sender && agent_key.as_deref() == Some(k.as_str()))) => {
+                                    let _ = k;
+                                    Err("not_authorized")
+                                }
+                                Some(k) => match ctx.adn_store.lock().await.revoke_key(&k, &agent, &sender, reason_text.as_deref(), now) {
+                                    Ok(fresh) => Ok(format!("agent={agent}, public_key={}, already_revoked={}", k.to_ascii_lowercase(), !fresh)),
+                                    Err(e) => { error!("[Handler] revoke_key failed: {}", e); Err("store_error") }
+                                },
+                            }
+                        } else if purpose == "approval_decision" {
+                            let approvals = super::approval::ApprovalPolicy::from_env();
+                            match (get("approval_id"), get("decision")) {
+                                _ if !approvals.is_approver(&sender) => Err("not_authorized"),
+                                (Some(id), Some(dec)) if matches!(dec.as_str(), "approve" | "reject") => {
+                                    let store = ctx.adn_store.lock().await;
+                                    match store.get_approval(&id) {
+                                        Ok(Some(row)) if row.agent == sender => Err("self_approval"),
+                                        Ok(Some(row)) if now > row.requested_at + approvals.ttl_secs => Err("approval_expired"),
+                                        Ok(Some(row)) => match store.decide_approval(&id, dec == "approve", &sender, reason_text.as_deref(), now) {
+                                            Ok(true) => Ok(format!(
+                                                "approval_id={id}, agent={}, action={}, decision={dec}{}",
+                                                row.agent, row.action, row.amount.as_deref().map(|a| format!(", amount={a}")).unwrap_or_default()
+                                            )),
+                                            Ok(false) => Err("approval_not_pending"),
+                                            Err(e) => { error!("[Handler] decide_approval failed: {}", e); Err("store_error") }
+                                        },
+                                        Ok(None) => Err("approval_unknown"),
+                                        Err(e) => { error!("[Handler] get_approval failed: {}", e); Err("store_error") }
+                                    }
+                                }
+                                (Some(_), Some(_)) => Err("invalid_decision"),
+                                _ => Err("missing_approval_id_or_decision"),
+                            }
+                        } else if purpose == "key_enroll" {
+                            match (get("agent"), get("public_key")) {
+                                _ if !is_author => Err("not_authorized"),
+                                (Some(a), _) if !valid_name(&a) => Err("invalid_agent"),
+                                (Some(_), Some(k)) if !valid_key(&k) => Err("invalid_public_key"),
+                                (Some(a), Some(k)) => {
+                                    let store = ctx.adn_store.lock().await;
+                                    if store.is_key_revoked(&k).unwrap_or(true) {
+                                        Err("key_revoked")
+                                    } else if let Err(e) = store.enroll_key(&a, &k, &sender, now) {
+                                        error!("[Handler] enroll_key failed: {}", e);
+                                        Err("store_error")
+                                    } else {
+                                        Ok(format!("agent={a}, public_key={}", k.to_ascii_lowercase()))
+                                    }
+                                }
+                                _ => Err("missing_agent_or_public_key"),
+                            }
+                        } else {
+                            let scope = get("scope").unwrap_or_else(|| "all".to_string());
+                            let state = get("state").unwrap_or_else(|| "on".to_string());
+                            if !is_author {
+                                Err(if matches!(authors, super::action_authorization::PolicyAuthors::Only(_)) { "not_authorized" } else { "policy_authors_required" })
+                            } else if !super::emergency::valid_scope(&scope) {
+                                Err("invalid_scope")
+                            } else if !matches!(state.as_str(), "on" | "off") {
+                                Err("invalid_state")
+                            } else {
+                                match ctx.adn_store.lock().await.set_emergency_stop(&scope, state == "on", &sender, reason_text.as_deref(), now) {
+                                    Ok(()) => {
+                                        if let (Some(a), "off") = (scope.strip_prefix("agent:"), state.as_str()) {
+                                            super::emergency::reset_window(a);
+                                        }
+                                        Ok(format!("scope={scope}, state={state}"))
+                                    }
+                                    Err(e) => { error!("[Handler] set_emergency_stop failed: {}", e); Err("store_error") }
+                                }
+                            }
+                        };
+                        let shown_sender = if valid_name(&sender) { sender.clone() } else { "invalid".to_string() };
+                        let response = match outcome {
+                            Ok(fields) => {
+                                let (entry, _) = { ctx.chain.lock().await.append_with_replay_flag(&payload) };
+                                {
+                                    let store = ctx.adn_store.lock().await;
+                                    if let Err(e) = store.save_audit_entry(&entry) {
+                                        error!("[Handler] {}: save_audit_entry failed: {}", purpose, e);
+                                    }
+                                    if let Err(e) = store.put(
+                                        &entry.hash, &raw_payload,
+                                        payload.meta.get("encoder").map(String::as_str),
+                                        payload.meta.get("produced_by").map(String::as_str),
+                                        0.5, Some(&entry.parent_hash), None, None,
+                                    ) {
+                                        error!("[Handler] {}: put failed: {}", purpose, e);
+                                    }
+                                }
+                                warn!("[Handler] {} by '{}': {}", purpose, sender, fields);
+                                let done = match purpose.as_str() {
+                                    "key_revoke" => "key_revoked",
+                                    "key_enroll" => "key_enrolled",
+                                    "approval_decision" => "approval_recorded",
+                                    _ => "emergency_stop_set",
+                                };
+                                format!(
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
+                                     INTENT_PAYLOAD [purpose={done}, sender=server, receiver={shown_sender}, {fields}{}]\n\
+                                     AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
+                                    reason_text.as_deref().map(|r| format!(", reason={}", wire_text(r))).unwrap_or_default(),
+                                    entry.hash, entry.parent_hash, entry.seq,
+                                )
+                            }
+                            Err(why) => {
+                                warn!("[Handler] {} by '{}' refused: {}", purpose, sender, why);
+                                format!(
+                                    "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\n\
+                                     INTENT_PAYLOAD [purpose=control_denied, sender=server, receiver={shown_sender}, request={purpose}, reason={why}]\n---END---\n"
+                                )
+                            }
+                        };
+                        send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
+                        continue;
+                    }
+
                     if payload.intent.get("purpose").map(String::as_str) == Some("action_request") {
                         let sender = payload.intent.get("sender").cloned().unwrap_or_default();
                         let action = payload.intent.get("action").cloned();
@@ -801,7 +1199,48 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let amount_raw = payload.intent.get("amount").cloned();
                         let amount = amount_raw.as_deref().map(super::action_authorization::parse_amount);
                         let mut req_ctx = load_request_context(&ctx, &authors, &sender, amount.flatten()).await;
-                        let decision = if matches!(amount, Some(None)) {
+                        let mut approval_note = String::new();
+                        let mut new_approval: Option<String> = None;
+                        // Detection de comportement anormal (2026-11-25, emergency.rs) :
+                        // trop de demandes d'un agent PROUVE en 60 s -> arret d'urgence
+                        // sur cet agent, persiste, jusqu'a ce qu'un auteur le leve.
+                        if let (Some(max), true) = (super::emergency::anomaly_max_per_min(), identity_proven) {
+                            let now = chrono::Utc::now().timestamp();
+                            if super::emergency::record_request(&sender, now, max) {
+                                let scope = format!("agent:{sender}");
+                                let already = ctx.adn_store.lock().await.emergency_stops().unwrap_or_default().iter().any(|s| s.0 == scope);
+                                if !already {
+                                    let reason = format!("more than {max} action requests in 60 s");
+                                    if let Err(e) = ctx.adn_store.lock().await.set_emergency_stop(&scope, true, "anomaly_detector", Some(&reason), now) {
+                                        error!("[Handler] anomaly stop failed: {}", e);
+                                    }
+                                    warn!("[Handler] anomaly: {} -- emergency stop on {}", reason, scope);
+                                    if let Some(telegram) = ctx.telegram.as_ref() {
+                                        let _ = telegram.send_message(&format!("CSTL : arret automatique de {sender} ({reason})")).await;
+                                    }
+                                }
+                            }
+                        }
+                        // Arret d'urgence (2026-11-25) : l'emporte sur toute regle.
+                        // Fichier de l'operateur d'abord, puis arrets des auteurs.
+                        let stopped: Option<String> = match super::emergency::operator_stop(
+                            super::emergency::stop_file(ctx.server_key.path.as_deref()).as_deref(),
+                        ) {
+                            Some(_) => Some("operator".to_string()),
+                            None => {
+                                let stops = ctx.adn_store.lock().await.emergency_stops().unwrap_or_else(|e| {
+                                    error!("[Handler] emergency_stops failed: {}", e);
+                                    vec![("all".to_string(), "store_error".to_string(), None)]
+                                });
+                                super::emergency::covering(stops.iter().map(|s| s.0.as_str()), &sender, action.as_deref()).map(str::to_string)
+                            }
+                        };
+                        let decision = if let Some(scope) = stopped {
+                            super::action_authorization::Decision {
+                                allowed: false, reason: "emergency_stop", rule: Some(scope), conflict: false,
+                                superseded: false, ignored: 0, not_applicable: 0,
+                            }
+                        } else if matches!(amount, Some(None)) {
                             super::action_authorization::Decision {
                                 allowed: false, reason: "invalid_amount", rule: None, conflict: false,
                                 superseded: false, ignored: 0, not_applicable: 0,
@@ -818,16 +1257,72 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                     Vec::new()
                                 });
                             }
-                            let d = super::action_authorization::decide(
-                                &sender,
+                            // Actions gouvernees (2026-11-25) : sans regle d'un auteur, refus.
+                            let d = super::action_authorization::govern(
+                                super::action_authorization::decide(
+                                    &sender,
+                                    action.as_deref(),
+                                    identity_proven,
+                                    sender_registered,
+                                    &rules,
+                                    super::action_authorization::DefaultPolicy::from_env(),
+                                    &authors,
+                                    &req_ctx,
+                                ),
                                 action.as_deref(),
-                                identity_proven,
-                                sender_registered,
-                                &rules,
-                                super::action_authorization::DefaultPolicy::from_env(),
-                                &authors,
-                                &req_ctx,
+                                &super::action_authorization::GovernedActions::from_env(),
                             );
+                            // Escalade vers un humain (2026-11-25, approval.rs) : une
+                            // action permise par les regles mais qui demande un accord
+                            // n'a son jeton qu'avec un accord signe, valable une fois.
+                            let approvals = super::approval::ApprovalPolicy::from_env();
+                            let d = match action.as_deref() {
+                                Some(a) if d.allowed && approvals.requires(a) => {
+                                    let now = chrono::Utc::now().timestamp();
+                                    let deny = |reason: &'static str, d: super::action_authorization::Decision| super::action_authorization::Decision {
+                                        allowed: false, reason, rule: Some("approval".to_string()), ..d
+                                    };
+                                    match payload.intent.get("approval_id").filter(|v| super::action_authorization::is_valid_action(v)) {
+                                        Some(id) => {
+                                            approval_note = format!(", approval_id={id}");
+                                            let checked = match store.get_approval(id) {
+                                                Ok(Some(row)) => approvals.check(&row, &sender, a, amount.flatten(), now).map(|_| row),
+                                                Ok(None) => Err("approval_unknown"),
+                                                Err(e) => { error!("[Handler] get_approval failed: {}", e); Err("store_error") }
+                                            };
+                                            match checked {
+                                                Ok(row) if store.consume_approval(id).unwrap_or(false) => {
+                                                    approval_note.push_str(&format!(", approved_by={}", wire_name(row.decided_by.as_deref())));
+                                                    d
+                                                }
+                                                Ok(_) => deny("approval_used", d),
+                                                Err(why) => deny(why, d),
+                                            }
+                                        }
+                                        None => {
+                                            let mut b = [0u8; 16];
+                                            rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut b);
+                                            let id = hex::encode(b);
+                                            let amt = amount.flatten().map(|x| x.to_string());
+                                            match store.create_approval(&id, &sender, a, amt.as_deref(), now) {
+                                                Ok(()) => {
+                                                    approval_note = format!(", approval_id={id}");
+                                                    if approvals.approvers.is_empty() {
+                                                        approval_note.push_str(", approvers=none");
+                                                    }
+                                                    new_approval = Some(format!(
+                                                        "CSTL : accord demande -- agent {sender}, action {a}{}, id {id}",
+                                                        amt.as_deref().map(|x| format!(", montant {x}")).unwrap_or_default()
+                                                    ));
+                                                    deny("approval_required", d)
+                                                }
+                                                Err(e) => { error!("[Handler] create_approval failed: {}", e); deny("store_error", d) }
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => d,
+                            };
                             if let (true, Some(a), Some(amt)) = (d.allowed, action.as_deref(), amount.flatten()) {
                                 let audit_hash = crate::server::audit::canonical_hash(&payload);
                                 if let Err(e) = store.record_authorization(&sender, a, amt, req_ctx.now, &audit_hash) {
@@ -851,10 +1346,24 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                 error!("[Handler] action_request: put failed: {}", e);
                             }
                         }
+                        if let Some(a) = action.as_deref().filter(|a| super::action_authorization::is_valid_action(a)) {
+                            if let Err(e) = ctx.adn_store.lock().await.record_decision(
+                                chrono::Utc::now().timestamp(), &sender, a,
+                                amount.flatten().map(|x| x.to_string()).as_deref(),
+                                decision.allowed, decision.reason, decision.rule.as_deref(), &entry.hash,
+                            ) {
+                                error!("[Handler] record_decision failed: {}", e);
+                            }
+                        }
                         info!(
                             "[Handler] action_request sender={} action={:?} -> {} ({})",
                             sender, action, if decision.allowed { "allowed" } else { "denied" }, decision.reason
                         );
+                        if let (Some(text), Some(telegram)) = (new_approval.as_ref(), ctx.telegram.as_ref()) {
+                            if let Err(e) = telegram.send_message(text).await {
+                                warn!("[Handler] approval: Telegram notification failed: {}", e);
+                            }
+                        }
                         let shown_action = action.clone().filter(|a| super::action_authorization::is_valid_action(a)).unwrap_or_else(|| "invalid".to_string());
                         let shown_sender = if super::action_authorization::is_valid_action(&sender) { sender.clone() } else { "invalid".to_string() };
                         // Jeton signe par la cle du serveur, SEULEMENT si autorise
@@ -877,6 +1386,12 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                 amount: amount.flatten().map(|a| a.to_string()),
                             };
                             let sig = ctx.server_key.sign_hex(auth.message().as_bytes());
+                            // Pour la verification en direct (purpose=token_status).
+                            if let Err(e) = ctx.adn_store.lock().await.record_issued_token(
+                                &auth.audit_hash, &auth.agent, &auth.action, registered_pubkey_for_sender.as_deref(), auth.expires_at as i64,
+                            ) {
+                                error!("[Handler] record_issued_token failed: {}", e);
+                            }
                             format!(
                                 ", request_id={}, issued_at={}, expires_at={}, audit_hash={}{}, server_key={}, authorization={}",
                                 auth.request_id, auth.issued_at, auth.expires_at, auth.audit_hash,
@@ -888,7 +1403,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         };
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}{}]\n\
+                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}{}{}]\n\
                              AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
                             shown_sender,
                             shown_action,
@@ -899,7 +1414,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             if decision.superseded { ", superseded=true" } else { "" },
                             if decision.ignored > 0 { format!(", ignored_rules={}", decision.ignored) } else { String::new() },
                             if decision.not_applicable > 0 { format!(", rules_not_applicable={}", decision.not_applicable) } else { String::new() },
-                            token,
+                            approval_note, token,
                             entry.hash, entry.parent_hash, entry.seq,
                         );
                         send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;
@@ -1440,14 +1955,79 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         let response = if name.is_empty() || public_key.is_none() {
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason=missing_name_or_public_key]\n---END---\n".to_string()
                         } else {
+                            // Identite d'entreprise OIDC (2026-11-25, oidc.rs) : avec
+                            // CSTL_OIDC_ISSUER, l'enregistrement exige un jeton d'identite
+                            // du fournisseur dont le nom est celui de l'agent.
+                            // Federation (2026-11-25, federation.rs) : un agent d'un serveur
+                            // pair s'enregistre sous <pair>.<agent> avec l'attestation signee
+                            // de ce pair ; un agent local ne peut pas prendre ce nom.
+                            let fed_peers = super::federation::peers();
+                            let federation: Option<Result<(String, i64), &'static str>> = if fed_peers.is_empty() {
+                                None
+                            } else if let Some(issuer) = payload.intent.get("federation_issuer") {
+                                let get = |k: &str| payload.intent.get(k).map(String::as_str).unwrap_or("");
+                                let a = super::federation::Assertion {
+                                    issuer, agent: get("federation_agent"), public_key: get("federation_public_key"),
+                                    issued_at: get("federation_issued_at").parse().unwrap_or(0),
+                                    expires_at: get("federation_expires_at").parse().unwrap_or(0),
+                                    signature: get("federation_signature"),
+                                };
+                                Some(super::federation::verify(&a, &name, public_key.as_deref().unwrap_or(""), &fed_peers, chrono::Utc::now().timestamp())
+                                    .map(|exp| (issuer.clone(), exp)))
+                            } else if super::federation::reserved_by_peer(&name, &fed_peers).is_some() {
+                                Some(Err("federation_name_reserved"))
+                            } else {
+                                None
+                            };
+                            let federated_ok = matches!(federation, Some(Ok(_)));
+                            let oidc_rejection = match (super::oidc::OidcConfig::from_env(), &sig_check) {
+                                _ if federated_ok => None,
+                                (_, SignatureCheck::Valid) if matches!(federation, Some(Err(_))) => federation.as_ref().and_then(|f| f.as_ref().err().copied()),
+                                (Some(cfg), SignatureCheck::Valid) => match payload.intent.get("oidc_token") {
+                                    None => Some("oidc_token_required"),
+                                    Some(t) => match cfg.jwks().await {
+                                        Ok(jwks) => super::oidc::verify(t, &name, &cfg, &jwks, chrono::Utc::now().timestamp()).err(),
+                                        Err(e) => Some(e),
+                                    },
+                                },
+                                _ => None,
+                            };
                             match &sig_check {
+                                SignatureCheck::Valid if oidc_rejection.is_some() => {
+                                    let reason = oidc_rejection.unwrap_or("oidc");
+                                    error!("[Handler] agent_register rejected for '{}': {}", name, reason);
+                                    format!(
+                                        "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=error]\nINTENT_PAYLOAD [purpose=agent_register_rejected, reason={reason}]\n---END---\n"
+                                    )
+                                }
                                 SignatureCheck::Valid => {
                                     let existing_pubkey = {
                                         let reg = ctx.agent_registry.read().await;  // agent_register: lookup existant, lecture seule
                                         reg.agents.iter().find(|a| a.name == name).and_then(|a| a.public_key.clone())
                                     };
                                     let is_rotation = matches!(&existing_pubkey, Some(old) if Some(old) != public_key.as_ref());
-                                    let rotation_rejection: Option<(&'static str, String)> = if !is_rotation {
+                                    // Cle actuelle revoquee (2026-11-25) : la preuve de
+                                    // rotation signee par l'ancienne cle ne vaut plus rien
+                                    // (un voleur l'a aussi). La nouvelle cle passe seulement
+                                    // si un auteur de politique l'a inscrite (key_enroll).
+                                    let existing_revoked = match existing_pubkey.as_deref() {
+                                        Some(k) => ctx.adn_store.lock().await.is_key_revoked(k).unwrap_or(true),
+                                        None => false,
+                                    };
+                                    let rotation_rejection: Option<(&'static str, String)> = if federated_ok {
+                                        // Le pair fait autorite sur la cle de ses agents.
+                                        None
+                                    } else if existing_revoked {
+                                        let enrolled = match public_key.as_deref() {
+                                            Some(k) => ctx.adn_store.lock().await.take_enrollment(&name, k).unwrap_or(false),
+                                            None => false,
+                                        };
+                                        if enrolled {
+                                            None
+                                        } else {
+                                            Some(("key_revoked_enrollment_required", "the registered key of this name is revoked -- a policy author must enroll the new key (purpose=key_enroll)".to_string()))
+                                        }
+                                    } else if !is_rotation {
                                         None
                                     } else {
                                         // unwrap() sur is_rotation: existing_pubkey est forcement Some ici.
@@ -1496,6 +2076,11 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                                             chrono::Utc::now().timestamp(),
                                         ) {
                                             error!("[Handler] agent_register: echec persistance de '{}': {}", name, e);
+                                        }
+                                        if let Some(Ok((issuer, exp))) = &federation {
+                                            if let Err(e) = ctx.adn_store.lock().await.set_federated(&name, issuer, *exp) {
+                                                error!("[Handler] set_federated failed: {}", e);
+                                            }
                                         }
                                         ctx.agent_registry.write().await.register(card);  // agent_register: écriture
                                         if is_rotation {
@@ -1691,6 +2276,14 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     let relations_to_verify: Vec<(usize, String, String, String)> = payload.relations.iter()
                         .enumerate()
                         .filter_map(|(idx, relation)| {
+                            // Elements d'arbre (tree=<id>) et engagements tree_commit
+                            // (2026-11-23) : des identifiants LOCAUX (c1, c1.0,
+                            // commandes_nov), sans sens dans une base de connaissances
+                            // publique. Les envoyer a Wikidata ne verifiait rien et
+                            // coutait une requete sortante par ligne de l'arbre.
+                            if relation.contains_key("tree") || relation.get("type").map(String::as_str) == Some("tree_commit") {
+                                return None;
+                            }
                             let subject = relation.get("subject").cloned()?;
                             let predicate = relation.get("type").cloned()?;
                             let object = relation.get("object").cloned()?;
@@ -2729,12 +3322,33 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                         // reponse.
                         let routed_agent_name_for_response = agent_name.clone();
 
+                        // RECU SIGNE (2026-11-25, banc public, modele T2) : pour un
+                        // message qui porte `policy_seq`, le serveur signe ce qu'il a
+                        // accepte (expediteur, sequence, empreinte des octets
+                        // canoniques recus, maillon d'audit). L'auteur verifie ce recu
+                        // avec la cle publique du serveur : un faux accuse de reception,
+                        // ou le recu d'un message modifie en route, ne passe pas, et il
+                        // sait qu'il doit renvoyer sa politique.
+                        let receipt_line = match payload.intent.get("policy_seq") {
+                            Some(seq) => {
+                                use sha2::{Digest, Sha256};
+                                let request_hash = format!("sha256:{}", hex::encode(Sha256::digest(super::audit::signing_bytes(&payload))));
+                                let msg = receipt_message(&sig_sender, seq, &request_hash, &entry.hash);
+                                format!(
+                                    "RECEIPT [sender={}, policy_seq={}, request_hash={}, audit_hash={}, signature={}]\n",
+                                    sig_sender, seq, request_hash, entry.hash, ctx.server_key.sign_hex(msg.as_bytes())
+                                )
+                            }
+                            None => String::new(),
+                        };
+
                         // STEP 5: Build response
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\n\
                             META [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
                             INTENT_PAYLOAD [purpose=acknowledgement, sender=server, receiver={}]\n\
                             RELATION [type=received, subject={}, status=valid]\n\
+                            {}\
                             {}\
                             {}\
                             {}\
@@ -2777,6 +3391,7 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                             execution_trace_line,
                             adn_delta_line,
                             conversation_context_line,
+                            receipt_line,
                             entry.hash,
                             entry.parent_hash,
                             entry.seq
@@ -2831,6 +3446,9 @@ pub async fn handle_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     // Categorie fixe (jamais le contenu brut) : dit a l'IA cliente
                     // que c'est sa premiere ligne qui est en cause (2026-11-20).
                     parser::ParseError::InvalidFormat(m) if m.starts_with("malformed_header") => "malformed_header",
+                    // Memes categories fixes pour les refus du 2026-11-26.
+                    parser::ParseError::InvalidFormat(m) if m.starts_with("unrecognized_line") => "unrecognized_line",
+                    parser::ParseError::InvalidFormat(m) if m.starts_with("invalid_sigma") => "invalid_sigma",
                     parser::ParseError::InvalidFormat(_) => "invalid_format",
                     parser::ParseError::MissingEndMarker => "missing_end_marker",
                     parser::ParseError::MalformedBlock(_) => "malformed_block",

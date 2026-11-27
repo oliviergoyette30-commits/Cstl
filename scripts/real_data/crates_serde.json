@@ -1,0 +1,253 @@
+{
+ "crate": {
+  "name": "serde",
+  "description": "A generic serialization/deserialization framework",
+  "downloads": 1773650378,
+  "recent_downloads": 458944912,
+  "max_version": "1.0.229",
+  "max_stable_version": "1.0.229",
+  "repository": "https://github.com/serde-rs/serde",
+  "num_versions": 316,
+  "yanked": false
+ },
+ "keywords": [
+  {
+   "id": "no_std",
+   "keyword": "no_std",
+   "crates_cnt": 2516
+  },
+  {
+   "id": "serde",
+   "keyword": "serde",
+   "crates_cnt": 1715
+  },
+  {
+   "id": "serialization",
+   "keyword": "serialization",
+   "crates_cnt": 1770
+  }
+ ],
+ "categories": [
+  {
+   "id": "no-std",
+   "category": "No standard library",
+   "crates_cnt": 15372
+  },
+  {
+   "id": "encoding",
+   "category": "Encoding",
+   "crates_cnt": 8656
+  },
+  {
+   "id": "no-std::no-alloc",
+   "category": "No dynamic allocation",
+   "crates_cnt": 1762
+  }
+ ],
+ "versions": [
+  {
+   "num": "1.0.229",
+   "created_at": "2026-07-18T23:05:13.266456Z",
+   "downloads": 291102851,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 83669,
+   "rust_version": "1.56",
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "published_by": {
+    "login": "dtolnay",
+    "name": "David Tolnay"
+   }
+  },
+  {
+   "num": "1.0.228",
+   "created_at": "2025-09-27T16:51:35.265429Z",
+   "downloads": 589727930,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 83652,
+   "rust_version": "1.56",
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "published_by": {
+    "login": "dtolnay",
+    "name": "David Tolnay"
+   }
+  },
+  {
+   "num": "1.0.227",
+   "created_at": "2025-09-25T23:43:08.742811Z",
+   "downloads": 1862747,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 83643,
+   "rust_version": "1.56",
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "published_by": {
+    "login": "dtolnay",
+    "name": "David Tolnay"
+   }
+  },
+  {
+   "num": "1.0.226",
+   "created_at": "2025-09-20T23:37:58.558002Z",
+   "downloads": 7455122,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 28484,
+   "rust_version": "1.56",
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "published_by": {
+    "login": "dtolnay",
+    "name": "David Tolnay"
+   }
+  },
+  {
+   "num": "1.0.225",
+   "created_at": "2025-09-16T03:43:57.050243Z",
+   "downloads": 6742786,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 28467,
+   "rust_version": "1.56",
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "published_by": {
+    "login": "dtolnay",
+    "name": "David Tolnay"
+   }
+  },
+  {
+   "num": "1.0.224",
+   "created_at": "2025-09-15T15:47:07.829179Z",
+   "downloads": 2214240,
+   "yanked": false,
+   "yank_message": null,
+   "license": "MIT OR Apache-2.0",
+   "crate_size": 28268,
+   "rust_version": "1.56",
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "published_by": {
+    "login": "dtolnay",
+    "name": "David Tolnay"
+   }
+  }
+ ]
+}

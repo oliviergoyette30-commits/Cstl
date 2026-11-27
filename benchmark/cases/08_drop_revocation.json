@@ -1,0 +1,35 @@
+{
+ "id": "08_drop_revocation",
+ "author": "cstl-team",
+ "kind": "suppression",
+ "description": "v1 permet wipe_db, v2 l'interdit ; le relais supprime v2. Personne ne peut savoir qu'un message manque.",
+ "messages": [
+  {
+   "rules": [
+    {
+     "action": "wipe_db",
+     "modality": "MAY"
+    }
+   ]
+  },
+  {
+   "rules": [
+    {
+     "action": "wipe_db",
+     "modality": "MUST_NOT"
+    }
+   ]
+  }
+ ],
+ "attack": [
+  {
+   "op": "deliver",
+   "message": 0
+  }
+ ],
+ "requests": [
+  {
+   "action": "wipe_db"
+  }
+ ]
+}

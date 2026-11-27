@@ -533,7 +533,7 @@ def test_indented_tree_lenient_mode_for_model_written_text():
     got = decode_tree_indented(text, lenient=True, warnings=warn)
     assert got == {"orders": [{"id": "o0", "client": "c5", "lines": [{"item": "gpu", "qty": 5}, {"item": "lic", "qty": 3}]},
                               {"id": "o1", "client": "c3", "note": "fragile", "lines": [{"item": "router", "qty": 1}]}]}
-    assert warn == ["lines[9] annonce, 3 element(s) ecrit(s)"]
+    assert warn == ["ligne 3 : orders sans note (colonnes absentes)", "lines[9] annonce, 3 element(s) ecrit(s)"]
     # [N] facultatif, dans les deux modes.
     assert decode_tree_indented("@t: a\n1\n2") == {"t": [{"a": 1}, {"a": 2}]}
     # Une indentation incoherente reste refusee.
@@ -638,3 +638,95 @@ def test_indented_tree_unknown_value_speaks():
     assert back == data and is_unknown(back["patients"][0]["renal"]) and back["patients"][1]["renal"] is None
     assert "renal" not in back["patients"][2]
     assert relations_to_tree(tree_to_relations(data, "t1"), "t1") == data
+
+
+def test_lenient_mode_warns_about_every_row_with_missing_columns():
+    """2026-11-24 : une critique ecrite par un modele avait oublie d'indenter
+    ses lignes de detail ; le mode tolerant les lisait comme des sections a qui
+    il manque des colonnes, sans rien signaler. Il avertit maintenant."""
+    text = ("@crit: section rang titre\n@details^crit: preuve impact\n"
+            "1 1 \"Biais\"\n\"llama 8/12\" \"absorbe\"")
+    with pytest.raises(CompactError):
+        decode_tree_indented(text)
+    warn = []
+    decode_tree_indented(text, lenient=True, warnings=warn)
+    assert warn == ["ligne 4 : crit sans titre (colonnes absentes)"]
+
+
+def test_inline_values_accept_plain_json_with_spaces():
+    """2026-11-24 : du JSON pur, espaces compris, est une valeur en ligne
+    valide ; un espace ambigu ([hello world]) est refuse, pas recolle."""
+    text = '@t: id cfg\nx1 {"a": 1, "b": [1, 2], "c d": "e f"}\nx2 [] extra={"k": null}'
+    assert decode_tree_indented(text) == {"t": [{"id": "x1", "cfg": {"a": 1, "b": [1, 2], "c d": "e f"}},
+                                                {"id": "x2", "cfg": [], "extra": {"k": None}}]}
+    with pytest.raises(CompactError, match="espace"):
+        decode_tree_indented("@t: v\n[hello world]")
+
+
+def test_polymorphic_cstl_picks_the_most_reliable_form_for_the_task():
+    """2026-11-24 : CSTL polymorphe. Entre machines : la forme sans perte la
+    moins chere. Quand un modele lit ou ecrit : la forme la plus fiable mesuree
+    pour la sorte de donnees et la tache. Chaque choix se relit a l'identique."""
+    from cstl_compact import candidates, choose_format, data_kind, decode_auto, encode_auto
+    policy = [{"type": "PERFORM", "subject": "bot", "object": "refund_order", "modality": "MUST_NOT",
+               "amount_above": "100"},
+              {"type": "PERFORM", "subject": "bot", "object": "log_transaction", "modality": "MUST"},
+              {"type": "POSSESSES", "subject": "bot", "object": "role:support"},
+              {"type": "STATE", "subject": "incident_open", "object": "true"}]
+    table = {"orders": [{"id": f"o{i}", "client": f"c{i % 3}", "lines": [{"item": "gpu", "qty": i, "price": 9}]}
+                        for i in range(8)]}
+    config = {"name": "x", "scripts": {"lint:fix": "eslint --fix", "build": "tsc"}, "engines": {"node": ">=18"},
+              "maintainers": [{"name": "a", "email": "a@x"}], "private": False}
+    assert (data_kind(policy), data_kind(table), data_kind(config)) == ("relations", "tabulaire", "irregulier")
+    assert choose_format(policy, "ecrire")[0] == "complet"
+    assert choose_format(policy, "lire")[0] in ("lignes", "symboles")
+    assert choose_format(table, "lire")[0] == "arbre_n" and choose_format(table, "ecrire")[0] == "arbre_n"
+    assert choose_format(config, "ecrire")[0] == "strict"
+    text = encode_auto(config, "ecrire")
+    assert text.startswith("#cstl strict\n") and decode_auto(text) == config
+    # Les textes ecrits sous l'ancien nom restent lus.
+    assert decode_auto(text.replace("#cstl strict", "#cstl objets_json", 1)) == config
+    assert choose_format(table)[0] in ("arbre", "arbre_ids")          # entre machines : la moins chere
+    for d in (policy, table, config, [1, 2], "texte", None, {}):
+        for task in (None, "lire", "ecrire"):
+            assert decode_auto(encode_auto(d, task)) == d
+    assert "tableau" not in candidates(policy)     # regrouperait les regles : ordre perdu
+    with pytest.raises(CompactError):
+        decode_auto("rien de reconnaissable")
+
+
+def test_objects_form_round_trips_any_json():
+    """2026-11-24 : forme « objets » (donnees irregulieres) : cle: valeur,
+    objets indentes, listes en « - » ; sans perte sur des documents
+    aleatoires, cles pieges comprises (« - », « x=y », « docs:dev »)."""
+    from cstl_compact import decode_objects, encode_objects
+    doc = {"name": "express", "scripts": {"docs:dev": "vitepress dev", "lint": "eslint ."},
+           "maintainers": [{"name": "a", "email": "a@x"}, {"name": "b"}], "keywords": ["web", "api"],
+           "-": [{}, []], "x=y": None, "pay": {"$unknown": {"why": "bank"}}, "note": "l1\nl2", "v": "1.0"}
+    text = encode_objects(doc)
+    assert "scripts:\n  docs:dev: \"vitepress dev\"" in text and "- name: a" in text
+    # Ce que les modeles ecrivent : cle avec « : », valeur sans guillemets.
+    assert decode_objects("s:\n  lint:fix: eslint --fix\n  docs:dev: vitepress dev") == \
+        {"s": {"lint:fix": "eslint --fix", "docs:dev": "vitepress dev"}}
+    assert decode_objects(text) == doc
+    for d in ([{"a": 1}, {"b": [1, {"c": 2}]}], [], {}, 5, "texte", None, [[1, 2], [3]]):
+        assert decode_objects(encode_objects(d)) == d
+    with pytest.raises(CompactError):
+        decode_objects("a: 1\n   b: 2")
+
+
+def test_strict_writes_unknown_values_as_question_marks():
+    """CSTL strict (2026-11-25) : une valeur inconnue s'ecrit `?` ou
+    `?{"sigma":0.3}`, comme dans l'arbre indente, et se relit identique."""
+    import cstl_compact as c
+    data = {"patients": [{"id": "p1", "renal": c.unknown(sigma=0.3, pending="next_checkup")},
+                         {"id": "p2", "renal": None}, {"id": "p3"}],
+            "flags": [1, c.unknown(), "a"]}
+    text = c.encode_strict(data)
+    assert 'renal: ?{"sigma":0.3,"pending":"next_checkup"}' in text and "  - ?" in text
+    assert "$unknown" not in text
+    assert c.decode_strict(text) == data
+    assert c.decode_strict(c.encode_strict(c.unknown())) == c.unknown()
+    assert c.decode_strict('a: "?"') == {"a": "?"}, "le texte « ? » reste un texte"
+    with pytest.raises(c.CompactError):
+        c.decode_strict("a: ?[1]")

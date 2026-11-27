@@ -1,0 +1,2020 @@
+{
+  "rows": [
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : o2 = 2×546 + 4×169 = 1092 + 676 = 1768.\n\nQ2 : lignes avec une option warranty :\n- o1 : router (warranty 38), oui → 1\n- o3 : license_pack qty 1 (install, warranty), oui → 2\n- o4 : storage_tb (warranty 74), oui → 3\n- o5 : license_pack (express, warranty), oui → 4\n\nTotal : 4.\n\nQ3 : lignes gpu_rack avec qty ≥ 3 :\n- o0 : gpu_rack qty 5, oui\n- o3 : gpu_rack qty 5, oui\n- o6 : gpu_rack qty 3, oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "o2 : support_plan 2×546 = 1092 ; license_pack 4×169 = 676 ; total 1768.\n\nLignes avec une option warranty :\n- o1 : router (warranty,38) → 1\n- o3 : license_pack qty 1 (install, warranty) → 2\n- o4 : storage_tb (warranty,74) → 3\n- o5 : license_pack (express, warranty) → 4\n- o6 : gpu_rack n'a qu'une option install → non\n\nTotal : 4.\n\nLignes gpu_rack avec qty ≥ 3 :\n- o0 : qty 5 → oui\n- o3 : qty 5 → oui\n- o6 : qty 3 → oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : o2 a deux lignes sans option.\n- support_plan : 2 × 546 = 1092\n- license_pack : 4 × 169 = 676\n- Total : 1092 + 676 = 1768\n\nQ2 : lignes ayant une option warranty.\n- o1 : router, 1 ligne\n- o3 : license_pack 1 417, avec install et warranty, 1 ligne\n- o4 : storage_tb 1 84, 1 ligne\n- o5 : license_pack 4 482, 1 ligne\n- Total : 4\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : gpu_rack 5, oui\n- o3 : gpu_rack 5, oui\n- o6 : gpu_rack 3, oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "o2 : support_plan 2×546 = 1092 ; license_pack 4×169 = 676 ; total 1768.\n\nLignes avec une option warranty : o1 router (1), o3 license_pack 417 (2), o4 storage_tb (3), o5 license_pack (4). Total 4.\n\ngpu_rack avec qty ≥ 3 : o0 (qty 5), o3 (qty 5), o6 (qty 3).\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : commande o0.\n- Ligne gpu_rack : 3 × (507 + 46 + 22) = 3 × 575 = 1725\n- Ligne storage_tb : 2 × (534 + 60) = 2 × 594 = 1188\n- Total : 1725 + 1188 = 2913\n\nQ2 : lignes avec une option warranty.\n- o2 : la ligne license_pack a warranty.\n- o4 : la ligne gpu_rack a warranty.\n- Total : 2\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : qty 3, oui.\n- o1 : qty 3, oui.\n- o2 : qty 4, oui.\n- o3 : qty 3, oui.\n- o4 : qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack, non.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : o0.\n- Ligne gpu_rack : qty 3 × (507 + 46 + 22) = 3 × 575 = 1725.\n- Ligne storage_tb : qty 2 × (534 + 60) = 2 × 594 = 1188.\n- Total : 1725 + 1188 = 2913.\n\nQ2 : lignes avec une option warranty.\n- o2 : la ligne license_pack a warranty (1).\n- o4 : la ligne gpu_rack a warranty (2).\n- Les autres commandes n'en ont pas, donc 2.\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : qty 3, oui.\n- o1 : qty 3, oui.\n- o2 : qty 4, oui.\n- o3 : qty 3, oui.\n- o4 : qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack, non.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : commande o0.\n- gpu_rack : 3 × (507 + 46 + 22) = 3 × 575 = 1725\n- storage_tb : 2 × (534 + 60) = 2 × 594 = 1188\n- Total : 2913\n\nQ2 : lignes ayant une option warranty.\n- o2 license_pack : oui (1)\n- o4 gpu_rack : oui (2)\n- Total : 2\n\nQ3 : commandes avec une ligne gpu_rack de qty ≥ 3.\n- o0 : gpu_rack 3 → oui\n- o1 : gpu_rack 3 → oui\n- o2 : gpu_rack 4 → oui\n- o3 : gpu_rack 3 → oui\n- o4 : gpu_rack 4 → oui\n- o5 : qty 1 → non\n- o6 : qty 1 → non\n- o7 : pas de gpu_rack → non\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : commande o0.\n- gpu_rack : qty 3, prix 507 + 46 + 22 = 575, soit 1725.\n- storage_tb : qty 2, prix 534 + 60 = 594, soit 1188.\n- Total : 1725 + 1188 = 2913.\n\nQ2 : lignes ayant une option warranty.\n- o2 : la ligne license_pack a warranty.\n- o4 : la ligne gpu_rack a warranty.\n- Total : 2.\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : gpu_rack qty 3, oui.\n- o1 : gpu_rack qty 3, oui.\n- o2 : gpu_rack qty 4, oui.\n- o3 : gpu_rack qty 3, oui.\n- o4 : gpu_rack qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : dans dept_1, seul agent_28 a la clearance high, donc 1.\n\nQ2 : agent_22 est membre de team_1_1, dont le lead est agent_21, donc [\"agent_21\"].\n\nQ3 : dept_1 a un budget de 367000, supérieur à 200000, mais ses équipes comptent 3 et 1 membres, aucune n'a plus de 3 membres. dept_0 a un budget de 30000, inférieur à 200000, même si team_0_0 compte 5 membres. Aucun département ne remplit les deux conditions, donc [].\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : dans dept_1, seul agent_28 (team_1_0) a la clearance high, donc 1.\n\nQ2 : agent_22 est membre de team_1_1, dont le lead est agent_21.\n\nQ3 : dept_1 a un budget de 367000 (> 200000), mais ses équipes comptent 3 et 1 membres, donc aucune n'a plus de 3 membres. dept_0 a une équipe de 5 membres, mais son budget de 30000 est insuffisant. Aucun département ne remplit les deux conditions.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n- dept_0 (budget 30000) : team_0_0 (lead agent_19) compte 5 membres, team_0_1 (lead agent_6) en compte 1.\n- dept_1 (budget 367000) : team_1_0 (lead agent_30) compte 3 membres, team_1_1 (lead agent_21) en compte 1.\n\n1. Dans dept_1, seul agent_28 (team_1_0) a la clearance high. Réponse : 1.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21. Réponse : [\"agent_21\"].\n3. dept_0 a une équipe de plus de 3 membres, mais son budget est de 30000, donc inférieur à 200000. dept_1 a un budget supérieur à 200000, mais aucune équipe de plus de 3 membres (maximum 3). Réponse : [].\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\n- dept_1 : team_1_0 contient agent_28 (high), agent_40 (low) et agent_31 (medium). team_1_1 contient agent_22 (medium).\n- agent_22 n'apparaît que dans team_1_1, dont le lead est agent_21.\n- dept_0 (budget 30000) a une équipe de 5 membres, mais son budget est inférieur à 200000.\n- dept_1 (budget 367000) a des équipes de 3 et 1 membres, aucune de plus de 3.\n\nRéponses :\n\n1. Un seul membre de dept_1 a la clearance high (agent_28).\n2. Le lead est agent_21.\n3. Aucun département ne remplit les deux conditions.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres : agent_30 (high), agent_31 (medium), agent_30 (high) et agent_33 (low). Il y a donc 2 entrées avec la clearance high. Ce sont deux entrées pour le même agent, mais la question porte sur les « membres » ; je compte les entrées, soit 2.\n\nQ2 : agent_37 est membre de team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Ses équipes team_0_0 (4 membres) et team_0_2 (5 membres) ont plus de 3 membres. dept_1 a un budget de 76000, inférieur à 200000, donc il est exclu. La réponse est [\"dept_0\"].\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres. Ceux avec clearance high sont agent_30 (analyst, high) et agent_30 (analyst, high), soit 2 entrées. Les deux lignes étant des entrées de membres distinctes, le total est de 2. Si l'on comptait les agents distincts, on obtiendrait 1, mais la question porte sur les « membres », donc on compte les entrées : 2.\n\nQ2 : agent_37 est membre de team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Il a team_0_0 avec 4 membres (plus de 3), donc il satisfait les deux conditions. dept_1 a un budget de 76000, il ne qualifie pas.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\ndept_1 contient une seule équipe, team_1_0, avec 4 membres : agent_30 (high), agent_31 (medium), agent_30 (high), agent_33 (low). Il y a donc 2 membres high.\n\nagent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35.\n\nPour la question 3 :\n- dept_0 a un budget de 497000, supérieur à 200000. Ses équipes comptent 4 membres (team_0_0), 2 (team_0_1) et 5 (team_0_2). Il a donc au moins une équipe de plus de 3 membres, et il est retenu.\n- dept_1 a un budget de 76000, inférieur à 200000. Il est exclu, même si team_1_0 a 4 membres.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte quatre membres. Deux d'entre eux ont la clearance high : agent_30 (analyst) et le second agent_30. Les autres sont medium (agent_31) et low (agent_33). Réponse : 2.\n\nQ2 : agent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35. Réponse : [\"agent_35\"].\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Il compte team_0_0 avec 4 membres, donc plus de 3, ce qui le qualifie. dept_1 a un budget de 76000, inférieur à 200000, donc il est exclu. Réponse : [\"dept_0\"].\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : dans dept_4, agent_5 est en clearance high, agent_14 en low et agent_18 en medium. Il y a donc 1 membre high.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est lead de team_3_0, mais pas membre. Il n'apparaît pas ailleurs comme membre. Résultat : [\"agent_16\"].\n\nQ3 : budgets supérieurs à 200000 : dept_2 (330000) et dept_5 (371000).\n- dept_2 : team_2_1 compte 5 membres, soit plus de 3. dept_2 est retenu.\n- dept_5 : team_5_0 compte 1 membre. dept_5 est exclu.\n\nRésultat : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : dans dept_4, agent_5 est reviewer avec la clearance high. agent_14 est low et agent_18 est medium. Il y a donc 1 membre high.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est lead de team_3_0, mais pas membre de cette équipe. Réponse : [\"agent_16\"].\n\nQ3 : les départements avec un budget supérieur à 200000 sont dept_2 (330000) et dept_5 (371000). dept_2 a team_2_1 avec 5 membres, ce qui dépasse 3. dept_5 n'a qu'une équipe d'un seul membre. Réponse : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}",
+      "parsed": true
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont agent_5 (high), agent_14 (low) et agent_18 (medium). Un seul a la clearance high, donc r1 = 1.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est aussi membre de team_3_0. Le lead de cette équipe est agent_25 (c'est lui-même le lead, mais pas un membre listé). Les membres de team_3_0 sont agent_21, agent_10, agent_32 et agent_39, donc agent_25 n'y figure pas. Seule team_2_1 compte, d'où r2 = [\"agent_16\"].\n\nQ3 : les départements avec un budget supérieur à 200000 sont dept_2 (330000) et dept_5 (371000). Pour les équipes de plus de 3 membres, team_2_1 en a 5, donc dept_2 convient. dept_5 n'a qu'une équipe avec 1 membre. team_3_0 a 4 membres, mais dept_3 a un budget de 29000. Donc r3 = [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, agent_5 (reviewer, high) est le seul membre high. agent_14 est low et agent_18 est medium. Réponse : 1.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il apparaît aussi comme lead de team_3_0, mais il n'en est pas membre. Réponse : [\"agent_16\"].\n\nQ3 : les départements avec un budget supérieur à 200000 sont dept_2 (330000) et dept_5 (371000). dept_2 a team_2_1 avec 5 membres, donc plus de 3. dept_5 n'a qu'une équipe d'un seul membre. dept_3 a une équipe de 4 membres, mais son budget est de 29000. Réponse : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, aucun membre n'a la clearance high.\n- team_4_0 : medium, low, medium.\n- team_4_1 : medium, medium, medium, medium.\n- team_4_2 : medium.\nLe total est donc 0.\n\nQ2 : agent_17 est membre de deux équipes.\n- team_0_1, dont le lead est agent_38.\n- team_0_2, dont le lead est agent_21.\nLes leads sont donc [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les départements ont un budget supérieur à 200000. Il faut donc chercher une équipe de plus de 3 membres, soit au moins 4.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : 1 et 2 membres, donc non.\n- dept_2 : 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\nLes départements retenus sont dept_0, dept_3, dept_4 et dept_5.\n\n{\"r1\": 0, \"r2\": [\"agent_38\",\"agent_21\"], \"r3\": [\"dept_0\",\"dept_3\",\"dept_4\",\"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont les suivants.\n- team_4_0 : agent_32 (medium), agent_40 (low), agent_33 (medium).\n- team_4_1 : agent_10 (medium), agent_3 (medium), agent_1 (medium), agent_19 (medium).\n- team_4_2 : agent_7 (medium).\n\nAucun n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). Les leads sont donc agent_38 et agent_21.\n\nQ3 : tous les budgets dépassent 200000. Il faut au moins une équipe de plus de 3 membres, c'est-à-dire 4 ou plus.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dept_4 compte 3 équipes (team_4_0, team_4_1, team_4_2). Leurs membres ont les clearances suivantes :\n- team_4_0 : medium, low, medium.\n- team_4_1 : medium, medium, medium, medium.\n- team_4_2 : medium.\nAucun membre n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Donc r2 = [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets sont supérieurs à 200000. Il faut compter les membres par équipe :\n- dept_0 : team_0_0 en a 4, donc dept_0 est retenu.\n- dept_1 : 1 et 2 membres, non retenu.\n- dept_2 : 3 et 2 membres, non retenu.\n- dept_3 : team_3_0 en a 4, donc dept_3 est retenu.\n- dept_4 : team_4_0 en a 3, team_4_1 en a 4, donc dept_4 est retenu.\n- dept_5 : team_5_0 en a 5, donc dept_5 est retenu.\n\nr3 = [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"].\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont :\n- team_4_0 : medium, low, medium\n- team_4_1 : medium, medium, medium, medium\n- team_4_2 : medium\n\nAucun n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). Donc r2 = [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000. Il faut au moins une équipe de plus de 3 membres, c'est-à-dire 4 ou plus :\n- dept_0 : team_0_0 en a 4, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 en a 4, donc oui.\n- dept_4 : team_4_1 en a 4, donc oui.\n- dept_5 : team_5_0 en a 5, donc oui.\n\nr3 = [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"].\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : on cherche les clauses terminate qui ont un amount_above inférieur à 1000.\n- ctr_1, clause 1.1.0 : terminate avec amount_above 500, donc retenu.\n- ctr_6, clause 6.0.2 : terminate avec amount_above 1000, ce qui n'est pas inférieur à 1000, donc exclu.\n- ctr_2, clause 2.0.1 : terminate sans amount_above, donc exclu.\n- ctr_6, clause 6.1.1 : terminate sans amount_above, donc exclu.\n- ctr_7, clause 7.0.2 : terminate sans amount_above, donc exclu.\n\nSeul ctr_1 est retenu.\n\nQ3 : la clause 7.0.2 se trouve dans la section « privacy_0 ».\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : les clauses d'action terminate avec un amount_above sont :\n- 1.1.0 (ctr_1) : 500, inférieur à 1000, donc retenue.\n- 6.0.2 (ctr_6) : 1000, pas inférieur à 1000, donc exclue.\n- Les autres clauses terminate n'ont pas d'amount_above : 2.0.1, 6.1.1 et 7.0.2.\n\nSeul ctr_1 est donc retenu.\n\nQ3 : la clause 7.0.2 se trouve dans la section privacy_0.\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : les clauses terminate avec amount_above sont :\n- 1.1.0 (ctr_1) : amount_above=500, inférieur à 1000, donc retenue.\n- 6.0.2 (ctr_6) : amount_above=1000, non inférieur à 1000, donc exclue.\n\nLes autres clauses terminate (2.0.1, 6.1.1, 7.0.2) n'ont pas d'amount_above. Seul ctr_1 convient.\n\nQ3 : la clause 7.0.2 se trouve dans la section « privacy_0 ».\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : on cherche les clauses d'action terminate avec un amount_above inférieur à 1000.\n- 1.1.0 : MAY terminate, amount_above=500 → ctr_1 convient.\n- 6.0.2 : MUST_NOT terminate, amount_above=1000 → 1000 n'est pas inférieur à 1000, donc non.\n- 2.0.1 : terminate sans amount_above → non.\n- 6.1.1 : terminate sans amount_above → non.\n- 7.0.2 : terminate sans amount_above → non.\n\nSeul ctr_1 convient.\n\nQ3 : la clause 7.0.2 est dans la section privacy_0 de ctr_7. Le title est donc « privacy_0 ».\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : ctr_2 contient 3 clauses MUST_NOT : 2.0.0, 2.0.1 et 2.1.0.\n\nQ2 : il faut chercher les clauses d'action terminate qui ont un amount_above strictement inférieur à 1000.\n- ctr_0 : la clause 0.1.1 a amount_above 5000, donc elle ne convient pas.\n- ctr_4 : la clause 4.0.1 a amount_above 1000, ce qui n'est pas inférieur à 1000.\n- ctr_7 : la clause 7.1.1 a amount_above 1000, même cas.\n- ctr_6 : les clauses terminate (6.1.2 et 6.2.2) n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section \"payment_0\".\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : on cherche les clauses d'action terminate avec un amount_above strictement inférieur à 1000.\n- ctr_0 : 0.1.1 a amount_above 5000, donc non.\n- ctr_4 : 4.0.1 a amount_above 1000, ce qui n'est pas inférieur à 1000, donc non.\n- ctr_7 : 7.1.1 a amount_above 1000, donc non.\n- Les autres clauses terminate (4.0.0, 6.1.2, 6.2.2) n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 est dans la section payment_0 de ctr_6.\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : il faut chercher les clauses d'action terminate avec un amount_above strictement inférieur à 1000.\n- 0.1.1 : terminate, amount_above=5000, donc non.\n- 4.0.1 : terminate, amount_above=1000, ce n'est pas inférieur à 1000, donc non.\n- 7.1.1 : terminate, amount_above=1000, donc non.\n- Les autres clauses terminate (4.0.0, 6.1.2, 6.2.2) n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 est dans la section payment_0 de ctr_6, dont le title est « payment ». Le nom de la section est « payment_0 », mais le champ title vaut probablement « payment_0 », puisque la colonne est title et que la valeur affichée est « payment_0 ». Je retiens donc « payment_0 ».\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans ctr_2, les clauses MUST_NOT sont 2.0.0, 2.0.1 et 2.1.0, soit 3.\n\nQ2 : il faut chercher les clauses d'action terminate qui ont un amount_above inférieur à 1000.\n- ctr_0 : 0.1.1 terminate a amount_above=5000, ce qui n'est pas inférieur à 1000.\n- ctr_4 : 4.0.1 terminate a amount_above=1000, ce qui n'est pas strictement inférieur à 1000. 4.0.0 n'a pas d'amount_above.\n- ctr_6 : 6.1.2 et 6.2.2 n'ont pas d'amount_above.\n- ctr_7 : 7.1.1 terminate a amount_above=1000, ce qui n'est pas inférieur à 1000.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 appartient à la section payment_0 de ctr_6. Le title est donc \"payment\".\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\"], \"r3\": \"liability_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}",
+      "parsed": true
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 0,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : o2 = 2×546 + 4×169 = 1092 + 676 = 1768.\n\nQ2 : lignes avec une option warranty :\n- o1 : ligne router (warranty 38), oui → 1\n- o3 : ligne license_pack qty 1 (install + warranty), oui → 2\n- o4 : ligne storage_tb (warranty 74) → 3\n- o5 : ligne license_pack (express + warranty) → 4\n\nTotal : 4.\n\nQ3 : lignes gpu_rack avec qty ≥ 3 :\n- o0 : qty 5, oui\n- o3 : qty 5, oui\n- o6 : qty 3, oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "o2 : support_plan 2×546 = 1092 ; license_pack 4×169 = 676 ; total 1768.\n\nLignes avec une option warranty :\n- o1 : router (warranty) → 1\n- o3 : license_pack qty 1 (install, warranty) → 2\n- o4 : storage_tb (warranty) → 3\n- o5 : license_pack (express, warranty) → 4\n\nTotal : 4. L'option warranty d'o6 n'existe pas (o6 a seulement install).\n\nLignes gpu_rack avec qty ≥ 3 :\n- o0 : qty 5 → oui\n- o3 : qty 5 → oui\n- o6 : qty 3 → oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : la commande o2 compte deux lignes sans option.\n- support_plan : 2 × 546 = 1092\n- license_pack : 4 × 169 = 676\n- Total : 1092 + 676 = 1768\n\nQ2 : lignes ayant une option warranty.\n- o1 : router, 1 ligne\n- o3 : license_pack (qty 1, price 417), 1 ligne\n- o4 : storage_tb (qty 1, price 84), 1 ligne\n- o5 : license_pack, 1 ligne\n- Total : 4\n\nQ3 : lignes gpu_rack avec qty d'au moins 3.\n- o0 : gpu_rack qty 5, oui\n- o3 : gpu_rack qty 5, oui\n- o6 : gpu_rack qty 3, oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "r1 : la commande o2 compte deux lignes sans option : 2×546 = 1092 et 4×169 = 676, soit 1768.\n\nr2 : les lignes ayant une option warranty sont :\n- o1 : router (1)\n- o3 : license_pack 1 417 (2)\n- o4 : storage_tb (3)\n- o5 : license_pack 4 482 (4)\n\nLe total est donc 4.\n\nr3 : les lignes gpu_rack avec qty ≥ 3 sont :\n- o0 : gpu_rack 5 (oui)\n- o3 : gpu_rack 5 (oui)\n- o6 : gpu_rack 3 (oui)\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : commande o0.\n- Ligne gpu_rack : 3 × (507 + 46 + 22) = 3 × 575 = 1725\n- Ligne storage_tb : 2 × (534 + 60) = 2 × 594 = 1188\n- Total : 1725 + 1188 = 2913\n\nQ2 : lignes avec une option warranty.\n- o2, ligne license_pack : oui (1)\n- o4, ligne gpu_rack : oui (2)\n- Total : 2\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : qty 3, oui\n- o1 : qty 3, oui\n- o2 : qty 4, oui\n- o3 : qty 3, oui\n- o4 : qty 4, oui\n- o5 : qty 1, non\n- o6 : qty 1, non\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : o0\n- Ligne gpu_rack : 3 × (507 + 46 + 22) = 3 × 575 = 1725\n- Ligne storage_tb : 2 × (534 + 60) = 2 × 594 = 1188\n- Total : 1725 + 1188 = 2913\n\nQ2 : lignes avec une option warranty\n- o2, ligne license_pack : warranty (1)\n- o4, ligne gpu_rack : warranty (2)\n- Total : 2\n\nQ3 : lignes gpu_rack avec qty ≥ 3\n- o0 : qty 3 → oui\n- o1 : qty 3 → oui\n- o2 : qty 4 → oui\n- o3 : qty 3 → oui\n- o4 : qty 4 → oui\n- o5 : qty 1 → non\n- o6 : qty 1 → non\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : commande o0.\n- gpu_rack : 3 × (507 + 46 + 22) = 3 × 575 = 1725\n- storage_tb : 2 × (534 + 60) = 2 × 594 = 1188\n- Total : 1725 + 1188 = 2913\n\nQ2 : lignes ayant une option warranty.\n- o2, ligne license_pack : oui.\n- o4, ligne gpu_rack qty 4 : oui.\n- Total : 2\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : gpu_rack qty 3, oui.\n- o1 : gpu_rack qty 3, oui.\n- o2 : gpu_rack qty 4, oui.\n- o3 : gpu_rack qty 3, oui.\n- o4 : gpu_rack qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : commande o0.\n- gpu_rack : qty 3, prix 507 + 46 + 22 = 575, soit 1725.\n- storage_tb : qty 2, prix 534 + 60 = 594, soit 1188.\n- Total : 1725 + 1188 = 2913.\n\nQ2 : lignes avec une option warranty.\n- o2 : license_pack a une option warranty.\n- o4 : gpu_rack (qty 4, prix 18) a une option warranty.\n- Total : 2.\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : gpu_rack qty 3, oui.\n- o1 : gpu_rack qty 3, oui.\n- o2 : gpu_rack qty 4, oui.\n- o3 : gpu_rack qty 3, oui.\n- o4 : gpu_rack qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack, non.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "1. Dans dept_1, seul agent_28 a la clearance high, donc 1 membre.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21.\n3. Seul dept_1 a un budget supérieur à 200000 (367000), mais ses équipes comptent 3 et 1 membres, aucune n'a plus de 3 membres. dept_0 a une équipe de 5 membres (team_0_0) mais son budget est de 30000. La liste est donc vide.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, agent_28 est le seul membre avec la clearance high, donc 1.\n\nQ2 : agent_22 est membre de team_1_1, dont le lead est agent_21, donc [\"agent_21\"].\n\nQ3 : seul dept_1 a un budget supérieur à 200000 (367000). Ses équipes comptent 3 et 1 membres, aucune n'a plus de 3 membres. dept_0 a une équipe de 5 membres, mais son budget est de 30000. Le résultat est donc une liste vide.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\n- dept_0 (budget 30000) : team_0_0 (lead agent_19) a 5 membres ; team_0_1 (lead agent_6) en a 1.\n- dept_1 (budget 367000) : team_1_0 (lead agent_30) a 3 membres ; team_1_1 (lead agent_21) en a 1.\n\n1. Dans dept_1, seul agent_28 (team_1_0) a la clearance high, donc 1.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21, donc [\"agent_21\"].\n3. dept_0 a une équipe de plus de 3 membres, mais son budget (30000) est inférieur à 200000. dept_1 a un budget supérieur à 200000, mais aucune équipe de plus de 3 membres (maximum 3). La liste est donc vide.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\n- dept_1 : team_1_0 contient agent_28 (high), agent_40 (low) et agent_31 (medium). team_1_1 contient agent_22 (medium).\n- agent_22 est membre de team_1_1 uniquement, dont le lead est agent_21.\n- Seule team_0_0 a plus de 3 membres (5), et elle appartient à dept_0, dont le budget est de 30000, donc inférieur à 200000. dept_1 a un budget de 367000, mais ses équipes ont 3 et 1 membres. Aucun département ne satisfait les deux conditions.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte deux entrées high, toutes deux pour agent_30. Les entrées étant dupliquées, il faut choisir entre compter les entrées (2) ou les membres distincts (1). La question demande « combien de membres » ; je compte les entrées de membres, soit 2. Les doublons sont probablement un piège volontaire, mais « membres » désigne ici les entrées de la liste members. Ambigu : agent_30 apparaît deux fois avec les mêmes attributs. Je retiens 2 (entrées).\n\nQ2 : agent_37 est membre de team_0_2, dont le lead est agent_35. Réponse : [\"agent_35\"].\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Ses équipes ont 4, 2 et 5 membres, donc au moins une équipe dépasse 3 membres. dept_1 a un budget de 76000, il est exclu. Réponse : [\"dept_0\"].\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres. agent_30 est high, agent_31 est medium, agent_30 est de nouveau high, et agent_33 est low. Cela donne 2 membres high, en comptant les entrées et non les agents distincts.\n\nQ2 : agent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Ses équipes team_0_0 (4 membres) et team_0_2 (5 membres) dépassent 3 membres, donc dept_0 convient. dept_1 a un budget de 76000, inférieur à 200000, donc il ne convient pas.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte agent_30 (high), agent_31 (medium), agent_30 (high) et agent_33 (low). Il y a donc 2 membres avec la clearance high.\n\nQ2 : agent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Son équipe team_0_0 compte 4 membres, donc plus de 3. dept_0 est retenu. dept_1 a un budget de 76000, insuffisant, donc exclu.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dept_1 compte une seule équipe, team_1_0, avec 4 membres. Ceux dont la clearance est high : agent_30 (high) et agent_30 (high), soit 2. Les deux autres sont medium et low.\n\nQ2 : agent_37 apparaît uniquement dans team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Il compte team_0_0 avec 4 membres et team_0_2 avec 5 membres, donc au moins une équipe de plus de 3 membres. dept_1 a un budget de 76000, inférieur à 200000, donc il est exclu, même si team_1_0 a 4 membres. Seul dept_0 répond aux deux conditions.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, agent_5 est en clearance high (team_4_0). agent_14 est low et agent_18 est medium. Il y a donc 1 membre high.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est aussi lead de team_3_0, mais il n'en est pas membre. Réponse : [\"agent_16\"].\n\nQ3 : les budgets supérieurs à 200000 sont dept_2 (330000) et dept_5 (371000).\n- dept_2 : team_2_1 compte 5 membres, soit plus de 3. dept_2 est donc retenu.\n- dept_5 : team_5_0 compte 1 membre. dept_5 n'est pas retenu.\n\ndept_3 a une équipe de 4 membres, mais son budget est de 29000, donc il ne convient pas.\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, agent_5 a la clearance high (team_4_0). agent_14 est low et agent_18 est medium. Il y a donc 1 membre high.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est lead de team_3_0, mais pas membre. La liste est donc [\"agent_16\"].\n\nQ3 : les budgets supérieurs à 200000 sont dept_2 (330000) et dept_5 (371000). dept_2 a team_2_1 avec 5 membres, donc elle convient. dept_5 n'a qu'une équipe d'un seul membre. La liste est [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres high sont agent_5 (team_4_0, high). agent_14 est low, agent_18 est medium. Total : 1.\n\nQ2 : agent_25 est membre de team_2_1 (lead agent_16). Il apparaît aussi dans team_3_0, où il est lead, mais pas comme membre. Les membres de team_3_0 sont agent_21, agent_10, agent_32 et agent_39. Résultat : [\"agent_16\"].\n\nQ3 : budgets supérieurs à 200000 : dept_2 (330000) et dept_5 (371000).\n- dept_2 a team_2_1 avec 5 membres, donc plus de 3 : oui.\n- dept_5 a team_5_0 avec 1 membre : non.\n\nRésultat : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres high sont agent_5 (team_4_0, high). agent_14 est low, agent_18 est medium. Total : 1.\n\nQ2 : agent_25 est membre de team_2_1 (lead agent_16). Il est aussi dans team_3_0 comme lead, mais il n'en est pas membre. Ses équipes en tant que membre : team_2_1 seulement. Réponse : [\"agent_16\"].\n\nQ3 : budget > 200000 : dept_2 (330000) et dept_5 (371000).\n- dept_2 : team_2_1 a 5 membres (>3), donc oui.\n- dept_5 : team_5_0 a 1 membre, donc non.\n\nRéponse : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, aucun membre n'a la clearance high.\n- team_4_0 : medium, low, medium\n- team_4_1 : medium, medium, medium, medium\n- team_4_2 : medium\n\nRésultat : 0.\n\nQ2 : agent_17 est membre de deux équipes.\n- team_0_1, dont le lead est agent_38\n- team_0_2, dont le lead est agent_21\n\nRésultat : [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000, il suffit donc de chercher une équipe de plus de 3 membres, c'est-à-dire 4 ou plus.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\nRésultat : [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"].\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont :\n- team_4_0 : medium, low, medium\n- team_4_1 : medium, medium, medium, medium\n- team_4_2 : medium\n\nAucun n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Il n'apparaît dans aucune autre équipe. r2 = [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000. Il faut au moins une équipe de plus de 3 membres, soit 4 ou plus.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\nr3 = [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"].\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont les suivants.\n- team_4_0 : agent_32 (medium), agent_40 (low), agent_33 (medium) → aucun high.\n- team_4_1 : agent_10 (medium), agent_3 (medium), agent_1 (medium), agent_19 (medium) → aucun high.\n- team_4_2 : agent_7 (medium) → aucun high.\n\nLe total est donc 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). Réponse : [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000. Il faut au moins une équipe de plus de 3 membres, soit 4 ou plus.\n- dept_0 : team_0_0 compte 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont agent_32 (medium), agent_40 (low), agent_33 (medium), agent_10 (medium), agent_3 (medium), agent_1 (medium), agent_19 (medium) et agent_7 (medium). Aucun n'a la clearance high, donc 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). Réponse : agent_38 et agent_21.\n\nQ3 : tous les budgets dépassent 200000. Il faut au moins une équipe de plus de 3 membres, soit 4 ou plus.\n- dept_0 : team_0_1 compte 5 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 compte 4 membres, donc oui.\n- dept_4 : team_4_1 compte 4 membres, donc oui.\n- dept_5 : team_5_0 compte 5 membres, donc oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : on cherche les clauses terminate qui ont un amount_above inférieur à 1000.\n- 1.1.0 : terminate, amount_above 500, donc ctr_1 convient.\n- 6.0.2 : terminate, amount_above 1000, ce qui n'est pas inférieur à 1000.\n- 6.1.1 : terminate sans amount_above, donc exclue.\n- 2.0.1 et 7.0.2 : terminate sans amount_above, donc exclues.\n\nSeul ctr_1 convient.\n\nQ3 : la clause 7.0.2 se trouve dans la section \"privacy_0\".\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : les clauses d'action terminate avec un amount_above sont :\n- 1.1.0 (ctr_1) : amount_above 500, donc inférieur à 1000.\n- 6.0.2 (ctr_6) : amount_above 1000, donc pas strictement inférieur.\n\nLes autres clauses terminate n'ont pas d'amount_above : 2.0.1, 6.1.1 et 7.0.2. Seul ctr_1 répond donc au critère.\n\nQ3 : la clause 7.0.2 se trouve dans la section privacy_0.\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0), donc 1.\n\nQ2 : il faut les clauses terminate avec amount_above présent et inférieur à 1000.\n- 1.1.0 : MAY terminate, amount_above=500 → ctr_1 convient.\n- 6.0.2 : amount_above=1000, ce n'est pas inférieur à 1000.\n- 2.0.1, 6.1.1 et 7.0.2 n'ont pas de amount_above.\n\nRésultat : [\"ctr_1\"].\n\nQ3 : la clause 7.0.2 est dans la section privacy_0 de ctr_7, dont le title est \"privacy_0\".\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans ctr_2, la seule clause MUST_NOT est 2.1.0, donc 1.\n\nQ2 : on cherche les clauses terminate avec un amount_above strictement inférieur à 1000.\n- ctr_1 : 1.1.0 MAY terminate avec amount_above=500, donc ctr_1 convient.\n- ctr_6 : 6.0.2 MUST_NOT terminate avec amount_above=1000, ce qui n'est pas inférieur à 1000. 6.1.1 MUST terminate n'a pas d'amount_above. ctr_6 ne convient pas.\n- ctr_2 : 2.0.1 MAY terminate n'a pas d'amount_above, donc ne convient pas.\n- ctr_7 : 7.0.2 MAY terminate n'a pas d'amount_above, donc ne convient pas.\n\nSeul ctr_1 convient.\n\nQ3 : la clause 7.0.2 se trouve dans la section privacy_0 de ctr_7. Le title de la section est donc \"privacy_0\".\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 3 clauses MUST_NOT (2.0.0, 2.0.1, 2.1.0).\n\nQ2 : je cherche les clauses terminate qui ont un amount_above strictement inférieur à 1000.\n- ctr_0 : 0.1.1 a un amount_above de 5000, donc non.\n- ctr_4 : 4.0.1 a un amount_above de 1000, ce qui n'est pas inférieur à 1000. 4.0.0 n'a pas d'amount_above.\n- ctr_7 : 7.1.1 a un amount_above de 1000, donc non.\n- ctr_6 : 6.1.2 et 6.2.2 n'ont pas d'amount_above.\n\nAucun contrat ne répond au critère, la liste est vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section \"payment_0\".\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 3 clauses MUST_NOT : 2.0.0, 2.0.1 et 2.1.0.\n\nQ2 : on cherche les clauses d'action terminate dont amount_above est inférieur à 1000.\n- ctr_0 : 0.1.1 a un amount_above de 5000, ce qui ne convient pas.\n- ctr_4 : 4.0.1 a un amount_above de 1000, ce qui n'est pas inférieur à 1000.\n- ctr_7 : 7.1.1 a un amount_above de 1000, ce qui ne convient pas non plus.\n- Les autres clauses terminate n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section payment_0.\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : il faut chercher les clauses d'action terminate qui ont un amount_above inférieur à 1000.\n- 0.1.1 : terminate, amount_above=5000, non.\n- 4.0.1 : terminate, amount_above=1000, non (1000 n'est pas inférieur à 1000).\n- 7.1.1 : terminate, amount_above=1000, non.\n- Les clauses 4.0.0, 6.1.2 et 6.2.2 n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section payment_0 du contrat ctr_6. Le title est « payment », car le nom de la section est de la forme title_index.\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses MUST_NOT.\n\nQ2 : il faut chercher les clauses d'action terminate avec un amount_above strictement inférieur à 1000.\n- 0.1.1 : terminate, 5000, non.\n- 4.0.1 : terminate, 1000, non (pas strictement inférieur).\n- 7.1.1 : terminate, 1000, non.\n- Les autres clauses terminate n'ont pas de amount_above : 4.0.0, 6.1.2, 6.2.2.\n\nAucun contrat ne répond au critère, la liste est vide.\n\nQ3 : la clause 6.0.0 appartient à la section payment_0 de ctr_6. Le title est donc « payment ».\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\",\"ctr_1\",\"ctr_7\",\"ctr_15\",\"ctr_17\",\"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 1,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : o2 = 2×546 + 4×169 = 1092 + 676 = 1768.\n\nQ2 : lignes ayant une option warranty :\n- o1 : router (warranty 38), soit 1.\n- o3 : license_pack avec install 44 et warranty 64, soit 1.\n- o4 : storage_tb avec warranty 74, soit 1.\n- o5 : license_pack avec express et warranty, soit 1.\n\nTotal : 4.\n\nQ3 : lignes gpu_rack avec qty ≥ 3 :\n- o0 : gpu_rack qty 5, oui.\n- o3 : gpu_rack qty 5, oui.\n- o6 : gpu_rack qty 3, oui.\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\",\"o3\",\"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "o2 : support_plan 2×546 = 1092 ; license_pack 4×169 = 676 ; total 1768.\n\nLignes avec une option warranty :\n- o1 : router (warranty) → 1\n- o3 : license_pack qty 1 (install, warranty) → 2\n- o4 : storage_tb qty 1 (warranty) → 3\n- o5 : license_pack (express, warranty) → 4\n\nTotal : 4. Les lignes de o0, o6 et o7 n'en ont pas.\n\nLignes gpu_rack avec qty ≥ 3 :\n- o0 : qty 5, oui\n- o3 : qty 5, oui\n- o6 : qty 3, oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : la commande o2 compte deux lignes, sans option.\n- support_plan : 2 × 546 = 1092\n- license_pack : 4 × 169 = 676\n- Total : 1768\n\nQ2 : lignes ayant une option warranty :\n- o1 : router (warranty 38), soit 1\n- o3 : license_pack 1 417 (warranty 64), soit 2\n- o4 : storage_tb 1 84 (warranty 74), soit 3\n- o5 : license_pack 4 482 (warranty 55), soit 4\n\nTotal : 4.\n\nQ3 : lignes gpu_rack avec qty ≥ 3 :\n- o0 : gpu_rack 5, oui\n- o3 : gpu_rack 5, oui\n- o6 : gpu_rack 3, oui\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\", \"o3\", \"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : la commande o2 compte deux lignes sans option : 2×546 = 1092 et 4×169 = 676. Total : 1768.\n\nQ2 : les lignes ayant une option warranty sont :\n- o1, router (warranty 38)\n- o3, license_pack 1 417 (warranty 64)\n- o4, storage_tb (warranty 74)\n- o5, license_pack (warranty 55)\n\nCela fait 4 lignes.\n\nQ3 : les lignes gpu_rack avec qty d'au moins 3 sont :\n- o0 : gpu_rack 5, qualifie\n- o3 : gpu_rack 5, qualifie\n- o6 : gpu_rack 3, qualifie\n\n{\"r1\": 1768, \"r2\": 4, \"r3\": [\"o0\",\"o3\",\"o6\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : commande o0.\n- Ligne gpu_rack : qty 3, prix 507 + 46 + 22 = 575, soit 3 × 575 = 1725.\n- Ligne storage_tb : qty 2, prix 534 + 60 = 594, soit 2 × 594 = 1188.\n- Total : 1725 + 1188 = 2913.\n\nQ2 : lignes avec une option warranty.\n- o2, ligne license_pack : oui.\n- o4, ligne gpu_rack : oui.\n- Aucune autre ligne n'en a, donc 2.\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : qty 3, oui.\n- o1 : qty 3, oui.\n- o2 : qty 4, oui.\n- o3 : qty 3, oui.\n- o4 : qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack, non.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : o0.\n- Ligne gpu_rack : qty 3, prix 507 + 46 + 22 = 575, soit 3 × 575 = 1725.\n- Ligne storage_tb : qty 2, prix 534 + 60 = 594, soit 2 × 594 = 1188.\n- Total : 1725 + 1188 = 2913.\n\nQ2 : lignes avec une option warranty.\n- o2 : la ligne license_pack a warranty.\n- o4 : la ligne gpu_rack (qty 4) a warranty.\n- Total : 2.\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : qty 3, oui.\n- o1 : qty 3, oui.\n- o2 : qty 4, oui.\n- o3 : qty 3, oui.\n- o4 : qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack, non.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : commande o0.\n- gpu_rack : qty 3, prix 507 + 46 + 22 = 575, soit 1725.\n- storage_tb : qty 2, prix 534 + 60 = 594, soit 1188.\n- Total : 1725 + 1188 = 2913.\n\nQ2 : lignes ayant une option warranty.\n- o2 : la ligne license_pack en a une (1).\n- o4 : la ligne gpu_rack en a une (2).\n- Total : 2.\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : gpu_rack qty 3, oui.\n- o1 : gpu_rack qty 3, oui.\n- o2 : gpu_rack qty 4, oui.\n- o3 : gpu_rack qty 3, oui.\n- o4 : gpu_rack qty 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : o0.\n- gpu_rack : 3 × (507 + 46 + 22) = 3 × 575 = 1725\n- storage_tb : 2 × (534 + 60) = 2 × 594 = 1188\n- Total : 2913\n\nQ2 : lignes ayant une option warranty.\n- o2 : license_pack (warranty 11), soit 1.\n- o4 : gpu_rack 4 18 (warranty 22), soit 1.\n- Total : 2\n\nQ3 : lignes gpu_rack avec qty ≥ 3.\n- o0 : gpu_rack 3, oui.\n- o1 : gpu_rack 3, oui.\n- o2 : gpu_rack 4, oui.\n- o3 : gpu_rack 3, oui.\n- o4 : gpu_rack 4, oui.\n- o5 : qty 1, non.\n- o6 : qty 1, non.\n- o7 : pas de gpu_rack, non.\n\n{\"r1\": 2913, \"r2\": 2, \"r3\": [\"o0\",\"o1\",\"o2\",\"o3\",\"o4\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 4254, \"r2\": 11, \"r3\": [\"o0\", \"o7\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "commandes",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 392, \"r2\": 10, \"r3\": [\"o2\", \"o11\", \"o12\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "1. Dans dept_1, seul agent_28 a la clearance high, donc 1.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21, donc [\"agent_21\"].\n3. Seul dept_1 a un budget supérieur à 200000 (367000), mais ses équipes ont 3 et 1 membres, donc aucune n'a plus de 3 membres. dept_0 a une équipe de 5 membres, mais son budget est de 30000. La liste est donc vide.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, seul agent_28 (team_1_0) a la clearance high, donc 1.\n\nQ2 : agent_22 est membre de team_1_1, dont le lead est agent_21.\n\nQ3 : dept_1 a un budget de 367000 (> 200000), mais ses équipes comptent 3 et 1 membres, donc aucune n'a plus de 3 membres. dept_0 a une équipe de 5 membres, mais son budget est de 30000 (< 200000). Aucun département ne remplit les deux conditions.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\n- dept_0 (budget 30000) : team_0_0 (lead agent_19) a 5 membres, team_0_1 (lead agent_6) en a 1.\n- dept_1 (budget 367000) : team_1_0 (lead agent_30) a 3 membres, team_1_1 (lead agent_21) en a 1.\n\n1. Dans dept_1, seul agent_28 (team_1_0) a la clearance high, soit 1 membre.\n2. agent_22 est membre de team_1_1, dont le lead est agent_21.\n3. dept_0 a une équipe de plus de 3 membres (5), mais son budget de 30000 ne dépasse pas 200000. dept_1 a un budget de 367000, mais aucune équipe de plus de 3 membres (3 au maximum). Aucun département ne remplit les deux conditions.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\n- dept_1 : team_1_0 contient agent_28 (high), agent_40 (low) et agent_31 (medium). team_1_1 contient agent_22 (medium).\n- Q1 : un seul membre a la clearance high dans dept_1 (agent_28), donc 1.\n- Q2 : agent_22 est dans team_1_1, dont le lead est agent_21, donc [\"agent_21\"].\n- Q3 : dept_0 a un budget de 30000, inférieur à 200000, donc exclu même si team_0_0 a 5 membres. dept_1 a un budget de 367000 mais ses équipes ont 3 et 1 membres, aucune de plus de 3. La liste est vide.\n\n{\"r1\": 1, \"r2\": [\"agent_21\"], \"r3\": []}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte deux entrées « high », toutes deux pour agent_30 (la première et la troisième). Si l'on compte les entrées de membres, on obtient 2. Si l'on compte les agents distincts, on obtient 1.\n\nLa question demande « combien de membres », ce qui est ambigu. Les entrées étant des doublons de la même personne, je retiens 2 entrées, qui est le décompte brut le plus naturel (l'ambiguïté demeure).\n\nQ2 : agent_37 apparaît dans team_0_2, dont le lead est agent_35. Réponse : [\"agent_35\"].\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Il contient team_0_0 avec 4 membres et team_0_2 avec 5 membres, donc au moins une équipe a plus de 3 membres. dept_1 a un budget de 76000, inférieur à 200000, donc il est exclu. Réponse : [\"dept_0\"].\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres. Les membres de clearance high sont agent_30 (premier enregistrement) et agent_30 (troisième enregistrement), soit 2 lignes. Je compte les lignes (membres), donc 2. Si l'on comptait les agents distincts, on obtiendrait 1, mais la question demande combien de membres, et je retiens 2.\n\nQ2 : agent_37 est membre de team_0_2 uniquement, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000. Ses équipes team_0_0 (4 membres) et team_0_2 (5 membres) ont plus de 3 membres, donc dept_0 convient. dept_1 a un budget de 76000, inférieur à 200000, donc il ne convient pas.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Lecture des données :\n\ndept_0 (budget 497000) :\n- team_0_0 (lead agent_4) : 4 membres (agent_21, agent_27, agent_22, agent_27)\n- team_0_1 (lead agent_11) : 2 membres\n- team_0_2 (lead agent_35) : 5 membres (agent_34, agent_37, agent_22, agent_7, agent_22)\n\ndept_1 (budget 76000) :\n- team_1_0 (lead agent_20) : 4 membres (agent_30 high, agent_31 medium, agent_30 high, agent_33 low)\n\nQ1 : dans dept_1, les membres avec clearance high sont les deux lignes agent_30, soit 2.\n\nQ2 : agent_37 appartient uniquement à team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000, et possède des équipes de plus de 3 membres (4 et 5). dept_1 a un budget de 76000, inférieur à 200000, donc exclu.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_1, l'équipe team_1_0 compte 4 membres : agent_30 analyst high, agent_31 medium, agent_30 high, agent_33 low. Il y a donc 2 membres high.\n\nQ2 : agent_37 appartient à team_0_2, dont le lead est agent_35.\n\nQ3 : dept_0 a un budget de 497000, supérieur à 200000, et team_0_0 compte 4 membres, team_0_2 en compte 5. Il a donc au moins une équipe de plus de 3 membres. dept_1 a un budget de 76000, inférieur à 200000, donc exclu. Seul dept_0 répond.\n\n{\"r1\": 2, \"r2\": [\"agent_35\"], \"r3\": [\"dept_0\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, agent_5 est high, agent_14 low, agent_18 medium. Il y a donc 1 membre high.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est lead de team_3_0, mais pas membre. La liste est donc [\"agent_16\"].\n\nQ3 : dept_2 a un budget de 330000 et team_2_1 compte 5 membres, donc il est retenu. dept_5 a un budget de 371000 mais une seule équipe de 1 membre, donc il est exclu. dept_3 compte 4 membres mais son budget est de 29000, donc il est exclu. La liste est [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, agent_5 a la clearance high (team_4_0), agent_14 est low et agent_18 est medium. Il y a donc 1 membre high.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il est lead de team_3_0, mais pas membre de cette équipe. Réponse : [\"agent_16\"].\n\nQ3 : les départements avec un budget supérieur à 200000 sont dept_2 (330000) et dept_5 (371000).\n- dept_2 a team_2_1 avec 5 membres, donc plus de 3 : il est retenu.\n- dept_5 a une seule équipe de 1 membre : il est écarté.\n\nRéponse : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres high sont agent_5 (team_4_0) ; agent_14 est low, agent_18 est medium. Cela fait 1.\n\nQ2 : agent_25 est membre de team_2_1 (lead agent_16). Il est aussi membre de team_3_0 ? Non : le lead de team_3_0 est agent_25, mais ce n'est pas un membre. Les membres de team_3_0 sont agent_21, agent_10, agent_32 et agent_39. Résultat : [\"agent_16\"].\n\nQ3 : budget supérieur à 200000 : dept_2 (330000) et dept_5 (371000). Dans dept_2, team_2_1 compte 5 membres, donc plus de 3. Dans dept_5, team_5_0 n'en compte qu'un. Résultat : [\"dept_2\"].\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, seul agent_5 (team_4_0) a la clearance high. agent_14 est low et agent_18 est medium. Réponse : 1.\n\nQ2 : agent_25 est membre de team_2_1, dont le lead est agent_16. Il apparaît aussi dans team_3_0 comme lead, mais pas comme membre. Les membres de team_3_0 sont agent_21, agent_10, agent_32 et agent_39. Réponse : [\"agent_16\"].\n\nQ3 : les départements avec un budget supérieur à 200000 sont dept_2 (330000) et dept_5 (371000).\n- dept_2 a team_2_1 avec 5 membres, donc plus de 3. Il est retenu.\n- dept_5 n'a qu'une équipe d'un seul membre. Il est écarté.\n\ndept_3 a une équipe de 4 membres mais son budget est de 29000, donc il est écarté.\n\n{\"r1\": 1, \"r2\": [\"agent_16\"], \"r3\": [\"dept_2\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, aucun membre n'a la clearance high.\n- team_4_0 : medium, low, medium.\n- team_4_1 : medium, medium, medium, medium.\n- team_4_2 : medium.\nLe total est donc 0.\n\nQ2 : agent_17 est membre de deux équipes.\n- team_0_1, dont le lead est agent_38.\n- team_0_2, dont le lead est agent_21.\nLes leads, sans doublon, sont agent_38 et agent_21.\n\nQ3 : tous les budgets dépassent 200000, il reste à chercher une équipe de plus de 3 membres (au moins 4).\n- dept_0 : team_0_0 a 4 membres, donc oui.\n- dept_1 : les équipes ont 1 et 2 membres, donc non.\n- dept_2 : les équipes ont 3 et 2 membres, donc non.\n- dept_3 : team_3_0 a 4 membres, donc oui.\n- dept_4 : team_4_1 a 4 membres, donc oui.\n- dept_5 : team_5_0 a 5 membres, donc oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dept_4, membres de clearance high.\n- team_4_0 : medium, low, medium → aucun.\n- team_4_1 : medium, medium, medium, medium → aucun.\n- team_4_2 : medium → aucun.\nTotal : 0.\n\nQ2 : agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Réponse : [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000, il reste à chercher une équipe de plus de 3 membres, soit au moins 4.\n- dept_0 : team_0_0 a 4 membres → oui.\n- dept_1 : 1 et 2 membres → non.\n- dept_2 : 3 et 2 membres → non.\n- dept_3 : team_3_0 a 4 membres → oui.\n- dept_4 : team_4_1 a 4 membres → oui.\n- dept_5 : team_5_0 a 5 membres → oui.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont :\n- team_4_0 : agent_32 operator medium, agent_40 operator low, agent_33 operator medium.\n- team_4_1 : agent_10 analyst medium, agent_3 reviewer medium, agent_1 analyst medium, agent_19 operator medium.\n- team_4_2 : agent_7 analyst medium.\n\nAucun n'a la clearance high, donc r1 = 0.\n\nQ2 : agent_17 est membre de team_0_1 (lead agent_38) et de team_0_2 (lead agent_21). Donc r2 = [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000. Il faut une équipe de plus de 3 membres, soit au moins 4.\n- dept_0 : team_0_0 a 4 membres, donc oui.\n- dept_1 : équipes de 1 et 2 membres, donc non.\n- dept_2 : équipes de 3 et 2 membres, donc non.\n- dept_3 : team_3_0 a 4 membres, donc oui.\n- dept_4 : team_4_1 a 4 membres, donc oui.\n- dept_5 : team_5_0 a 5 membres, donc oui.\n\nr3 = [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"].\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "organisation",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans dept_4, les membres sont les suivants.\n- team_4_0 : medium, low, medium → aucun high.\n- team_4_1 : medium, medium, medium, medium → aucun high.\n- team_4_2 : medium → aucun high.\nLe total est 0.\n\nQ2 : agent_17 apparaît dans team_0_1 (lead agent_38) et dans team_0_2 (lead agent_21). La liste est donc [\"agent_38\", \"agent_21\"].\n\nQ3 : tous les budgets dépassent 200000, il reste à compter les membres par équipe, en cherchant une équipe de plus de 3 membres (soit 4 ou plus).\n- dept_0 : team_0_0 en a 4, donc oui.\n- dept_1 : 1 et 2 membres, donc non.\n- dept_2 : 3 et 2 membres, donc non.\n- dept_3 : team_3_0 en a 4, donc oui.\n- dept_4 : team_4_1 en a 4, donc oui.\n- dept_5 : team_5_0 en a 5, donc oui.\n\nLes départements retenus sont dept_0, dept_3, dept_4 et dept_5.\n\n{\"r1\": 0, \"r2\": [\"agent_38\", \"agent_21\"], \"r3\": [\"dept_0\", \"dept_3\", \"dept_4\", \"dept_5\"]}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : dans ctr_2, la seule clause MUST_NOT est 2.1.0, donc 1.\n\nQ2 : on cherche les clauses terminate qui ont un amount_above inférieur à 1000.\n- ctr_1 : la clause 1.1.0 est terminate avec amount_above 500, donc ctr_1 convient.\n- ctr_6 : la clause 6.0.2 est terminate avec 1000, ce qui n'est pas inférieur à 1000. La clause 6.1.1 est terminate sans amount_above. ctr_6 ne convient donc pas.\n- ctr_2 : la clause 2.0.1 est terminate sans amount_above, donc non.\n- ctr_7 : la clause 7.0.2 est terminate sans amount_above, donc non.\n\nQ3 : la clause 7.0.2 se trouve dans la section \"privacy_0\".\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : les clauses d'action terminate avec un amount_above sont :\n- 1.1.0 : amount_above 500, donc inférieur à 1000, ctr_1 est retenu.\n- 6.0.2 : amount_above 1000, pas inférieur à 1000.\n- 6.1.1 : pas d'amount_above.\n- 2.0.1 : pas d'amount_above.\n- 7.0.2 : pas d'amount_above.\n\nSeul ctr_1 correspond.\n\nQ3 : la clause 7.0.2 se trouve dans la section privacy_0.\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient une seule clause MUST_NOT (2.1.0).\n\nQ2 : les clauses terminate avec un amount_above inférieur à 1000 sont :\n- 1.1.0 (amount_above=500), contrat ctr_1.\n- 6.0.2 (amount_above=1000), qui n'est pas inférieur à 1000, donc exclue.\n- 2.0.1, 6.1.1 et 7.0.2 n'ont pas d'amount_above, donc exclues.\n\nSeul ctr_1 répond au critère.\n\nQ3 : la clause 7.0.2 est dans la section privacy_0.\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.1.0 MUST_NOT pay, soit 1 clause MUST_NOT.\n\nQ2 : on cherche les clauses d'action terminate ayant un amount_above strictement inférieur à 1000.\n- 1.1.0 MAY terminate amount_above=500 : ctr_1 convient.\n- 6.0.2 MUST_NOT terminate amount_above=1000 : 1000 n'est pas inférieur à 1000, donc exclu.\n- 2.0.1 MAY terminate n'a pas d'amount_above : exclu.\n- 6.1.1 MUST terminate n'a pas d'amount_above : exclu.\n- 7.0.2 MAY terminate n'a pas d'amount_above : exclu.\n\nRésultat : [\"ctr_1\"].\n\nQ3 : la clause 7.0.2 se trouve dans la section privacy_0 de ctr_7. Le title est donc \"privacy_0\".\n\n{\"r1\": 1, \"r2\": [\"ctr_1\"], \"r3\": \"privacy_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 3 clauses MUST_NOT (2.0.0, 2.0.1, 2.1.0).\n\nQ2 : je cherche les clauses terminate qui ont un amount_above strictement inférieur à 1000.\n- ctr_0 : 0.1.1 a amount_above 5000, donc non.\n- ctr_4 : 4.0.1 a amount_above 1000, ce qui n'est pas inférieur à 1000. La clause 4.0.0 n'a pas d'amount_above.\n- ctr_7 : 7.1.1 a amount_above 1000, donc non.\n- ctr_6 : 6.1.2 et 6.2.2 n'ont pas d'amount_above.\nAucun contrat ne correspond, la liste est vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section \"payment_0\".\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 3 clauses MUST_NOT (2.0.0, 2.0.1 et 2.1.0).\n\nQ2 : on cherche les clauses d'action terminate avec un amount_above strictement inférieur à 1000.\n- ctr_0 : 0.1.1 a un amount_above de 5000, ce qui ne convient pas.\n- ctr_4 : 4.0.1 a un amount_above de 1000, ce qui n'est pas inférieur à 1000.\n- ctr_6 : 6.1.2 et 6.2.2 n'ont pas d'amount_above.\n- ctr_7 : 7.1.1 a un amount_above de 1000, ce qui ne convient pas.\n\nAucun contrat ne répond au critère, la liste est vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section payment_0.\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : il faut les clauses d'action terminate avec amount_above < 1000, donc strictement inférieur à 1000.\n- 0.1.1 : terminate, amount_above=5000, non.\n- 4.0.1 : terminate, amount_above=1000, non (1000 n'est pas inférieur à 1000).\n- 7.1.1 : terminate, amount_above=1000, non.\n- Les autres clauses terminate (4.0.0, 6.1.2, 6.2.2) n'ont pas d'amount_above.\n\nLa liste est donc vide.\n\nQ3 : la clause 6.0.0 appartient à la section payment_0 du contrat ctr_6. Le title est « payment », ou « payment_0 » si l'on prend le nom tel qu'il apparaît dans l'arbre. Le title de la section semble être la valeur affichée, soit \"payment_0\".\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment_0\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 8,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        false
+      ],
+      "parsed": true,
+      "raw": "Q1 : ctr_2 contient 2.0.0 MUST_NOT, 2.0.1 MUST_NOT et 2.1.0 MUST_NOT, soit 3 clauses.\n\nQ2 : clauses d'action terminate avec amount_above < 1000 :\n- 0.1.1 : amount_above=5000, non.\n- 4.0.1 : amount_above=1000, non (1000 n'est pas inférieur à 1000).\n- 7.1.1 : amount_above=1000, non.\n- 6.1.2 et 6.2.2 n'ont pas de champ amount_above.\n- 4.0.0 n'a pas de champ amount_above.\n\nAucun contrat ne répond au critère, donc la liste est vide.\n\nQ3 : la clause 6.0.0 se trouve dans la section payment_0 de ctr_6. Le title est « payment ».\n\n{\"r1\": 3, \"r2\": [], \"r3\": \"payment\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        false,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 1,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_1\", \"ctr_7\", \"ctr_15\", \"ctr_17\", \"ctr_22\"], \"r3\": \"liability_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "json",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "toon",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    },
+    {
+      "kind": "contrats",
+      "size": 24,
+      "seed": 2,
+      "format": "cstl_indent_ligne",
+      "run": 2,
+      "ok": [
+        true,
+        true,
+        true
+      ],
+      "parsed": true,
+      "raw": "{\"r1\": 1, \"r2\": [\"ctr_0\", \"ctr_2\", \"ctr_12\", \"ctr_20\", \"ctr_22\"], \"r3\": \"termination_1\"}"
+    }
+  ]
+}

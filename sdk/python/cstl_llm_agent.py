@@ -425,6 +425,33 @@ class ActionDenied(Exception):
         super().__init__(f"action '{action}' refusee : {reason}" + (f" ({rule})" if rule else ""))
 
 
+class ApprovalRequired(ActionDenied):
+    """L'action demande l'accord signe d'un approbateur humain (2026-11-25).
+    `approval_id` : a donner a l'approbateur, puis a `authorize(...,
+    approval_id=...)` une fois l'accord donne."""
+
+    def __init__(self, action: str, reason: str, approval_id: Optional[str]):
+        super().__init__(action, reason, "approval")
+        self.approval_id = approval_id
+
+
+class ControlDenied(Exception):
+    """Revocation, inscription de cle ou arret d'urgence refuse par le serveur."""
+
+    def __init__(self, request: str, reason: str, response=None):
+        self.request, self.reason, self.response = request, reason, response
+        super().__init__(f"{request} refuse : {reason}")
+
+
+class PolicyNotConfirmed(Exception):
+    """La politique publiee n'a pas de recu valide du serveur : elle n'est
+    peut-etre pas en vigueur (message modifie, perdu, refuse ou trop ancien)."""
+
+    def __init__(self, reason: str, response=None):
+        self.reason, self.response = reason, response
+        super().__init__(f"politique non confirmee : {reason}")
+
+
 class CstlAgent:
     def __init__(self, name: str, provider_name: str = "hermes",
                  host: str = "127.0.0.1", port: int = 5050, strict_history: bool = False):
@@ -490,12 +517,18 @@ class CstlAgent:
         )
         return self.client.send_raw(payload)
 
-    def register(self) -> bool:
-        """Enregistre l'agent (agent_register auto-signe). True si accepte."""
+    def register(self, oidc_token: Optional[str] = None) -> bool:
+        """Enregistre l'agent (agent_register auto-signe). True si accepte.
+        `oidc_token` (ou CSTL_OIDC_TOKEN) : jeton d'identite du fournisseur de
+        l'entreprise, exige quand le serveur a CSTL_OIDC_ISSUER (2026-11-25)."""
         if self.registered:
             return True
-        resp = self._send_signed("agent_register", "server", [],
-                                 {"name": self.name, "capabilities": "communication"})
+        intent = {"name": self.name, "capabilities": "communication"}
+        token = oidc_token or os.environ.get("CSTL_OIDC_TOKEN")
+        if token:
+            intent["oidc_token"] = token
+        resp = self._send_signed("agent_register", "server", [], intent)
+        self.last_register_response = resp
         self.registered = resp.purpose == "agent_register_ack"
         if self.registered:
             print(f"[{self.name}] ✅ Registered with signature validation")
@@ -511,6 +544,72 @@ class CstlAgent:
         extra = {"strict_deontic_history": "true"} if self.strict_history else None
         return self._send_signed(purpose, receiver, relations, extra)
 
+    def publish_policy(self, relations: list[dict], server_key: str, attempts: int = 3) -> dict:
+        """Publie des regles (2026-11-25) et VERIFIE qu'elles sont en vigueur.
+
+        Le message porte `policy_seq` (strictement croissant, garde dans
+        ~/.cstl/agent_<nom>.seq) : le serveur refuse un message plus ancien
+        que le dernier accepte de cet auteur. La reponse doit porter un recu
+        signe par le serveur (`server_key` : sa cle publique, obtenue hors
+        bande) pour CE message exact. Sans recu valide, renvoie jusqu'a
+        `attempts` fois avec une nouvelle sequence, puis leve
+        PolicyNotConfirmed. Retourne le recu."""
+        import cstl_receipt
+        from cstl_signing import signing_bytes
+        key = server_key.strip()
+        if Path(key).is_file():
+            key = Path(key).read_text().strip()
+        last = None
+        for _ in range(max(1, attempts)):
+            seq = cstl_receipt.next_seq(self.keyfile.with_suffix(".seq"))
+            intent_extra = {"policy_seq": str(seq)}
+            meta = {"encoder": ENCODER, "produced_by": ENCODER, "public_key": self.pub_key}
+            intent = {"purpose": "inform", "sender": self.name, "receiver": "server", **intent_extra}
+            canon = signing_bytes({"version": "v5.0.0", "mode": "A", "meta": meta, "intent": intent,
+                                   "relations": relations})
+            try:
+                resp = self._send_signed("inform", "server", relations, intent_extra)
+            except Exception as e:  # noqa: BLE001 -- reseau coupe : on retente
+                last = (f"envoi impossible : {e}", None)
+                continue
+            receipt = cstl_receipt.verify_receipt(resp.raw, key, self.name, seq, canon)
+            if receipt:
+                return receipt
+            last = (resp.purpose if resp.is_error else "recu absent ou invalide", resp)
+        raise PolicyNotConfirmed(*last)
+
+    # -- Revocation des cles et arret d'urgence (2026-11-25) -----------------
+    def _control(self, purpose: str, fields: dict) -> dict:
+        import cstl_receipt
+        seq = cstl_receipt.next_seq(self.keyfile.with_suffix(".seq"))
+        intent = {k: str(v) for k, v in fields.items() if v is not None}
+        intent["policy_seq"] = str(seq)
+        resp = self._send_signed(purpose, "server", [], intent)
+        if resp.purpose == "control_denied" or resp.is_error:
+            raise ControlDenied(purpose, resp.fields.get("reason", resp.purpose), resp)
+        return resp.fields
+
+    def revoke_key(self, agent: Optional[str] = None, public_key: Optional[str] = None,
+                   reason: Optional[str] = None) -> dict:
+        """Revoque une cle, pour toujours : elle ne signe plus rien (messages,
+        enregistrement, rotation) et les regles qu'elle a signees ne comptent
+        plus. Sans argument : la cle actuelle de cet agent (cle volee). Un
+        auteur de politique peut revoquer celle de n'importe quel agent.
+        Leve ControlDenied si refuse."""
+        return self._control("key_revoke", {"agent": agent, "public_key": public_key, "reason": reason})
+
+    def enroll_key(self, agent: str, public_key: str) -> dict:
+        """Auteur de politique : autorise `agent`, dont la cle est revoquee, a
+        se reenregistrer avec `public_key` (une seule fois)."""
+        return self._control("key_enroll", {"agent": agent, "public_key": public_key})
+
+    def emergency_stop(self, scope: str = "all", on: bool = True, reason: Optional[str] = None) -> dict:
+        """Auteur de politique : arrete (on=True) ou relance (on=False) les
+        actions. `scope` : "all", "agent:<nom>" ou "action:<motif>"
+        ("action:refund_*"). Tant qu'il est en vigueur, toute demande couverte
+        est refusee (reason=emergency_stop), quelles que soient les regles."""
+        return self._control("emergency_stop", {"scope": scope, "state": "on" if on else "off", "reason": reason})
+
     def tell(self, receiver: str, subject: str,
              peer_message: Optional[str] = None) -> Tuple[Optional[dict], Optional[CstlResponse]]:
         """Le modele formule UNE relation sur `subject`, l'agent l'envoie signee.
@@ -522,7 +621,7 @@ class CstlAgent:
         return relation, self.send_relations(receiver, [relation])
 
     # -- Couche 9 : autorisation AVANT action (2026-11-20) --------------------
-    def request_action(self, action: str, amount=None) -> Tuple[bool, CstlResponse]:
+    def request_action(self, action: str, amount=None, approval_id: Optional[str] = None) -> Tuple[bool, CstlResponse]:
         """Demande au serveur, AVANT d'agir, si `action` est autorisee pour cet
         agent d'apres l'historique des obligations / interdictions. `amount` :
         montant de l'action, pour les regles `amount_above`/`amount_at_most`
@@ -534,6 +633,8 @@ class CstlAgent:
         intent = {"action": action, "request_id": uuid.uuid4().hex}
         if amount is not None:
             intent["amount"] = str(amount)
+        if approval_id:
+            intent["approval_id"] = approval_id
         resp = self._send_signed("action_request", "server", [], intent)
         return resp.fields.get("decision") == "allowed", resp
 
@@ -563,20 +664,27 @@ class CstlAgent:
         body = "\n".join(ln for ln in text.strip("\n").splitlines() if not ln.lstrip().startswith("```"))
         return self.send_relations(receiver, cstl_compact.decode(body), purpose)
 
-    def commit_tree(self, tree, tree_id: str) -> CstlResponse:
+    def commit_tree(self, tree, tree_id: str) -> Tuple[str, CstlResponse]:
         """La SOURCE s'engage sur un arbre (2026-11-23) : elle signe son
         empreinte canonique (`cstl_compact.tree_hash`), inscrite dans l'audit
         (RELATION [type=tree_commit, subject=<tree_id>, object=sha256:...]).
-        Ensuite, un arbre envoye par N'IMPORTE QUI avec source=<cet agent>
-        n'est accepte par le serveur que s'il a exactement cette empreinte :
-        un transmetteur ne peut ni omettre, ni modifier, ni ajouter."""
+        Ensuite, un arbre envoye par N'IMPORTE QUI avec source=<cet agent> et
+        le meme sel n'est accepte par le serveur que s'il a exactement cette
+        empreinte : un transmetteur ne peut ni omettre, ni modifier, ni ajouter.
+
+        L'empreinte couvre un SEL aleatoire de 128 bits (tree_nonce) : sans lui,
+        l'empreinte d'un petit document se devine en essayant les contenus
+        plausibles. Renvoie (sel, reponse) ; donner le sel au transmetteur avec
+        les donnees : `send_tree(..., source=<source>, nonce=sel)`."""
+        import secrets
         import cstl_compact
-        rels = cstl_compact.tree_to_relations(tree, tree_id, source=self.name)
+        nonce = secrets.token_hex(16)
+        rels = cstl_compact.tree_to_relations(tree, tree_id, source=self.name, nonce=nonce)
         digest = cstl_compact.tree_hash(rels, tree_id)
-        return self.send_relations("server", [{"type": "tree_commit", "subject": str(tree_id), "object": digest}])
+        return nonce, self.send_relations("server", [{"type": "tree_commit", "subject": str(tree_id), "object": digest}])
 
     def send_tree(self, receiver: str, tree, tree_id: Optional[str] = None,
-                  lenient: bool = False, source: Optional[str] = None) -> Tuple[str, CstlResponse]:
+                  lenient: bool = False, source: Optional[str] = None, nonce: Optional[str] = None) -> Tuple[str, CstlResponse]:
         """Envoie un ARBRE (donnees imbriquees) au serveur (2026-11-22).
         `tree` : n'importe quel document JSON (objet, liste, valeur), ou un
         texte en CSTL compact mode arbre : arbre indente
@@ -591,20 +699,28 @@ class CstlAgent:
         `cstl_compact.decode_tree_indented`). Rien n'est devine.
         source=<agent> : l'arbre se reclame de cette source ; le serveur le
         refuse (purpose=tree_rejected) si la source n'a pas engage exactement
-        cette empreinte avec `commit_tree`.
+        cette empreinte avec `commit_tree` ; nonce = le sel que `commit_tree`
+        a renvoye a la source.
         Renvoie (tree_id, reponse). Relire avec `fetch_tree(tree_id)`."""
         import cstl_compact
         if isinstance(tree, str):
             tree = (cstl_compact.decode_tree_indented(tree, lenient=lenient) if tree.lstrip().startswith("@")
                     else cstl_compact.decode_tree(tree))
         tree_id = tree_id or f"tree_{uuid.uuid4().hex[:12]}"
-        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id, source=source))
+        return tree_id, self.send_relations(receiver, cstl_compact.tree_to_relations(tree, tree_id, source=source,
+                                                                                     nonce=nonce))
 
-    def fetch_tree(self, tree_id: str):
+    def fetch_tree(self, tree_id: str, source: Optional[str] = None):
         """Relit un arbre envoye avec `send_tree` (sa derniere version), depuis
-        le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse."""
+        le serveur (`purpose=tree_query`, signe). Leve RuntimeError si refuse.
+        source=<agent> : seulement la derniere version qui se reclame de cette
+        source, donc conforme a son engagement signe ; un autre arbre du meme
+        nom, envoye par un tiers, est ignore (2026-11-23)."""
         import cstl_compact
-        resp = self._send_signed("tree_query", "server", [], {"tree": tree_id, "request_id": uuid.uuid4().hex})
+        intent = {"tree": tree_id, "request_id": uuid.uuid4().hex}
+        if source:
+            intent["source"] = source
+        resp = self._send_signed("tree_query", "server", [], intent)
         if resp.purpose != "tree":
             raise RuntimeError(f"arbre refuse : {resp.fields.get('reason', resp.purpose)}")
         return cstl_compact.relations_to_tree([r for r in resp.relations if r.get("block") == "RELATION"], tree_id)
@@ -625,6 +741,11 @@ class CstlAgent:
         if resp.fields.get("roles"):
             out["roles"] = resp.fields["roles"].split()
         out["default"] = resp.fields.get("default", "allow")
+        # Arrets d'urgence en vigueur pour cet agent (2026-11-25) : "operator",
+        # "all", "agent:<nom>" ou "action:<motif>".
+        out["emergency_stop"] = resp.fields.get("emergency_stop", "").split()
+        # Actions qui demandent l'accord signe d'un approbateur humain.
+        out["approval"] = resp.fields.get("approval", "").split()
         for block in resp.relations:
             item = {k: v for k, v in block.items() if k not in ("block", "decision")}
             if block.get("block") == "POLICY_RULE":
@@ -634,17 +755,79 @@ class CstlAgent:
                 out["ignored"].append(item)
         return out
 
-    def authorize(self, action: str, amount=None):
+    def authorize(self, action: str, amount=None, approval_id: Optional[str] = None,
+                  wait: float = 0, poll: float = 2.0):
         """Jeton d'autorisation SIGNE par le serveur pour `action` (et pour CE
         montant, s'il est donne), a presenter au systeme vise
         (`cstl_guard.CstlGuard.run`). Leve ActionDenied si l'action est
         refusee (2026-11-20 : couche 9 obligatoire)."""
         from cstl_guard import AuthorizationToken
-        allowed, resp = self.request_action(action, amount)
+        # Escalade vers un humain (2026-11-25) : `approval_id` presente un
+        # accord deja donne ; `wait` > 0 attend jusqu'a `wait` secondes qu'un
+        # approbateur decide, puis redemande avec l'accord.
+        allowed, resp = self.request_action(action, amount, approval_id)
+        deadline = time.time() + wait
+        while not allowed and resp.fields.get("reason") in ("approval_required", "approval_pending") \
+                and time.time() < deadline:
+            approval_id = resp.fields.get("approval_id") or approval_id
+            time.sleep(poll)
+            allowed, resp = self.request_action(action, amount, approval_id)
         token = AuthorizationToken.from_response(resp) if allowed else None
         if token is None:
-            raise ActionDenied(action, resp.fields.get("reason", resp.purpose), resp.fields.get("rule"))
+            reason = resp.fields.get("reason", resp.purpose)
+            if reason in ("approval_required", "approval_pending"):
+                raise ApprovalRequired(action, reason, resp.fields.get("approval_id") or approval_id)
+            raise ActionDenied(action, reason, resp.fields.get("rule"))
         return token
+
+    # -- Federation (2026-11-25) ----------------------------------------------
+    def identity_assertion(self) -> dict:
+        """Attestation signee par CE serveur : cet agent a cette cle. A presenter
+        a un serveur pair (`federated_at`). Leve ControlDenied sinon."""
+        resp = self._send_signed("identity_assertion", "server", [], {"request_id": uuid.uuid4().hex})
+        if resp.purpose != "identity_assertion_issued":
+            raise ControlDenied("identity_assertion", resp.fields.get("reason", resp.purpose), resp)
+        return {k: resp.fields[k] for k in ("issuer", "agent", "public_key", "issued_at", "expires_at", "signature")}
+
+    def federated_at(self, host: str, port: int, assertion: Optional[dict] = None) -> "CstlAgent":
+        """Le meme agent, avec la meme cle, aupres d'un serveur PAIR qui fait
+        confiance a ce serveur (CSTL_FEDERATION_PEERS) : il y porte le nom
+        <emetteur>.<agent> et s'y enregistre avec l'attestation. A refaire
+        avant l'expiration de l'attestation."""
+        a = assertion or self.identity_assertion()
+        other = CstlAgent.__new__(CstlAgent)
+        other.__dict__.update(self.__dict__)
+        other.name = f"{a['issuer']}.{a['agent']}"
+        other.client = type(self.client)(host=host, port=port)
+        other.registered = False
+        other.keyfile = self.keyfile.with_name(f"agent_{other.name}.key")
+        resp = other._send_signed("agent_register", "server", [], {
+            "name": other.name, "capabilities": "communication", "federation_issuer": a["issuer"],
+            "federation_agent": a["agent"], "federation_public_key": a["public_key"],
+            "federation_issued_at": a["issued_at"], "federation_expires_at": a["expires_at"],
+            "federation_signature": a["signature"]})
+        other.last_register_response = resp
+        if resp.purpose != "agent_register_ack":
+            raise ControlDenied("agent_register", resp.fields.get("reason", resp.purpose), resp)
+        other.registered = True
+        return other
+
+    # -- Escalade vers un humain (2026-11-25) --------------------------------
+    def pending_approvals(self) -> list:
+        """Approbateur : demandes en attente [{approval_id, agent, action,
+        amount?, requested_at, expires_at}]. Leve ControlDenied sinon."""
+        resp = self._send_signed("approval_list", "server", [], {"request_id": uuid.uuid4().hex})
+        if resp.purpose != "approvals":
+            raise ControlDenied("approval_list", resp.fields.get("reason", resp.purpose), resp)
+        return [{k: v for k, v in b.items() if k != "block"} for b in resp.relations if b.get("block") == "APPROVAL"]
+
+    def approve(self, approval_id: str, reason: Optional[str] = None) -> dict:
+        """Approbateur : donne son accord SIGNE (une seule demande, une fois)."""
+        return self._control("approval_decision", {"approval_id": approval_id, "decision": "approve", "reason": reason})
+
+    def reject(self, approval_id: str, reason: Optional[str] = None) -> dict:
+        """Approbateur : refuse la demande."""
+        return self._control("approval_decision", {"approval_id": approval_id, "decision": "reject", "reason": reason})
 
     def act(self, action: str, func, *args, amount=None, **kwargs):
         """Execute `func` SEULEMENT si le serveur autorise `action` (pour ce

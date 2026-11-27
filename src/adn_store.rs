@@ -14,6 +14,11 @@ use std::collections::HashMap;
 use crate::server::audit::{AuditEntry, HashChain};
 use crate::payload_compression::{compress_payload, decompress_payload, should_compress};
 
+/// (agent, action, cle de l'agent, expiration) d'un jeton delivre.
+pub type IssuedToken = (String, String, Option<String>, i64);
+/// (portee, pose par, raison, date) d'un arret d'urgence.
+pub type DatedStop = (String, String, Option<String>, i64);
+
 #[derive(Debug, Clone)]
 pub struct AdnEntry {
     pub hash: String,
@@ -146,6 +151,30 @@ pub struct DbPeerReviewSignature {
     pub signature: String,
     pub approval_status: String,  // "Approved", "Rejected", "Abstain"
     pub reviewed_at: i64,
+}
+
+/// Demande d'accord humain (2026-11-25, voir server/approval.rs).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApprovalRow {
+    pub id: String,
+    pub agent: String,
+    pub action: String,
+    pub amount: Option<String>,
+    pub requested_at: i64,
+    /// `pending`, `approved` ou `rejected`.
+    pub status: String,
+    pub decided_by: Option<String>,
+    pub reason: Option<String>,
+    pub consumed: bool,
+}
+
+impl ApprovalRow {
+    fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Self> {
+        Ok(ApprovalRow {
+            id: r.get(0)?, agent: r.get(1)?, action: r.get(2)?, amount: r.get(3)?, requested_at: r.get(4)?,
+            status: r.get(5)?, decided_by: r.get(6)?, reason: r.get(7)?, consumed: r.get::<_, i64>(8)? != 0,
+        })
+    }
 }
 
 /// Ligne brute de `load_agents` : (name, version, capabilities, trust_score, public_key).
@@ -401,6 +430,65 @@ impl AdnStore {
                 content_hash TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 UNIQUE(proposal_id, voter_id)
+            );
+            CREATE TABLE IF NOT EXISTS policy_seq (
+                sender TEXT PRIMARY KEY,
+                seq INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS revoked_keys (
+                public_key TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                revoked_by TEXT NOT NULL,
+                reason TEXT,
+                at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS key_enrollments (
+                agent TEXT PRIMARY KEY,
+                public_key TEXT NOT NULL,
+                enrolled_by TEXT NOT NULL,
+                at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS approvals (
+                id TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount TEXT,
+                requested_at INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                decided_by TEXT,
+                decided_at INTEGER,
+                reason TEXT,
+                consumed INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS issued_tokens (
+                audit_hash TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                agent_key TEXT,
+                expires_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                at INTEGER NOT NULL,
+                agent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount TEXT,
+                allowed INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                rule TEXT,
+                audit_hash TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_decisions_at ON decisions(at);
+            CREATE TABLE IF NOT EXISTS federated_agents (
+                name TEXT PRIMARY KEY,
+                issuer TEXT NOT NULL,
+                expires_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS emergency_stops (
+                scope TEXT PRIMARY KEY,
+                set_by TEXT NOT NULL,
+                reason TEXT,
+                at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS agents (
                 name TEXT PRIMARY KEY,
@@ -1490,6 +1578,18 @@ impl AdnStore {
     /// 2026-09-04) -- NULL sinon (l'immense majorite des relations
     /// factuelles), colonne ajoutee par la migration idempotente dans open().
     pub fn put_relations(&self, hash: &str, relations: &[HashMap<String, String>]) -> Result<(), rusqlite::Error> {
+        // REJEU (2026-11-23) : un message deja stocke (meme hash canonique) qu'on
+        // renvoie ne doit PAS reinscrire ses relations. Sinon elles deviennent
+        // les plus recentes : rejouer un ancien engagement tree_commit signe
+        // rendait de nouveau valide l'ancien arbre (verifie en direct), et
+        // rejouer une ancienne regle signee d'un auteur de politique (un MAY
+        // leve depuis par un MUST_NOT) l'aurait remise en vigueur. La date
+        // d'une relation est celle du PREMIER envoi de son message.
+        let already: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM adn_relations WHERE hash = ?1)", params![hash], |r| r.get(0))?;
+        if already {
+            return Ok(());
+        }
         // Les cles fixes du theoreme k=9 (spec §13: sigma/tau/layer/weight/id/
         // coref_with, symboles compacts σ/τ/δ/ω/ι acceptes en entree par le
         // parser mais toujours normalises sous leur nom long dans le HashMap --
@@ -1593,6 +1693,15 @@ impl AdnStore {
     /// qui portent l'attribut `tree=<tree>`, du DERNIER message qui l'a envoye
     /// (un arbre renvoye remplace le precedent), dans l'ordre d'envoi.
     pub fn tree_relations(&self, tree: &str) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
+        self.tree_relations_from(tree, None)
+    }
+
+    /// Comme `tree_relations`, mais avec `source` : seulement la derniere
+    /// version qui se reclame de cette source (tree_source sur tree_root), donc
+    /// acceptee contre son engagement signe (2026-11-23). Deux sources -- ou un
+    /// tiers sans source -- peuvent employer le meme nom d'arbre sans se
+    /// masquer l'une l'autre.
+    pub fn tree_relations_from(&self, tree: &str, source: Option<&str>) -> Result<Vec<HashMap<String, String>>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT hash, subject, predicate, object, modality, extra_attrs FROM adn_relations
              WHERE extra_attrs LIKE ?1 ORDER BY id",
@@ -1616,7 +1725,14 @@ impl AdnStore {
             if let Some(v) = modality { m.insert("modality".into(), v); }
             out.push((hash, m));
         }
-        let Some(last) = out.last().map(|(h, _)| h.clone()) else { return Ok(Vec::new()) };
+        let last = match source {
+            None => out.last().map(|(h, _)| h.clone()),
+            Some(src) => out.iter().rev().find(|(_, m)| {
+                m.get("type").map(String::as_str) == Some("tree_root")
+                    && m.get("tree_source").map(String::as_str) == Some(src)
+            }).map(|(h, _)| h.clone()),
+        };
+        let Some(last) = last else { return Ok(Vec::new()) };
         Ok(out.into_iter().filter(|(h, _)| *h == last).map(|(_, m)| m).collect())
     }
 
@@ -1746,6 +1862,229 @@ impl AdnStore {
     /// Engagements d'une source sur un arbre (`RELATION [type=tree_commit,
     /// subject=<id d'arbre>, object=sha256:...]`), avec leur auteur, dans
     /// l'ordre (2026-11-23, voir server/tree_check.rs).
+    /// Sequence de politique d'un auteur (2026-11-25, banc public T2) : un
+    /// message signe qui porte `policy_seq` n'est accepte que s'il est PLUS
+    /// RECENT que le dernier accepte de cet expediteur. Sinon, deux messages
+    /// authentiques livres dans le desordre faisaient gagner l'ancienne
+    /// regle (le serveur rangeait les regles dans l'ordre de RECEPTION).
+    /// `Ok(None)` : accepte et enregistre ; `Ok(Some(dernier))` : trop ancien.
+    /// Revocation d'une cle d'agent (2026-11-25). Definitive : une cle
+    /// revoquee ne signe plus rien (aucun message, aucune rotation), et les
+    /// regles qu'elle a signees ne comptent plus. `Ok(false)` : deja revoquee.
+    pub fn revoke_key(&self, public_key: &str, agent: &str, revoked_by: &str, reason: Option<&str>, at: i64) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute(
+            "INSERT OR IGNORE INTO revoked_keys (public_key, agent, revoked_by, reason, at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![public_key.to_ascii_lowercase(), agent, revoked_by, reason, at],
+        )?;
+        Ok(n > 0)
+    }
+
+    pub fn is_key_revoked(&self, public_key: &str) -> Result<bool, rusqlite::Error> {
+        Ok(self.conn
+            .query_row("SELECT 1 FROM revoked_keys WHERE public_key = ?1", [public_key.to_ascii_lowercase()], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
+    pub fn revoked_keys(&self) -> Result<std::collections::HashSet<String>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT public_key FROM revoked_keys")?;
+        let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+        rows.collect()
+    }
+
+    /// Nouvelle cle d'un agent dont la cle est revoquee, approuvee par un
+    /// auteur de politique : le prochain `agent_register` avec EXACTEMENT
+    /// cette cle passe sans preuve de rotation (l'ancienne cle est compromise).
+    pub fn enroll_key(&self, agent: &str, public_key: &str, enrolled_by: &str, at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO key_enrollments (agent, public_key, enrolled_by, at) VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(agent) DO UPDATE SET public_key = excluded.public_key, enrolled_by = excluded.enrolled_by, at = excluded.at",
+            params![agent, public_key.to_ascii_lowercase(), enrolled_by, at],
+        )?;
+        Ok(())
+    }
+
+    /// Consomme l'inscription de `agent` si elle porte `public_key`.
+    pub fn take_enrollment(&self, agent: &str, public_key: &str) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute(
+            "DELETE FROM key_enrollments WHERE agent = ?1 AND public_key = ?2",
+            params![agent, public_key.to_ascii_lowercase()],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Escalade vers un humain (2026-11-25) : une demande en attente
+    /// d'accord. `amount` : le montant normalise, ou None.
+    pub fn create_approval(&self, id: &str, agent: &str, action: &str, amount: Option<&str>, at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO approvals (id, agent, action, amount, requested_at, status) VALUES (?1, ?2, ?3, ?4, ?5, 'pending')",
+            params![id, agent, action, amount, at],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_approval(&self, id: &str) -> Result<Option<ApprovalRow>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT id, agent, action, amount, requested_at, status, decided_by, reason, consumed FROM approvals WHERE id = ?1",
+                [id],
+                ApprovalRow::from_row,
+            )
+            .optional()
+    }
+
+    /// Decide une demande EN ATTENTE. `Ok(false)` : pas en attente (deja
+    /// decidee, ou inconnue).
+    pub fn decide_approval(&self, id: &str, approve: bool, by: &str, reason: Option<&str>, at: i64) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute(
+            "UPDATE approvals SET status = ?2, decided_by = ?3, reason = ?4, decided_at = ?5 WHERE id = ?1 AND status = 'pending'",
+            params![id, if approve { "approved" } else { "rejected" }, by, reason, at],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Usage unique d'un accord. `Ok(false)` : deja utilise.
+    pub fn consume_approval(&self, id: &str) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute("UPDATE approvals SET consumed = 1 WHERE id = ?1 AND status = 'approved' AND consumed = 0", [id])?;
+        Ok(n > 0)
+    }
+
+    /// Demandes en attente, les plus anciennes d'abord.
+    pub fn pending_approvals(&self, since: i64, limit: usize) -> Result<Vec<ApprovalRow>, rusqlite::Error> {
+        let mut st = self.conn.prepare(
+            "SELECT id, agent, action, amount, requested_at, status, decided_by, reason, consumed FROM approvals \
+             WHERE status = 'pending' AND requested_at >= ?1 ORDER BY requested_at, id LIMIT ?2",
+        )?;
+        let rows = st.query_map(params![since, limit as i64], ApprovalRow::from_row)?;
+        rows.collect()
+    }
+
+    /// Jeton delivre (2026-11-25), pour que le systeme qui execute puisse
+    /// demander s'il vaut encore (cle revoquee, arret d'urgence).
+    pub fn record_issued_token(&self, audit_hash: &str, agent: &str, action: &str, agent_key: Option<&str>, expires_at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO issued_tokens (audit_hash, agent, action, agent_key, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![audit_hash, agent, action, agent_key, expires_at],
+        )?;
+        Ok(())
+    }
+
+    /// (agent, action, cle de l'agent, expiration) d'un jeton delivre.
+    pub fn issued_token(&self, audit_hash: &str) -> Result<Option<IssuedToken>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT agent, action, agent_key, expires_at FROM issued_tokens WHERE audit_hash = ?1",
+                [audit_hash],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()
+    }
+
+    /// Decision de la couche 9, pour le tableau de bord (2026-11-25).
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_decision(&self, at: i64, agent: &str, action: &str, amount: Option<&str>, allowed: bool,
+                           reason: &str, rule: Option<&str>, audit_hash: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO decisions (at, agent, action, amount, allowed, reason, rule, audit_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![at, agent, action, amount, allowed as i64, reason, rule, audit_hash],
+        )?;
+        Ok(())
+    }
+
+    /// Les `limit` dernieres decisions, la plus recente d'abord :
+    /// (at, agent, action, amount, allowed, reason, rule, audit_hash).
+    #[allow(clippy::type_complexity)]
+    pub fn recent_decisions(&self, limit: usize) -> Result<Vec<(i64, String, String, Option<String>, bool, String, Option<String>, Option<String>)>, rusqlite::Error> {
+        let mut st = self.conn.prepare(
+            "SELECT at, agent, action, amount, allowed, reason, rule, audit_hash FROM decisions ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = st.query_map([limit as i64], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get::<_, i64>(4)? != 0, r.get(5)?, r.get(6)?, r.get(7)?))
+        })?;
+        rows.collect()
+    }
+
+    /// (raison, nombre) des refus depuis `since`, les plus frequents d'abord,
+    /// et le nombre de decisions permises.
+    pub fn decision_counts(&self, since: i64) -> Result<(i64, Vec<(String, i64)>), rusqlite::Error> {
+        let allowed: i64 = self.conn.query_row("SELECT COUNT(*) FROM decisions WHERE at >= ?1 AND allowed = 1", [since], |r| r.get(0))?;
+        let mut st = self.conn.prepare(
+            "SELECT reason, COUNT(*) FROM decisions WHERE at >= ?1 AND allowed = 0 GROUP BY reason ORDER BY COUNT(*) DESC, reason",
+        )?;
+        let rows = st.query_map([since], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok((allowed, rows.collect::<Result<_, _>>()?))
+    }
+
+    /// (cle, agent, revoquee par, raison, date) des cles revoquees, la plus recente d'abord.
+    #[allow(clippy::type_complexity)]
+    pub fn revoked_key_list(&self, limit: usize) -> Result<Vec<(String, String, String, Option<String>, i64)>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT public_key, agent, revoked_by, reason, at FROM revoked_keys ORDER BY at DESC LIMIT ?1")?;
+        let rows = st.query_map([limit as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+        rows.collect()
+    }
+
+    /// Comme `emergency_stops`, avec la date.
+    pub fn emergency_stops_dated(&self) -> Result<Vec<DatedStop>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT scope, set_by, reason, at FROM emergency_stops ORDER BY at, scope")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        rows.collect()
+    }
+
+    /// Agent d'un serveur pair (2026-11-25, server/federation.rs) et
+    /// l'expiration de son attestation.
+    pub fn set_federated(&self, name: &str, issuer: &str, expires_at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO federated_agents (name, issuer, expires_at) VALUES (?1, ?2, ?3) \
+             ON CONFLICT(name) DO UPDATE SET issuer = excluded.issuer, expires_at = excluded.expires_at",
+            params![name, issuer, expires_at],
+        )?;
+        Ok(())
+    }
+
+    /// Expiration de l'attestation d'un agent federe, ou None (agent local).
+    pub fn federated_expiry(&self, name: &str) -> Result<Option<i64>, rusqlite::Error> {
+        self.conn.query_row("SELECT expires_at FROM federated_agents WHERE name = ?1", [name], |r| r.get(0)).optional()
+    }
+
+    /// Arret d'urgence (2026-11-25). `scope` : `all`, `agent:<nom>` ou
+    /// `action:<motif>`. `on=false` le leve.
+    pub fn set_emergency_stop(&self, scope: &str, on: bool, set_by: &str, reason: Option<&str>, at: i64) -> Result<(), rusqlite::Error> {
+        if on {
+            self.conn.execute(
+                "INSERT INTO emergency_stops (scope, set_by, reason, at) VALUES (?1, ?2, ?3, ?4) \
+                 ON CONFLICT(scope) DO UPDATE SET set_by = excluded.set_by, reason = excluded.reason, at = excluded.at",
+                params![scope, set_by, reason, at],
+            )?;
+        } else {
+            self.conn.execute("DELETE FROM emergency_stops WHERE scope = ?1", [scope])?;
+        }
+        Ok(())
+    }
+
+    /// (scope, auteur, raison) des arrets en vigueur, du plus ancien au plus recent.
+    pub fn emergency_stops(&self) -> Result<Vec<(String, String, Option<String>)>, rusqlite::Error> {
+        let mut st = self.conn.prepare("SELECT scope, set_by, reason FROM emergency_stops ORDER BY at, scope")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect()
+    }
+
+    pub fn advance_policy_seq(&self, sender: &str, seq: u64) -> Result<Option<u64>, rusqlite::Error> {
+        let last: Option<i64> = self
+            .conn
+            .query_row("SELECT seq FROM policy_seq WHERE sender = ?1", [sender], |r| r.get(0))
+            .optional()?;
+        if let Some(last) = last {
+            if seq as i64 <= last {
+                return Ok(Some(last as u64));
+            }
+        }
+        self.conn.execute(
+            "INSERT INTO policy_seq (sender, seq) VALUES (?1, ?2) ON CONFLICT(sender) DO UPDATE SET seq = excluded.seq",
+            rusqlite::params![sender, seq as i64],
+        )?;
+        Ok(None)
+    }
+
     pub fn tree_commits(&self, tree: &str) -> Result<Vec<DeonticRuleRow>, rusqlite::Error> {
         self.authored_relations("modality IS NULL AND predicate = 'tree_commit' AND subject = ?1", &[tree])
     }
@@ -3088,6 +3427,29 @@ mod tests {
     /// Fix 2026-10-29 (faille de continuite d'identite, audit du 15
     /// octobre): round-trip simple save_agent/load_agents, upsert inclus.
     #[test]
+    fn replayed_message_does_not_restore_its_relations_as_latest() {
+        // 2026-11-23 : rejouer un ancien message signe (meme hash) ne doit pas
+        // reinscrire ses relations, sinon un ancien engagement tree_commit (ou
+        // une ancienne regle de politique) redevient le plus recent.
+        let store = AdnStore::open(":memory:").unwrap();
+        let rel = |obj: &str| -> HashMap<String, String> {
+            [("type", "tree_commit"), ("subject", "t"), ("object", obj)].iter()
+                .map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        };
+        for h in ["h_old", "h_new"] {
+            store.put(h, "payload", None, None, 0.5, None, None, None).unwrap();
+        }
+        store.put_relations("h_old", &[rel("sha256:old")]).unwrap();
+        store.put_relations("h_new", &[rel("sha256:new")]).unwrap();
+        store.put_relations("h_old", &[rel("sha256:old")]).unwrap(); // rejeu
+        let n: i64 = store.conn.query_row("SELECT COUNT(*) FROM adn_relations WHERE hash = 'h_old'", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1);
+        let last: String = store.conn.query_row(
+            "SELECT object FROM adn_relations WHERE subject = 't' ORDER BY id DESC LIMIT 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(last, "sha256:new");
+    }
+
+    #[test]
     fn test_save_agent_load_agents_roundtrip_and_upsert() {
         let store = AdnStore::open(":memory:").unwrap();
 
@@ -3121,6 +3483,73 @@ mod tests {
     /// suivante. Sans ce fix, `load_agents()` n'existait pas et
     /// `AgentRegistry::new()` demarrait toujours vide a chaque
     /// `try_with_data_path`.
+    /// policy_seq (2026-11-25) : strictement croissant par auteur, et la
+    /// derniere valeur survit a un redemarrage (sinon un vieux message
+    /// authentique redeviendrait acceptable apres un arret du serveur).
+    #[test]
+    fn test_approvals_are_decided_once_and_used_once() {
+        let s = AdnStore::open(":memory:").unwrap();
+        s.create_approval("a1", "bot", "wipe_db", None, 10).unwrap();
+        assert_eq!(s.pending_approvals(0, 10).unwrap().len(), 1);
+        assert!(!s.consume_approval("a1").unwrap(), "en attente : pas utilisable");
+        assert!(s.decide_approval("a1", true, "alice", Some("ok"), 11).unwrap());
+        assert!(!s.decide_approval("a1", false, "mallory", None, 12).unwrap(), "deja decidee");
+        let row = s.get_approval("a1").unwrap().unwrap();
+        assert_eq!((row.status.as_str(), row.decided_by.as_deref()), ("approved", Some("alice")));
+        assert!(s.consume_approval("a1").unwrap());
+        assert!(!s.consume_approval("a1").unwrap(), "usage unique");
+        assert!(s.pending_approvals(0, 10).unwrap().is_empty());
+        s.record_issued_token("sha256:x", "bot", "wipe_db", Some("ab"), 99).unwrap();
+        assert_eq!(s.issued_token("sha256:x").unwrap(), Some(("bot".into(), "wipe_db".into(), Some("ab".into()), 99)));
+    }
+
+    #[test]
+    fn test_revocation_enrollment_and_emergency_stop_persist() {
+        let tmp_path = std::env::temp_dir().join(format!("cstl_test_revoke_{}.db", std::process::id()));
+        let p = tmp_path.to_str().unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+        {
+            let s = AdnStore::open(p).unwrap();
+            assert!(s.revoke_key("ABCD", "bot", "owner", Some("vol"), 1).unwrap());
+            assert!(!s.revoke_key("abcd", "bot", "owner", None, 2).unwrap(), "deja revoquee");
+            s.enroll_key("bot", "EF01", "owner", 3).unwrap();
+            assert!(!s.take_enrollment("bot", "9999").unwrap(), "autre cle : refusee");
+            s.set_emergency_stop("all", true, "owner", Some("incident"), 4).unwrap();
+            s.set_emergency_stop("agent:bot", true, "owner", None, 5).unwrap();
+            s.set_emergency_stop("agent:bot", false, "owner", None, 6).unwrap();
+        }
+        {
+            let s = AdnStore::open(p).unwrap(); // redemarrage
+            assert!(s.is_key_revoked("abcd").unwrap());
+            assert!(!s.is_key_revoked("ef01").unwrap());
+            assert!(s.take_enrollment("bot", "ef01").unwrap());
+            assert!(!s.take_enrollment("bot", "ef01").unwrap(), "usage unique");
+            assert_eq!(s.emergency_stops().unwrap(), vec![("all".to_string(), "owner".to_string(), Some("incident".to_string()))]);
+        }
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    #[test]
+    fn test_policy_seq_is_strictly_increasing_per_author_and_persists() {
+        let tmp_path = std::env::temp_dir().join(format!("cstl_test_policy_seq_{}.db", std::process::id()));
+        let p = tmp_path.to_str().unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+        {
+            let s = AdnStore::open(p).unwrap();
+            assert_eq!(s.advance_policy_seq("owner", 5).unwrap(), None);
+            assert_eq!(s.advance_policy_seq("owner", 5).unwrap(), Some(5), "egal : refuse");
+            assert_eq!(s.advance_policy_seq("owner", 3).unwrap(), Some(5), "plus ancien : refuse");
+            assert_eq!(s.advance_policy_seq("other", 1).unwrap(), None, "sequence propre a chaque auteur");
+            assert_eq!(s.advance_policy_seq("owner", 6).unwrap(), None);
+        }
+        {
+            let s = AdnStore::open(p).unwrap(); // redemarrage
+            assert_eq!(s.advance_policy_seq("owner", 6).unwrap(), Some(6));
+            assert_eq!(s.advance_policy_seq("owner", 7).unwrap(), None);
+        }
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
     #[test]
     fn test_agent_persists_across_reopen_same_file() {
         let tmp_path = std::env::temp_dir().join(format!("cstl_test_agent_persist_{}.db", std::process::id()));
