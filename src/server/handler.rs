@@ -1403,7 +1403,7 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                         };
                         let response = format!(
                             "#!CSTL v5.0.0 MODE=A\nMETA [encoder=CstlNativeServer, produced_by=Server, status=processed]\n\
-                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}{}]\n\
+                             INTENT_PAYLOAD [purpose=action_authorization, sender=server, receiver={}, action={}, decision={}, reason={}{}{}{}{}{}{}{}]\n\
                              AUDIT [hash={}, parent_hash={}, seq={}]\n---END---\n",
                             shown_sender,
                             shown_action,
@@ -1414,7 +1414,7 @@ pub async fn handle_connection_as<S: AsyncRead + AsyncWrite + Unpin>(
                             if decision.superseded { ", superseded=true" } else { "" },
                             if decision.ignored > 0 { format!(", ignored_rules={}", decision.ignored) } else { String::new() },
                             if decision.not_applicable > 0 { format!(", rules_not_applicable={}", decision.not_applicable) } else { String::new() },
-                            format!("{approval_note}{token}"),
+                            approval_note, token,
                             entry.hash, entry.parent_hash, entry.seq,
                         );
                         send_response(&mut socket, &response, &ctx, want_compressed_response, want_castle_response, &mut castle_parser).await?;

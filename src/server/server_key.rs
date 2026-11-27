@@ -444,6 +444,9 @@ pub enum AuthzError {
 /// (comparaison numerique). Avant, cette fonction ne regardait pas le
 /// montant : un systeme en Rust aurait execute 8000 avec un jeton de 80
 /// (trouve en ecrivant la specification de conformite v1).
+// API publique stable (spec de conformite v1, appelee telle quelle par les
+// systemes cibles en Rust) : chaque argument est un champ verifie du jeton.
+#[allow(clippy::too_many_arguments)]
 pub fn verify_authorization(
     server_public_hex: &str,
     auth: &Authorization,

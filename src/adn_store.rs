@@ -14,6 +14,11 @@ use std::collections::HashMap;
 use crate::server::audit::{AuditEntry, HashChain};
 use crate::payload_compression::{compress_payload, decompress_payload, should_compress};
 
+/// (agent, action, cle de l'agent, expiration) d'un jeton delivre.
+pub type IssuedToken = (String, String, Option<String>, i64);
+/// (portee, pose par, raison, date) d'un arret d'urgence.
+pub type DatedStop = (String, String, Option<String>, i64);
+
 #[derive(Debug, Clone)]
 pub struct AdnEntry {
     pub hash: String,
@@ -1965,7 +1970,7 @@ impl AdnStore {
     }
 
     /// (agent, action, cle de l'agent, expiration) d'un jeton delivre.
-    pub fn issued_token(&self, audit_hash: &str) -> Result<Option<(String, String, Option<String>, i64)>, rusqlite::Error> {
+    pub fn issued_token(&self, audit_hash: &str) -> Result<Option<IssuedToken>, rusqlite::Error> {
         self.conn
             .query_row(
                 "SELECT agent, action, agent_key, expires_at FROM issued_tokens WHERE audit_hash = ?1",
@@ -2019,7 +2024,7 @@ impl AdnStore {
     }
 
     /// Comme `emergency_stops`, avec la date.
-    pub fn emergency_stops_dated(&self) -> Result<Vec<(String, String, Option<String>, i64)>, rusqlite::Error> {
+    pub fn emergency_stops_dated(&self) -> Result<Vec<DatedStop>, rusqlite::Error> {
         let mut st = self.conn.prepare("SELECT scope, set_by, reason, at FROM emergency_stops ORDER BY at, scope")?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
         rows.collect()
