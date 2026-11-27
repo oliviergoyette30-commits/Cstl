@@ -13,7 +13,7 @@ cstl_cli.py -- la commande unique `cstl` (2026-11-27) : CSTL cle en main.
   cstl revoke <agent>            revoque la cle d'un agent (auteur)
 
 Les commandes existantes restent disponibles sous `cstl <nom>` : demo,
-approve, gate, mcp-proxy, mcp-server, a2a-proxy, witness, deliberate.
+approve, gate, mcp-proxy, mcp-server, mcp-remote, a2a-proxy, witness, deliberate.
 
 Configuration, par ordre de priorite : options, variables d'environnement
 (CSTL_OWNER, CSTL_HOST, CSTL_PORT, CSTL_DATA, CSTL_SERVER_PUBLIC_KEY), puis
@@ -58,6 +58,7 @@ agent_support MUST_NOT wipe_db "production data"
 PASSTHROUGH = {
     "demo": ("cstl_demo", "main"), "approve": ("cstl_approve", "cli"), "gate": ("cstl_gate", "main"),
     "mcp-proxy": ("cstl_mcp_proxy", "cli"), "mcp-server": ("cstl_mcp_server", "cli"),
+    "mcp-remote": ("cstl_mcp_remote", "cli"),
     "a2a-proxy": ("cstl_a2a", "main"), "witness": ("cstl_witness", "main"),
     "deliberate": ("cstl_deliberation", "cli"),
 }

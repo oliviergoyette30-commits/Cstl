@@ -60,7 +60,7 @@ Everything goes through one command, `cstl`:
 | `cstl policy apply <file>` / `cstl policy show <agent>` | Publish the rules; see what the server will decide for an agent. |
 | `cstl agent add <name>` / `cstl check <agent> <action>` | Create an agent's key; ask for an authorization as that agent. |
 | `cstl stop [all\|agent:X\|action:Y] [--off]` / `cstl revoke <agent>` | Emergency stop; revoke a stolen key. |
-| `cstl approve`, `cstl gate`, `cstl mcp-proxy`, `cstl a2a-proxy`, `cstl mcp-server`, `cstl witness`, `cstl deliberate`, `cstl demo` | Human approvals, enforcement points, witness, deliberation, demo. |
+| `cstl approve`, `cstl gate`, `cstl mcp-proxy`, `cstl a2a-proxy`, `cstl mcp-server`, `cstl mcp-remote`, `cstl witness`, `cstl deliberate`, `cstl demo` | Human approvals, enforcement points, witness, deliberation, demo. |
 
 The demo runs against the real server, in a temporary folder:
 - two agents register;
@@ -179,6 +179,7 @@ deterministic Rust code.
 | **Emergency stop** | It wins over every rule, for all actions, one agent or one action pattern. The operator also has a file switch that no message can lift. |
 | **Abnormal behavior** | A burst of requests stops the agent automatically. |
 | **Enforcement points** | `cstl-gate` (named SQL, shell and HTTP operations; it alone holds the credentials), `cstl-mcp-proxy` (in front of any MCP server), `cstl-a2a-proxy` (in front of any A2A 1.0 agent, batches included), and `cstl-mcp-server` (CSTL as MCP tools). |
+| **Connector for claude.ai** | `cstl mcp-remote`: the same MCP tools over HTTPS (Streamable HTTP), for claude.ai custom connectors (web and mobile), with a secret token in the URL. Step by step: [`docs/CLAUDE_AI.md`](docs/CLAUDE_AI.md). |
 | **Built-in connector** | For your own MCP server or A2A agent (`cstl_connect`): `@guarded("refund_order", amount_arg="amount")` on an MCP tool, or `A2AGuard(app, name="billing")` around an ASGI A2A app. Same checks as the proxies, in the same process, closed by default. |
 
 ### Deliberation (v6, draft)
