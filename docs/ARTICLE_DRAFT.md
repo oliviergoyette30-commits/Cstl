@@ -118,8 +118,9 @@ is mandated anyway: a committee, or four-eyes review.
 
 - **A token makes an action mandatory only where the executing system
   demands it.** The gate must be the only path to the privilege.
-- **The proxies check the tool or method and the amount**, not the other
-  arguments.
+- **The proxies check the tool or method and the amount.** The MCP proxy
+  can also bound top-level arguments with a schema; nested content and A2A
+  message text are not read.
 - **One server on SQLite.** No external security audit yet.
 - **Our model benchmarks** use a single pass per case for deliberation,
   free models, and cases written by one team.

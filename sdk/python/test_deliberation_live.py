@@ -281,3 +281,33 @@ def test_decision_mode_ignores_claims_and_accepts_an_empty_reply(d, server):
     assert set(delib.points) == {"p1", "p2", "p3"}, "l'affirmation n'est pas un point"
     assert summary["status"] == {"deadlock": ["p1", "p2", "p3"]}, "c n'a soutenu aucun point : pas de consensus"
     assert any(e[1] == "claim_ignored" for e in delib.events)
+
+
+def test_anyone_can_check_the_moderator_s_published_state(d, server):
+    """verify_state (2026-11-27) : un tiers relit l'etat signe et recalcule
+    les fermetures ; un participant y verifie ses propres positions."""
+    import copy
+    (a, b, c), bot, mod = names()
+    s_a = [R(f"type=PERFORM, subject={bot}, object=order_routine_tests, modality=MAY, sigma=0.8")]
+    s_b = [R(f"type=supports, subject={b}, object=p1, sigma=0.8")]
+    s_c = [R(f"type=supports, subject={c}, object=p1, sigma=0.7")]
+    delib, _ = make(d, server, [a, b, c], [s_a, s_b, s_c], mod)
+    delib.run()
+    reader = agent(d, f"auditeur_{uuid.uuid4().hex[:5]}")
+    published = reader.fetch_tree(f"delib_{delib.topic}")
+    assert published["quorum"] == 2 and published["points"][0]["status"] == "consensus"
+    assert d.verify_state(published) == []
+    assert d.verify_state(published, me=b, sent={"p1": ("supports", 0.8)}) == []
+
+    forged = copy.deepcopy(published)                      # le moderateur ment sur une position
+    forged["points"][0]["stances"][c] = {"stance": "rejects", "sigma": 0.9}
+    assert any("sans unanimite" in x for x in d.verify_state(forged))
+    assert any("envoyee" in x for x in d.verify_state(forged, me=c, sent={"p1": ("supports", 0.7)}))
+
+    hidden = copy.deepcopy(published)                      # il etouffe un consensus
+    hidden["points"][0]["status"] = "deadlock"
+    assert any("unanimite atteinte" in x for x in d.verify_state(hidden))
+
+    alone = copy.deepcopy(published)                       # un seul actif ne fait pas un consensus
+    alone["active"] = [a]
+    assert any("quorum" in x for x in d.verify_state(alone))

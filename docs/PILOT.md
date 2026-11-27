@@ -111,7 +111,8 @@ At the end of the pilot, fill this in:
 ## 7. Known limits to keep in mind
 
 - The proxies control which tool or method is called and with which amount.
-  They do not read the other arguments.
+  Give the MCP proxy an `--args-schema` to bound the other arguments
+  (`AGENTS.md`); the A2A proxy does not read the message content.
 - The server stores everything in SQLite on one machine. There is no
   PostgreSQL backend yet.
 - The JSON gateway and the dashboard listen on 127.0.0.1 only.

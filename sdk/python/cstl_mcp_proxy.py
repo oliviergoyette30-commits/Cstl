@@ -30,11 +30,24 @@ Usage (configuration d'un client MCP) :
               "npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
      "env": {"CSTL_AGENT": "agent_fichiers", "CSTL_PORT": "5050"}}}}
 
+  - `--args-schema schema.json` (2026-11-27) : borne aussi les AUTRES
+    arguments, avec les types de cstl-gate (int, num, bool, word, text,
+    {"enum": [...]}, {"regex": "..."}). Par outil :
+      {"write_file": {"path": {"regex": "/srv/out/[A-Za-z0-9_.-]+"},
+                      "$required": ["path"], "$only": true},
+       "$default": "deny"}
+    Un argument decrit doit avoir le bon type ; `$required` les rend
+    obligatoires ; `$only: true` refuse tout argument non decrit ;
+    `"$default": "deny"` refuse tout outil absent du schema. Un appel non
+    conforme est refuse (`argument_refuse`) AVANT la demande au serveur
+    CSTL : il n'est jamais execute.
+
 Limites : un appel d'outil attend la reponse du serveur CSTL avant de
 passer (les autres messages ne sont pas bloques par le serveur MCP, mais
-sont traites dans l'ordre). Le proxy controle QUEL outil est appele, avec
-quel montant ; il ne comprend pas les autres arguments. Pour borner un
-argument, ecrire une regle par outil distinct, ou un outil par usage.
+sont traites dans l'ordre). Sans `--args-schema`, le proxy controle QUEL
+outil est appele, avec quel montant, pas les autres arguments. Le schema
+ne regarde que les arguments de premier niveau ; un objet imbrique se
+borne avec un `regex` sur sa forme texte, ou pas du tout.
 
 Test en direct : test_mcp_proxy_live.py.
 """
@@ -53,9 +66,10 @@ sys.path.insert(0, str(SDK))
 class Gate:
     """Decide, pour chaque appel d'outil, s'il peut passer."""
 
-    def __init__(self, agent_name, host, port, server_key=None, prefix="", amount_arg=None):
+    def __init__(self, agent_name, host, port, server_key=None, prefix="", amount_arg=None, args_schema=None):
         import cstl_llm_agent as m
         self.m = m
+        self.schema = load_args_schema(args_schema)
         self.agent = m.CstlAgent(agent_name, "none", host=host, port=port)
         self.prefix, self.amount_arg = prefix, amount_arg
         self.guard = None
@@ -65,6 +79,9 @@ class Gate:
 
     def decide(self, tool, arguments):
         """(autorise, raison, regle). Toute erreur refuse."""
+        problem = check_arguments(self.schema, tool, arguments)
+        if problem:
+            return False, f"argument_refuse:{problem}", None
         action = f"{self.prefix}{tool}"
         amount = None
         if self.amount_arg and isinstance(arguments, dict) and self.amount_arg in arguments:
@@ -88,6 +105,67 @@ class Gate:
             return False, f"cstl_indisponible:{type(e).__name__}", None
 
 
+def load_args_schema(schema):
+    """None, un dict, ou le chemin d'un fichier JSON. Un schema mal ecrit
+    arrete le proxy au demarrage, pas au premier appel."""
+    if schema is None:
+        return None
+    if not isinstance(schema, dict):
+        schema = json.loads(Path(schema).read_text())
+    from cstl_gate import check_param, BadRequest
+    if schema.get("$default", "allow") not in ("allow", "deny"):
+        raise SystemExit("args-schema : $default vaut allow ou deny")
+    for tool, spec in schema.items():
+        if tool.startswith("$"):
+            continue
+        if not isinstance(spec, dict):
+            raise SystemExit(f"args-schema : {tool} doit etre un objet")
+        for name, kind in spec.items():
+            if name in ("$required",) and not (isinstance(kind, list) and all(isinstance(x, str) for x in kind)):
+                raise SystemExit(f"args-schema : {tool}.$required doit etre une liste de noms")
+            if name == "$only" and not isinstance(kind, bool):
+                raise SystemExit(f"args-schema : {tool}.$only doit etre true ou false")
+            if not name.startswith("$"):
+                try:                       # type inconnu -> refuse des maintenant
+                    if isinstance(kind, dict) and "regex" in kind:
+                        __import__("re").compile(kind["regex"])
+                    check_param(name, kind, "")
+                except BadRequest as e:
+                    if "type inconnu" in str(e):
+                        raise SystemExit(f"args-schema : {tool}.{e}") from None
+                except Exception:          # noqa: BLE001 -- regex invalide, etc.
+                    raise SystemExit(f"args-schema : {tool}.{name} mal ecrit") from None
+    return schema
+
+
+def check_arguments(schema, tool, arguments):
+    """Texte du probleme, ou None si l'appel est conforme."""
+    if schema is None:
+        return None
+    spec = schema.get(tool)
+    if spec is None:
+        return "outil_hors_schema" if schema.get("$default") == "deny" else None
+    if arguments is None:
+        arguments = {}
+    if not isinstance(arguments, dict):
+        return "arguments_non_objet"
+    from cstl_gate import check_param, BadRequest
+    missing = [a for a in spec.get("$required", []) if a not in arguments]
+    if missing:
+        return f"manquant:{','.join(missing)}"
+    described = {k for k in spec if not k.startswith("$")}
+    if spec.get("$only"):
+        extra = sorted(set(arguments) - described)
+        if extra:
+            return f"en_trop:{','.join(extra)}"
+    for name in sorted(described & set(arguments)):
+        try:
+            check_param(name, spec[name], arguments[name])
+        except BadRequest:
+            return f"invalide:{name}"
+    return None
+
+
 def denial(mid, tool, reason, rule):
     text = f"Refuse par CSTL : outil {tool!r}, raison {reason}" + (f", regle {rule}" if rule else "")
     return {"jsonrpc": "2.0", "id": mid, "result": {"content": [{"type": "text", "text": text}], "isError": True}}
@@ -99,6 +177,7 @@ def main(argv=None):
                     help="cle publique du serveur CSTL (hex, ou chemin d'un fichier .pub)")
     ap.add_argument("--prefix", default="", help="prefixe des actions demandees")
     ap.add_argument("--amount-arg", default=None, help="argument d'outil qui porte le montant")
+    ap.add_argument("--args-schema", default=None, help="fichier JSON qui borne les arguments de chaque outil")
     ap.add_argument("command", nargs=argparse.REMAINDER, help="-- commande du serveur MCP")
     args = ap.parse_args(argv)
     cmd = args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -112,7 +191,8 @@ def main(argv=None):
         key = Path(key).read_text().strip()
 
     gate = Gate(name, os.environ.get("CSTL_HOST", "127.0.0.1"), int(os.environ.get("CSTL_PORT", "5050")),
-                server_key=key, prefix=args.prefix, amount_arg=args.amount_arg)
+                server_key=key, prefix=args.prefix, amount_arg=args.amount_arg,
+                args_schema=args.args_schema)
     child = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
     out_lock = threading.Lock()
 

@@ -529,7 +529,7 @@ class Deliberation:
     # ------------------------------------------------------------ execution
     def state(self):
         return {"topic": self.topic, "round": self.round, "stop_reason": self.stop_reason,
-                "active": self.active,
+                "active": self.active, "quorum": self.cfg["quorum"], "min_confidence": self.cfg["min_confidence"],
                 "points": [{"id": p.id, "kind": p.kind, "text": p.describe(), "status": p.status, "reason": p.reason,
                             "proposer": p.proposer, "amends": p.amends,
                             "stances": {a: {"stance": s, "sigma": g} for a, (s, g, _) in sorted(self.stances[p.id].items())}}
@@ -636,6 +636,48 @@ def _clean(text):
 
 
 # ------------------------------------------------------------------- CLI
+def verify_state(state, me=None, sent=None):
+    """Verification INDEPENDANTE de l'etat publie par le moderateur
+    (2026-11-27). N'importe qui le relit (`fetch_tree("delib_<topic>")`,
+    signe et audite) et recalcule chaque fermeture a partir des positions
+    publiees, avec les regles publiees (quorum, min_confidence) :
+      - un CONSENSUS doit avoir au moins `quorum` participants actifs, qui
+        soutiennent tous le point avec sigma >= min_confidence ;
+      - un point ouvert ou en impasse ne doit PAS remplir cette condition
+        (sinon le moderateur a etouffe un consensus).
+    Un participant (`me`) donne aussi les positions qu'il a lui-meme
+    envoyees (`sent` = {point: (stance, sigma)}) : elles doivent figurer
+    telles quelles dans l'etat. Renvoie la liste des anomalies ([] = conforme).
+
+    Limite : l'impasse par stagnation depend de l'historique des tours, qui
+    n'est pas publie ; seule sa compatibilite avec les positions finales est
+    verifiee. Les positions des AUTRES participants sont celles que publie
+    le moderateur : chacun verifie les siennes."""
+    issues = []
+    quorum, min_conf = state.get("quorum"), state.get("min_confidence")
+    if not isinstance(quorum, int) or not isinstance(min_conf, (int, float)):
+        return ["etat sans quorum ni min_confidence : regles de fermeture non publiees"]
+    active = list(state.get("active") or [])
+    for p in state.get("points", []):
+        st = p.get("stances") or {}
+        unanimous = len(active) >= quorum and all(
+            (st.get(a) or {}).get("stance") == "supports" and float((st.get(a) or {}).get("sigma", 0)) >= min_conf
+            for a in active)
+        if p.get("status") == "consensus" and not unanimous:
+            issues.append(f"{p['id']} : marque consensus sans unanimite de {len(active)} actifs (quorum {quorum})")
+        if p.get("status") in ("open", "deadlock") and unanimous:
+            issues.append(f"{p['id']} : unanimite atteinte mais marque {p['status']}")
+    if me is not None:
+        points = {p["id"]: p for p in state.get("points", [])}
+        for pid, (stance, sigma) in (sent or {}).items():
+            got = ((points.get(pid) or {}).get("stances") or {}).get(me)
+            if got is None:
+                issues.append(f"{pid} : position de {me} absente de l'etat")
+            elif got.get("stance") != stance or abs(float(got.get("sigma", -1)) - float(sigma)) > 1e-9:
+                issues.append(f"{pid} : position de {me} publiee {got}, envoyee {(stance, sigma)}")
+    return issues
+
+
 def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser(description="Deliberation CSTL v6 entre modeles (docs/CSTL_DELIBERATION_v6.md).")

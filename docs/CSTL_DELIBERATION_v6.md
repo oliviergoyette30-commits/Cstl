@@ -133,7 +133,24 @@ soutien timide ne compte pas.
 
 Après chaque tour, l'état complet (points, positions, statuts) est publié
 par le modérateur comme un arbre signé (`delib_<sujet>`). Le serveur
-l'inscrit dans l'audit, et on peut le relire avec `fetch_tree`.
+l'inscrit dans l'audit, et on peut le relire avec `fetch_tree`. L'état
+publie aussi les règles de fermeture (`quorum`, `min_confidence`).
+
+**Vérification indépendante (2026-11-27).** `verify_state(state)` recalcule
+chaque fermeture à partir des positions publiées, sans faire confiance au
+modérateur :
+- un CONSENSUS doit avoir au moins `quorum` participants actifs, qui le
+  soutiennent tous avec `sigma >= min_confidence` ;
+- un point ouvert ou en impasse ne doit pas remplir cette condition, sinon
+  le modérateur a étouffé un consensus.
+
+Un participant ajoute `me=<son nom>, sent={point: (position, sigma)}` :
+ses propres positions doivent y figurer telles qu'il les a envoyées.
+
+```python
+state = agent.fetch_tree(f"delib_{topic}")
+assert cstl_deliberation.verify_state(state, me="gem", sent={"p1": ("supports", 0.8)}) == []
+```
 
 ## 6. Exécution
 
@@ -206,10 +223,13 @@ d.run(); d.compile(); d.escalate()
 
 ## 10. Limites
 
-- **Le modérateur est un processus de confiance.** Il tient l'état et
-  compile. Ses messages sont signés et l'état est audité, mais un modérateur
-  malveillant pourrait mal compter les positions. Il faut une
-  vérification indépendante de l'état publié (à faire).
+- **Le modérateur tient l'état et compile.** Ses messages sont signés et
+  l'état est audité. `verify_state` détecte une fermeture mal calculée, et
+  chaque participant y vérifie ses propres positions. Il reste deux limites :
+  - une impasse par stagnation dépend de l'historique des tours, qui n'est
+    pas publié ;
+  - un participant ne peut vérifier que ses propres positions, pas celles
+    des autres.
 - **Les affirmations ne sont pas vérifiées sur le fond.** La brique « preuves
   externes » n'est pas encore faite.
 - **Rien n'est encore mesuré avec de vrais modèles.** Les chiffres ci-dessus

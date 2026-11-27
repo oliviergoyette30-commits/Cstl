@@ -156,3 +156,41 @@ def test_unreachable_cstl_server_closes_the_gate(cstl):
         assert s.executed() == []
     finally:
         s.close()
+
+
+def test_args_schema_bounds_the_other_arguments(cstl):
+    """--args-schema (2026-11-27) : un argument hors schema n'atteint jamais
+    le serveur MCP, meme quand l'outil lui-meme est permis par CSTL."""
+    schema = cstl / "schema.json"
+    schema.write_text(json.dumps({
+        "read_logs": {"path": {"regex": "/var/log/app/[a-z0-9_.-]+"}, "lines": "int",
+                      "$required": ["path"], "$only": True},
+        "refund": {"amount": "num"},
+        "$default": "deny"}))
+    key = (cstl / "cstl_adn.db.server_key.pub").read_text().strip()
+    s = Session(cstl, f"proxy_{uuid.uuid4().hex[:6]}", ["--server-key", key, "--args-schema", str(schema)])
+    try:
+        assert s.call("read_logs", path="/var/log/app/today.log", lines=10)["content"][0]["text"] == "fait : read_logs"
+        for bad, why in [({"path": "/etc/shadow"}, "invalide:path"),
+                         ({"path": "/var/log/app/../../etc/shadow"}, "invalide:path"),
+                         ({"lines": 5}, "manquant:path"),
+                         ({"path": "/var/log/app/a.log", "lines": "beaucoup"}, "invalide:lines"),
+                         ({"path": "/var/log/app/a.log", "follow": True}, "en_trop:follow")]:
+            r = s.call("read_logs", **bad)
+            assert r["isError"] and f"argument_refuse:{why}" in r["content"][0]["text"], (bad, r)
+        r = s.call("wipe_db")
+        assert r["isError"] and "argument_refuse:outil_hors_schema" in r["content"][0]["text"]
+        assert s.call("refund", amount="1e9; DROP")["isError"]
+        assert s.call("refund", amount=20)["content"][0]["text"] == "fait : refund"
+        assert s.executed() == ["read_logs", "refund"], "seuls les appels conformes ont ete executes"
+    finally:
+        s.close()
+
+
+def test_a_badly_written_args_schema_stops_the_proxy_at_start(cstl):
+    schema = cstl / "bad_schema.json"
+    schema.write_text(json.dumps({"read_logs": {"path": {"regex": "("}}}))
+    p = subprocess.run([sys.executable, str(PROXY), "--args-schema", str(schema), "--", sys.executable, "-c", "pass"],
+                       env={**os.environ, "CSTL_AGENT": "x", "CSTL_PORT": str(PORT)}, capture_output=True, text=True,
+                       timeout=30)
+    assert p.returncode != 0 and "mal ecrit" in p.stderr

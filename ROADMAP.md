@@ -726,7 +726,8 @@ Mesurées ou constatées dans ce dépôt ; à corriger ou à assumer.
   - départager sur des tâches où l'agent seul se trompe : petits modèles,
     dossiers très longs, règles implicites ;
   - les preuves externes pour `sigma` ;
-  - une vérification indépendante de l'état publié par le modérateur.
+  - **fait** (2026-11-27) : une vérification indépendante de l'état publié par
+    le modérateur (`verify_state`) ;
 
 ## Publication (2026-11-26)
 

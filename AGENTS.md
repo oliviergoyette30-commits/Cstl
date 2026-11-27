@@ -454,8 +454,21 @@ the reason and the rule.
 - **Options:** `--amount-arg amount` sends that tool argument as the amount
   (rules `amount_above` / `amount_at_most`). `--prefix mcp_` asks for
   `mcp_<tool>`.
-- **Limit:** the proxy controls which tool is called and with which amount.
-  It does not understand the other arguments.
+- **Arguments** (2026-11-27): `--args-schema schema.json` bounds the other
+  arguments, with the `cstl-gate` types (`int`, `num`, `bool`, `word`,
+  `text`, `{"enum": [...]}`, `{"regex": "..."}`):
+  ```json
+  {"write_file": {"path": {"regex": "/srv/out/[A-Za-z0-9_.-]+"},
+                  "$required": ["path"], "$only": true},
+   "$default": "deny"}
+  ```
+  A described argument must have the right type; `$required` makes it
+  mandatory; `$only` refuses any argument not described; `"$default":
+  "deny"` refuses any tool not in the schema. A call that does not conform
+  is refused (`argument_refuse:<detail>`) before CSTL is even asked, so it
+  never runs. A badly written schema stops the proxy at start.
+- **Limit:** the schema checks top-level arguments only. Without it, the
+  proxy controls which tool is called and with which amount, nothing else.
 
 Live test: `sdk/python/test_mcp_proxy_live.py`. A test MCP server records
 every tool it actually runs, so the test proves that a forbidden tool is

@@ -212,7 +212,8 @@ The full list, with each behavior explained, is in [`AGENTS.md`](AGENTS.md).
   it. A gate protects only what it alone can do; removing the same access
   from the agent is part of the setup.
 - The MCP and A2A proxies control which tool or method is called, and the
-  amount. They do not understand the other arguments.
+  amount. The MCP proxy also bounds the top-level arguments when given an
+  `--args-schema`; the A2A proxy does not read the message content.
 - Without the live check, a token stays valid until it expires (60 s by
   default), even after a revocation or a stop.
 - Tree counts are the author's: they prove completeness against what the
