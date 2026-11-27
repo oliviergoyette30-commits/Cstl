@@ -179,6 +179,7 @@ deterministic Rust code.
 | **Emergency stop** | It wins over every rule, for all actions, one agent or one action pattern. The operator also has a file switch that no message can lift. |
 | **Abnormal behavior** | A burst of requests stops the agent automatically. |
 | **Enforcement points** | `cstl-gate` (named SQL, shell and HTTP operations; it alone holds the credentials), `cstl-mcp-proxy` (in front of any MCP server), `cstl-a2a-proxy` (in front of any A2A 1.0 agent, batches included), and `cstl-mcp-server` (CSTL as MCP tools). |
+| **Built-in connector** | For your own MCP server or A2A agent (`cstl_connect`): `@guarded("refund_order", amount_arg="amount")` on an MCP tool, or `A2AGuard(app, name="billing")` around an ASGI A2A app. Same checks as the proxies, in the same process, closed by default. |
 
 ### Deliberation (v6, draft)
 | | |

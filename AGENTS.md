@@ -428,6 +428,49 @@ only be bound, by signature, to what it declared.
 Any registered agent can read a tree by its id. Live test:
 `test_tree_mode_goes_through_the_server`.
 
+**Inside your own MCP server or A2A agent (`cstl_connect`, 2026-11-27).**
+The proxies below sit in front of a server you do not change. When you
+write the server yourself, put the check where the action runs:
+
+```python
+from cstl_connect import guarded, A2AGuard
+
+@mcp.tool()                                      # official MCP SDK (FastMCP) or any other
+@guarded("refund_order", amount_arg="amount")
+def refund_order(order_id: int, amount: float) -> str: ...
+
+app = A2AGuard(app, name="billing")              # ASGI middleware in front of your A2A app
+```
+
+- **`@guarded`:** before each call, the tool asks the CSTL server for an
+  authorization, as the agent `CSTL_AGENT`. It checks the signed token
+  (server key, action, agent, amount, time window, single use) and only
+  then runs. Otherwise it raises `ActionDenied`, which an MCP SDK turns
+  into a tool error the model can read. `on_deny="message"` returns the
+  refusal text instead.
+- It works on sync and `async def` functions, and keeps the signature, so
+  the MCP SDK builds the same argument schema. The action defaults to the
+  function name.
+- **`A2AGuard`:** every JSON-RPC POST must carry one token per call in
+  `X-CSTL-Authorization`, for `a2a.<name>.<Method>`. This is the same check
+  as `cstl-a2a-proxy` (`cstl_a2a.check_calls`, batches all or nothing).
+  Otherwise the app receives nothing (401/403, JSON-RPC `-32050`). A call
+  that passes reaches the app with `X-CSTL-Agent: <verified caller>`, and
+  the token removed. GET requests (the agent card) pass through.
+  `check_a2a(headers, body, name, guard)` does the same for a non-ASGI
+  server.
+- **Closed by default:** with no server public key
+  (`CSTL_SERVER_PUBLIC_KEY`), nothing starts. With the CSTL server
+  unreachable or a bad token, nothing runs.
+- **Limit:** like the proxies, it controls which action, by whom, with
+  which amount. Bound the other arguments in the function itself.
+
+Live test: `sdk/python/test_connect_live.py`. It counts the real
+executions, runs a minimal stdio MCP server whose tools carry `@guarded`,
+and drives `A2AGuard` the way an ASGI server would. It has not been run
+against the official MCP or A2A SDK packages, which this environment cannot
+install.
+
 **In front of any MCP server.** `sdk/python/cstl_mcp_proxy.py` sits between
 an MCP client and an existing MCP server, which it starts itself.
 Everything passes through unchanged, except tool calls (`tools/call`).
