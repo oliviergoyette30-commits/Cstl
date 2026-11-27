@@ -157,3 +157,42 @@ def test_the_token_never_reaches_the_log(remote):
     _, logs = remote
     text = "".join(p.read_text() for p in logs)
     assert "POST" in text and TOKEN not in text
+
+
+def test_cloud_mode_one_container(tmp_path):
+    """`cstl cloud` (Render, Fly...) : serveur + politique CSTL_POLICY +
+    connecteur sur PORT ; jeton au format base64 (avec / + =), comme celui que
+    genere Render ; /healthz pour l'hebergeur."""
+    if not BINARY.exists():
+        pytest.skip("cargo build --bin cstl_parser requis")
+    token = "Ab+/cd=" + uuid.uuid4().hex + uuid.uuid4().hex[:4] + "+/=="
+    port = 8768
+    (tmp_path / "home").mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CSTL_")}
+    env.update({"HOME": str(tmp_path / "home"), "CSTL_BINARY": str(BINARY), "CSTL_DATA": str(tmp_path / "data"),
+                "CSTL_PORT": "5889", "CSTL_REST_PORT": "8889", "PORT": str(port), "CSTL_MCP_TOKEN": token,
+                "CSTL_MCP_AGENT": "agent_claude",
+                "CSTL_POLICY": 'agent_claude MUST_NOT delete_repo "irreversible"\\nagent_claude MAY read_issues'})
+    log = tmp_path / "cloud.log"
+    p = subprocess.Popen([sys.executable, str(SDK / "cstl_cli.py"), "cloud"], cwd=tmp_path, env=env,
+                         stdout=open(log, "w"), stderr=subprocess.STDOUT)
+    try:
+        assert wait(port), log.read_text()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=10) as r:
+            assert r.status == 200
+        from urllib.parse import quote
+        url = f"http://127.0.0.1:{port}/mcp/{quote(token, safe='/+=')}"
+        sid, _ = init(url)
+        st, _, r = post(url, {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                              "params": {"name": "cstl_authorize", "arguments": {"action": "delete_repo"}}},
+                        {"Mcp-Session-Id": sid})
+        out = json.loads(r["result"]["content"][0]["text"])
+        assert out["allowed"] is False and out["reason"] == "forbidden", out
+        assert "politique publiee : 2 relation(s) par owner_ops" in log.read_text()
+        assert token not in log.read_text()
+    finally:
+        p.terminate()
+        p.wait(timeout=15)
+    r = subprocess.run([sys.executable, str(SDK / "cstl_cli.py"), "cloud"], cwd=tmp_path,
+                       env={**env, "CSTL_MCP_TOKEN": ""}, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 1 and "CSTL_MCP_TOKEN" in r.stderr, "sans jeton, rien ne demarre"

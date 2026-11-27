@@ -73,12 +73,14 @@ class Remote:
         self.sessions = {}
 
     def authorized(self, path, header):
-        """Le jeton du chemin (/mcp/<jeton>) ou de l'en-tete Bearer."""
-        parts = path.split("?")[0].rstrip("/").split("/")
+        """Le jeton du chemin (/mcp/<jeton>, tout ce qui suit /mcp/, decode :
+        un jeton en base64 peut contenir « / ») ou de l'en-tete Bearer."""
+        from urllib.parse import unquote
+        p = path.split("?")[0]
         given = None
-        if len(parts) == 3 and parts[1] == "mcp":
-            given = parts[2]
-        elif len(parts) == 2 and parts[1] == "mcp" and header and header.startswith("Bearer "):
+        if p.startswith("/mcp/") and len(p) > 5:
+            given = unquote(p[5:])
+        elif p.rstrip("/") == "/mcp" and header and header.startswith("Bearer "):
             given = header[7:].strip()
         return given is not None and hmac.compare_digest(given.encode(), self.token)
 
@@ -155,6 +157,8 @@ def make_handler(remote):
             return True
 
         def do_GET(self):
+            if self.path == "/healthz":                   # pour l'hebergeur ; ne dit rien d'autre
+                return self._send(200, {"ok": True})
             if self._guard():
                 self._send(405, None, {"Allow": "POST, DELETE"})
 

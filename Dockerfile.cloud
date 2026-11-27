@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# CSTL chez un hebergeur (Render, Fly, Railway...), en UN conteneur :
+# serveur CSTL en local + politique (CSTL_POLICY) + connecteur MCP distant
+# pour claude.ai sur le port public (PORT). Voir docs/CLAUDE_AI.md.
+#
+# Reglages (variables d'environnement de l'hebergeur) :
+#   CSTL_MCP_TOKEN   obligatoire, 32 caracteres au moins (render.yaml le genere)
+#   CSTL_POLICY      vos regles en CSTL compact, une par ligne (ou separees par \n)
+#   CSTL_MCP_AGENT   l'agent CSTL de Claude (agent_claude)
+# Sans disque persistant, la base, les cles et l'audit repartent de zero a
+# chaque redemarrage : bien pour essayer, pas pour la production.
+FROM rust:1.97-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN cargo build --release --bin cstl_parser && strip target/release/cstl_parser
+
+FROM python:3.13-slim-bookworm
+COPY --from=build /src/target/release/cstl_parser /usr/local/bin/cstl_parser
+COPY sdk/python /opt/cstl-sdk
+RUN pip install --no-cache-dir /opt/cstl-sdk && mkdir -p /root/.cstl /data
+ENV CSTL_BINARY=/usr/local/bin/cstl_parser \
+    CSTL_DATA=/data \
+    CSTL_KB_VERIFY=off \
+    PYTHONUNBUFFERED=1
+WORKDIR /data
+EXPOSE 10000
+ENTRYPOINT ["cstl", "cloud"]

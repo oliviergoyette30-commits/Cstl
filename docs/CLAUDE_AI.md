@@ -11,6 +11,40 @@ Pour Claude Desktop et Claude Code, un connecteur local suffit (README,
 section « Get started », et `cstl mcp-server`). Ce guide sert pour
 claude.ai, qui n'appelle que des serveurs **distants en HTTPS**.
 
+## Depuis un téléphone seulement : Render, sans terminal
+
+Tout se fait dans le navigateur du téléphone. Le dépôt contient
+`render.yaml`, que Render lit pour tout créer, et `Dockerfile.cloud`, un
+seul conteneur qui fait tourner le serveur, la politique et le connecteur.
+
+1. **Créer le service.** Va sur **render.com**, connecte-toi avec ton compte
+   GitHub, puis choisis **New → Blueprint** et le dépôt `Cstl`. Render lit
+   `render.yaml` et propose le service `cstl` : valide avec **Apply**.
+2. **Attendre la construction.** Elle prend environ 10 minutes, car Render
+   compile le serveur.
+3. **Récupérer les deux informations :**
+   - l'adresse, en haut de la page du service :
+     `https://cstl-xxxx.onrender.com` ;
+   - le jeton, dans l'onglet **Environment**, valeur de `CSTL_MCP_TOKEN`
+     (bouton pour l'afficher).
+4. **Ajouter le connecteur dans claude.ai** (navigateur du téléphone) :
+   **Paramètres → Connecteurs → Ajouter un connecteur personnalisé**,
+   avec l'URL `https://cstl-xxxx.onrender.com/mcp/<le jeton>`.
+5. **Changer les règles.** Elles sont dans **Environment**, variable
+   `CSTL_POLICY`, une règle par ligne. Après une modification, Render
+   redémarre le service et republie la politique.
+6. **Tester** comme à la section 6.
+
+Ce qu'il faut savoir sur l'offre gratuite de Render :
+- **Le service s'endort** après 15 minutes sans usage. Le premier appel
+  suivant prend environ une minute.
+- **Rien n'est gardé.** Sans disque persistant (payant), la base, les clés
+  et l'audit repartent de zéro à chaque redémarrage. C'est bien pour
+  essayer, pas pour un vrai usage.
+- **La construction n'a pas été essayée chez Render.** Elle a été vérifiée
+  avec Docker dans l'environnement de développement. Si elle échoue chez
+  Render (mémoire, temps), envoie le message d'erreur.
+
 ## 1. Ce qu'il faut
 - Le dépôt CSTL, avec Docker, ou avec Rust et Python 3.10 ou plus.
 - Une façon de publier un port en HTTPS sur internet :

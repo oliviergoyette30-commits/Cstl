@@ -1,0 +1,19 @@
+# Render (render.com) : New -> Blueprint -> ce depot. Cree le service CSTL pour
+# claude.ai et GENERE le jeton secret. Pas a pas : docs/CLAUDE_AI.md.
+services:
+  - type: web
+    name: cstl
+    runtime: docker
+    dockerfilePath: ./Dockerfile.cloud
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: CSTL_MCP_TOKEN
+        generateValue: true
+      - key: CSTL_MCP_AGENT
+        value: agent_claude
+      - key: CSTL_POLICY
+        value: |
+          agent_claude MAY read_issues
+          agent_claude MUST_NOT delete_repo "irreversible"
+          agent_claude MUST_NOT send_payment >50 "above 50: a human decides"
