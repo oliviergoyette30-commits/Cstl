@@ -66,6 +66,53 @@ from any JSON client (`POST /v1/message`).
 
 ---
 
+## How the server works
+
+One Rust binary, `cstl_parser`, with one SQLite file next to it. Every
+message goes through the same stages:
+
+```
+ agent ──TCP / TLS 1.3 (optional mTLS, SPIFFE)──▶ listener   rate limit per IP
+                                                     │
+ 1. security scan       dangerous characters and structures refused
+ 2. strict parser       header, blocks; prose outside a block, a sigma outside
+                        0–1 → parse_error (nothing is silently dropped)
+ 3. identity            Ed25519 signature against the registered key; revoked
+                        keys, SPIFFE identity, federation expiry
+ 4. validation          operators, deontic contradictions (MUST + MUST_NOT),
+                        SCHEMA types, tree completeness and source commitments,
+                        policy_seq (replayed or older policy refused)
+ 5. purpose             register · revoke · emergency stop · approval ·
+                        action_request → layer 9 decides from the authors'
+                        rules → signed token · policy_query · tree_query ·
+                        token_status · deliberation messages
+ 6. audit               every accepted message and decision is chained by hash
+                        and signed with the server key
+ 7. response            CSTL text (or JSON through the gateway), with the
+                        AUDIT line
+```
+
+Around the pipeline:
+- **Storage:** SQLite (`cstl_adn.db`): messages, agents and keys, revoked
+  keys, emergency stops, approvals, issued tokens, decisions, audit chain.
+- **Server key** (`<db>.server_key`): signs tokens, receipts, token status
+  and every audit link. Startup re-verifies the whole chain and refuses to
+  start on any change, deletion or missing signature.
+- **REST port** (127.0.0.1 only): the JSON gateway `/v1/message` and the
+  dashboard `/v1/dashboard`.
+- **Optional outside pieces:** the witness (`cstl-witness`, on another
+  machine, against rollback), Telegram for approvals, Wikidata fact checks
+  (off with `CSTL_KB_VERIFY=off`).
+- **Executing side** (not in the server): `cstl-gate`, the MCP and A2A
+  proxies, or `CstlGuard` in your code. They trust only the server's public
+  key and check each token themselves.
+
+The server is the only judge: models write and read CSTL, but no decision
+depends on a model. Policy evaluation, signatures and the audit are
+deterministic Rust code.
+
+---
+
 ## What it does
 
 ### Identity
@@ -113,12 +160,119 @@ from any JSON client (`POST /v1/message`).
 | **Dashboard** | `/v1/dashboard` shows decisions, refusals by reason, stops, pending approvals and revoked keys. |
 
 ### Data for models
-| | |
+CSTL has several written forms, described in [the next section](#the-cstl-formats).
+The server checks and audits all of them the same way.
+
+---
+
+## The CSTL formats
+
+All forms carry the same relations and convert into each other with no loss
+(`sdk/python/cstl_compact.py`, `cstl_formes.py`). Reading never guesses: an
+unreadable line, a wrong count or a badly typed value is an error, never a
+silent default.
+
+**1. The wire format**: what the server receives and signs.
+```
+#!CSTL v5.0.0 MODE=A
+META [encoder=agent_support, produced_by=agent_support]
+INTENT_PAYLOAD [purpose=action_request, sender=agent_support, receiver=server, action=refund_order, amount=80, request_id=r1, signature=...]
+---END---
+```
+
+**2. Compact CSTL, in lines**: policies and relations for a model.
+```
+agent_support MAY refund_order <=100
+agent_support MUST_NOT refund_order >100 "above 100: a human decides"
+agent_support MUST_NOT liquidate if:incident_open
+agent_support MUST log_transaction
+```
+
+**3. Without keywords (`symboles`)**: the same policy, in the shortest form
+(`?` may, `!` must not, `*` must, `+fact` if the fact holds).
+```
+agent_support ?refund_order <=100
+agent_support !refund_order >100 "above 100: a human decides"
+agent_support !liquidate +incident_open
+agent_support *log_transaction
+```
+Both are real encoder output (`encode`, `encode_symbols`), and both decode
+back to the exact same four relations.
+
+**4. The indented tree**: nested documents. Children sit under their
+parent, and an optional field is written only when present.
+```
+@@ service=billing
+@orders[2]: id client
+@lines[3]^orders: item qty
+o1 client_3 note=fragile
+  gpu_rack 2
+  lic 1
+o2 client_1
+  router 3
+```
+With `counts="line"`, each element ends its line with `/N`, its number of
+children, so a model's counting mistake names the faulty line.
+
+**5. Strict**: indented keys, with every value written as JSON. This is the
+form to ask a model to **write** on irregular data.
+
+**6. Unknown values**: `?` or `?{sigma:0.3,pending:next_checkup}`. They
+are distinct from `null` (known to be empty) and from an absent field (not
+applicable).
+
+### What each form saves (measured)
+
+| Form | Data | Tokens vs JSON compact | Model accuracy |
+|---|---|---|---|
+| Indented tree | Nested tabular data (orders → lines → options) | **−39 %** (10,792 against 17,577) | Reading 36/36, against 35/36 for JSON (Gemma 4 31B) |
+| Indented tree with `/N` counts | Same | −35 % | Writing 12/12 identical, in strict mode |
+| Indented tree | Real API responses (PyPI, npm, crates.io, Wikidata), 6 tokenizers | −39 to −49 % on tabular parts, −8 to −13 % on object-rich data | Reading on par with JSON |
+| Compact CSTL in lines | Effective policies | **−62 %** (782 against 2,039) | Reading: Opus 36/36 |
+| Without keywords | Policies, Gemini tokenizer | **−63 %** (5,540 against 15,064); −43 % against TOON | Not yet measured with a model |
+| Strict | Irregular real data | +7 to +18 % (the cost of reliability) | Writing 48/48, against 42/48 for JSON |
+| Full wire format | 16 real server messages | −3 % (−7 % in bytes) | — |
+
+What these numbers mean:
+- **The saving is in tokens for models,** about 40 % on nested data and
+  more than 60 % on policies. On plain wire bytes, CSTL saves almost
+  nothing (see compression below).
+- **Strong models read every form as well as JSON.** Across 10 models and 5
+  providers: 312/360 for the indented tree, 315 for JSON, 319 for TOON.
+  Weak models make a few more mistakes on the indented tree.
+- **To have a model write irregular data, use strict.** The compact forms
+  are for reading, and for passing data between programs.
+- **TOON is shorter on flat, regular data** (compact CSTL in lines costs
+  33 % more there). The table and keyword-free modes close that gap offline,
+  but no model has been measured on them yet.
+
+Sources: `scripts/nested_benchmark.py`, `scripts/real_data_benchmark.py`,
+`scripts/format_short_benchmark.py`, `scripts/gemini_tokens.py`,
+`scripts/multi_model_summary.py`, `scripts/wire_size_benchmark.py`. Each is
+detailed in [`ROADMAP.md`](ROADMAP.md).
+
+### Compression: CSTL against gzip and zstd
+
+Measured on the same 16 real messages (`scripts/compression_benchmark.py`):
+
+| | Bytes |
 |---|---|
-| **Compact CSTL** | Policies and relations in few tokens. Nothing is guessed when reading: an unreadable line is an error, never a silent default. |
-| **Trees** | Nested JSON documents, signed and audited. The server checks completeness, and a source can commit to a document that someone else transmits. |
-| **CSTL strict** | An indented form with JSON values, the most reliable for a model to write on irregular data. |
-| **Unknown values** | `?` is distinct from `null` and from an absent field. |
+| Best for JSON: zstd with a trained dictionary | 2,076 |
+| Best for CSTL: zstd with a trained dictionary | 2,070 |
+| CSTL's own compressors (WAI codec, master 4-stream compressor) | about 10,000 |
+
+- Once compressed with the best tool, CSTL and JSON are the same size.
+- CSTL's own compressors do about **5 times worse** than zstd.
+- Compressed server responses (`COMPRESSED_RESPONSE`) came out **larger**
+  than plain text (971 → 1,327 bytes), because of base64 and a dictionary
+  that does not know the response vocabulary.
+- Uncompressed, the CSTL wire format is 7 % smaller than compact JSON, but
+  3 % larger after gzip.
+
+So **compression is not a reason to use CSTL**. The old compression modules
+stay in the code, opt-in, and are not part of the control layer. Earlier
+figures for them (such as a "63.81 % compression ratio") are superseded by
+these measurements on real messages.
 
 ---
 
@@ -152,14 +306,16 @@ Llama 4, Claude Haiku 5.5, Mistral):
   models. The benchmark was stopped when the API credits ran out; see
   `benchmark/README.md`.
 
-**Formats** (`scripts/real_data_benchmark.py`, irregular data):
-- **Writing:**
-  - with a short instruction, CSTL strict is written correctly 48/48 times,
-    against 36/48 for JSON;
-  - with 3 examples, they are tied (46 against 47);
-  - CSTL reports its own errors, while JSON fails silently.
-- **Reading:** the indented tree scored 36/36, against 35/36 for JSON, on
-  Gemma 4 31B, with 39 % fewer tokens.
+**Formats:** see [The CSTL formats](#the-cstl-formats): about −40 % tokens on
+nested data, more than −60 % on policies, reading on par with JSON, and
+strict written correctly 48/48 against 36/48 for JSON with one example
+(46 against 47 with three). CSTL reports its own errors, while JSON fails
+silently.
+
+**Deliberation** (`benchmark/deliberation/`, 26 cases, 3 free models):
+100 % correct in every condition, so deliberating did not reduce errors
+here. CSTL deliberation used about 4,600 tokens per case, against 18,000 for
+a free debate and 700 for a single agent.
 
 **Conformance**:
 - `conformance/run_server_conformance.py` was written from the spec alone;
@@ -205,7 +361,7 @@ The full list, with each behavior explained, is in [`AGENTS.md`](AGENTS.md).
 
 ---
 
-## Known limitations (2026-11-25)
+## Known limitations (2026-11-27)
 
 **Security model**
 - A token makes an action mandatory only where the executing system demands
@@ -239,8 +395,9 @@ CSTL started as a compact language for model-to-model messages, and several
 earlier components remain:
 - **Compression:** the WAI codec, the 4-stream master compressor, the
   `COMPRESSED_PAYLOAD` and `COMPRESSED_RESPONSE` blocks and the CASTLE
-  session dictionary. They are opt-in, verified byte-exact, and their gains
-  on real traffic are small. They are not part of the control layer.
+  session dictionary. They are opt-in and verified byte-exact, but they
+  lose to zstd (see [Compression](#compression-cstl-against-gzip-and-zstd)).
+  They are not part of the control layer.
 - Wikidata fact verification (off with `CSTL_KB_VERIFY=off`), a signed
   2/3 quorum, an arbitration channel, calibration, and the Graphify export.
 
