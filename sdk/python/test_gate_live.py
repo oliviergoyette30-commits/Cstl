@@ -53,18 +53,30 @@ def free_port():
 
 
 def start_postgres(work):
-    """PostgreSQL jetable (utilisateur postgres, socket dans work). None si impossible."""
-    if not (PG_BIN / "initdb").exists() or shutil.which("runuser") is None:
+    """PostgreSQL jetable (socket dans un dossier temporaire). None si impossible.
+
+    En root, PostgreSQL refuse de tourner : il est lance sous l'utilisateur
+    postgres (runuser). Sinon (runner GitHub, poste de dev), il tourne sous
+    l'utilisateur courant -- avant le 2026-11-27, ce cas tentait quand meme
+    un chown vers postgres et echouait (PermissionError en CI)."""
+    if not (PG_BIN / "initdb").exists():
+        return None
+    as_root = os.geteuid() == 0
+    if as_root and shutil.which("runuser") is None:
         return None
     # Dossier propre sous /tmp : l'utilisateur postgres doit pouvoir traverser ses parents.
     work = Path(tempfile.mkdtemp(prefix="cstl_pg_", dir="/tmp"))
     os.chmod(work, 0o755)
     data, sock = work / "pgdata", work / "pgsock"
     sock.mkdir()
-    shutil.chown(sock, "postgres")
-    as_pg = lambda *cmd: subprocess.run(["runuser", "-u", "postgres", "--", *cmd], capture_output=True, text=True)  # noqa: E731
     data.mkdir()
-    shutil.chown(data, "postgres")
+    if as_root:
+        shutil.chown(sock, "postgres")
+        shutil.chown(data, "postgres")
+        as_pg = lambda *cmd: subprocess.run(["runuser", "-u", "postgres", "--", *cmd], capture_output=True, text=True)  # noqa: E731
+    else:
+        os.chmod(data, 0o700)
+        as_pg = lambda *cmd: subprocess.run(list(cmd), capture_output=True, text=True)  # noqa: E731
     if as_pg(str(PG_BIN / "initdb"), "-D", str(data), "-A", "trust", "-U", "postgres").returncode != 0:
         return None
     port = free_port()
