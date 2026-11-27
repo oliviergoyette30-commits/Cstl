@@ -417,22 +417,23 @@ from cstl_client import CstlClient, CstlResponse  # noqa: E402
 ENCODER = "CstlLlmAgent"
 
 
-WIRE_FORBIDDEN = ('"', "[", "]", "\n", "\r", "\x00")
+WIRE_FORBIDDEN = ('"', "\n", "\r", "\x00")
 
 
 def check_wire_values(intent, relations):
     """Avant de signer (2026-11-27, revue d'attaque) : une valeur que le fil
-    CSTL ne peut pas porter exactement (guillemet, crochet, saut de ligne,
-    `---END---`, espaces aux bords) est refusee ICI, avec le champ en cause.
+    CSTL ne peut pas porter exactement (guillemet, saut de ligne, caractere
+    nul, `---END---`) est refusee ICI, avec le champ en cause. Crochets,
+    virgules et espaces passent : le client met ces valeurs entre guillemets.
     Avant, elle partait quand meme : le serveur relisait autre chose que ce
     qui avait ete signe et repondait `signature_rejected`, un message
     trompeur. (Le mode arbre, lui, encode ces valeurs en base64.)"""
     for where, kv in [("INTENT_PAYLOAD", intent)] + [(f"RELATION {i + 1}", r) for i, r in enumerate(relations)]:
         for k, v in kv.items():
             s = str(v)
-            if any(c in s for c in WIRE_FORBIDDEN) or "---END---" in s or s != s.strip():
+            if any(c in s for c in WIRE_FORBIDDEN) or "---END---" in s:
                 raise ValueError(f"{where}, champ {k!r} : valeur que le fil CSTL ne peut pas porter exactement "
-                                 "(guillemet, crochet, saut de ligne, ---END--- ou espaces aux bords)")
+                                 "(guillemet, saut de ligne, caractere nul ou ---END---)")
 
 
 class ActionDenied(Exception):
